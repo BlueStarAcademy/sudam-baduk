@@ -1,3 +1,4 @@
+
 import * as types from '../types.js';
 import type { LiveGameSession, Point, BoardState, Player as PlayerType } from '../types.js';
 
@@ -168,8 +169,6 @@ export const getGoLogic = (game: LiveGameSession) => {
     };
 
     const getAllGroups = (playerColor: PlayerType, currentBoard: BoardState) => {
-        // FIX: The return type for this function was incorrect, causing a type error in aiPlayer.ts.
-        // The type now correctly includes the `libertyPoints` property returned by `findGroup`.
         const groups: { stones: Point[]; liberties: number; libertyPoints: Set<string>; player: PlayerType }[] = [];
         const visited = new Set<string>();
         for (let y = 0; y < boardSize; y++) {

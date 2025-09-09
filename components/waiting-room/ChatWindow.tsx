@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from 'react';
 import { ChatMessage, ServerAction, GameMode, UserWithStatus } from '../../types.js';
 import { GAME_CHAT_MESSAGES, GAME_CHAT_EMOJIS } from '../../constants.js';
@@ -90,8 +89,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, onAction, mode, onVie
             : "[메시지 입력]";
 
     return (
-        <div className="p-1 flex flex-col h-full min-h-0 text-on-panel">
-            <h2 className="text-lg font-semibold mb-1 border-b border-color pb-1 flex-shrink-0">전체채팅</h2>
+        <div className="p-4 flex flex-col h-full min-h-0">
+            <h2 className="text-xl font-semibold mb-3 border-b border-color pb-2 flex-shrink-0">전체채팅</h2>
             <p className="text-[10px] text-center text-yellow-400 mb-1 bg-tertiary/50 rounded-sm p-0.5">AI 보안관봇이 부적절한 언어 사용을 감지하고 있습니다. 🚓</p>
             <div ref={chatBodyRef} className="flex-grow space-y-0.5 overflow-y-auto pr-1 mb-1 bg-tertiary/40 p-1 rounded-md min-h-0">
                 {messages.map(msg => {

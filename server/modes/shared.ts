@@ -1,3 +1,5 @@
+
+// FIX: Correctly import summaryService to resolve module not found error.
 import * as summaryService from '../summaryService.js';
 import { LiveGameSession, RPSChoice, GameStatus, HandleActionResult, VolatileState, ServerAction, User, Player, ChatMessage } from '../../types.js';
 import * as db from '../db.js';
@@ -86,7 +88,7 @@ export const updateSharedGameState = (game: LiveGameSession, now: number): boole
                 if (!finalP2Choice) finalP2Choice = choices[Math.floor(Math.random() * 2)];
             }
             
-            if (finalP1Choice && finalP2Choice) {
+            if (finalP1Choice && finalP2Choice) { // Type guard for safety
                 transitionFromTurnPreference(game, finalP1Choice, finalP2Choice, now);
                 return true;
             }
@@ -223,6 +225,9 @@ export const handleSharedAction = async (volatileState: VolatileState, game: Liv
             volatileState.gameChats[game.id].push(message);
 
             user.mannerScore = Math.max(0, user.mannerScore + scoreChange);
+
+            if (!game.mannerScoreChanges) game.mannerScoreChanges = {};
+            game.mannerScoreChanges[user.id] = (game.mannerScoreChanges[user.id] || 0) + scoreChange;
             
             if (!game.actionButtonUses) game.actionButtonUses = {};
             game.actionButtonUses[user.id] = (game.actionButtonUses[user.id] ?? 0) + 1;
@@ -257,7 +262,7 @@ export const handleSharedAction = async (volatileState: VolatileState, game: Liv
         case 'SUBMIT_RPS_CHOICE': {
             const { choice } = payload as { choice: RPSChoice };
             if (!game.rpsState || typeof game.rpsState[user.id] === 'string') {
-                return { error: 'Cannot make RPS choice now.' };
+                return { error: "Cannot make RPS choice now." };
             }
             game.rpsState[user.id] = choice;
             return {};

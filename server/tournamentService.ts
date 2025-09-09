@@ -62,7 +62,7 @@ const COMMENTARY_POOLS = {
 
 const getPhase = (time: number): 'early' | 'mid' | 'end' => {
     if (time <= EARLY_GAME_DURATION) return 'early';
-    if (time <= EARLY_GAME_DURATION + MID_GAME_DURATION) return 'mid';
+    if (time <= EARLY_GAME_DURATION + MID_GAME_DURATION) return 'end';
     return 'end';
 };
 
@@ -127,7 +127,6 @@ const simulateAndFinishMatch = (match: Match, players: PlayerForTournament[]) =>
     const p1 = players.find(p => p.id === match.players[0]!.id)!;
     const p2 = players.find(p => p.id === match.players[1]!.id)!;
     
-    // Reset stats to original values before starting the match simulation
     if (p1.originalStats) {
         p1.stats = JSON.parse(JSON.stringify(p1.originalStats));
     }
@@ -216,56 +215,103 @@ const processMatchCompletion = (state: TournamentState, user: User, completedMat
         }
     });
 
+    const currentRound = state.rounds[roundIndex];
+    const allMatchesInCurrentRoundFinished = currentRound.matches.every(m => m.isFinished);
+
     if (state.type === 'neighborhood') {
-        const currentRound = state.currentRoundRobinRound || 1;
-        const players = state.players;
+        const currentRoundRobinRound = state.currentRoundRobinRound || 1;
+        const allLeagueMatchesFinished = state.rounds[0].matches.every(m => m.isFinished);
         
-        const schedule = [
-            [[0, 5], [1, 4], [2, 3]],
-            [[0, 4], [5, 3], [1, 2]],
-            [[0, 3], [4, 2], [5, 1]],
-            [[0, 2], [3, 1], [4, 5]],
-            [[0, 1], [2, 5], [3, 4]],
-        ];
-        const roundPairings = schedule[currentRound - 1];
-        const roundMatches = roundPairings.map(pair => {
-            const p1Id = players[pair[0]].id;
-            const p2Id = players[pair[1]].id;
-            return state.rounds[0].matches.find(m =>
-                (m.players[0]?.id === p1Id && m.players[1]?.id === p2Id) ||
-                (m.players[0]?.id === p2Id && m.players[1]?.id === p1Id)
-            );
-        });
+        if (allLeagueMatchesFinished) {
+            state.status = 'complete';
+        } else {
+             const schedule = [
+                [[0, 5], [1, 4], [2, 3]], [[0, 4], [5, 3], [1, 2]], [[0, 3], [4, 2], [5, 1]],
+                [[0, 2], [3, 1], [4, 5]], [[0, 1], [2, 5], [3, 4]],
+            ];
+            const roundPairings = schedule[currentRoundRobinRound - 1];
+            const roundMatches = roundPairings.map(pair => {
+                const p1Id = state.players[pair[0]].id;
+                const p2Id = state.players[pair[1]].id;
+                return state.rounds[0].matches.find(m =>
+                    (m.players[0]?.id === p1Id && m.players[1]?.id === p2Id) ||
+                    (m.players[0]?.id === p2Id && m.players[1]?.id === p1Id)
+                );
+            });
 
-        roundMatches.forEach(m => {
-            if (m && !m.isFinished) {
-                simulateAndFinishMatch(m, state.players);
-            }
-        });
-        
-        const allRoundMatchesFinished = roundMatches.every(m => m?.isFinished);
-
-        if (allRoundMatchesFinished) {
-            if (currentRound >= 5) {
-                state.status = 'complete';
-            } else {
-                state.status = 'round_complete';
+            if (roundMatches.every(m => m?.isFinished)) {
+                 state.status = 'round_complete';
             }
         }
         return;
     }
-    
+
     const loser = completedMatch.players.find(p => p && p.id !== completedMatch.winner?.id) || null;
 
     if (loser?.id === user.id) {
         state.status = 'eliminated';
-    } else {
-        const allTournamentMatchesFinished = state.rounds.every(r => r.matches.every(m => m.isFinished));
-        if (allTournamentMatchesFinished) {
+        currentRound.matches.forEach(match => {
+            if (!match.isFinished) {
+                simulateAndFinishMatch(match, state.players);
+            }
+        });
+        
+        // Refactored from `while` to `for` to avoid TypeScript type narrowing error
+        for (let safety = 0; safety < 10; safety++) {
+            if ((state as any).status === 'complete') break;
+
+            const lastRound = state.rounds[state.rounds.length - 1];
+            if (lastRound.matches.every(m => m.isFinished)) {
+                if (lastRound.matches.length === 1 && (lastRound.name === '결승' || lastRound.name.includes("3,4위전"))) {
+                     const finalIsDone = state.rounds.find(r => r.name === '결승')?.matches[0]?.isFinished;
+                     const thirdPlaceIsDone = state.rounds.find(r => r.name === '3,4위전')?.matches[0]?.isFinished ?? true;
+                     if(finalIsDone && thirdPlaceIsDone) {
+                         state.status = 'complete';
+                         break;
+                     }
+                } else if(lastRound.matches.length === 1) {
+                    state.status = 'complete';
+                    break;
+                }
+                
+                prepareNextRound(state, user);
+                const nextRound = state.rounds[state.rounds.length - 1];
+                nextRound.matches.forEach(m => simulateAndFinishMatch(m, state.players));
+
+            } else {
+                 break;
+            }
+        }
+
+    } else if (allMatchesInCurrentRoundFinished) {
+        const isFinalRound = (currentRound.matches.length === 1 && (currentRound.name === '결승' || currentRound.name.includes("3,4위전")));
+        const isWorldCupFinals = (
+            state.type === 'world' && 
+            currentRound.name === '4강' && 
+            state.rounds.length === 3
+        );
+        const isNationalFinals = (
+            state.type === 'national' && 
+            currentRound.name === '4강' && 
+            state.rounds.length === 2
+        );
+
+        if (isFinalRound || isWorldCupFinals || isNationalFinals) {
+             const finals = state.rounds.filter(r => r.name === '결승' || r.name === '3,4위전');
+             if(finals.every(r => r.matches.every(m => m.isFinished))) {
+                state.status = 'complete';
+             } else {
+                state.status = 'round_complete';
+                if(!finals.length) {
+                    prepareNextRound(state, user);
+                }
+             }
+
+        } else if (currentRound.matches.length === 1) {
              state.status = 'complete';
         } else {
-             state.status = 'round_complete';
-             prepareNextRound(state, user); // Prepare the next round immediately
+            state.status = 'round_complete';
+            prepareNextRound(state, user);
         }
     }
 };
@@ -293,14 +339,10 @@ export const createTournament = (type: TournamentType, user: User, players: Play
             });
         }
         rounds.push({ id: 1, name: `${players.length}강`, matches });
-    } else { // round-robin for 'neighborhood'
+    } else {
         const roundMatches: Match[] = [];
         const numPlayers = players.length;
-        const playerIndices = Array.from({ length: numPlayers }, (_, i) => i);
-        if (numPlayers % 2 !== 0) {
-            // Logic for bye if we ever need it
-        }
-
+        
         const schedule: [number, number][] = [];
         for (let i = 0; i < numPlayers; i++) {
             for (let j = i + 1; j < numPlayers; j++) {
@@ -356,11 +398,8 @@ export const startNextRound = (state: TournamentState, user: User) => {
     
         const players = state.players;
         const schedule = [
-            [[0, 5], [1, 4], [2, 3]],
-            [[0, 4], [5, 3], [1, 2]],
-            [[0, 3], [4, 2], [5, 1]],
-            [[0, 2], [3, 1], [4, 5]],
-            [[0, 1], [2, 5], [3, 4]],
+            [[0, 5], [1, 4], [2, 3]], [[0, 4], [5, 3], [1, 2]], [[0, 3], [4, 2], [5, 1]],
+            [[0, 2], [3, 1], [4, 5]], [[0, 1], [2, 5], [3, 4]],
         ];
         const roundPairings = schedule[currentRound - 1];
         const roundMatches = roundPairings.map(pair => {
@@ -411,57 +450,6 @@ export const startNextRound = (state: TournamentState, user: User) => {
     }
 };
 
-export const skipToResults = (state: TournamentState, userId: string) => {
-    if (state.status === 'complete') return;
-
-    let safety = 0; // prevent infinite loops
-    while (state.status !== 'complete' && safety < 10) {
-        safety++;
-        
-        let allMatchesInStateFinished = true;
-        state.rounds.forEach(round => {
-            round.matches.forEach(match => {
-                if (!match.isFinished) {
-                    allMatchesInStateFinished = false;
-                    simulateAndFinishMatch(match, state.players);
-                }
-            });
-        });
-
-        if (allMatchesInStateFinished) {
-            state.status = 'complete';
-            break;
-        }
-
-        prepareNextRound(state, { id: userId } as User);
-
-        // After preparing, check again if all matches are finished (e.g., final round was just created and resolved)
-        const finalCheck = state.rounds.every(r => r.matches.every(m => m.isFinished));
-        if(finalCheck) {
-            state.status = 'complete';
-        }
-    }
-    
-    // Finalize state
-    state.currentSimulatingMatch = null;
-    state.timeElapsed = TOTAL_GAME_DURATION;
-};
-
-export const forfeitTournament = (state: TournamentState, userId: string) => {
-    if (state.status === 'complete' || state.status === 'eliminated') return;
-
-    state.rounds.forEach(round => {
-        round.matches.forEach(match => {
-            if (!match.isFinished && match.players.some(p => p?.id === userId)) {
-                match.isFinished = true;
-                match.winner = match.players.find(p => p && p.id !== userId) || null;
-            }
-        });
-    });
-
-    state.status = 'eliminated';
-};
-
 export const advanceSimulation = (state: TournamentState, user: User) => {
     if (state.status !== 'round_in_progress' || !state.currentSimulatingMatch) return;
 
@@ -488,30 +476,16 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
         if (p1.originalStats) p1.stats = JSON.parse(JSON.stringify(p1.originalStats));
         if (p2.originalStats) p2.stats = JSON.parse(JSON.stringify(p2.originalStats));
 
-        p1.condition = Math.floor(Math.random() * 61) + 40; // 40-100
-        p2.condition = Math.floor(Math.random() * 61) + 40; // 40-100
+        p1.condition = Math.floor(Math.random() * 61) + 40;
+        p2.condition = Math.floor(Math.random() * 61) + 40;
     }
     
-    // Fluctuate stats every second
     const playersToUpdate = [p1, p2];
     for (const player of playersToUpdate) {
         if (!player) continue;
-        
-        // Select one random stat to fluctuate
         const allStats = Object.values(CoreStat);
         const statToFluctuate = allStats[Math.floor(Math.random() * allStats.length)];
-
-        const condition = player.condition || 100;
-        const positiveChangeProbability = (condition - 20) / 100;
-        
-        let fluctuation: number;
-        if (Math.random() < positiveChangeProbability) {
-            // Positive fluctuation: 1 or 2
-            fluctuation = Math.floor(Math.random() * 2) + 1;
-        } else {
-            // Negative fluctuation: -1 or -2
-            fluctuation = Math.floor(Math.random() * 2) - 2;
-        }
+        const fluctuation = Math.random() < 0.5 ? 1 : -1;
         player.stats[statToFluctuate] = (player.stats[statToFluctuate] || 0) + fluctuation;
     }
 
@@ -539,20 +513,14 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
         }
     } else if (state.timeElapsed % 3 === 0 && state.timeElapsed < TOTAL_GAME_DURATION) {
         const pool = COMMENTARY_POOLS[phase];
-        
-        // Get the text of the last few comments to avoid repetition.
         const recentComments = state.currentMatchCommentary.slice(-3).map(c => c.text);
-        
         let newCommentText;
         if (pool.length > 1) {
             let attempts = 0;
-            let candidateText;
             do {
-                candidateText = pool[Math.floor(Math.random() * pool.length)];
-                candidateText = candidateText.replace('{p1}', p1.nickname).replace('{p2}', p2.nickname);
+                newCommentText = pool[Math.floor(Math.random() * pool.length)].replace('{p1}', p1.nickname).replace('{p2}', p2.nickname);
                 attempts++;
-            } while (recentComments.includes(candidateText) && attempts < 10); // Try up to 10 times to find a unique comment
-            newCommentText = candidateText;
+            } while (recentComments.includes(newCommentText) && attempts < 10);
         } else {
             newCommentText = pool[0].replace('{p1}', p1.nickname).replace('{p2}', p2.nickname);
         }
@@ -560,54 +528,11 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
         state.currentMatchCommentary.push({ text: newCommentText, phase, isRandomEvent: false });
     }
 
-    if (state.timeElapsed > 1 && state.timeElapsed < TOTAL_GAME_DURATION && state.timeElapsed % 5 === 0) {
-        const events = [
-            { type: CoreStat.Concentration, isPositive: false, text: "{player}님이 조급한 마음에 실수가 나왔습니다." },
-            { type: CoreStat.ThinkingSpeed, isPositive: true, text: "{player}님이 시간 압박에서도 좋은 수를 둡니다." },
-            { type: CoreStat.CombatPower, isPositive: true, text: "{player}님이 공격적인 수로 판세를 흔듭니다." },
-            { type: CoreStat.Stability, isPositive: true, text: "{player}님이 차분하게 받아치며 불리한 싸움을 버팁니다." },
-        ];
-        
-        if (Math.random() < 0.20) { // Base 20% chance for any event
-            const event = events[Math.floor(Math.random() * events.length)];
-            const p1Stat = p1.stats[event.type] || 100;
-            const p2Stat = p2.stats[event.type] || 100;
-            
-            let highStatPlayer: PlayerForTournament, lowStatPlayer: PlayerForTournament;
-            if (p1Stat > p2Stat) {
-                highStatPlayer = p1; lowStatPlayer = p2;
-            } else {
-                highStatPlayer = p2; lowStatPlayer = p1;
-            }
-
-            const playerForEvent = event.isPositive ? highStatPlayer : lowStatPlayer;
-            const otherPlayer = playerForEvent.id === p1.id ? p2 : p1;
-
-            const statDiff = Math.abs(p1Stat - p2Stat);
-            const N = Math.min(50, statDiff * 0.5); // Bonus chance capped at 50%
-            const eventChance = 0.20 + (N / 100);
-
-            if (Math.random() < eventChance) {
-                let triggeredMessage = event.text.replace('{player}', playerForEvent.nickname);
-                const isMistake = !event.isPositive;
-
-                const randomPercent = Math.random() * 8 + 2; // 2% to 10%
-                const points = Math.round(randomPercent / 2);
-                const scoreChange = (p1Cumulative + p2Cumulative) * (randomPercent / 100);
-                
-                triggeredMessage += ` (${isMistake ? '-' : '+'}${points}집)`;
-                
-                if (state.currentMatchScores) {
-                    if (playerForEvent.id === p1.id) {
-                        state.currentMatchScores.player1 += isMistake ? -scoreChange : scoreChange;
-                    } else {
-                        state.currentMatchScores.player2 += isMistake ? -scoreChange : scoreChange;
-                    }
-                }
-                
-                state.currentMatchCommentary.push({ text: triggeredMessage, phase, isRandomEvent: true });
-            }
-        }
+    if (state.timeElapsed > 1 && state.timeElapsed < TOTAL_GAME_DURATION && state.timeElapsed % 5 === 0 && Math.random() < 0.20) {
+        const eventPlayer = Math.random() < 0.5 ? p1 : p2;
+        eventPlayer.condition = Math.max(0, Math.min(120, eventPlayer.condition + (Math.random() > 0.5 ? 10 : -10)));
+        const eventText = `${eventPlayer.nickname}님이 ${eventPlayer.condition > 100 ? '컨디션 최상!' : '컨디션 난조.'}`;
+        state.currentMatchCommentary.push({ text: eventText, phase, isRandomEvent: true });
     }
     
     if (state.timeElapsed >= TOTAL_GAME_DURATION) {
@@ -622,6 +547,48 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
         
         processMatchCompletion(state, user, match, roundIndex);
     }
+};
+
+export const skipToResults = (state: TournamentState, userId: string) => {
+    for (let safety = 0; safety < 10; safety++) {
+        if ((state as any).status === 'complete') break;
+
+        const lastRound = state.rounds[state.rounds.length - 1];
+        if (lastRound.matches.every((m: Match) => m.isFinished)) {
+            if (lastRound.matches.length === 1 && (lastRound.name === '결승' || lastRound.name.includes("3,4위전"))) {
+                 const finalIsDone = state.rounds.find((r: Round) => r.name === '결승')?.matches[0]?.isFinished;
+                 const thirdPlaceIsDone = state.rounds.find((r: Round) => r.name === '3,4위전')?.matches[0]?.isFinished ?? true;
+                 if(finalIsDone && thirdPlaceIsDone) {
+                     state.status = 'complete';
+                     break;
+                 }
+            } else if (lastRound.matches.length === 1) {
+                state.status = 'complete';
+                break;
+            }
+            prepareNextRound(state, { id: userId } as User);
+        } else {
+            break;
+        }
+    }
+    
+    state.status = 'complete';
+};
+
+export const forfeitTournament = (state: TournamentState, userId: string) => {
+    if (state.status === 'complete' || state.status === 'eliminated') return;
+
+    state.rounds.forEach(round => {
+        round.matches.forEach(match => {
+            if (!match.isFinished && match.players.some(p => p?.id === userId)) {
+                match.isFinished = true;
+                match.winner = match.players.find(p => p && p.id !== userId) || null;
+            }
+        });
+    });
+
+    state.status = 'eliminated';
+    skipToResults(state, userId);
 };
 
 export const calculateRanks = (tournament: TournamentState): { id: string, nickname: string, rank: number }[] => {

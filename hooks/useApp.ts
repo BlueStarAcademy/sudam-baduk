@@ -432,10 +432,15 @@ export const useApp = () => {
         if (activeGame && !isGamePage) {
             window.location.hash = `#/game/${activeGame.id}`;
         } else if (!activeGame && isGamePage) {
-            let targetHash = '#/profile';
-            if (currentUserWithStatus?.status === 'waiting' && currentUserWithStatus?.mode) {
+            const redirect = sessionStorage.getItem('postGameRedirect');
+            sessionStorage.removeItem('postGameRedirect');
+
+            let targetHash = redirect || '#/profile';
+            
+            if (!redirect && currentUserWithStatus?.status === 'waiting' && currentUserWithStatus?.mode) {
                 targetHash = `#/waiting/${encodeURIComponent(currentUserWithStatus.mode)}`;
             }
+
             if (currentHash !== targetHash) {
                 window.location.hash = targetHash;
             }

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { LiveGameSession, User, Player, WinReason, StatChange, AnalysisResult, GameMode, GameSummary, InventoryItem, AvatarInfo, BorderInfo, AlkkagiStone } from '../types.js';
 import Avatar from './Avatar.js';
@@ -28,30 +29,58 @@ const getMannerRank = (score: number) => {
 };
 
 
-const XpBar: React.FC<{ initial: number; final: number; max: number; levelUp: boolean; xpGain: number; finalLevel: number; }> = ({ initial, final, max, levelUp, xpGain, finalLevel }) => {
-    // Width of the yellow bar, animates from initial to final
+const XpBar: React.FC<{ summary: GameSummary | undefined, isPlayful: boolean, currentUser: User }> = ({ summary, isPlayful, currentUser }) => {
+    const levelSummary = summary?.level;
+    if (!levelSummary) {
+        // Fallback display if summary is missing
+        const level = isPlayful ? currentUser.playfulLevel : currentUser.strategyLevel;
+        const xp = isPlayful ? currentUser.playfulXp : currentUser.strategyXp;
+        const maxXp = 1000 + (level - 1) * 200;
+        const percentage = (xp / maxXp) * 100;
+        return (
+             <div className="flex items-center gap-3">
+                 <span className="text-sm font-bold w-16 text-right">Lv.{level}</span>
+                <div className="w-full bg-gray-700/50 rounded-full h-4 relative border border-gray-900/50 overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-full" style={{ width: `${percentage}%` }}></div>
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black/80 drop-shadow-sm">
+                       {xp} / {maxXp}
+                    </span>
+                </div>
+                 <div className="w-20"></div>
+            </div>
+        );
+    }
+
+    const { initial, final, progress } = levelSummary;
+    const xpGain = summary?.xp?.change ?? 0;
+    const isLevelUp = initial < final;
+    
     const [barWidth, setBarWidth] = useState(0); 
-    // Opacity of the green "flash" element
     const [gainFlashOpacity, setGainFlashOpacity] = useState(0); 
     const [showGainText, setShowGainText] = useState(false);
+    const [levelUpTextVisible, setLevelUpTextVisible] = useState(false);
 
-    const initialPercent = max > 0 ? (initial / max) * 100 : 0;
-    const finalPercent = max > 0 ? (levelUp ? 100 : (final / max) * 100) : 0;
+    const initialPercent = progress.max > 0 ? (progress.initial / progress.max) * 100 : 0;
+    const finalPercent = progress.max > 0 ? (isLevelUp ? 100 : (progress.final / progress.max) * 100) : 0;
     const gainPercent = finalPercent - initialPercent;
 
     useEffect(() => {
-        // Set initial state without animation
         setBarWidth(initialPercent);
-        setGainFlashOpacity(0);
         setShowGainText(false);
+        setGainFlashOpacity(0);
+        setLevelUpTextVisible(false);
 
-        // Start animation after a short delay
         const startTimer = setTimeout(() => {
-            setShowGainText(true);
-            setGainFlashOpacity(1); // Show the green flash
-            setBarWidth(finalPercent); // Start the yellow bar animation
+            if(xpGain > 0) {
+                setShowGainText(true);
+                setGainFlashOpacity(1);
+            }
+            setBarWidth(finalPercent);
 
-            // After the yellow bar animation starts, fade out the green flash
+            if (isLevelUp) {
+                setTimeout(() => setLevelUpTextVisible(true), 800);
+            }
+            
             const fadeTimer = setTimeout(() => {
                 setGainFlashOpacity(0);
             }, 500);
@@ -60,13 +89,13 @@ const XpBar: React.FC<{ initial: number; final: number; max: number; levelUp: bo
         }, 500);
 
         return () => clearTimeout(startTimer);
-    }, [initial, final, max, levelUp, initialPercent, finalPercent]);
+    }, [initial, final, progress, isLevelUp, initialPercent, finalPercent, xpGain]);
     
-    const gainTextKey = `${xpGain}-${initial}`;
-
+    const gainTextKey = `${xpGain}-${progress.initial}`;
+    
     return (
-        <div className="flex items-center gap-3">
-             <span className="text-sm font-bold w-16 text-right">Lv.{finalLevel}</span>
+        <div className="flex items-center gap-3 relative">
+             <span className="text-sm font-bold w-16 text-right">Lv.{final}</span>
             <div className="w-full bg-gray-700/50 rounded-full h-4 relative border border-gray-900/50 overflow-hidden">
                 <div 
                     className="h-full bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-full transition-all duration-1000 ease-out"
@@ -83,13 +112,12 @@ const XpBar: React.FC<{ initial: number; final: number; max: number; levelUp: bo
                 ></div>
 
                 <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black/80 drop-shadow-sm">
-                   {final} / {max}
+                   {isLevelUp ? `${progress.max} / ${progress.max}` : `${progress.final} / ${progress.max}`}
                 </span>
-
-                {levelUp && (
-                    <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white animate-pulse" style={{textShadow: '0 0 5px black'}}>
+                 {levelUpTextVisible && (
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-2xl font-black text-yellow-300 animate-bounce" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.7)'}}>
                         LEVEL UP!
-                    </span>
+                    </div>
                 )}
             </div>
              {showGainText && xpGain > 0 && (
@@ -125,23 +153,23 @@ const ScoreDetailsComponent: React.FC<{ analysis: AnalysisResult, session: LiveG
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1 bg-gray-800/50 p-2 rounded-md">
                     <h3 className="font-bold text-center mb-1">흑</h3>
-                    <div className="flex justify-between"><span>영토:</span> <span>{scoreDetails.black.territory.toFixed(0)}</span></div>
-                    <div className="flex justify-between"><span>따낸 돌:</span> <span>{scoreDetails.black.liveCaptures ?? 0}</span></div>
-                    <div className="flex justify-between"><span>사석:</span> <span>{scoreDetails.black.deadStones ?? 0}</span></div>
-                    {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span>{scoreDetails.black.baseStoneBonus}</span></div>}
-                    {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span>{scoreDetails.black.hiddenStoneBonus}</span></div>}
-                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span>{scoreDetails.black.timeBonus.toFixed(1)}</span></div>}
+                    <div className="flex justify-between"><span>영토:</span> <span className="font-mono">{scoreDetails.black.territory.toFixed(0)}</span></div>
+                    <div className="flex justify-between"><span>따낸 돌:</span> <span className="font-mono">{scoreDetails.black.liveCaptures ?? 0}</span></div>
+                    <div className="flex justify-between"><span>사석:</span> <span className="font-mono">{scoreDetails.black.deadStones ?? 0}</span></div>
+                    {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span className="font-mono">{scoreDetails.black.baseStoneBonus}</span></div>}
+                    {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span className="font-mono">{scoreDetails.black.hiddenStoneBonus}</span></div>}
+                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span className="font-mono">{scoreDetails.black.timeBonus.toFixed(1)}</span></div>}
                     <div className="flex justify-between border-t border-gray-600 pt-1 mt-1 font-bold text-base"><span>총점:</span> <span className="text-yellow-300">{scoreDetails.black.total.toFixed(1)}</span></div>
                 </div>
                 <div className="space-y-1 bg-gray-800/50 p-2 rounded-md">
                     <h3 className="font-bold text-center mb-1">백</h3>
-                    <div className="flex justify-between"><span>영토:</span> <span>{scoreDetails.white.territory.toFixed(0)}</span></div>
-                    <div className="flex justify-between"><span>따낸 돌:</span> <span>{scoreDetails.white.liveCaptures ?? 0}</span></div>
-                    <div className="flex justify-between"><span>사석:</span> <span>{scoreDetails.white.deadStones ?? 0}</span></div>
-                    <div className="flex justify-between"><span>덤:</span> <span>{scoreDetails.white.komi}</span></div>
-                    {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span>{scoreDetails.white.baseStoneBonus}</span></div>}
-                    {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span>{scoreDetails.white.hiddenStoneBonus}</span></div>}
-                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span>{scoreDetails.white.timeBonus.toFixed(1)}</span></div>}
+                    <div className="flex justify-between"><span>영토:</span> <span className="font-mono">{scoreDetails.white.territory.toFixed(0)}</span></div>
+                    <div className="flex justify-between"><span>따낸 돌:</span> <span className="font-mono">{scoreDetails.white.liveCaptures ?? 0}</span></div>
+                    <div className="flex justify-between"><span>사석:</span> <span className="font-mono">{scoreDetails.white.deadStones ?? 0}</span></div>
+                    <div className="flex justify-between"><span>덤:</span> <span className="font-mono">{scoreDetails.white.komi}</span></div>
+                    {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span className="font-mono">{scoreDetails.white.baseStoneBonus}</span></div>}
+                    {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span className="font-mono">{scoreDetails.white.hiddenStoneBonus}</span></div>}
+                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span className="font-mono">{scoreDetails.white.timeBonus.toFixed(1)}</span></div>}
                     <div className="flex justify-between border-t border-gray-600 pt-1 mt-1 font-bold text-base"><span>총점:</span> <span className="text-yellow-300">{scoreDetails.white.total.toFixed(1)}</span></div>
                 </div>
             </div>
@@ -245,24 +273,30 @@ const GameSummaryModal: React.FC<GameSummaryModalProps> = ({ session, currentUse
     const borderUrl = useMemo(() => BORDER_POOL.find((b: BorderInfo) => b.id === currentUser.borderId)?.url, [currentUser.borderId]);
     const rewardItem = mySummary?.items?.[0];
     const rewardItemTemplate = rewardItem ? CONSUMABLE_ITEMS.find((item: { name: string; }) => item.name === rewardItem.name) : null;
+    
+    const hasLeveledUp = useMemo(() => mySummary?.level?.initial !== mySummary?.level?.final, [mySummary]);
 
     useEffect(() => {
         if (soundPlayed.current) return;
         
-        if (isWinner === true) audioService.gameWin();
-        else if (isWinner === false) audioService.gameLose();
+        let soundTimer: number | undefined;
+
+        if (hasLeveledUp) {
+            soundTimer = window.setTimeout(() => audioService.levelUp(), 800);
+        } else if (isWinner === true) {
+            audioService.gameWin();
+        } else if (isWinner === false) {
+            audioService.gameLose();
+        }
         
-        if (mySummary) {
-            if (mySummary.level && mySummary.level.initial < mySummary.level.final) {
-                setTimeout(() => audioService.levelUp(), 800);
-            }
-            if (mySummary.manner && getMannerRank(mySummary.manner.initial) !== getMannerRank(mySummary.manner.final)) {
-                 setTimeout(() => audioService.levelUp(), 900);
-            }
+        if (mySummary?.manner && getMannerRank(mySummary.manner.initial) !== getMannerRank(mySummary.manner.final)) {
+             setTimeout(() => audioService.levelUp(), 900);
         }
         
         soundPlayed.current = true;
-    }, [isWinner, mySummary]);
+
+        return () => clearTimeout(soundTimer);
+    }, [isWinner, mySummary, hasLeveledUp]);
     
     const isDraw = winner === Player.None;
     const winnerUser = winner === Player.Black 
@@ -373,7 +407,7 @@ const GameSummaryModal: React.FC<GameSummaryModalProps> = ({ session, currentUse
                                         </p>
                                     </div>
                                 </div>
-                                {mySummary.level && <XpBar initial={mySummary.level.progress.initial} final={mySummary.level.progress.final} max={mySummary.level.progress.max} levelUp={mySummary.level.initial < mySummary.level.final} xpGain={mySummary.xp.change} finalLevel={mySummary.level.final} />}
+                                <XpBar summary={mySummary} isPlayful={isPlayful} currentUser={currentUser} />
                                 <div className="grid grid-cols-2 gap-2 text-xs text-center">
                                     <div className="bg-gray-800 p-2 rounded-md">
                                         <p className="text-gray-400">랭킹 점수</p>

@@ -1,6 +1,5 @@
-
 import { getGoLogic } from './goLogic.js';
-import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT } from '../constants.js';
+import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_KOMI } from '../constants.js';
 import * as types from '../types.js';
 import { analyzeGame } from './kataGoService.js';
 import type { LiveGameSession, AppState, Negotiation, ActionButton, GameMode } from '../types.js';
@@ -11,18 +10,33 @@ import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.j
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
 import * as effectService from './effectService.js';
+// FIX: Correctly import summaryService to resolve module not found error.
 import { endGame } from './summaryService.js';
 
 export const finalizeAnalysisResult = (baseAnalysis: types.AnalysisResult, session: types.LiveGameSession): types.AnalysisResult => {
     const finalAnalysis = JSON.parse(JSON.stringify(baseAnalysis)); // Deep copy
 
+    const { mode, settings, baseStoneCaptures, hiddenStoneCaptures } = session;
+    const isBaseMode = mode === types.GameMode.Base || (mode === types.GameMode.Mix && settings.mixedModes?.includes(types.GameMode.Base));
+    const isHiddenMode = mode === types.GameMode.Hidden || (mode === types.GameMode.Mix && settings.mixedModes?.includes(types.GameMode.Hidden));
+
     // Base stone bonus
-    finalAnalysis.scoreDetails.black.baseStoneBonus = 0;
-    finalAnalysis.scoreDetails.white.baseStoneBonus = 0;
+    if (isBaseMode && baseStoneCaptures) {
+        finalAnalysis.scoreDetails.black.baseStoneBonus = (baseStoneCaptures[types.Player.Black] || 0) * 5;
+        finalAnalysis.scoreDetails.white.baseStoneBonus = (baseStoneCaptures[types.Player.White] || 0) * 5;
+    } else {
+        finalAnalysis.scoreDetails.black.baseStoneBonus = 0;
+        finalAnalysis.scoreDetails.white.baseStoneBonus = 0;
+    }
 
     // Hidden stone bonus
-    finalAnalysis.scoreDetails.black.hiddenStoneBonus = 0;
-    finalAnalysis.scoreDetails.white.hiddenStoneBonus = 0;
+    if (isHiddenMode && hiddenStoneCaptures) {
+        finalAnalysis.scoreDetails.black.hiddenStoneBonus = (hiddenStoneCaptures[types.Player.Black] || 0) * 5; // Using 5 points as per server/modes/standard.ts
+        finalAnalysis.scoreDetails.white.hiddenStoneBonus = (hiddenStoneCaptures[types.Player.White] || 0) * 5;
+    } else {
+        finalAnalysis.scoreDetails.black.hiddenStoneBonus = 0;
+        finalAnalysis.scoreDetails.white.hiddenStoneBonus = 0;
+    }
     
     // Time bonus
     if (session.mode === types.GameMode.Speed || (session.mode === types.GameMode.Mix && session.settings.mixedModes?.includes(types.GameMode.Speed))) {
@@ -76,11 +90,38 @@ export const getGameResult = (game: LiveGameSession): LiveGameSession => {
     game.gameStatus = 'scoring';
     game.winReason = 'score';
     game.isAnalyzing = true;
-    
-    analyzeGame(game)
+
+    const fallbackToInfluenceScoring = async (failedGame: LiveGameSession, reason: string) => {
+        console.warn(`[Scoring] KataGo analysis failed or was inconclusive. Reason: ${reason}. Falling back to influence-based scoring.`);
+        
+        const logic = getGoLogic(failedGame);
+        const { score } = logic.getScore();
+        
+        const komi = failedGame.finalKomi ?? failedGame.settings.komi ?? DEFAULT_KOMI;
+        failedGame.finalScores = {
+            black: score.black,
+            white: score.white + komi
+        };
+        
+        failedGame.isAnalyzing = false;
+        
+        const winner = failedGame.finalScores.black > failedGame.finalScores.white
+            ? types.Player.Black
+            : types.Player.White;
+            
+        await endGame(failedGame, winner, 'score');
+    };
+
+    analyzeGame(game, { maxVisits: 100 })
         .then(async (baseAnalysis) => {
             const freshGame = await db.getLiveGame(game.id);
             if (!freshGame || freshGame.gameStatus !== 'scoring') return;
+
+            // Check for the error condition from kataGoService (empty/default result)
+            if (baseAnalysis.areaScore.black === 0 && baseAnalysis.areaScore.white === 0 && baseAnalysis.recommendedMoves.length === 0) {
+                await fallbackToInfluenceScoring(freshGame, "KataGo returned empty/default result.");
+                return;
+            }
 
             const finalAnalysis = finalizeAnalysisResult(baseAnalysis, freshGame);
 
@@ -98,18 +139,14 @@ export const getGameResult = (game: LiveGameSession): LiveGameSession => {
             
             await endGame(freshGame, winner, 'score');
         })
-        .catch(error => {
-            console.error(`[AI Analysis] scoring failed for game ${game.id}.`, error);
-            db.getLiveGame(game.id).then(async (failedGame: types.LiveGameSession | null) => {
-                if (failedGame) {
-                    failedGame.isAnalyzing = false;
-                    // Decide a winner randomly as a fallback
-                    const winner = Math.random() < 0.5 ? types.Player.Black : types.Player.White;
-                    // End the game properly to process summaries and rewards
-                    await endGame(failedGame, winner, 'score'); // Re-use 'score' reason, as it's a scoring failure
-                }
-            });
+        .catch(async (error) => {
+            console.error(`[AI Analysis] Scoring analysis promise rejected for game ${game.id}.`, error);
+            const freshGame = await db.getLiveGame(game.id);
+            if (freshGame && freshGame.gameStatus === 'scoring') {
+                await fallbackToInfluenceScoring(freshGame, "Promise rejection during analysis.");
+            }
         });
+        
     return game;
 };
 
@@ -349,4 +386,4 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
         updatedGames.push(game);
     }
     return updatedGames;
-};
+}

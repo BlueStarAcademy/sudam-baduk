@@ -30,14 +30,13 @@ function usePrevious<T>(value: T): T | undefined {
 
 const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
     const { handlers } = useAppContext();
-    const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
     const isPlayfulAiSupported = PLAYFUL_AI_MODES.includes(mode);
 
-    if (!isStrategic && !isPlayfulAiSupported) {
+    if (!isPlayfulAiSupported) {
         return null;
     }
     
-    const botName = isStrategic ? `${mode}봇(카타고)` : `${mode}봇`;
+    const botName = `${mode}봇`;
 
     return (
         <div className="bg-panel rounded-lg shadow-lg p-3 flex items-center justify-between flex-shrink-0 text-on-panel">
@@ -201,11 +200,8 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                     <div className="flex-1 min-w-0">
                         <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                     </div>
-                    <div className="w-20 flex-shrink-0">
-                        <QuickAccessSidebar compact={true} fillHeight={true} />
-                    </div>
                 </div>
-                 <div className="flex-1 min-h-0 bg-panel border border-color rounded-lg shadow-lg flex flex-col">
+                 <div className="h-60 flex-shrink-0 flex flex-col bg-panel border border-color rounded-lg shadow-lg">
                     <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
                 </div>
             </div>
@@ -242,18 +238,18 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                    <div className="flex-shrink-0">
                       <AiChallengePanel mode={mode} />
                   </div>
-                  <div className="flex-1 flex flex-col gap-4 min-h-0">
-                      <div className="flex-1 min-h-0">
+                  <div className="bg-panel border border-color rounded-lg shadow-lg flex flex-col flex-1 min-h-0 text-on-panel">
+                      <div className="flex-[6] min-h-0">
                           <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                       </div>
-                      <div className="h-80 flex-shrink-0 flex flex-col bg-panel border border-color rounded-lg shadow-lg">
+                      <div className="flex-[4] min-h-0 border-t-2 border-color">
                           <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
                       </div>
                   </div>
               </div>
               
               {/* Right Sidebar Column */}
-              <div className="lg:col-span-2 grid grid-rows-[1fr_auto] gap-4">
+              <div className="lg:col-span-2 grid grid-rows-2 gap-4">
                 <div className="flex flex-row gap-4 items-stretch min-h-0">
                   <div className="flex-1 bg-panel border border-color rounded-lg shadow-lg min-w-0">
                     <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />

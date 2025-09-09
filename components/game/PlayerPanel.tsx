@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 // FIX: Import missing types from the centralized types file.
 import { Player, GameProps, GameMode, User, AlkkagiPlacementType, GameSettings, GameStatus, UserWithStatus } from '../../types/index.js';
@@ -123,8 +124,8 @@ const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
 
     const effectiveByoyomiTime = isFoulMode ? totalTime : byoyomiTime;
 
-    const levelToDisplay = isStrategic ? user.strategyLevel : user.playfulLevel;
-    const levelLabel = isStrategic ? '전략' : '놀이';
+    const levelToDisplay = isAiPlayer ? session.settings.aiDifficulty : (isStrategic ? user.strategyLevel : user.playfulLevel);
+    const levelLabel = isAiPlayer ? 'AI' : (isStrategic ? '전략' : '놀이');
     const levelText = `${levelLabel} Lv.${levelToDisplay}`;
 
     const orderClass = isLeft ? 'flex-row' : 'flex-row-reverse';

@@ -65,7 +65,7 @@ const AppContent: React.FC = () => {
             const timer = setTimeout(() => setShowQuestToast(false), 3000);
             return () => clearTimeout(timer);
         }
-    }, [hasClaimableQuest, prevHasClaimableQuest, settings.features.questNotifications]);
+    }, [hasClaimableQuest, settings.features.questNotifications]);
 
 
     useEffect(() => {

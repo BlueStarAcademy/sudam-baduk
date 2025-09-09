@@ -789,10 +789,10 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                     </div>
                 ) : (
                     <>
-                        <div className="flex-shrink-0 mb-4 h-[28rem]">
+                        <div className="flex-1 min-h-0 mb-2">
                             {disassembleMode ? (
                                 <DisassemblyPreviewPanel selectedIds={selectedForDisassembly} inventory={inventory} />
-                            ) : !selectedItem && (activeTab === 'equipment' || activeTab === 'all') ? (
+                            ) : !selectedItem ? (
                                 <div className="w-full h-full bg-secondary/50 rounded-lg p-4 flex flex-col items-center justify-center text-center text-tertiary">
                                     <h3 className="font-bold text-lg">아이템 정보</h3>
                                     <p className="text-sm mt-4">아래 목록에서 아이템을 선택하여<br/>상세 정보를 확인하세요.</p>
@@ -800,8 +800,8 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                             ) : (activeTab !== 'equipment' && activeTab !== 'all') || (selectedItem && selectedItem.type !== 'equipment') ? (
                                  <ItemDisplayCard item={selectedItem} title="선택 아이템" currentUser={currentUser} activeTab={activeTab} isLarge={true} />
                             ) : (
-                                <div className="w-full flex flex-col md:flex-row gap-4 h-full">
-                                    <div className="w-full md:w-1/2 h-full min-h-0">
+                                <div className="w-full flex flex-row gap-4 h-full">
+                                    <div className="w-1/2 h-full min-h-0">
                                         <ItemDisplayCard
                                             item={currentlyEquippedItem}
                                             title="현재 장착"
@@ -810,7 +810,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                                             activeTab={activeTab}
                                         />
                                     </div>
-                                    <div className="w-full md:w-1/2 h-full min-h-0">
+                                    <div className="w-1/2 h-full min-h-0">
                                         <ItemDisplayCard
                                             item={selectedItem}
                                             title="선택 아이템"
@@ -849,7 +849,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                     </>
                 )}
 
-                <div className="flex-1 flex flex-col pt-2 min-h-0">
+                <div className="flex-shrink-0 flex flex-col pt-2 h-56">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2 flex-shrink-0">
                         <div className="flex items-center gap-4">
                             <h3 className="text-lg font-bold text-on-panel">인벤토리 ({inventory.length} / {inventorySlots})</h3>
@@ -871,49 +871,52 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                          </div>
                     </div>
                     
-                    <div className="grid grid-cols-10 gap-1 flex-grow overflow-y-auto pr-2 bg-tertiary/30 p-2 rounded-md">
-                        {inventoryDisplaySlots.map((item, index) => {
-                            const isDisassemblable = item?.type === 'equipment' && !item.isEquipped;
-                            const isNotDisassemblable = !item || !isDisassemblable;
-                            const isSelectedForDisassembly = disassembleMode && item && selectedForDisassembly.has(item.id);
+                    <div className="flex-grow overflow-y-auto pr-2 bg-tertiary/30 p-2 rounded-md">
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-1">
+                            {inventoryDisplaySlots.map((item, index) => {
+                                const isDisassemblable = item?.type === 'equipment' && !item.isEquipped;
+                                const isNotDisassemblable = !item || !isDisassemblable;
+                                const isSelectedForDisassembly = disassembleMode && item && selectedForDisassembly.has(item.id);
                         
-                            return (
-                                <div
-                                    key={item?.id || `empty-${index}`}
-                                    onClick={() => {
-                                        if (disassembleMode && isDisassemblable) {
-                                            toggleDisassemblySelection(item.id);
-                                        } else if (!disassembleMode && item) {
-                                            setSelectedItemId(item.id);
-                                            setShowSynthesis(false);
-                                        }
-                                    }}
-                                    className={`relative aspect-square rounded-md transition-all duration-200 ${item ? 'hover:scale-105' : 'bg-tertiary/50'} ${disassembleMode && !isDisassemblable ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-                                >
-                                    {item && (
-                                        <>
-                                            <div className={`absolute inset-0 rounded-md border-2 ${selectedItemId === item.id && !disassembleMode ? 'border-accent ring-2 ring-accent' : 'border-black/20'}`} />
-                                            <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-sm" />
-                                            {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-1" />}
-                                            {item.isEquipped && <div className="absolute top-0.5 right-0.5 text-xs font-bold text-white bg-blue-600/80 px-1 rounded-bl-md">E</div>}
-                                            {item.quantity && item.quantity > 1 && <span className="absolute bottom-0 right-0 text-xs font-bold text-white bg-black/60 px-1 rounded-tl-md">{item.quantity}</span>}
-                                            {item.type === 'equipment' && renderStarDisplay(item.stars)}
-                                            
-                                            {disassembleMode && (
-                                                <>
-                                                    {isNotDisassemblable && <div className="absolute inset-0 bg-black/70 rounded-sm"></div>}
-                                                    {isSelectedForDisassembly && (
-                                                        <div className="absolute inset-0 bg-red-500/70 flex items-center justify-center text-3xl text-white rounded-sm">✓</div>
-                                                    )}
-                                                </>
-                                            )}
-                                            
-                                            {enhancementAnimationTarget?.itemId === item.id && <div className="absolute inset-0 animate-ping rounded-md bg-yellow-400/50"></div>}
-                                        </>
-                                    )}
-                                </div>
-                            );
-                        })}
+                                return (
+                                    <div
+                                        key={item?.id || `empty-${index}`}
+                                        onClick={() => {
+                                            if (disassembleMode && isDisassemblable) {
+                                                toggleDisassemblySelection(item.id);
+                                            } else if (!disassembleMode && item) {
+                                                setSelectedItemId(item.id);
+                                                setShowSynthesis(false);
+                                            }
+                                        }}
+                                        className={`relative aspect-square rounded-md transition-all duration-200 ${item ? 'hover:scale-105' : 'bg-tertiary/50'} ${disassembleMode && !isNotDisassemblable ? 'cursor-pointer' : disassembleMode ? 'cursor-not-allowed' : item ? 'cursor-pointer' : ''}`}
+                                    >
+                                        {item && (
+                                            <>
+                                                <div className={`absolute inset-0 rounded-md border-2 ${selectedItemId === item.id && !disassembleMode ? 'border-accent ring-2 ring-accent' : 'border-black/20'}`} />
+                                                <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-sm" />
+                                                {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-1" />}
+                                                
+                                                {item.isEquipped && <div className="absolute top-0.5 right-0.5 text-xs font-bold text-white bg-blue-600/80 px-1 rounded-bl-md">E</div>}
+                                                {item.quantity && item.quantity > 1 && <span className="absolute bottom-0 right-0 text-xs font-bold text-white bg-black/60 px-1 rounded-tl-md">{item.quantity}</span>}
+                                                {item.type === 'equipment' && renderStarDisplay(item.stars)}
+                                                
+                                                {disassembleMode && (
+                                                    <>
+                                                        {isNotDisassemblable && <div className="absolute inset-0 bg-black/70 rounded-sm"></div>}
+                                                        {isSelectedForDisassembly && (
+                                                            <div className="absolute inset-0 bg-red-500/70 flex items-center justify-center text-3xl text-white rounded-sm">✓</div>
+                                                        )}
+                                                    </>
+                                                )}
+                                                
+                                                {enhancementAnimationTarget?.itemId === item.id && <div className="absolute inset-0 animate-ping rounded-md bg-yellow-400/50"></div>}
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                     <div className="flex justify-end items-center mt-2 flex-shrink-0 text-sm">
                         {canExpand ? (

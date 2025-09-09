@@ -45,7 +45,13 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
     
     const handleRefresh = () => {
         if (canRefresh && canAfford) {
-            onAction({ type: 'SINGLE_PLAYER_REFRESH_PLACEMENT', payload: { gameId: session.id } });
+            if (nextCost > 0) {
+                if (window.confirm(`${nextCost}골드가 소모됩니다. 새로고침 하시겠습니까?`)) {
+                    onAction({ type: 'SINGLE_PLAYER_REFRESH_PLACEMENT', payload: { gameId: session.id } });
+                }
+            } else {
+                onAction({ type: 'SINGLE_PLAYER_REFRESH_PLACEMENT', payload: { gameId: session.id } });
+            }
         }
     };
 

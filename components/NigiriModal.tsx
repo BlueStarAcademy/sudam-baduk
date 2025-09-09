@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LiveGameSession, User, ServerAction } from '../types.js';
-import { audioService } from '../services/audioService.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
+import { audioService } from '../services/audioService.js';
 
 interface NigiriModalProps {
     session: LiveGameSession;
@@ -12,10 +12,20 @@ interface NigiriModalProps {
 }
 
 const NigiriModal: React.FC<NigiriModalProps> = ({ session, currentUser, onAction }) => {
-    const [countdown, setCountdown] = useState(15);
-    const choosingSoundPlayed = useRef(false);
+    const { id: gameId, nigiri, player1, player2, gameStatus, guessDeadline } = session;
     
-    const { id: gameId, nigiri, player1, player2, gameStatus } = session;
+    // FIX: Initialize countdown from session deadline to prevent flicker. Default to 30.
+    const [countdown, setCountdown] = useState(() => {
+        if (!guessDeadline) return 30;
+        return Math.max(0, Math.ceil((guessDeadline - Date.now()) / 1000));
+    });
+
+    const choosingSoundPlayed = useRef(false);
+    const latestProps = useRef({ session, currentUser, onAction });
+    useEffect(() => {
+        latestProps.current = { session, currentUser, onAction };
+    });
+
     if (!nigiri) return null;
 
     const { holderId, guesserId, result, stones: stoneCount, guess } = nigiri;
@@ -23,32 +33,31 @@ const NigiriModal: React.FC<NigiriModalProps> = ({ session, currentUser, onActio
     
     useEffect(() => {
         if (gameStatus === 'nigiri_choosing' && !choosingSoundPlayed.current) {
+            audioService.rollDice(1); // Re-use a simple sound
             choosingSoundPlayed.current = true;
         }
     }, [gameStatus]);
 
     const handleGuess = useCallback((myGuess: 1 | 2) => {
-        if (currentUser.id !== session.nigiri?.guesserId || session.gameStatus !== 'nigiri_guessing') {
+        const { session: currentSession, onAction: currentOnAction } = latestProps.current;
+        if (currentSession.nigiri?.guesserId !== currentUser.id || currentSession.gameStatus !== 'nigiri_guessing') {
             return;
         }
-        onAction({ type: 'NIGIRI_GUESS', payload: { gameId: session.id, guess: myGuess } });
-    }, [session, currentUser, onAction]);
+        currentOnAction({ type: 'NIGIRI_GUESS', payload: { gameId: currentSession.id, guess: myGuess } });
+    }, [currentUser.id]);
 
     useEffect(() => {
-        if (gameStatus !== 'nigiri_guessing' || !isGuesser) return;
-        
-        const deadline = session.guessDeadline || (Date.now() + 15 * 1000);
+        if (gameStatus !== 'nigiri_guessing' || !isGuesser || !guessDeadline) return;
         
         const timerId = setInterval(() => {
-            const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-            setCountdown(remaining);
-            if (remaining <= 0) {
-                clearInterval(timerId);
-                // Server will handle the timeout action
-            }
+             const remaining = Math.max(0, Math.ceil((guessDeadline - Date.now()) / 1000));
+             setCountdown(remaining);
+             if (remaining <= 0) {
+                 clearInterval(timerId);
+             }
         }, 1000);
         return () => clearInterval(timerId);
-    }, [gameStatus, isGuesser, session.guessDeadline]);
+    }, [gameStatus, isGuesser, guessDeadline]);
     
     const getTitle = () => {
         switch (gameStatus) {
@@ -125,7 +134,7 @@ const NigiriModal: React.FC<NigiriModalProps> = ({ session, currentUser, onActio
                         <p className="text-gray-300 mb-4">쥔 돌의 개수가 홀수일지 짝수일지 선택하세요.</p>
                         <div className="my-4 text-center">
                             <div className="w-full bg-gray-700 rounded-full h-2.5 mb-2 overflow-hidden">
-                                <div className="bg-yellow-400 h-2.5 rounded-full" style={{ width: `${(countdown / 15) * 100}%`, transition: 'width 1s linear' }}></div>
+                                <div className="bg-yellow-400 h-2.5 rounded-full" style={{ width: `${(countdown / 30) * 100}%`, transition: 'width 1s linear' }}></div>
                             </div>
                             <div className="text-5xl font-mono text-yellow-300">{countdown}</div>
                         </div>
@@ -161,7 +170,7 @@ const NigiriModal: React.FC<NigiriModalProps> = ({ session, currentUser, onActio
 
     return (
         <DraggableWindow title={getTitle()} windowId="nigiri">
-            {renderContent()}
+             {renderContent()}
         </DraggableWindow>
     );
 };

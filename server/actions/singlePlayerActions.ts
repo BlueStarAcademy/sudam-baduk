@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, LiveGameSession, Player, GameMode, Point, BoardState, SinglePlayerStageInfo, SinglePlayerMissionState } from '../../types.js';
-import { SINGLE_PLAYER_STAGES, KATAGO_LEVEL_TO_MAX_VISITS, SINGLE_PLAYER_MISSIONS } from '../../constants/singlePlayerConstants.js';
+import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../../constants/singlePlayerConstants.js';
 import { getAiUser } from '../aiPlayer.js';
 
 type HandleActionResult = { 
@@ -44,6 +44,26 @@ const generateSinglePlayerBoard = (stage: SinglePlayerStageInfo): { board: Board
     placeStonesOnBoard(board, stage.boardSize, blackToPlace, Player.Black); // Place remaining black stones
     
     return { board, blackPattern: blackPatternStones, whitePattern: whitePatternStones };
+};
+
+const getRequiredProgressForStageId = (stageId: string): number => {
+    const index = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stageId);
+    if (index !== -1) return index + 1; // Progress is index + 1
+    const parts = stageId.split('-');
+    if (parts.length !== 2) return Infinity; // Cannot parse, lock it
+    const levelPart = parts[0];
+    const stageNum = parseInt(parts[1], 10);
+    if (isNaN(stageNum)) return Infinity;
+    let baseProgress = 0;
+    switch (levelPart) {
+        case '입문': baseProgress = 0; break;
+        case '초급': baseProgress = 20; break;
+        case '중급': baseProgress = 40; break;
+        case '고급': baseProgress = 60; break;
+        case '유단자': baseProgress = 80; break;
+        default: return Infinity;
+    }
+    return baseProgress + stageNum;
 };
 
 
@@ -120,11 +140,8 @@ export const handleSinglePlayerAction = async (volatileState: VolatileState, act
                 turnStartTime: now,
                 turnDeadline: now + (stage.timeControl.mainTime * 60 * 1000),
                 effectiveCaptureTargets: {
-                    // FIX: Changed 'types.Player' to 'Player' to match the imported symbols and resolve 'Cannot find name' errors.
                     [Player.None]: 0,
-                    // FIX: Changed 'types.Player' to 'Player' to match the imported symbols and resolve 'Cannot find name' errors.
                     [Player.Black]: stage.targetScore.black,
-                    // FIX: Changed 'types.Player' to 'Player' to match the imported symbols and resolve 'Cannot find name' errors.
                     [Player.White]: stage.targetScore.white,
                 },
                 singlePlayerPlacementRefreshesUsed: 0,
@@ -187,16 +204,18 @@ export const handleSinglePlayerAction = async (volatileState: VolatileState, act
             if (!user.singlePlayerMissions) user.singlePlayerMissions = {};
             if (user.singlePlayerMissions[missionId]?.isStarted) return { error: '이미 시작된 미션입니다.' };
 
-            const unlockStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === missionInfo.unlockStageId);
-            if ((user.singlePlayerProgress ?? 0) <= unlockStageIndex) return { error: '미션이 아직 잠겨있습니다.' };
-
-            const initialAmount = Math.min(missionInfo.rewardAmount, missionInfo.maxCapacity);
+            if (missionInfo.unlockStageId) {
+                const requiredProgress = getRequiredProgressForStageId(missionInfo.unlockStageId);
+                if ((user.singlePlayerProgress ?? 0) < requiredProgress) {
+                    return { error: '미션이 아직 잠겨있습니다.' };
+                }
+            }
 
             user.singlePlayerMissions[missionId] = {
                 id: missionId,
                 isStarted: true,
                 lastCollectionTime: now,
-                accumulatedAmount: initialAmount,
+                accumulatedAmount: 0, // Start from zero
             };
             await db.updateUser(user);
             return { clientResponse: { updatedUser: user } };

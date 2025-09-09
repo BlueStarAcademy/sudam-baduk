@@ -70,6 +70,7 @@ const migrations: { [version: number]: string } = {
         ALTER TABLE live_games ADD COLUMN whitePatternStones TEXT;
         ALTER TABLE live_games ADD COLUMN singlePlayerPlacementRefreshesUsed INTEGER;
     `,
+    31: 'ALTER TABLE users ADD COLUMN singlePlayerMissions TEXT;',
 };
 
 export const initializeAndGetDb = async (): Promise<Database> => {

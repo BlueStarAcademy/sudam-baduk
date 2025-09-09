@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { MATERIAL_ITEMS } from '../constants.js';
+import { audioService } from '../services/audioService.js';
 
 interface DisassemblyResultModalProps {
     result: {
@@ -14,6 +15,15 @@ interface DisassemblyResultModalProps {
 
 const DisassemblyResultModal: React.FC<DisassemblyResultModalProps> = ({ result, onClose, isTopmost }) => {
     const { gained, jackpot } = result;
+
+    useEffect(() => {
+        if (jackpot) {
+            audioService.disassemblyJackpot();
+        } else {
+            audioService.claimReward();
+        }
+    }, [jackpot]);
+
 
     return (
         <DraggableWindow title={jackpot ? "✨ 대박! ✨" : "분해 결과"} onClose={onClose} windowId="disassembly-result" initialWidth={400} isTopmost={isTopmost}>

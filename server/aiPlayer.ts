@@ -1,10 +1,12 @@
+
 import { User, GameMode, LiveGameSession, Player, Point, AlkkagiStone, BoardState, Equipment, InventoryItem, LeagueTier, CoreStat, RecommendedMove } from '../types.js';
 import { defaultStats, createDefaultInventory, createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints } from './initialData.js';
 import { getOmokLogic } from './omokLogic.js';
 import { getGoLogic, processMove } from './goLogic.js';
-import { DICE_GO_MAIN_ROLL_TIME, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS, ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, KATAGO_LEVEL_TO_MAX_VISITS, SPECIAL_GAME_MODES, SINGLE_PLAYER_STAGES, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, CURLING_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES } from '../constants.js';
+import { DICE_GO_MAIN_ROLL_TIME, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS, ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, SPECIAL_GAME_MODES, SINGLE_PLAYER_STAGES, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, CURLING_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES } from './../constants.js';
 import * as types from '../types.js';
 import { analyzeGame } from './kataGoService.js';
+// FIX: Correctly import summaryService to resolve module not found error.
 import * as summaryService from './summaryService.js';
 
 
@@ -45,6 +47,8 @@ const baseAiUser: Omit<User, 'nickname'> = {
     avatarId: 'default',
     borderId: 'default',
     ownedBorders: ['default'],
+    previousSeasonTier: null,
+    seasonHistory: {},
     tournamentScore: 2250,
     league: types.LeagueTier.Challenger,
 };
@@ -74,7 +78,7 @@ export const getAiUser = (mode: GameMode): User => {
 
 const makeSimpleCaptureAiMove = (game: types.LiveGameSession) => {
     const difficulty = game.settings.aiDifficulty ?? 1;
-    const probability = difficulty / 10.0;
+    const probabilisticCheck = () => Math.random() < (0.5 + (difficulty - 1) * 0.05);
     const aiPlayer = game.currentPlayer;
     const humanPlayer = aiPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
     const logic = getGoLogic(game);
@@ -105,7 +109,7 @@ const makeSimpleCaptureAiMove = (game: types.LiveGameSession) => {
             }
         }
         
-        if (game.captures[aiPlayer] >= game.settings.captureTarget!) {
+        if (game.captures[aiPlayer] >= game.effectiveCaptureTargets![aiPlayer]) {
             summaryService.endGame(game, aiPlayer, 'capture_limit');
             return;
         }
@@ -145,11 +149,16 @@ const makeSimpleCaptureAiMove = (game: types.LiveGameSession) => {
         return;
     }
 
-    // 1. Winning Capture
-    if (Math.random() < probability) {
+    // 1. Winning Capture (Probabilistic)
+    if (probabilisticCheck()) {
         const winningMoves = allValidAiMoves.filter(move => {
             const res = processMove(game.boardState, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
-            return res.isValid && (game.captures[aiPlayer] + res.capturedStones.length * (res.capturedStones.some(s => game.whitePatternStones?.some(p => p.x === s.x && p.y === s.y)) ? 2 : 1)) >= game.settings.captureTarget!;
+            if (!res.isValid) return false;
+            const capturedPoints = res.capturedStones.reduce((acc, stone) => {
+                const isPattern = game.whitePatternStones?.some(p => p.x === stone.x && p.y === stone.y);
+                return acc + (isPattern ? 2 : 1);
+            }, 0);
+            return (game.captures[aiPlayer] + capturedPoints) >= game.effectiveCaptureTargets![aiPlayer];
         });
         if (winningMoves.length > 0) {
             applyMove(winningMoves[Math.floor(Math.random() * winningMoves.length)]);
@@ -157,11 +166,16 @@ const makeSimpleCaptureAiMove = (game: types.LiveGameSession) => {
         }
     }
     
-    // 2. Block Opponent's Winning Capture
-    if (Math.random() < probability) {
+    // 2. Block Opponent's Winning Capture (Probabilistic)
+    if (probabilisticCheck()) {
         const opponentWinningMoves = findValidMoves(game.boardState, humanPlayer).filter(move => {
             const res = processMove(game.boardState, { ...move, player: humanPlayer }, game.koInfo, game.moveHistory.length);
-            return res.isValid && (game.captures[humanPlayer] + res.capturedStones.length * (res.capturedStones.some(s => game.blackPatternStones?.some(p => p.x === s.x && p.y === s.y)) ? 2 : 1)) >= game.settings.captureTarget!;
+            if (!res.isValid) return false;
+             const capturedPoints = res.capturedStones.reduce((acc, stone) => {
+                const isPattern = game.blackPatternStones?.some(p => p.x === stone.x && p.y === stone.y);
+                return acc + (isPattern ? 2 : 1);
+            }, 0);
+            return (game.captures[humanPlayer] + capturedPoints) >= game.effectiveCaptureTargets![humanPlayer];
         });
 
         if (opponentWinningMoves.length > 0) {
@@ -173,54 +187,49 @@ const makeSimpleCaptureAiMove = (game: types.LiveGameSession) => {
         }
     }
 
-    // 3. Maximize Capture
-    if (Math.random() < probability) {
-        let maxCapture = 0;
-        let maxCaptureMoves: Point[] = [];
-        allValidAiMoves.forEach(move => {
-            const res = processMove(game.boardState, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
-            if (res.isValid && res.capturedStones.length > 0) {
-                const captureScore = res.capturedStones.reduce((acc, stone) => {
-                    const isPattern = game.whitePatternStones?.some(p => p.x === stone.x && p.y === stone.y);
-                    return acc + (isPattern ? 2 : 1);
-                }, 0);
-                if (captureScore > maxCapture) {
-                    maxCapture = captureScore;
-                    maxCaptureMoves = [move];
-                } else if (captureScore === maxCapture) {
-                    maxCaptureMoves.push(move);
-                }
+    // 3. Maximize Capture (Guaranteed)
+    let maxCapture = 0;
+    let maxCaptureMoves: Point[] = [];
+    allValidAiMoves.forEach(move => {
+        const res = processMove(game.boardState, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
+        if (res.isValid && res.capturedStones.length > 0) {
+            const captureScore = res.capturedStones.reduce((acc, stone) => {
+                const isPattern = game.whitePatternStones?.some(p => p.x === stone.x && p.y === stone.y);
+                return acc + (isPattern ? 2 : 1);
+            }, 0);
+            if (captureScore > maxCapture) {
+                maxCapture = captureScore;
+                maxCaptureMoves = [move];
+            } else if (captureScore === maxCapture) {
+                maxCaptureMoves.push(move);
             }
-        });
-        if (maxCaptureMoves.length > 0) {
-            applyMove(maxCaptureMoves[Math.floor(Math.random() * maxCaptureMoves.length)]);
-            return;
         }
+    });
+    if (maxCaptureMoves.length > 0) {
+        applyMove(maxCaptureMoves[Math.floor(Math.random() * maxCaptureMoves.length)]);
+        return;
     }
     
-    // 4. Atari opponent
-    if (Math.random() < probability) {
-        const potentialAtariMoves = allValidAiMoves.filter(move => {
-            const tempBoard = JSON.parse(JSON.stringify(game.boardState));
-            tempBoard[move.y][move.x] = aiPlayer;
-            const tempLogic = getGoLogic({ ...game, boardState: tempBoard });
-            for(const neighbor of logic.getNeighbors(move.x, move.y)) {
-                if(tempBoard[neighbor.y][neighbor.x] === humanPlayer) {
-                    const group = tempLogic.findGroup(neighbor.x, neighbor.y, humanPlayer, tempBoard);
-                    if (group && group.liberties === 1) return true;
-                }
+    // 4. Atari opponent (Guaranteed)
+    const potentialAtariMoves = allValidAiMoves.filter(move => {
+        const tempBoard = JSON.parse(JSON.stringify(game.boardState));
+        tempBoard[move.y][move.x] = aiPlayer;
+        const tempLogic = getGoLogic({ ...game, boardState: tempBoard });
+        for(const neighbor of logic.getNeighbors(move.x, move.y)) {
+            if(tempBoard[neighbor.y][neighbor.x] === humanPlayer) {
+                const group = tempLogic.findGroup(neighbor.x, neighbor.y, humanPlayer, tempBoard);
+                if (group && group.liberties === 1) return true;
             }
-            return false;
-        });
-
-        if (potentialAtariMoves.length > 0) {
-            applyMove(potentialAtariMoves[Math.floor(Math.random() * potentialAtariMoves.length)]);
-            return;
         }
+        return false;
+    });
+    if (potentialAtariMoves.length > 0) {
+        applyMove(potentialAtariMoves[Math.floor(Math.random() * potentialAtariMoves.length)]);
+        return;
     }
     
-    // 5. Save own atari group
-    if (Math.random() < probability) {
+    // 5. Save own atari group (Probabilistic)
+    if (probabilisticCheck()) {
         const myAtariGroups = logic.getAllGroups(aiPlayer, game.boardState).filter(g => g.liberties === 1);
         if (myAtariGroups.length > 0) {
             const libertyKey = myAtariGroups[0].libertyPoints.values().next().value;
@@ -234,8 +243,34 @@ const makeSimpleCaptureAiMove = (game: types.LiveGameSession) => {
             }
         }
     }
+
+    // 6. Maximize White Liberties (Probabilistic)
+    if (probabilisticCheck()) {
+        let maxLiberties = -1;
+        let bestLibertyMoves: Point[] = [];
+
+        allValidAiMoves.forEach(move => {
+            const tempBoard = JSON.parse(JSON.stringify(game.boardState));
+            tempBoard[move.y][move.x] = aiPlayer;
+            const group = getGoLogic({ ...game, boardState: tempBoard }).findGroup(move.x, move.y, aiPlayer, tempBoard);
+            
+            if (group) {
+                if (group.liberties > maxLiberties) {
+                    maxLiberties = group.liberties;
+                    bestLibertyMoves = [move];
+                } else if (group.liberties === maxLiberties) {
+                    bestLibertyMoves.push(move);
+                }
+            }
+        });
+
+        if (bestLibertyMoves.length > 0) {
+            applyMove(bestLibertyMoves[Math.floor(Math.random() * bestLibertyMoves.length)]);
+            return;
+        }
+    }
     
-    // 6. Random adjacent move
+    // 7. Play Near Existing Stones (Guaranteed)
     const adjacentMoves: Point[] = [];
     const occupiedPoints: Point[] = [];
     for(let y=0; y<boardSize; y++) {
@@ -258,7 +293,7 @@ const makeSimpleCaptureAiMove = (game: types.LiveGameSession) => {
         return;
     }
 
-    // 7. Fully random valid move
+    // 8. Fully random valid move (Fallback)
     applyMove(allValidAiMoves[Math.floor(Math.random() * allValidAiMoves.length)]);
 };
 
@@ -269,7 +304,7 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
     const now = Date.now();
 
     // 1. Get analysis from KataGo
-    const maxVisits = KATAGO_LEVEL_TO_MAX_VISITS[game.settings.aiDifficulty || 2] || 10;
+    const maxVisits = (game.settings.aiDifficulty ?? 2) * 5;
     const analysis = await analyzeGame(game, { maxVisits });
     const recommendedMoves = analysis.recommendedMoves || [];
     

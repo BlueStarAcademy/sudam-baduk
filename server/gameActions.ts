@@ -1,3 +1,4 @@
+
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
 // FIX: Import GameMode to resolve TS2304 error.
@@ -161,7 +162,7 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
     const gameId = payload?.gameId;
 
     // Game Actions (require gameId)
-    if (gameId) {
+     if (gameId) {
         const game = await db.getLiveGame(gameId);
         if (!game) return { error: 'Game not found.' };
         

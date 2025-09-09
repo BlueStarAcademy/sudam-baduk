@@ -310,10 +310,6 @@ const Profile: React.FC<ProfileProps> = () => {
     }, [currentUserWithStatus.spentStatPoints]);
     const availablePoints = totalPoints - spentPoints;
     
-    const onSelectLobby = (type: 'strategic' | 'playful') => window.location.hash = `#/lobby/${type}`;
-    const onSelectTournamentLobby = () => window.location.hash = '#/tournament';
-    const onSelectSinglePlayerLobby = () => window.location.hash = '#/singleplayer';
-
     const overallTiers = useMemo(() => {
         const getAvgScore = (user: User, modes: typeof SPECIAL_GAME_MODES) => {
             let totalScore = 0;
@@ -559,34 +555,36 @@ const Profile: React.FC<ProfileProps> = () => {
     const LobbyCards = (
         <div className="grid grid-cols-10 grid-rows-2 lg:grid-rows-7 gap-4 h-full">
             <div className="col-span-5 row-span-1 lg:col-span-5 lg:row-span-3">
-                <LobbyCard type="strategic" stats={aggregatedStats.strategic} onEnter={() => onSelectLobby('strategic')} onViewStats={() => setDetailedStatsType('strategic')} level={currentUserWithStatus.strategyLevel} title="전략 바둑" imageUrl={STRATEGIC_GO_LOBBY_IMG} tier={overallTiers.strategicTier} />
+                <LobbyCard type="strategic" stats={aggregatedStats.strategic} onEnter={() => window.location.hash = '#/lobby/strategic'} onViewStats={() => setDetailedStatsType('strategic')} level={currentUserWithStatus.strategyLevel} title="전략 바둑" imageUrl={STRATEGIC_GO_LOBBY_IMG} tier={overallTiers.strategicTier} />
             </div>
     
             <div className="col-span-5 row-span-1 lg:col-span-5 lg:row-span-3">
-                <LobbyCard type="playful" stats={aggregatedStats.playful} onEnter={() => onSelectLobby('playful')} onViewStats={() => setDetailedStatsType('playful')} level={currentUserWithStatus.playfulLevel} title="놀이 바둑" imageUrl={PLAYFUL_GO_LOBBY_IMG} tier={overallTiers.playfulTier} />
+                <LobbyCard type="playful" stats={aggregatedStats.playful} onEnter={() => window.location.hash = '#/lobby/playful'} onViewStats={() => setDetailedStatsType('playful')} level={currentUserWithStatus.playfulLevel} title="놀이 바둑" imageUrl={PLAYFUL_GO_LOBBY_IMG} tier={overallTiers.playfulTier} />
             </div>
     
-            <div className="col-span-4 row-span-1 lg:col-span-4 lg:row-span-4">
-                <div onClick={onSelectTournamentLobby} className="bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-purple-500/30 cursor-pointer h-full text-on-panel">
-                    <h2 className="text-base font-bold h-6 mb-1">자동대국 챔피언십</h2>
-                    <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
-                        <img src={TOURNAMENT_LOBBY_IMG} alt="자동대국 챔피언십" className="w-full h-full object-cover" />
-                    </div>
-                    <div className="w-full bg-tertiary/50 rounded-md p-1 text-xs mt-2" title="챔피언십 정보">
-                         <span>점수: {currentUserWithStatus.tournamentScore.toLocaleString()} / 리그: {currentUserWithStatus.league}</span>
-                    </div>
+            <div 
+                onClick={() => window.location.hash = '#/tournament'} 
+                className="col-span-4 row-span-1 lg:col-span-4 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-purple-500/30 cursor-pointer h-full text-on-panel"
+            >
+                <h2 className="text-base font-bold h-6 mb-1">자동대국 챔피언십</h2>
+                <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
+                    <img src={TOURNAMENT_LOBBY_IMG} alt="자동대국 챔피언십" className="w-full h-full object-cover" />
+                </div>
+                <div className="w-full bg-tertiary/50 rounded-md p-1 text-xs mt-2" title="챔피언십 정보">
+                     <span>점수: {currentUserWithStatus.tournamentScore.toLocaleString()} / 리그: {currentUserWithStatus.league}</span>
                 </div>
             </div>
             
-            <div className="col-span-4 row-span-1 lg:col-span-4 lg:row-span-4">
-                <div onClick={onSelectSinglePlayerLobby} className="bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-green-500/30 cursor-pointer h-full text-on-panel">
-                    <h2 className="text-base font-bold h-6 mb-1">싱글플레이</h2>
-                    <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
-                        <img src={SINGLE_PLAYER_LOBBY_IMG} alt="싱글플레이" className="w-full h-full object-cover" />
-                    </div>
-                    <div className="w-full bg-tertiary/50 rounded-md p-1 text-xs mt-2" title="싱글플레이 정보">
-                         <span>진행도: {currentUserWithStatus.singlePlayerProgress ?? 0} / {SINGLE_PLAYER_STAGES.length}</span>
-                    </div>
+            <div 
+                onClick={() => window.location.hash = '#/singleplayer'}
+                className="col-span-4 row-span-1 lg:col-span-4 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-green-500/30 cursor-pointer h-full text-on-panel"
+            >
+                <h2 className="text-base font-bold h-6 mb-1">싱글플레이</h2>
+                <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
+                    <img src={SINGLE_PLAYER_LOBBY_IMG} alt="싱글플레이" className="w-full h-full object-cover" />
+                </div>
+                <div className="w-full bg-tertiary/50 rounded-md p-1 text-xs mt-2" title="싱글플레이 정보">
+                     <span>진행도: {currentUserWithStatus.singlePlayerProgress ?? 0} / {SINGLE_PLAYER_STAGES.length}</span>
                 </div>
             </div>
             

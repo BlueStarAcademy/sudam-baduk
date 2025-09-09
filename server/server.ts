@@ -52,8 +52,8 @@ const processSinglePlayerMissions = (user: types.User): types.User => {
             const cycles = Math.floor(elapsedMs / productionIntervalMs);
 
             if (cycles > 0) {
-                const amountToAdd = cycles * missionInfo.rewardAmount;
-                const newAmount = Math.min(missionInfo.maxCapacity, missionState.accumulatedAmount + amountToAdd);
+                const generatedAmount = cycles * missionInfo.rewardAmount;
+                const newAmount = Math.min(missionInfo.maxCapacity, missionState.accumulatedAmount + generatedAmount);
                 
                 if (newAmount > missionState.accumulatedAmount) {
                     missionState.accumulatedAmount = newAmount;
@@ -109,8 +109,7 @@ const startServer = async () => {
             const allUsers = await db.getAllUsers();
             for (const user of allUsers) {
                 let updatedUser = await regenerateActionPoints(user);
-                updatedUser = processSinglePlayerMissions(updatedUser);
-
+                
                 // Ensure all users have base stats set to 100. This is a one-time migration for existing users.
                 const defaultBaseStats = createDefaultBaseStats();
                 let statsNeedUpdate = false;
@@ -374,6 +373,7 @@ const startServer = async () => {
             let updatedUser = await resetAndGenerateQuests(user);
             updatedUser = await processWeeklyLeagueUpdates(updatedUser);
             updatedUser = await regenerateActionPoints(updatedUser);
+            updatedUser = processSinglePlayerMissions(updatedUser);
 
             // --- Stats Migration Logic ---
             const allGameModesList = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES].map(m => m.mode);
@@ -467,6 +467,7 @@ const startServer = async () => {
             updatedUser = await processWeeklyLeagueUpdates(updatedUser);
             updatedUser = await regenerateActionPoints(updatedUser);
             updatedUser = await updateWeeklyCompetitorsIfNeeded(updatedUser, allUsersForCompetitors);
+            updatedUser = processSinglePlayerMissions(updatedUser);
             
             // --- Stats Migration Logic ---
             const allGameModesList = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES].map(m => m.mode);

@@ -4,6 +4,7 @@ import { getGoLogic, processMove } from '../goLogic.js';
 import { handleSharedAction, updateSharedGameState } from './shared.js';
 import { DICE_GO_INITIAL_WHITE_STONES_BY_ROUND, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_TURN_CHOICE_TIME, DICE_GO_TURN_ROLL_TIME, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
 import * as effectService from '../effectService.js';
+// FIX: Correctly import summaryService to resolve module not found error.
 import { endGame } from '../summaryService.js';
 import { aiUserId } from '../aiPlayer.js';
 
@@ -290,15 +291,35 @@ export const updateDiceGoState = (game: types.LiveGameSession, now: number) => {
                 game.animation = null;
             }
             break;
-        case 'dice_turn_choice':
-            if (game.turnChoiceDeadline && now > game.turnChoiceDeadline) {
+        case 'dice_turn_choice': {
+            if (game.isAiGame && game.turnChooserId === aiUserId) {
                 const choice = Math.random() < 0.5 ? 'first' : 'second';
-                let chooserId = game.turnChooserId;
-                if (!chooserId) {
-                    chooserId = Math.random() < 0.5 ? p1Id : p2Id;
-                }
-                const otherId = chooserId === p1Id ? p2Id : p1Id;
+                const humanId = game.player1.id === aiUserId ? game.player2.id : game.player1.id;
 
+                if (choice === 'first') {
+                    game.blackPlayerId = aiUserId;
+                    game.whitePlayerId = humanId;
+                } else {
+                    game.whitePlayerId = aiUserId;
+                    game.blackPlayerId = humanId;
+                }
+                game.gameStatus = 'dice_start_confirmation';
+                game.revealEndTime = now + 10000;
+                if (!game.preGameConfirmations) game.preGameConfirmations = {};
+                game.preGameConfirmations[aiUserId] = true;
+                break;
+            }
+        
+            if (game.turnChoiceDeadline && now > game.turnChoiceDeadline) {
+                if (!game.turnChooserId) {
+                    console.warn(`[DiceGo] Timed out in 'dice_turn_choice' but turnChooserId was not set. Game ID: ${game.id}. Randomly assigning chooser.`);
+                    game.turnChooserId = Math.random() < 0.5 ? p1Id : p2Id;
+                }
+                
+                const choice = Math.random() < 0.5 ? 'first' : 'second';
+                const chooserId = game.turnChooserId;
+                const otherId = chooserId === p1Id ? p2Id : p1Id;
+    
                 if (choice === 'first') {
                     game.blackPlayerId = chooserId;
                     game.whitePlayerId = otherId;
@@ -311,6 +332,7 @@ export const updateDiceGoState = (game: types.LiveGameSession, now: number) => {
                 game.revealEndTime = now + 10000;
             }
             break;
+        }
         case 'dice_start_confirmation':
             if ((game.preGameConfirmations?.[p1Id] && game.preGameConfirmations?.[p2Id]) || (game.revealEndTime && now > game.revealEndTime)) {
                 game.gameStatus = 'dice_rolling';
@@ -548,7 +570,7 @@ export const handleDiceGoAction = async (volatileState: types.VolatileState, gam
             game.turnDeadline = undefined;
             game.turnStartTime = undefined;
             game.dice = undefined;
-
+    
             game.stonesToPlace = isOvershot ? -1 : dice1;
             if (game.diceRollHistory) game.diceRollHistory[user.id].push(dice1);
             await db.saveGame(game);
@@ -572,11 +594,9 @@ export const handleDiceGoAction = async (volatileState: types.VolatileState, gam
             const result = processMove(game.boardState, move, game.koInfo, game.moveHistory.length, { ignoreSuicide: true });
 
             if (!result.isValid) return { error: `Invalid move: ${result.reason}` };
-
-            if (!game.stonesPlacedThisTurn) {
-                game.stonesPlacedThisTurn = [];
-            }
-            game.stonesPlacedThisTurn.push({ x, y });
+            
+            if (!game.stonesPlacedThisTurn) game.stonesPlacedThisTurn = [];
+            game.stonesPlacedThisTurn.push({x, y});
 
             game.diceCapturesThisTurn = (game.diceCapturesThisTurn || 0) + result.capturedStones.length;
             if (result.capturedStones.length > 0) {

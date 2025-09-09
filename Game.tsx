@@ -63,6 +63,8 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     const prevAnimationType = usePrevious(session.animation?.type);
     const warningSoundPlayedForTurn = useRef(false);
     const prevMoveCount = usePrevious(session.moveHistory?.length);
+    const prevByoyomiBlack = usePrevious(session.blackByoyomiPeriodsLeft);
+    const prevByoyomiWhite = usePrevious(session.whiteByoyomiPeriodsLeft);
 
     const isSpectator = useMemo(() => currentUserWithStatus?.status === 'spectating', [currentUserWithStatus]);
     const isSinglePlayer = session.isSinglePlayer;
@@ -101,8 +103,16 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
         if (gameHasJustEnded) {
             setShowResultModal(true);
             setShowFinalTerritory(true);
+            if (isSinglePlayer) {
+                // Human is always black in single player
+                if (session.winner === Player.Black) {
+                    audioService.gameWin();
+                } else {
+                    audioService.gameLose();
+                }
+            }
         }
-    }, [gameStatus, prevGameStatus]);
+    }, [gameStatus, prevGameStatus, isSinglePlayer, session.winner]);
     
     const myPlayerEnum = useMemo(() => {
         if (isSpectator) return Player.None;
@@ -187,7 +197,11 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
         const isGameOver = ['ended', 'no_contest', 'scoring'].includes(gameStatus);
         const hasTurnChanged = prevMoveCount !== undefined && session.moveHistory && session.moveHistory.length > prevMoveCount;
     
-        if (!isMyTurn || hasTurnChanged || isGameOver) {
+        const myByoyomiPeriods = myPlayerEnum === Player.Black ? session.blackByoyomiPeriodsLeft : session.whiteByoyomiPeriodsLeft;
+        const prevMyByoyomiPeriods = myPlayerEnum === Player.Black ? prevByoyomiBlack : prevByoyomiWhite;
+        const byoyomiUsed = prevMyByoyomiPeriods !== undefined && myByoyomiPeriods < prevMyByoyomiPeriods;
+
+        if (!isMyTurn || hasTurnChanged || isGameOver || byoyomiUsed) {
             if (warningSoundPlayedForTurn.current) {
                 audioService.stopTimerWarning();
                 warningSoundPlayedForTurn.current = false;
@@ -201,7 +215,13 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
                 warningSoundPlayedForTurn.current = true;
             }
         }
-    }, [isMyTurn, clientTimes.clientTimes, myPlayerEnum, session.moveHistory, prevMoveCount, gameStatus]);
+    }, [isMyTurn, clientTimes.clientTimes, myPlayerEnum, session.moveHistory, prevMoveCount, gameStatus, session.blackByoyomiPeriodsLeft, session.whiteByoyomiPeriodsLeft, prevByoyomiBlack, prevByoyomiWhite]);
+
+    useEffect(() => {
+        if (isSinglePlayer && prevByoyomiBlack !== undefined && session.blackByoyomiPeriodsLeft < prevByoyomiBlack) {
+            audioService.timeoutFoul();
+        }
+    }, [isSinglePlayer, session.blackByoyomiPeriodsLeft, prevByoyomiBlack]);
 
 
     const isItemModeActive = ['hidden_placing', 'scanning', 'missile_selecting', 'missile_animating', 'scanning_animating'].includes(gameStatus);

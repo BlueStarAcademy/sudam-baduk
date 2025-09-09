@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { LiveGameSession, GameMode } from '../../types.js';
-import { DEFAULT_KOMI } from '../../constants.js';
+import { SINGLE_PLAYER_STAGES } from '../../constants.js';
 
 const goProverbs = [
     { term: "부득탐승(不得貪勝)", meaning: "너무 이기려고 탐하지 말라." },
@@ -18,19 +18,29 @@ const goProverbs = [
 ];
 
 const GameInfoPanel: React.FC<{ session: LiveGameSession }> = ({ session }) => {
-    const { settings } = session;
+    const { settings, stageId } = session;
+    const stageInfo = useMemo(() => SINGLE_PLAYER_STAGES.find(s => s.id === stageId), [stageId]);
+
+    const stageDisplayName = useMemo(() => {
+        if (!stageInfo) return stageId || '알 수 없는 스테이지';
+        // e.g., stageId "초급-4" becomes "초급-4 스테이지"
+        return `${stageInfo.id} 스테이지`;
+    }, [stageInfo, stageId]);
+
     return (
         <div className="h-full bg-stone-800/60 backdrop-blur-sm p-3 rounded-md flex-shrink-0 border border-stone-700/50 text-stone-300">
             <h3 className="text-base font-bold border-b border-stone-600/50 pb-1 mb-2 text-amber-300 text-center">
                 대국 정보
             </h3>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
+                <div className="font-semibold text-stone-400">스테이지:</div>
+                <div>{stageDisplayName}</div>
                 <div className="font-semibold text-stone-400">판 크기:</div>
                 <div>{settings.boardSize}x{settings.boardSize}</div>
                 <div className="font-semibold text-stone-400">AI 레벨:</div>
                 <div>{settings.aiDifficulty}</div>
                 <div className="font-semibold text-stone-400">목표 점수:</div>
-                <div>{settings.captureTarget}점</div>
+                <div>흑{stageInfo?.targetScore.black} / 백{stageInfo?.targetScore.white}</div>
             </div>
         </div>
     );

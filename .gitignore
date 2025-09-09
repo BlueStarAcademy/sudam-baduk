@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Exclude large files and external tools
+katago-v1.16.3-opencl-windows-x64/

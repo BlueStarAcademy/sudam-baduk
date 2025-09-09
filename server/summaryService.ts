@@ -23,25 +23,33 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
         console.error(`[SP Summary] Could not find stage with id: ${game.stageId}`);
         return;
     }
-
-    // Initialize with a base structure
+    
+    // Base summary structure
     const summary: GameSummary = {
         xp: { initial: user.strategyXp, change: 0, final: user.strategyXp },
         rating: { initial: 1200, change: 0, final: 1200 }, // Not applicable
         manner: { initial: user.mannerScore, change: 0, final: user.mannerScore },
         gold: 0,
         items: [],
+        level: { 
+            initial: user.strategyLevel, 
+            final: user.strategyLevel,
+            progress: {
+                initial: user.strategyXp,
+                final: user.strategyXp,
+                max: getXpForLevel(user.strategyLevel)
+            }
+        }
     };
     
     if (isWinner) {
         const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
         const currentProgress = user.singlePlayerProgress ?? 0;
 
-        const rewards = currentProgress === stageIndex 
-            ? stage.rewards.firstClear 
-            : stage.rewards.repeatClear;
+        const isFirstClear = currentProgress === stageIndex;
+        const rewards = isFirstClear ? stage.rewards.firstClear : stage.rewards.repeatClear;
         
-        if (currentProgress === stageIndex) {
+        if (isFirstClear) {
             user.singlePlayerProgress = currentProgress + 1;
         }
 
@@ -50,16 +58,16 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
         
         if (!success) {
             console.error(`[SP Summary] Insufficient inventory space for user ${user.id} on stage ${stage.id}. Items not granted.`);
-            // Optionally, send items via mail here in the future
         } else {
             user.gold += rewards.gold;
             const initialXp = user.strategyXp;
-            user.strategyXp += rewards.exp;
+            const xpGain = rewards.exp;
+            user.strategyXp += xpGain;
 
             addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
             
             summary.gold = rewards.gold;
-            summary.xp = { initial: initialXp, change: rewards.exp, final: user.strategyXp };
+            summary.xp = { initial: initialXp, change: xpGain, final: user.strategyXp };
             summary.items = itemsToCreate;
 
             if (rewards.bonus && rewards.bonus.startsWith('스탯')) {
@@ -80,22 +88,35 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
         }
     }
 
-    // Always create a summary object, even on loss (with no rewards)
-    if (!game.summary) game.summary = {};
-    game.summary[user.id] = summary;
-    
     // Handle level up logic after potentially adding XP
+    const initialLevel = user.strategyLevel;
     let currentLevel = user.strategyLevel;
     let currentXp = user.strategyXp;
     let requiredXp = getXpForLevel(currentLevel);
+
     while (currentXp >= requiredXp) {
         currentXp -= requiredXp;
         currentLevel++;
         requiredXp = getXpForLevel(currentLevel);
     }
+    
+    // Update summary with level info regardless of win/loss
+    summary.level = {
+        initial: initialLevel,
+        final: currentLevel,
+        progress: {
+            initial: summary.xp.initial,
+            final: currentXp,
+            max: getXpForLevel(initialLevel)
+        }
+    };
+    
     user.strategyLevel = currentLevel;
     user.strategyXp = currentXp;
 
+    if (!game.summary) game.summary = {};
+    game.summary[user.id] = summary;
+    
     await db.updateUser(user);
 };
 

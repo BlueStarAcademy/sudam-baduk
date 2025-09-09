@@ -82,7 +82,9 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
                 // Session exists. Update the user's stats within it before returning.
                 const userInTournament = existingState.players.find(p => p.id === user.id);
                 if (userInTournament) {
-                    userInTournament.stats = calculateTotalStats(user);
+                    const newStats = calculateTotalStats(user);
+                    userInTournament.stats = JSON.parse(JSON.stringify(newStats));
+                    userInTournament.originalStats = JSON.parse(JSON.stringify(newStats));
                     userInTournament.avatarId = user.avatarId;
                     userInTournament.borderId = user.borderId;
                 }
@@ -92,7 +94,7 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             }
 
             if ((user as any)[playedDateKey] && isSameDayKST((user as any)[playedDateKey], now) && !user.isAdmin) {
-                return { error: '이미 오늘 참가한 토너먼트입니다.' };
+                return { error: '이미 오늘 참가한 토너먼트입니다. 결과를 확인해주세요.' };
             }
             
             const allUsers = await db.getAllUsers();
@@ -166,6 +168,17 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             const tournamentState = (freshUser as any)[stateKey] as types.TournamentState | null;
             if (!tournamentState) return { error: '토너먼트 정보를 찾을 수 없습니다.' };
             
+            // Find the user's player object in the tournament and update their stats.
+            const userInTournament = tournamentState.players.find(p => p.id === freshUser.id);
+            if (userInTournament) {
+                const newStats = calculateTotalStats(freshUser);
+                // Update both the current stats for the upcoming match and the original stats for future matches in this session.
+                userInTournament.stats = JSON.parse(JSON.stringify(newStats));
+                userInTournament.originalStats = JSON.parse(JSON.stringify(newStats));
+                userInTournament.avatarId = freshUser.avatarId;
+                userInTournament.borderId = freshUser.borderId;
+            }
+
             // Now that we have the fresh state, start the next round. This will mutate tournamentState.
             tournamentService.startNextRound(tournamentState, freshUser);
             

@@ -1,4 +1,3 @@
-
 import { randomUUID } from 'crypto';
 import { type InventoryItem, type ItemGrade, type EquipmentSlot, type ItemOptions, type ItemOption, CoreStat, SpecialStat, MythicStat, type ItemOptionType, type BorderInfo } from '../types.js';
 import {
@@ -152,11 +151,11 @@ function openBoxWithLootTable(lootTable: { grade: ItemGrade; weight: number }[])
 }
 
 const EQUIPMENT_BOX_1_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'normal', weight: 70 }, { grade: 'uncommon', weight: 20 }, { grade: 'rare', weight: 10 }];
-const EQUIPMENT_BOX_2_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'normal', weight: 50 }, { grade: 'uncommon', weight: 25 }, { grade: 'rare', weight: 20 }, { grade: 'epic', weight: 5 }];
-const EQUIPMENT_BOX_3_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'uncommon', weight: 40 }, { grade: 'rare', weight: 30 }, { grade: 'epic', weight: 25 }, { grade: 'legendary', weight: 5 }];
-const EQUIPMENT_BOX_4_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'rare', weight: 50 }, { grade: 'epic', weight: 40 }, { grade: 'legendary', weight: 8 }, { grade: 'mythic', weight: 2 }];
-const EQUIPMENT_BOX_5_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'epic', weight: 75 }, { grade: 'legendary', weight: 20 }, { grade: 'mythic', weight: 5 }];
-const EQUIPMENT_BOX_6_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'legendary', weight: 90 }, { grade: 'mythic', weight: 10 }];
+const EQUIPMENT_BOX_2_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'normal', weight: 50 }, { grade: 'uncommon', weight: 35 }, { grade: 'rare', weight: 14 }, { grade: 'epic', weight: 1 }];
+const EQUIPMENT_BOX_3_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'uncommon', weight: 45 }, { grade: 'rare', weight: 35 }, { grade: 'epic', weight: 19.9 }, { grade: 'legendary', weight: 0.1 }];
+const EQUIPMENT_BOX_4_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'rare', weight: 50 }, { grade: 'epic', weight: 49 }, { grade: 'legendary', weight: 0.9 }, { grade: 'mythic', weight: 0.1 }];
+const EQUIPMENT_BOX_5_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'epic', weight: 85 }, { grade: 'legendary', weight: 14.5 }, { grade: 'mythic', weight: 0.5 }];
+const EQUIPMENT_BOX_6_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'legendary', weight: 95 }, { grade: 'mythic', weight: 5 }];
 
 export function openEquipmentBox1(): InventoryItem { return openBoxWithLootTable(EQUIPMENT_BOX_1_LOOT_TABLE); }
 export function openEquipmentBox2(): InventoryItem { return openBoxWithLootTable(EQUIPMENT_BOX_2_LOOT_TABLE); }

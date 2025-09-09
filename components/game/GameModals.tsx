@@ -1,7 +1,9 @@
 
+
 import React from 'react';
 // FIX: Corrected import path for types. The path was './../types.js' which pointed to 'components/types.js', but the file is in the root directory.
-import { GameProps, GameStatus, Negotiation } from '../../types.js';
+import { GameProps, GameStatus, Negotiation } from '../../types/index.js';
+// FIX: Corrected import path for GameSummaryModal.
 import GameSummaryModal from '../GameSummaryModal.js';
 import NigiriModal from '../NigiriModal.js';
 import CaptureBidModal from '../CaptureBidModal.js';
@@ -25,6 +27,7 @@ import AlkkagiRoundSummary from '../AlkkagiRoundSummary.js';
 import DiceGoStartConfirmationModal from '../DiceGoStartConfirmationModal.js';
 import CurlingStartConfirmationModal from '../CurlingStartConfirmationModal.js';
 import AlkkagiStartConfirmationModal from '../AlkkagiStartConfirmationModal.js';
+// FIX: Corrected import path for SinglePlayerSummaryModal.
 import SinglePlayerSummaryModal from '../SinglePlayerSummaryModal.js';
 
 interface GameModalsProps extends GameProps {
@@ -78,7 +81,6 @@ const GameModals: React.FC<GameModalsProps> = (props) => {
         if (rpsStates.includes(gameStatus)) return <RPSMinigame session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'alkkagi_start_confirmation') return <AlkkagiStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'curling_start_confirmation') return <CurlingStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'thief_role_selection') return <ThiefRoleSelection session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'thief_role_confirmed') return <ThiefRoleConfirmedModal session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'thief_round_end') return <ThiefRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'curling_round_end') return <CurlingRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;

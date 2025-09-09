@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 // FIX: Import missing types from the centralized types file.
 import { LiveGameSession, Player } from '../types/index.js';

@@ -112,6 +112,7 @@ export const createDefaultUser = (id: string, username: string, nickname: string
         isMbtiPublic: false,
         singlePlayerProgress: 0,
         bonusStatPoints: 0,
+        singlePlayerMissions: {},
     };
     
     const botCompetitors = createInitialBotCompetitors(user);
