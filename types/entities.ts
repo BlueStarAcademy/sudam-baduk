@@ -664,6 +664,8 @@ export type LiveGameSession = {
   blackPatternStones?: Point[];
   whitePatternStones?: Point[];
   singlePlayerPlacementRefreshesUsed?: number;
+  blackStonesPlaced?: number;
+  blackStoneLimit?: number;
 };
 
 export type Negotiation = {

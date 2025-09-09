@@ -62,7 +62,7 @@ const StageListItem: React.FC<{
                 ) : (
                     <>
                         <span className="text-xs text-tertiary">스테이지</span>
-                        <span className="font-bold text-2xl text-primary">{stage.name.replace('스테이지 ', '')}</span>
+                        <span className="font-bold text-[clamp(1.125rem,0.9rem+1.5vw,1.5rem)] text-primary">{stage.name.replace('스테이지 ', '')}</span>
                     </>
                 )}
             </div>
@@ -72,7 +72,7 @@ const StageListItem: React.FC<{
                     <span className="text-xl">🤖</span>
                     <span className="font-semibold">Lv.{stage.katagoLevel}</span>
                 </div>
-                <div className="flex items-center gap-2 text-lg" title={`목표 점수 흑 ${stage.targetScore.black} / 백 ${stage.targetScore.white}`}>
+                <div className="flex items-center gap-2 text-[clamp(0.875rem,0.75rem+1vw,1.125rem)]" title={`목표 점수 흑 ${stage.targetScore.black} / 백 ${stage.targetScore.white}`}>
                     <span className="font-bold text-tertiary">목표:</span>
                     <span className="font-bold text-highlight">흑{stage.targetScore.black}/백{stage.targetScore.white}</span>
                 </div>
@@ -182,28 +182,25 @@ const MissionCard: React.FC<{
             return { displayAmount: accumulatedAmount, timeToNextReward: 0 };
         }
         
-        const now = Date.now();
-        const elapsedMs = now - lastCollectionTime;
-        const cyclesPassed = elapsedMs > 0 ? Math.floor(elapsedMs / productionIntervalMs) : 0;
-        const newlyAccumulated = cyclesPassed * mission.rewardAmount;
-        
-        const currentAmount = Math.min(mission.maxCapacity, accumulatedAmount + newlyAccumulated);
+        const currentAmount = accumulatedAmount;
 
         let nextRewardTime = 0;
         if (currentAmount < mission.maxCapacity) {
+            const now = Date.now();
+            const elapsedMs = now - lastCollectionTime;
             nextRewardTime = productionIntervalMs - (elapsedMs % productionIntervalMs);
         }
         
         return { displayAmount: currentAmount, timeToNextReward: nextRewardTime };
 
-    }, [isStarted, lastCollectionTime, accumulatedAmount, mission.productionRateMinutes, mission.rewardAmount, mission.maxCapacity, tick]);
+    }, [isStarted, lastCollectionTime, accumulatedAmount, mission.productionRateMinutes, mission.maxCapacity, tick]);
 
 
     if (!isUnlocked) {
         const unlockText = mission.unlockStageId ? `${mission.unlockStageId} 클리어 필요` : '이전 단계 클리어 필요';
         return (
             <div className="bg-secondary/30 p-2 rounded-lg flex flex-col items-center text-center opacity-60 h-full">
-                 <div className="relative w-full aspect-square flex-shrink-0 mb-2">
+                 <div className="relative w-[50px] h-[50px] flex-shrink-0 mb-2">
                     <img src={mission.image} alt={mission.name} className="w-full h-full object-cover p-1 rounded-md grayscale" />
                     <div className="absolute inset-0 bg-black/60 rounded-md flex items-center justify-center">
                         <span className="text-4xl" role="img" aria-label="Locked">🔒</span>
@@ -220,7 +217,7 @@ const MissionCard: React.FC<{
     return (
         <div className="bg-secondary/60 p-2 rounded-lg flex flex-col h-full border-2 border-color text-on-panel">
             <div className="flex flex-col items-center gap-1 mb-1 flex-grow text-center">
-                <div className="w-full aspect-square flex-shrink-0 bg-tertiary rounded-md">
+                <div className="w-[50px] h-[50px] flex-shrink-0 bg-tertiary rounded-md">
                     <img src={mission.image} alt={mission.name} className="w-full h-full object-cover p-1" />
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -284,7 +281,7 @@ const SinglePlayerMissions: React.FC<{onClose?: () => void}> = ({ onClose }) => 
                 <h2 className="text-xl font-bold text-center text-highlight">수련 과제</h2>
                 {onClose && <button onClick={onClose} className="text-2xl font-bold text-tertiary hover:text-primary">&times;</button>}
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 flex-grow">
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 flex-grow overflow-y-auto pr-1">
                 {SINGLE_PLAYER_MISSIONS.map(mission => {
                     const requiredProgress = getRequiredProgressForStageId(mission.unlockStageId);
                     const isUnlocked = userProgress >= requiredProgress;
@@ -341,8 +338,9 @@ const StageList: React.FC<{
 
     return (
         <div key={activeLevelData.id} className="w-full bg-panel border border-color rounded-lg p-4 flex flex-col min-h-0 animate-fade-in h-full">
-            <h2 className="text-xl font-bold mb-4 flex-shrink-0">{activeLevelData.id} 스테이지 목록 ({clearedInLevel}/{stagesInLevel})
-                <span className="text-sm font-normal text-tertiary ml-2">(총 진행도: {userProgress}/{SINGLE_PLAYER_STAGES.length})</span>
+            <h2 className="text-[clamp(1rem,0.8rem+1vw,1.25rem)] font-bold mb-4 flex-shrink-0 flex flex-wrap items-baseline gap-x-2">
+                <span>{activeLevelData.id} 스테이지 목록 ({clearedInLevel}/{stagesInLevel})</span>
+                <span className="text-sm font-normal text-tertiary ml-2 whitespace-nowrap">(총 진행도: {userProgress}/{SINGLE_PLAYER_STAGES.length})</span>
             </h2>
 
             {isCurrentLevelLocked && (
@@ -361,7 +359,7 @@ const StageList: React.FC<{
                         <StageListItem 
                             key={stage.id}
                             stage={stage}
-                            isLocked={isLocked}
+                            isLocked={isLocked || isCurrentLevelLocked}
                             isCleared={isCleared}
                             isCurrent={isCurrent}
                             onAction={handlers.handleAction}
@@ -405,63 +403,64 @@ const SinglePlayerLobby: React.FC = () => {
     const handleNextLevel = () => setActiveLevelIndex(prev => Math.min(LEVEL_DATA.length - 1, prev + 1));
     const handlePrevLevel = () => setActiveLevelIndex(prev => Math.max(0, prev - 1));
 
+    const LevelSelectionPanel: React.FC<{className?: string}> = ({ className }) => (
+        <div className={`bg-panel border border-color rounded-lg p-4 flex flex-col items-center w-full ${className}`}>
+            <h2 className="text-[clamp(1.1rem,0.9rem+1vw,1.25rem)] font-bold mb-2">레벨 선택</h2>
+            <div className="w-full flex items-center justify-center gap-2 relative group">
+                <button onClick={handlePrevLevel} disabled={activeLevelIndex === 0} className="absolute left-0 -translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0" aria-label="Previous Level">&#x276E;</button>
+                <div className="relative w-full rounded-lg overflow-hidden bg-black">
+                    <img key={activeLevelIndex} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-auto object-contain animate-fade-in" />
+                    <div className="absolute inset-0 bg-black/20"></div>
+                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
+                        <h3 key={activeLevelIndex + '-title'} className="text-[clamp(1.5rem,1rem+2.5vw,1.875rem)] font-bold text-white text-center animate-fade-in drop-shadow-lg">{activeLevelData.name}</h3>
+                    </div>
+                </div>
+                <button onClick={handleNextLevel} disabled={activeLevelIndex >= LEVEL_DATA.length - 1} className="absolute right-0 translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0" aria-label="Next Level">&#x276F;</button>
+            </div>
+        </div>
+    );
+
     return (
         <div className="w-full h-full flex flex-col bg-tertiary text-primary p-4 gap-4">
             <header className="flex justify-between items-center flex-shrink-0">
                  <Button onClick={() => window.location.hash = '#/profile'} colorScheme="gray">&larr; 프로필로</Button>
-                <h1 className="text-3xl font-bold">싱글플레이</h1>
+                <h1 className="text-[clamp(1.75rem,1.25rem+2.5vw,2.25rem)] font-bold whitespace-nowrap">싱글플레이</h1>
                 <div className="w-32"></div>
             </header>
 
-            <main className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0 relative">
-                {/* Left Column (Desktop) / Main Content (Mobile) */}
-                <div className="w-full lg:w-1/2 flex-shrink-0 flex flex-col items-center gap-4 min-h-0">
-                    {/* Level Selection Panel */}
-                    <div className="bg-panel border border-color rounded-lg p-4 flex flex-col items-center flex-shrink-0 w-full max-w-xl">
-                        <h2 className="text-xl font-bold mb-2">레벨 선택</h2>
-                        <div className="w-full flex items-center justify-center gap-2 relative group">
-                            <button onClick={handlePrevLevel} disabled={activeLevelIndex === 0} className="absolute left-0 -translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0" aria-label="Previous Level">&#x276E;</button>
-                            <div className="relative w-full aspect-[4/3] rounded-lg overflow-hidden bg-black">
-                                <img key={activeLevelIndex} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-full object-cover animate-fade-in" />
-                                <div className="absolute inset-0 bg-black/20"></div>
-                                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
-                                    <h3 key={activeLevelIndex + '-title'} className="text-3xl font-bold text-white text-center animate-fade-in drop-shadow-lg">{activeLevelData.name}</h3>
-                                </div>
-                            </div>
-                            <button onClick={handleNextLevel} disabled={activeLevelIndex >= LEVEL_DATA.length - 1} className="absolute right-0 translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0" aria-label="Next Level">&#x276F;</button>
+            <main className="flex-1 min-h-0">
+                {/* DESKTOP LAYOUT */}
+                <div className="hidden lg:flex flex-row-reverse gap-4 h-full">
+                    <div className="w-[400px] xl:w-[450px] flex-shrink-0 flex flex-col gap-4">
+                        <LevelSelectionPanel className="flex-shrink-0"/>
+                        <div className="flex-1 min-h-0 w-full">
+                            <SinglePlayerMissions />
                         </div>
                     </div>
-                    
-                    {/* Missions Panel (Desktop) */}
-                    <div className="hidden lg:flex flex-1 min-h-0 w-full max-w-xl">
-                        <SinglePlayerMissions />
-                    </div>
-                    
-                    {/* Stage List (Mobile) */}
-                    <div className="lg:hidden flex-1 min-h-0">
+                    <div className="flex-1 min-h-0">
                         <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus} handlers={handlers} />
                     </div>
                 </div>
 
-                {/* Right Column (Desktop) */}
-                <div className="hidden lg:flex lg:w-1/2 min-h-0">
-                    <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus} handlers={handlers} />
-                </div>
-                
-                {/* Mobile Slide-out button */}
-                <div className="lg:hidden absolute top-1/2 -translate-y-1/2 right-0 z-20">
-                    <button onClick={() => setIsMissionsPanelOpen(true)} className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg" aria-label="수련 과제 열기">
-                        <span className="font-bold text-lg">{'<'}</span>
-                    </button>
-                </div>
-
-                {/* Mobile Missions Panel (Sidebar) */}
-                <div className={`lg:hidden fixed top-0 right-0 h-full w-[320px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMissionsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                    <div className="p-2 h-full">
-                        <SinglePlayerMissions onClose={() => setIsMissionsPanelOpen(false)} />
+                {/* MOBILE LAYOUT */}
+                <div className="lg:hidden flex flex-col h-full gap-4 relative">
+                    <LevelSelectionPanel className="flex-shrink-0 max-w-xl mx-auto" />
+                    <div className="flex-1 min-h-0">
+                        <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus} handlers={handlers} />
                     </div>
+                    
+                    <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
+                        <button onClick={() => setIsMissionsPanelOpen(true)} className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg" aria-label="수련 과제 열기">
+                            <span className="font-bold text-lg">{'<'}</span>
+                        </button>
+                    </div>
+                    <div className={`fixed top-0 right-0 h-full w-[320px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMissionsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                        <div className="p-2 h-full">
+                            <SinglePlayerMissions onClose={() => setIsMissionsPanelOpen(false)} />
+                        </div>
+                    </div>
+                    {isMissionsPanelOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMissionsPanelOpen(false)}></div>}
                 </div>
-                {isMissionsPanelOpen && <div className="lg:hidden fixed inset-0 bg-black/60 z-40" onClick={() => setIsMissionsPanelOpen(false)}></div>}
             </main>
         </div>
     );

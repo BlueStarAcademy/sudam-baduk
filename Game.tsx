@@ -307,7 +307,6 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     
     const handleCloseResults = useCallback(() => {
         setShowResultModal(false);
-        setShowFinalTerritory(false);
     }, []);
     
     const gameProps: GameProps = {
@@ -322,7 +321,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
 
     if (isSinglePlayer) {
         return (
-            <div className="w-full h-dvh flex flex-col p-1 lg:p-4 bg-wood-pattern text-stone-200">
+            <div className="w-full h-dvh flex flex-col px-4 py-1 lg:p-4 bg-wood-pattern text-stone-200">
                 <button
                     onClick={handlers.openSettingsModal}
                     className="absolute top-2 right-2 z-30 p-2 rounded-lg text-xl hover:bg-black/20 transition-colors"

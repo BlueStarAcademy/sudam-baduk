@@ -113,7 +113,7 @@ export type GameStatus =
 
 export type UserStatus = 'online' | 'waiting' | 'resting' | 'negotiating' | 'in-game' | 'spectating';
 
-export type WinReason = 'resign' | 'timeout' | 'disconnect' | 'score' | 'capture_limit' | 'omok_win' | 'thief_captured' | 'police_win' | 'alkkagi_win' | 'curling_win' | 'total_score' | 'dice_win' | 'foul_limit';
+export type WinReason = 'resign' | 'timeout' | 'disconnect' | 'score' | 'capture_limit' | 'omok_win' | 'thief_captured' | 'police_win' | 'alkkagi_win' | 'curling_win' | 'total_score' | 'dice_win' | 'foul_limit' | 'stone_limit_exceeded';
 export type RPSChoice = 'rock' | 'paper' | 'scissors';
 export enum DiceGoVariant {
     Basic = 'basic',
@@ -144,7 +144,7 @@ export enum SpecialStat {
     ActionPointRegen = '행동력 회복속도',
     StrategyXpBonus = '전략 경험치 추가획득',
     PlayfulXpBonus = '놀이 경험치 추가획득',
-    GoldBonus = '경기 승리시 골드보상 추가',
+    GoldBonus = '골드보상 추가',
     ItemDropRate = '장비상자 획득확률 증가',
     MaterialDropRate = '재료상자 획득확률 증가',
 }
