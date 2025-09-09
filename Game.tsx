@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 // FIX: Import types from the new centralized types barrel file
-import { Player, GameMode, GameStatus, Point, GameProps, LiveGameSession, ServerAction } from './types/index.js';
+import { Player, GameMode, GameStatus, Point, GameProps, LiveGameSession, ServerAction, AlkkagiStone } from './types/index.js';
 import GameArena from './components/GameArena.js';
 import Sidebar from './components/game/Sidebar.js';
 import PlayerPanel from './components/game/PlayerPanel.js';
@@ -56,6 +56,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     const [justScanned, setJustScanned] = useState(false);
     const [pendingMove, setPendingMove] = useState<Point | null>(null);
     const [isAnalysisActive, setIsAnalysisActive] = useState(false);
+    const [showTimeoutFoulModal, setShowTimeoutFoulModal] = useState(false);
     
     const prevGameStatus = usePrevious(gameStatus);
     const prevCurrentPlayer = usePrevious(currentPlayer);
@@ -127,7 +128,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     const isMyTurn = useMemo(() => {
         if (isSpectator) return false;
         if (gameStatus === 'alkkagi_simultaneous_placement' && session.settings.alkkagiPlacementType === '일괄 배치') {
-            const myStonesOnBoard = (session.alkkagiStones || []).filter(s => s.player === myPlayerEnum).length;
+            const myStonesOnBoard = (session.alkkagiStones || []).filter((s: AlkkagiStone) => s.player === myPlayerEnum).length;
             const myStonesInPlacement = (currentUser.id === player1.id ? session.alkkagiStones_p1 : session.alkkagiStones_p2)?.length || 0;
             return (myStonesOnBoard + myStonesInPlacement) < (session.settings.alkkagiStoneCount || 5);
         }
@@ -220,6 +221,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     useEffect(() => {
         if (isSinglePlayer && prevByoyomiBlack !== undefined && session.blackByoyomiPeriodsLeft < prevByoyomiBlack) {
             audioService.timeoutFoul();
+            setShowTimeoutFoulModal(true);
         }
     }, [isSinglePlayer, session.blackByoyomiPeriodsLeft, prevByoyomiBlack]);
 
@@ -319,9 +321,19 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
         onlineUsers, pendingMove, onConfirmMove: handleConfirmMove, onCancelMove: handleCancelMove, settings, isMobile,
     };
 
+    const backgroundClass = useMemo(() => {
+        if (session.isTowerChallenge) {
+            return session.floor === 100 ? 'bg-tower-100' : 'bg-tower-default';
+        }
+        if (isSinglePlayer) {
+            return 'bg-wood-pattern';
+        }
+        return 'bg-tertiary'; // Default for PvP games
+    }, [isSinglePlayer, session.isTowerChallenge, session.floor]);
+    
     if (isSinglePlayer) {
         return (
-            <div className="w-full h-dvh flex flex-col px-4 py-1 lg:p-4 bg-wood-pattern text-stone-200">
+            <div className={`w-full h-dvh flex flex-col px-4 py-1 lg:p-4 ${backgroundClass} text-stone-200`}>
                 <button
                     onClick={handlers.openSettingsModal}
                     className="absolute top-2 right-2 z-30 p-2 rounded-lg text-xl hover:bg-black/20 transition-colors"
@@ -329,6 +341,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
                 >
                     ⚙️
                 </button>
+                {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={() => setShowTimeoutFoulModal(false)} />}
                 <main className="flex-1 flex flex-col items-center justify-center gap-2 lg:gap-4 max-w-5xl w-full mx-auto min-h-0">
                     <div className="w-full flex-shrink-0">
                         <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isSinglePlayer={true} />
@@ -370,7 +383,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     }
 
     return (
-        <div className={`w-full h-dvh flex flex-col p-1 lg:p-2 relative max-w-full bg-tertiary`}>
+        <div className={`w-full h-dvh flex flex-col p-1 lg:p-2 relative max-w-full ${backgroundClass}`}>
             {session.disconnectionState && <DisconnectionModal session={session} currentUser={currentUser} />}
             {session.gameStatus === 'scoring' && (
                 <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-30">

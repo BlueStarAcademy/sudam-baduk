@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { UserWithStatus, ServerAction, SinglePlayerLevel } from '../types.js';
 import DraggableWindow from './DraggableWindow.js';

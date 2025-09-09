@@ -11,6 +11,7 @@ import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/
 import { calculateTotalStats } from '../statService.js';
 import { handleRewardAction } from './rewardActions.js';
 
+const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
 type HandleActionResult = { 
     clientResponse?: any;
@@ -299,7 +300,69 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             await db.updateUser(user);
             return {};
         }
+        case 'USE_CONDITION_POTION': {
+            const { tournamentType, matchId, itemName } = payload;
+            
+            let stateKey: keyof User;
+            switch (tournamentType) {
+                case 'neighborhood': stateKey = 'lastNeighborhoodTournament'; break;
+                case 'national': stateKey = 'lastNationalTournament'; break;
+                case 'world': stateKey = 'lastWorldTournament'; break;
+                default: return { error: 'Invalid tournament type.' };
+            }
 
+            const tournamentState = (user as any)[stateKey] as TournamentState | null;
+            if (!tournamentState) return { error: '토너먼트 정보를 찾을 수 없습니다.' };
+
+            const playerInTournament = tournamentState.players.find(p => p.id === user.id);
+            if (!playerInTournament) return { error: '토너먼트에서 플레이어를 찾을 수 없습니다.' };
+            
+            let match: types.Match | undefined;
+            for(const round of tournamentState.rounds) {
+                match = round.matches.find(m => m.id === matchId);
+                if(match) break;
+            }
+            
+            if (!match || !match.isUserMatch || match.isFinished) return { error: '물약을 사용할 수 없는 경기입니다.' };
+
+            if(match.potionUsed?.[user.id]) return { error: '이 경기에는 이미 물약을 사용했습니다.' };
+
+            if (playerInTournament.condition >= 100) return { error: '컨디션이 이미 최대입니다.' };
+            
+            const itemIndex = user.inventory.findIndex(i => i.name === itemName);
+            if (itemIndex === -1) return { error: '보유하지 않은 물약입니다.' };
+
+            const item = user.inventory[itemIndex];
+            if (item.quantity && item.quantity > 1) {
+                item.quantity--;
+            } else {
+                user.inventory.splice(itemIndex, 1);
+            }
+
+            let recovery = 0;
+            if (itemName === '컨디션물약(소)') recovery = getRandomInt(1, 5);
+            else if (itemName === '컨디션물약(중)') recovery = getRandomInt(5, 10);
+            else if (itemName === '컨디션물약(대)') recovery = getRandomInt(10, 20);
+
+            playerInTournament.condition = Math.min(100, playerInTournament.condition + recovery);
+            
+            if(!match.potionUsed) match.potionUsed = {};
+            match.potionUsed[user.id] = true;
+
+            if(!match.conditionBoost) match.conditionBoost = {};
+            match.conditionBoost[user.id] = recovery;
+
+            if (!match.commentary) match.commentary = [];
+            match.commentary.push({
+                text: `[시스템] ${user.nickname}님이 ${itemName}을(를) 사용하여 컨디션이 ${recovery}만큼 회복되었습니다. (현재: ${playerInTournament.condition})`,
+                phase: 'early',
+                isRandomEvent: true,
+            });
+
+            await db.updateUser(user);
+
+            return { clientResponse: { updatedUser: user } };
+        }
         case 'CLAIM_TOURNAMENT_REWARD': {
             return handleRewardAction(volatileState, action, user);
         }

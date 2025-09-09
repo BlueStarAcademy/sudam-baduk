@@ -1,6 +1,5 @@
 import * as db from '../db.js';
-// FIX: Import the full namespace to access enums like CoreStat.
-import * as types from '../../types.js';
+import * as types from '../../types/index.js';
 import { AVATAR_POOL, BORDER_POOL } from '../../constants.js';
 import { containsProfanity } from '../../profanity.js';
 
@@ -41,7 +40,7 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
             if (containsProfanity(newNickname)) return { error: "닉네임에 부적절한 단어가 포함되어 있습니다." };
             
             const allUsers = await db.getAllUsers();
-            if (allUsers.some(u => u.nickname.toLowerCase() === newNickname.toLowerCase())) {
+            if (allUsers.some((u: types.User) => u.nickname.toLowerCase() === newNickname.toLowerCase())) {
                 return { error: '이미 사용 중인 닉네임입니다.' };
             }
             
@@ -80,7 +79,8 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
             
             const levelPoints = (user.strategyLevel - 1) * 2 + (user.playfulLevel - 1) * 2;
             const masteryBonus = user.mannerMasteryApplied ? 20 : 0;
-            const totalAvailablePoints = levelPoints + masteryBonus;
+            const bonusPoints = user.bonusStatPoints || 0;
+            const totalAvailablePoints = levelPoints + masteryBonus + bonusPoints;
             
             const totalSpent = Object.values(newStatPoints).reduce((sum, points) => sum + points, 0);
 

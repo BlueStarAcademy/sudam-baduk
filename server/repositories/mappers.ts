@@ -1,3 +1,4 @@
+
 import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
 import * as types from '../../types.js';
 // FIX: Import DEFAULT_GAME_SETTINGS to provide a default value when parsing game data.
@@ -107,6 +108,7 @@ export const rowToUser = (row: any): types.User | null => {
             singlePlayerProgress: row.singlePlayerProgress ?? 0,
             bonusStatPoints: row.bonusStatPoints ?? 0,
             singlePlayerMissions: safeParse(row.singlePlayerMissions, {}, row.id, 'singlePlayerMissions'),
+            towerProgress: safeParse(row.towerProgress, { highestFloor: 0, lastClearTimestamp: 0 }, row.id, 'towerProgress'),
         };
         return user;
     } catch (e) {
@@ -194,6 +196,7 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             turnOrderRolls: safeParse(row.turnOrderRolls, null, row.id, 'turnOrderRolls'),
             turnOrderRollReady: safeParse(row.turnOrderRollReady, null, row.id, 'turnOrderRollReady'),
             turnOrderRollResult: row.turnOrderRollResult ?? undefined,
+            turnOrderRollTies: row.turnOrderRollTies ?? undefined,
             turnOrderRollDeadline: row.turnOrderRollDeadline ?? undefined,
             turnOrderAnimationEndTime: row.turnOrderAnimationEndTime ?? undefined,
             turnChoiceDeadline: row.turnChoiceDeadline ?? undefined,
@@ -272,6 +275,8 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             singlePlayerPlacementRefreshesUsed: row.singlePlayerPlacementRefreshesUsed ?? undefined,
             blackStonesPlaced: row.blackStonesPlaced ?? undefined,
             blackStoneLimit: row.blackStoneLimit ?? undefined,
+            isTowerChallenge: !!row.isTowerChallenge,
+            floor: row.floor ?? undefined,
         };
         return game;
     } catch (e) {

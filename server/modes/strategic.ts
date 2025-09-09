@@ -1,3 +1,5 @@
+
+// FIX: Correctly import summaryService to resolve module not found error.
 import * as summaryService from '../summaryService.js';
 import * as types from '../../types.js';
 import * as db from '../db.js';
@@ -9,7 +11,7 @@ import { initializeBase, updateBaseState, handleBaseAction } from './base.js';
 import { initializeCapture, updateCaptureState, handleCaptureAction } from './capture.js';
 import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidden.js';
 import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
-import { transitionToPlaying } from './shared.js';
+import { handleSharedAction, transitionToPlaying } from './shared.js';
 
 
 export const initializeStrategicGame = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {
@@ -95,7 +97,11 @@ export const updateStrategicGameState = async (game: types.LiveGameSession, now:
 };
 
 export const handleStrategicGameAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction & { userId: string }, user: types.User): Promise<types.HandleActionResult | undefined> => {
-    // Try each specific handler. If one returns a result, we're done.
+    // Try shared actions first
+    const sharedResult = await handleSharedAction(volatileState, game, action, user);
+    if (sharedResult) return sharedResult;
+
+    // Then try each specific handler.
     let result: types.HandleActionResult | null = null;
     
     result = handleNigiriAction(game, action, user);
@@ -293,9 +299,13 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
 
                     if (game.isSinglePlayer) {
                         const patternStones = capturedPlayerEnum === types.Player.Black ? game.blackPatternStones : game.whitePatternStones;
-                        const wasPatternStone = patternStones?.some(p => p.x === stone.x && p.y === stone.y);
-                        if (wasPatternStone) {
-                            points = 2; // Pattern stones are worth 2 points
+                        if (patternStones) {
+                            const patternIndex = patternStones.findIndex(p => p.x === stone.x && p.y === stone.y);
+                            if (patternIndex !== -1) {
+                                points = 2; // Pattern stones are worth 2 points
+                                // Remove the pattern from the list so it's a one-time bonus
+                                patternStones.splice(patternIndex, 1);
+                            }
                         }
                     } else { // PvP logic
                         const isBaseStone = game.baseStones?.some(bs => bs.x === stone.x && bs.y === stone.y);

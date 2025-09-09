@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { UserWithStatus, ServerAction } from '../types.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
-import { ACTION_POINT_PURCHASE_COSTS_DIAMONDS, MAX_ACTION_POINT_PURCHASES_PER_DAY, ACTION_POINT_PURCHASE_REFILL_AMOUNT } from '../constants.js';
+import { ACTION_POINT_PURCHASE_COSTS_DIAMONDS, MAX_ACTION_POINT_PURCHASES_PER_DAY, ACTION_POINT_PURCHASE_REFILL_AMOUNT, SHOP_CONSUMABLE_ITEMS } from '../constants.js';
 import { isDifferentWeekKST } from '../utils/timeUtils.js';
+import { SHOP_ITEMS } from '../server/shop.js';
 
 interface ShopModalProps {
     currentUser: UserWithStatus;
@@ -190,6 +191,14 @@ const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAction, i
     const [toastMessage, setToastMessage] = useState<string | null>(null);
 
     useEffect(() => {
+        const initialTab = sessionStorage.getItem('shopInitialTab');
+        if (initialTab && (initialTab === 'equipment' || initialTab === 'materials' || initialTab === 'consumables' || initialTab === 'misc')) {
+            setActiveTab(initialTab as ShopTab);
+            sessionStorage.removeItem('shopInitialTab');
+        }
+    }, []);
+
+    useEffect(() => {
         if (toastMessage) {
             const timer = setTimeout(() => setToastMessage(null), 3000);
             return () => clearTimeout(timer);
@@ -197,7 +206,6 @@ const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAction, i
     }, [toastMessage]);
 
     const handleBuyEquipment = (itemId: string, quantity: number) => {
-        // FIX: Object literal may only specify known properties error by being more explicit with action types.
         if (quantity === 10) {
             onAction({ type: 'BUY_SHOP_ITEM_BULK', payload: { itemId, quantity } });
         } else {
@@ -240,17 +248,28 @@ const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAction, i
                         <MaterialBoxCard itemId="material_box_6" name="재료 상자 VI" description="상급 ~ 신비의 강화석 5개 획득" price={{ diamonds: 100 }} image="/images/Box/ResourceBox6.png" dailyLimit={3} onBuy={handleBuyMaterial} currentUser={currentUser} />
                     </div>
                 );
+            case 'consumables':
+                return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {SHOP_CONSUMABLE_ITEMS.map(item => (
+                             <MaterialBoxCard
+                                key={item.name}
+                                itemId={item.name}
+                                name={item.name}
+                                description={item.description}
+                                price={item.cost}
+                                image={item.image}
+                                weeklyLimit={item.weeklyLimit}
+                                onBuy={handleBuyMaterial}
+                                currentUser={currentUser}
+                            />
+                        ))}
+                    </div>
+                );
             case 'misc':
                  return (
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                         <ActionPointCard currentUser={currentUser} onBuy={handleBuyActionPoints} />
-                    </div>
-                );
-            case 'consumables':
-            default:
-                return (
-                    <div className="h-full flex items-center justify-center text-gray-500">
-                        <p>이 카테고리는 현재 준비 중입니다.</p>
                     </div>
                 );
         }

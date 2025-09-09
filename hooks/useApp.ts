@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-// FIX: The main types barrel file now exports settings types. Use it for consistency.
-import { User, LiveGameSession, UserWithStatus, ServerAction, GameMode, Negotiation, ChatMessage, UserStatus, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings } from '../types.js';
+import { User, LiveGameSession, UserWithStatus, ServerAction, GameMode, Negotiation, ChatMessage, UserStatus, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank } from '../types/index.js';
 import { audioService } from '../services/audioService.js';
 import { stableStringify, parseHash } from '../utils/appUtils.js';
 import { 
@@ -133,6 +132,7 @@ export const useApp = () => {
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [globalOverrideAnnouncement, setGlobalOverrideAnnouncement] = useState<OverrideAnnouncement | null>(null);
     const [announcementInterval, setAnnouncementInterval] = useState(3);
+    const [towerRankings, setTowerRankings] = useState<TowerRank[]>([]);
     
     // --- UI Modals & Toasts ---
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -143,6 +143,8 @@ export const useApp = () => {
     const [lastUsedItemResult, setLastUsedItemResult] = useState<InventoryItem[] | null>(null);
     const [disassemblyResult, setDisassemblyResult] = useState<{ gained: { name: string, amount: number }[], jackpot: boolean } | null>(null);
     const [craftResult, setCraftResult] = useState<{ gained: { name: string; amount: number }[]; used: { name: string; amount: number }[]; craftType: 'upgrade' | 'downgrade'; } | null>(null);
+    // FIX: Add state for synthesis result modal
+    const [synthesisResult, setSynthesisResult] = useState<{ item: InventoryItem; wasUpgraded: boolean; } | null>(null);
     const [rewardSummary, setRewardSummary] = useState<{ reward: QuestReward; items: InventoryItem[]; title: string } | null>(null);
     const [isClaimAllSummaryOpen, setIsClaimAllSummaryOpen] = useState(false);
     const [claimAllSummary, setClaimAllSummary] = useState<{ gold: number; diamonds: number; actionPoints: number } | null>(null);
@@ -308,6 +310,10 @@ export const useApp = () => {
                 if (result.craftResult) {
                     setCraftResult(result.craftResult);
                 }
+                // FIX: Handle synthesisResult from server response
+                if (result.synthesisResult) {
+                    setSynthesisResult(result.synthesisResult);
+                }
                 if (result.enhancementOutcome) {
                     const { message, success, itemBefore, itemAfter } = result.enhancementOutcome;
                     setEnhancementResult({ message, success });
@@ -367,6 +373,7 @@ export const useApp = () => {
                 updateStateIfChanged(setAnnouncements, data.announcements);
                 updateStateIfChanged(setGlobalOverrideAnnouncement, data.globalOverrideAnnouncement);
                 updateStateIfChanged(setAnnouncementInterval, data.announcementInterval);
+                updateStateIfChanged(setTowerRankings, data.towerRankings);
     
                 const onlineStatuses = Object.entries(data.userStatuses).map(([id, statusInfo]) => ({ ...data.users[id], ...statusInfo }));
                 updateStateIfChanged(setOnlineUsers, onlineStatuses as UserWithStatus[]);
@@ -548,6 +555,9 @@ export const useApp = () => {
         setClaimAllSummary(null);
     }, []);
 
+    // FIX: Add handler for closing synthesis result modal
+    const closeSynthesisResult = useCallback(() => setSynthesisResult(null), []);
+
     return {
         currentUser,
         setCurrentUserAndRoute,
@@ -565,6 +575,7 @@ export const useApp = () => {
         announcements,
         globalOverrideAnnouncement,
         announcementInterval,
+        towerRankings,
         activeGame,
         activeNegotiation,
         showExitToast,
@@ -581,7 +592,7 @@ export const useApp = () => {
         resetGraphicsToDefault,
         modals: {
             isSettingsModalOpen, isInventoryOpen, isMailboxOpen, isQuestsOpen, isShopOpen, lastUsedItemResult,
-            disassemblyResult, craftResult, rewardSummary, viewingUser, isInfoModalOpen, isEncyclopediaOpen, isStatAllocationModalOpen, enhancementAnimationTarget,
+            disassemblyResult, craftResult, synthesisResult, rewardSummary, viewingUser, isInfoModalOpen, isEncyclopediaOpen, isStatAllocationModalOpen, enhancementAnimationTarget,
             pastRankingsInfo, enhancingItem, viewingItem, isProfileEditModalOpen, moderatingUser,
             isClaimAllSummaryOpen,
             claimAllSummary,
@@ -603,6 +614,8 @@ export const useApp = () => {
             closeItemObtained: () => setLastUsedItemResult(null),
             closeDisassemblyResult: () => setDisassemblyResult(null),
             closeCraftResult: () => setCraftResult(null),
+            // FIX: Add handler for closing synthesis result modal
+            closeSynthesisResult,
             closeRewardSummary: () => setRewardSummary(null),
             closeClaimAllSummary,
             openViewingUser: handleViewUser,

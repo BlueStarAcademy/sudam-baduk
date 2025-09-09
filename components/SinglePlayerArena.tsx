@@ -1,4 +1,6 @@
+
 import React from 'react';
+// FIX: Corrected import path for types.
 import { GameProps, Player } from '../types/index.js';
 import GoBoard from './GoBoard.js';
 

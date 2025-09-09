@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, Negotiation, Player, LeagueTier, TournamentType, GameMode } from '../types.js';
-import * as types from '../types.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, Negotiation, Player, LeagueTier, TournamentType, GameMode } from '../types/index.js';
+import * as types from '../types/index.js';
 import { isDifferentDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../utils/timeUtils.js';
 import * as effectService from './effectService.js';
 import { regenerateActionPoints } from './effectService.js';
@@ -165,7 +165,7 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
         if (!game) return { error: 'Game not found.' };
         
         let result: HandleActionResult | null | undefined = null;
-        if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode)) {
+        if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
             result = await handleStrategicGameAction(volatileState, game, action, user);
         } else if (PLAYFUL_GAME_MODES.some(m => m.mode === game.mode)) {
             result = await handlePlayfulGameAction(volatileState, game, action, user);
@@ -179,12 +179,12 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
 
     // Non-Game actions
     if (type.startsWith('ADMIN_')) return handleAdminAction(volatileState, action, user);
-    if (type.includes('SINGLE_PLAYER')) return handleSinglePlayerAction(volatileState, action, user);
+    if (type.includes('SINGLE_PLAYER') || type.includes('TOWER_CHALLENGE')) return handleSinglePlayerAction(volatileState, action, user);
     if (type.includes('NEGOTIATION') || type === 'START_AI_GAME' || type === 'REQUEST_REMATCH' || type === 'CHALLENGE_USER' || type === 'SEND_CHALLENGE') return handleNegotiationAction(volatileState, action, user);
     if (type.startsWith('CLAIM_') || type.startsWith('DELETE_MAIL')) return handleRewardAction(volatileState, action, user);
     if (type.startsWith('BUY_') || type === 'PURCHASE_ACTION_POINTS' || type === 'EXPAND_INVENTORY') return handleShopAction(volatileState, action, user);
     if (type.startsWith('TOURNAMENT') || type.startsWith('START_TOURNAMENT') || type.startsWith('SKIP_TOURNAMENT') || type.startsWith('FORFEIT_TOURNAMENT') || type.startsWith('SAVE_TOURNAMENT') || type.startsWith('CLEAR_TOURNAMENT')) return handleTournamentAction(volatileState, action, user);
-    if (['TOGGLE_EQUIP_ITEM', 'SELL_ITEM', 'ENHANCE_ITEM', 'DISASSEMBLE_ITEM', 'USE_ITEM', 'USE_ALL_ITEMS_OF_TYPE', 'CRAFT_MATERIAL'].includes(type)) return handleInventoryAction(volatileState, action, user);
+    if (['TOGGLE_EQUIP_ITEM', 'SELL_ITEM', 'ENHANCE_ITEM', 'DISASSEMBLE_ITEM', 'USE_ITEM', 'USE_ALL_ITEMS_OF_TYPE', 'CRAFT_MATERIAL', 'SYNTHESIZE_EQUIPMENT'].includes(type)) return handleInventoryAction(volatileState, action, user);
     if (['UPDATE_AVATAR', 'UPDATE_BORDER', 'CHANGE_NICKNAME', 'RESET_STAT_POINTS', 'CONFIRM_STAT_ALLOCATION', 'UPDATE_MBTI'].includes(type)) return handleUserAction(volatileState, action, user);
     
     // Social actions can be game-related (chat in game) or not (logout)

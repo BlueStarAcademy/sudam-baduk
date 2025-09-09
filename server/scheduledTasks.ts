@@ -1,12 +1,13 @@
-
-
 import * as db from './db.js';
 import * as types from '../types.js';
-import { RANKING_TIERS, SEASONAL_TIER_REWARDS, BORDER_POOL, LEAGUE_DATA, LEAGUE_WEEKLY_REWARDS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
+import { RANKING_TIERS, SEASONAL_TIER_REWARDS, BORDER_POOL, LEAGUE_DATA, LEAGUE_WEEKLY_REWARDS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, TOWER_RANKING_REWARDS, BOT_NAMES, AVATAR_POOL } from '../constants.js';
 import { randomUUID } from 'crypto';
 import { getKSTDate, getCurrentSeason, getPreviousSeason, SeasonInfo, isDifferentWeekKST } from '../utils/timeUtils.js';
+import { User, Mail, LeagueRewardTier } from '../types.js';
+
 
 let lastSeasonProcessed: SeasonInfo | null = null;
+let lastTowerResetMonth: number | null = null;
 
 const processRewardsForSeason = async (season: SeasonInfo) => {
     console.log(`[Scheduler] Processing rewards for ${season.name}...`);
@@ -76,7 +77,7 @@ const processRewardsForSeason = async (season: SeasonInfo) => {
             }
             
             // 2. Grant mail reward
-            const reward = rewards[bestTierInfo.tierName];
+            const reward = rewards[bestTierInfo.tierName as keyof typeof rewards];
             if (reward) {
                 const mailMessage = `${season.name} 최고 티어는 "${bestTierInfo.tierName}" 티어입니다.(${bestTierInfo.mode} 경기장)\n프로필의 테두리 아이템을 한 시즌동안 사용하실 수 있습니다.\n티어 보상 상품을 수령하세요.`;
                 
@@ -151,6 +152,90 @@ export const processRankingRewards = async (volatileState: types.VolatileState):
         await db.setKV('lastSeasonProcessed', lastSeasonProcessed);
     }
 };
+
+export const processMonthlyTowerReset = async (): Promise<void> => {
+    const now = Date.now();
+    const kstNow = getKSTDate(now);
+
+    if (kstNow.getUTCDate() !== 1 || kstNow.getUTCHours() !== 0) {
+        return; // Only run at midnight KST on the 1st of the month.
+    }
+
+    const currentMonth = kstNow.getUTCFullYear() * 100 + kstNow.getUTCMonth();
+    if (lastTowerResetMonth === null) {
+        const saved = await db.getKV<number>('lastTowerResetMonth');
+        if (saved) {
+            lastTowerResetMonth = saved;
+        } else {
+            lastTowerResetMonth = currentMonth;
+            await db.setKV('lastTowerResetMonth', lastTowerResetMonth);
+            return;
+        }
+    }
+
+    if (lastTowerResetMonth >= currentMonth) {
+        return; // Already processed for this month
+    }
+
+    console.log('[Scheduler] Processing monthly Tower of Challenge reset...');
+    const allUsers = await db.getAllUsers();
+    
+    // 1. Filter and rank users eligible for rewards (cleared floor 10+)
+    const rankedUsers = allUsers
+        .filter(u => u.towerProgress && u.towerProgress.highestFloor >= 10)
+        .sort((a, b) => {
+            if (b.towerProgress.highestFloor !== a.towerProgress.highestFloor) {
+                return b.towerProgress.highestFloor - a.towerProgress.highestFloor;
+            }
+            return a.towerProgress.lastClearTimestamp - b.towerProgress.lastClearTimestamp;
+        });
+
+    // 2. Distribute rewards to ranked users
+    for (let i = 0; i < rankedUsers.length; i++) {
+        const user = rankedUsers[i];
+        const rank = i + 1;
+        
+        const rewardTier = TOWER_RANKING_REWARDS.find((r: LeagueRewardTier) => rank >= r.rankStart && rank <= r.rankEnd);
+        if (rewardTier) {
+            const mailMessage = `도전의 탑 월간 랭킹 ${rank}위를 달성하셨습니다! 보상이 지급되었습니다.`;
+            const mail: types.Mail = {
+                id: `mail-tower-${randomUUID()}`,
+                from: 'System',
+                title: `도전의 탑 월간 보상 (${rank}위)`,
+                message: mailMessage,
+                attachments: { diamonds: rewardTier.diamonds, items: rewardTier.items },
+                receivedAt: now,
+                expiresAt: now + 30 * 24 * 60 * 60 * 1000, // 30 days
+                isRead: false,
+                attachmentsClaimed: false,
+            };
+            user.mail.unshift(mail);
+            // The user object will be saved in the final loop
+        }
+    }
+
+    // 3. Reset progress for ALL users who participated and save changes
+    for (const user of allUsers) {
+        let needsUpdate = false;
+        // Check if the user was in the ranked list (mail was added)
+        const wasRankedAndRewarded = rankedUsers.some(rankedUser => rankedUser.id === user.id);
+
+        if (user.towerProgress && user.towerProgress.highestFloor > 0) {
+            user.towerProgress = { highestFloor: 0, lastClearTimestamp: 0 };
+            needsUpdate = true;
+        }
+
+        // Save if progress was reset OR if they received reward mail
+        if (needsUpdate || wasRankedAndRewarded) {
+             await db.updateUser(user);
+        }
+    }
+    
+    lastTowerResetMonth = currentMonth;
+    await db.setKV('lastTowerResetMonth', lastTowerResetMonth);
+    console.log('[Scheduler] Tower of Challenge reset complete.');
+};
+
 
 export async function processWeeklyLeagueUpdates(user: types.User): Promise<types.User> {
     if (!isDifferentWeekKST(user.lastLeagueUpdate, Date.now())) {
@@ -274,7 +359,6 @@ export async function updateWeeklyCompetitorsIfNeeded(user: types.User, allUsers
 
     console.log(`[LeagueUpdate] Updating weekly competitors for ${user.nickname}`);
 
-    // Find 15 other users in the same league
     const potentialCompetitors = allUsers.filter(
         u => u.id !== user.id && u.league === user.league
     );
@@ -282,7 +366,23 @@ export async function updateWeeklyCompetitorsIfNeeded(user: types.User, allUsers
     const shuffledCompetitors = potentialCompetitors.sort(() => 0.5 - Math.random());
     const selectedCompetitors = shuffledCompetitors.slice(0, 15);
 
-    // Create the list of competitors including the current user
+    const botsToCreate = 15 - selectedCompetitors.length;
+    if (botsToCreate > 0) {
+        const botNames = [...BOT_NAMES].sort(() => 0.5 - Math.random());
+        for (let i = 0; i < botsToCreate; i++) {
+            const botAvatar = AVATAR_POOL[Math.floor(Math.random() * AVATAR_POOL.length)];
+            const bot: any = {
+                id: `bot-weekly-${i}-${Date.now()}`,
+                nickname: botNames[i % botNames.length],
+                avatarId: botAvatar.id,
+                borderId: 'default',
+                league: user.league,
+                tournamentScore: user.tournamentScore + Math.floor((Math.random() - 0.5) * 100)
+            };
+            selectedCompetitors.push(bot);
+        }
+    }
+
     const competitorList: types.WeeklyCompetitor[] = [user, ...selectedCompetitors].map(u => ({
         id: u.id,
         nickname: u.nickname,

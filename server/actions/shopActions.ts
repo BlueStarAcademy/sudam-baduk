@@ -1,6 +1,3 @@
-
-
-
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, InventoryItem } from '../../types.js';
@@ -106,8 +103,8 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
             const { itemId, quantity } = payload;
             const shopItem = SHOP_ITEMS[itemId as keyof typeof SHOP_ITEMS] as any;
 
-            if (!shopItem || shopItem.type !== 'material') {
-                return { error: '유효하지 않은 재료 상자입니다.' };
+            if (!shopItem || (shopItem.type !== 'material' && shopItem.type !== 'consumable')) {
+                return { error: '유효하지 않은 구매 제한 아이템입니다.' };
             }
             
             const now = Date.now();

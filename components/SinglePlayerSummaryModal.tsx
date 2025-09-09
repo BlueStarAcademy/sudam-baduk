@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { LiveGameSession, User, Player, ServerAction } from '../types/index.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
@@ -15,24 +15,34 @@ interface SinglePlayerSummaryModalProps {
     isTopmost?: boolean;
 }
 
+const useAnimationKey = (summary: LiveGameSession['summary'], currentUser: User) => {
+    const mySummary = summary?.[currentUser.id];
+    if (!mySummary) {
+        return `${currentUser.strategyLevel}-${currentUser.strategyXp}`;
+    }
+    const { xp, level } = mySummary;
+    return `${level?.initial}-${level?.final}-${xp?.initial}-${xp?.change}`;
+};
+
 const XpBar: React.FC<{
     summary: LiveGameSession['summary'];
     currentUser: User;
-}> = ({ summary, currentUser }) => {
+// FIX: Corrected the component implementation which was causing a 'no default export' error due to an incomplete function body.
+}> = React.memo(({ summary, currentUser }) => {
     const mySummary = summary?.[currentUser.id];
     const levelSummary = mySummary?.level;
+    const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
 
     if (!levelSummary) {
-        // Fallback display if summary is missing
         const level = currentUser.strategyLevel;
         const xp = currentUser.strategyXp;
-        const maxXp = 1000 + (level - 1) * 200;
+        const maxXp = getXpForLevel(level);
         const percentage = (xp / maxXp) * 100;
         return (
              <div className="flex items-center gap-3">
                  <span className="text-sm font-bold w-16 text-right">Lv.{level}</span>
                 <div className="w-full bg-gray-700/50 rounded-full h-4 relative border border-gray-900/50 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full" style={{ width: `${percentage}%` }}></div>
+                    <div className="h-full bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-full" style={{ width: `${percentage}%` }}></div>
                     <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black/80 drop-shadow-sm">
                        {xp} / {maxXp}
                     </span>
@@ -41,23 +51,28 @@ const XpBar: React.FC<{
             </div>
         );
     }
-    
+
     const { initial, final, progress } = levelSummary;
     const xpGain = mySummary?.xp?.change ?? 0;
     const isLevelUp = initial < final;
-
+    
     const [barWidth, setBarWidth] = useState(0); 
     const [gainFlashOpacity, setGainFlashOpacity] = useState(0); 
     const [showGainText, setShowGainText] = useState(false);
-    
+    const [levelUpTextVisible, setLevelUpTextVisible] = useState(false);
+
     const initialPercent = progress.max > 0 ? (progress.initial / progress.max) * 100 : 0;
     const finalPercent = progress.max > 0 ? (isLevelUp ? 100 : (progress.final / progress.max) * 100) : 0;
     const gainPercent = finalPercent - initialPercent;
 
+    const animationKey = useAnimationKey(summary, currentUser);
+
     useEffect(() => {
+        // Reset state before animation
         setBarWidth(initialPercent);
         setShowGainText(false);
         setGainFlashOpacity(0);
+        setLevelUpTextVisible(false);
 
         const startTimer = setTimeout(() => {
             if(xpGain > 0) {
@@ -65,6 +80,10 @@ const XpBar: React.FC<{
                 setGainFlashOpacity(1);
             }
             setBarWidth(finalPercent);
+
+            if (isLevelUp) {
+                setTimeout(() => setLevelUpTextVisible(true), 800);
+            }
             
             const fadeTimer = setTimeout(() => {
                 setGainFlashOpacity(0);
@@ -74,18 +93,19 @@ const XpBar: React.FC<{
         }, 500);
 
         return () => clearTimeout(startTimer);
-    }, [initial, final, progress, isLevelUp, initialPercent, finalPercent, xpGain]);
+    }, [animationKey, initialPercent, finalPercent, xpGain, isLevelUp]);
     
     const gainTextKey = `${xpGain}-${progress.initial}`;
     
     return (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 relative">
              <span className="text-sm font-bold w-16 text-right">Lv.{final}</span>
             <div className="w-full bg-gray-700/50 rounded-full h-4 relative border border-gray-900/50 overflow-hidden">
                 <div 
-                    className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-1000 ease-out"
+                    className="h-full bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-full transition-all duration-1000 ease-out"
                     style={{ width: `${barWidth}%` }}
                 ></div>
+                
                 <div 
                     className="absolute top-0 h-full bg-gradient-to-r from-green-400 to-green-500 rounded-r-full transition-opacity duration-500 ease-out pointer-events-none"
                     style={{ 
@@ -94,9 +114,15 @@ const XpBar: React.FC<{
                         opacity: gainFlashOpacity
                     }}
                 ></div>
+
                 <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black/80 drop-shadow-sm">
                    {isLevelUp ? `${progress.max} / ${progress.max}` : `${progress.final} / ${progress.max}`}
                 </span>
+                 {levelUpTextVisible && (
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-2xl font-black text-yellow-300 animate-bounce" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.7)'}}>
+                        LEVEL UP!
+                    </div>
+                )}
             </div>
              {showGainText && xpGain > 0 && (
                 <span key={gainTextKey} className="text-sm font-bold text-green-400 whitespace-nowrap animate-fade-in-xp w-20">
@@ -114,18 +140,21 @@ const XpBar: React.FC<{
             `}</style>
         </div>
     );
-};
+});
 
 
 const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ session, currentUser, onAction, onClose, isTopmost }) => {
-    const isWinner = session.winner === Player.Black; // Human is always Black
-    const currentStage = useMemo(() => SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId), [session.stageId]);
-    const summary = useMemo(() => session.summary?.[currentUser.id], [session.summary, currentUser.id]);
-    
-    const hasLeveledUp = useMemo(() => summary?.level?.initial !== summary?.level?.final, [summary]);
+    const isWinner = session.winner === Player.Black;
+    const soundPlayed = useRef(false);
+
+    const mySummary = session.summary?.[currentUser.id];
+    const stage = SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId);
+    const hasLeveledUp = useMemo(() => mySummary?.level?.initial !== mySummary?.level?.final, [mySummary]);
 
     useEffect(() => {
+        if (soundPlayed.current) return;
         let soundTimer: number | undefined;
+
         if (hasLeveledUp) {
             soundTimer = window.setTimeout(() => audioService.levelUp(), 800);
         } else if (isWinner) {
@@ -133,89 +162,78 @@ const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ ses
         } else {
             audioService.gameLose();
         }
+        soundPlayed.current = true;
         return () => clearTimeout(soundTimer);
     }, [isWinner, hasLeveledUp]);
 
-    if (!currentStage) {
-        return (
-            <DraggableWindow title="결과" onClose={onClose} windowId="sp-summary" isTopmost={isTopmost}>
-                <p>스테이지 정보를 불러올 수 없습니다.</p>
-                <Button onClick={onClose}>확인</Button>
-            </DraggableWindow>
-        );
-    }
-    
-    const isFirstClear = (currentUser.singlePlayerProgress ?? 0) === SINGLE_PLAYER_STAGES.findIndex(s => s.id === currentStage.id);
-    const rewards = isWinner ? (isFirstClear ? currentStage.rewards.firstClear : currentStage.rewards.repeatClear) : null;
-    
+    const title = isWinner ? '승리' : '패배';
+    const color = isWinner ? 'text-green-400' : 'text-red-400';
+
+    const currentStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId);
+    const nextStage = SINGLE_PLAYER_STAGES[currentStageIndex + 1];
+    const canTryNext = isWinner && nextStage && (currentUser.singlePlayerProgress ?? 0) > currentStageIndex;
+
     const handleRetry = () => {
-        onClose();
         onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: session.stageId! } });
+        onClose();
     };
 
     const handleNextStage = () => {
-        const currentStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId);
-        const nextStage = SINGLE_PLAYER_STAGES[currentStageIndex + 1];
-        if (nextStage) {
-            onClose();
+        if (canTryNext) {
             onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: nextStage.id } });
+            onClose();
         }
     };
-    
+
     const handleExitToLobby = () => {
-        onClose();
         sessionStorage.setItem('postGameRedirect', '#/singleplayer');
         onAction({ type: 'LEAVE_AI_GAME', payload: { gameId: session.id } });
+        onClose();
     };
 
-    const canTryNext = useMemo(() => {
-        if (!isWinner) return false;
-        const currentStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId);
-        const nextStage = SINGLE_PLAYER_STAGES[currentStageIndex + 1];
-        return !!nextStage;
-    }, [isWinner, session.stageId]);
+    const rewardItem = mySummary?.items?.[0];
+    const rewardItemTemplate = rewardItem ? CONSUMABLE_ITEMS.find(item => item.name === rewardItem.name) : null;
 
     return (
-        <DraggableWindow title="스테이지 결과" onClose={onClose} windowId="sp-summary" initialWidth={500} isTopmost={isTopmost}>
-            <div className="text-center relative">
-                <h2 className={`text-4xl font-black mb-2 ${isWinner ? 'text-amber-400' : 'text-stone-500'}`}>
-                    {isWinner ? '승리' : '패배'}
-                </h2>
-                <p className="text-stone-300 mb-6">{isWinner ? "스테이지를 클리어했습니다!" : "아쉽지만 다음 기회에!"}</p>
-                
-                <div className="bg-stone-800/50 p-4 rounded-lg space-y-3 relative">
-                    <h3 className="font-bold text-lg text-amber-300">획득 보상</h3>
-                    <XpBar summary={session.summary} currentUser={currentUser} />
-                    {hasLeveledUp && (
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-5xl font-black text-yellow-300 animate-bounce" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.7)' }}>
-                            LEVEL UP!
+        <DraggableWindow title="대국 결과" onClose={onClose} windowId="singleplayer-summary" initialWidth={500} isTopmost={isTopmost}>
+            <div className="text-white text-center">
+                <h1 className={`text-5xl font-black mb-4 ${color}`}>{title}</h1>
+                <p className="text-gray-300 mb-6">{isWinner ? `축하합니다! ${stage?.name}을(를) 클리어했습니다.` : `아쉽지만 다음 기회에 다시 도전해보세요.`}</p>
+
+                {mySummary && (
+                    <div className="bg-gray-900/50 p-4 rounded-lg space-y-4">
+                        <XpBar summary={session.summary} currentUser={currentUser} />
+                        
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                            <div className="bg-gray-800 p-2 rounded-md">
+                                <p className="text-gray-400">획득 골드</p>
+                                <p className="font-semibold text-yellow-300 flex items-center justify-center gap-1">
+                                    <img src="/images/Gold.png" alt="골드" className="w-4 h-4" /> {(mySummary.gold ?? 0).toLocaleString()}
+                                </p>
+                            </div>
+                            <div className="bg-gray-800 p-2 rounded-md">
+                                <p className="text-gray-400">획득 아이템</p>
+                                 <div className="font-semibold h-6 flex items-center justify-center">
+                                    {rewardItem && rewardItemTemplate ? (
+                                        <div className="flex items-center gap-2">
+                                            <img src={rewardItemTemplate.image!} alt={rewardItem.name} className="w-6 h-6 object-contain" />
+                                            <p className="text-xs">{rewardItem.name}</p>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-gray-500">없음</p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    )}
-                    {rewards && (
-                        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 pt-2 border-t border-stone-700">
-                            {rewards.gold > 0 && 
-                                <span className="flex items-center gap-1 text-yellow-300"><img src="/images/Gold.png" alt="골드" className="w-5 h-5"/> +{rewards.gold.toLocaleString()}</span>
-                            }
-                            {rewards.items?.map((itemRef, idx) => {
-                                const itemTemplate = CONSUMABLE_ITEMS.find(ci => ci.name === itemRef.itemId);
-                                if (!itemTemplate) return null;
-                                return (
-                                    <div key={idx} className="flex items-center gap-1" title={`${itemRef.itemId} x${itemRef.quantity}`}>
-                                        <img src={itemTemplate.image!} alt={itemRef.itemId} className="w-6 h-6 object-contain" />
-                                        <span>x{itemRef.quantity}</span>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
+                    </div>
+                )}
                 
-                <div className="flex justify-center gap-4 mt-8">
-                    <Button onClick={handleExitToLobby} colorScheme="gray" className="flex-1">로비로</Button>
-                    <Button onClick={handleRetry} colorScheme="yellow" className="flex-1">재도전</Button>
-                    {isWinner && (
-                        <Button onClick={handleNextStage} disabled={!canTryNext} colorScheme="accent" className="flex-1">다음 단계</Button>
-                    )}
+                <div className="grid grid-cols-3 gap-3 mt-6">
+                    <Button onClick={handleExitToLobby} colorScheme="gray">로비로</Button>
+                    <Button onClick={handleRetry} colorScheme="yellow">재도전</Button>
+                    <Button onClick={handleNextStage} colorScheme="accent" disabled={!canTryNext}>
+                        {nextStage ? `다음 단계: ${nextStage.name.replace('스테이지 ', '')}` : '다음 단계'}
+                    </Button>
                 </div>
             </div>
         </DraggableWindow>

@@ -1,7 +1,7 @@
-import { TournamentState, PlayerForTournament, CoreStat, CommentaryLine, Match, User, Round, TournamentType } from '../types.js';
+import { TournamentState, PlayerForTournament, CoreStat, CommentaryLine, Match, User, Round, TournamentType, LeagueTier } from '../types.js';
 import { calculateTotalStats } from './statService.js';
 import { randomUUID } from 'crypto';
-import { TOURNAMENT_DEFINITIONS } from '../constants.js';
+import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS } from '../constants.js';
 
 const EARLY_GAME_DURATION = 40;
 const MID_GAME_DURATION = 60;
@@ -59,20 +59,27 @@ const COMMENTARY_POOLS = {
     ]
 };
 
-
 const getPhase = (time: number): 'early' | 'mid' | 'end' => {
     if (time <= EARLY_GAME_DURATION) return 'early';
     if (time <= EARLY_GAME_DURATION + MID_GAME_DURATION) return 'end';
     return 'end';
 };
 
+const getMaxStatValueForLeague = (league: LeagueTier): number => {
+    if ([LeagueTier.Sprout, LeagueTier.Rookie, LeagueTier.Rising].includes(league)) return 250;
+    if ([LeagueTier.Ace, LeagueTier.Diamond, LeagueTier.Master].includes(league)) return 500;
+    return 9999; // No cap for Grandmaster/Challenger
+};
+
 const calculatePower = (player: PlayerForTournament, phase: 'early' | 'mid' | 'end') => {
     const weights = STAT_WEIGHTS[phase];
+    const statCap = getMaxStatValueForLeague(player.league);
     let power = 0;
     for (const stat in weights) {
         const statKey = stat as CoreStat;
         const weight = weights[statKey]!;
-        power += (player.stats[statKey] || 0) * weight;
+        const statValue = Math.min(player.stats[statKey] || 0, statCap);
+        power += statValue * weight;
     }
     const conditionModifier = (player.condition || 100) / 100;
     return (power) * conditionModifier;
@@ -164,7 +171,7 @@ const prepareNextRound = (state: TournamentState, user: User) => {
         const winners = lastRound.matches.map(m => m.winner).filter(Boolean) as PlayerForTournament[];
 
         if (winners.length > 1) {
-            if (winners.length === 2 && state.players.length === 8 && lastRound.matches.length === 2) {
+            if (winners.length === 2 && (state.type === 'national' || state.type === 'world') && lastRound.matches.length === 2) {
                 const losers = lastRound.matches.map(m => m.players.find(p => p && p.id !== m.winner?.id)).filter(Boolean) as PlayerForTournament[];
                 if (losers.length === 2) {
                     const thirdPlaceMatch: Match = {
@@ -202,7 +209,7 @@ const prepareNextRound = (state: TournamentState, user: User) => {
 
 const processMatchCompletion = (state: TournamentState, user: User, completedMatch: Match, roundIndex: number) => {
     state.currentSimulatingMatch = null;
-    
+
     completedMatch.players.forEach(p => {
         if (p) {
             const playerInState = state.players.find(player => player.id === p.id);
@@ -215,100 +222,60 @@ const processMatchCompletion = (state: TournamentState, user: User, completedMat
         }
     });
 
-    const currentRound = state.rounds[roundIndex];
-    const allMatchesInCurrentRoundFinished = currentRound.matches.every(m => m.isFinished);
-
     if (state.type === 'neighborhood') {
-        const currentRoundRobinRound = state.currentRoundRobinRound || 1;
-        const allLeagueMatchesFinished = state.rounds[0].matches.every(m => m.isFinished);
-        
-        if (allLeagueMatchesFinished) {
-            state.status = 'complete';
-        } else {
-             const schedule = [
-                [[0, 5], [1, 4], [2, 3]], [[0, 4], [5, 3], [1, 2]], [[0, 3], [4, 2], [5, 1]],
-                [[0, 2], [3, 1], [4, 5]], [[0, 1], [2, 5], [3, 4]],
-            ];
-            const roundPairings = schedule[currentRoundRobinRound - 1];
-            const roundMatches = roundPairings.map(pair => {
-                const p1Id = state.players[pair[0]].id;
-                const p2Id = state.players[pair[1]].id;
-                return state.rounds[0].matches.find(m =>
-                    (m.players[0]?.id === p1Id && m.players[1]?.id === p2Id) ||
-                    (m.players[0]?.id === p2Id && m.players[1]?.id === p1Id)
-                );
-            });
+        const currentRoundNum = state.currentRoundRobinRound || 1;
+        const schedule = [
+            [[0, 5], [1, 4], [2, 3]], [[0, 4], [5, 3], [1, 2]], [[0, 3], [4, 2], [5, 1]],
+            [[0, 2], [3, 1], [4, 5]], [[0, 1], [2, 5], [3, 4]],
+        ];
+        const roundPairings = schedule[currentRoundNum - 1];
+        const matchesForThisRound = roundPairings.map(pair => {
+            const p1Id = state.players[pair[0]].id;
+            const p2Id = state.players[pair[1]].id;
+            return state.rounds[0].matches.find(m =>
+                (m.players[0]?.id === p1Id && m.players[1]?.id === p2Id) ||
+                (m.players[0]?.id === p2Id && m.players[1]?.id === p1Id)
+            );
+        }).filter((m): m is Match => !!m);
 
-            if (roundMatches.every(m => m?.isFinished)) {
-                 state.status = 'round_complete';
-            }
-        }
-        return;
-    }
-
-    const loser = completedMatch.players.find(p => p && p.id !== completedMatch.winner?.id) || null;
-
-    if (loser?.id === user.id) {
-        state.status = 'eliminated';
-        currentRound.matches.forEach(match => {
+        matchesForThisRound.forEach(match => {
             if (!match.isFinished) {
                 simulateAndFinishMatch(match, state.players);
             }
         });
-        
-        // Refactored from `while` to `for` to avoid TypeScript type narrowing error
-        for (let safety = 0; safety < 10; safety++) {
-            if ((state as any).status === 'complete') break;
 
-            const lastRound = state.rounds[state.rounds.length - 1];
-            if (lastRound.matches.every(m => m.isFinished)) {
-                if (lastRound.matches.length === 1 && (lastRound.name === '결승' || lastRound.name.includes("3,4위전"))) {
-                     const finalIsDone = state.rounds.find(r => r.name === '결승')?.matches[0]?.isFinished;
-                     const thirdPlaceIsDone = state.rounds.find(r => r.name === '3,4위전')?.matches[0]?.isFinished ?? true;
-                     if(finalIsDone && thirdPlaceIsDone) {
+        state.status = 'round_complete';
+
+        const allMatchesInTournamentFinished = state.rounds[0].matches.every(m => m.isFinished);
+        if (allMatchesInTournamentFinished) {
+            state.status = 'complete';
+        }
+    } else { // Knockout tournament logic
+        const currentRound = state.rounds[roundIndex];
+        const userWon = completedMatch.winner?.id === user.id;
+
+        if (!userWon) {
+            state.status = 'eliminated';
+            currentRound.matches.forEach(match => {
+                if (!match.isFinished) {
+                    simulateAndFinishMatch(match, state.players);
+                }
+            });
+            for (let safety = 0; safety < 10; safety++) {
+                const lastRound = state.rounds[state.rounds.length - 1];
+                if (lastRound.matches.every(m => m.isFinished)) {
+                     const isFinalOver = state.rounds.some(r => r.name === '결승') && state.rounds.find(r => r.name === '결승')!.matches.every(m => m.isFinished);
+                     if(isFinalOver) {
                          state.status = 'complete';
                          break;
                      }
-                } else if(lastRound.matches.length === 1) {
-                    state.status = 'complete';
-                    break;
-                }
-                
-                prepareNextRound(state, user);
-                const nextRound = state.rounds[state.rounds.length - 1];
-                nextRound.matches.forEach(m => simulateAndFinishMatch(m, state.players));
-
-            } else {
-                 break;
-            }
-        }
-
-    } else if (allMatchesInCurrentRoundFinished) {
-        const isFinalRound = (currentRound.matches.length === 1 && (currentRound.name === '결승' || currentRound.name.includes("3,4위전")));
-        const isWorldCupFinals = (
-            state.type === 'world' && 
-            currentRound.name === '4강' && 
-            state.rounds.length === 3
-        );
-        const isNationalFinals = (
-            state.type === 'national' && 
-            currentRound.name === '4강' && 
-            state.rounds.length === 2
-        );
-
-        if (isFinalRound || isWorldCupFinals || isNationalFinals) {
-             const finals = state.rounds.filter(r => r.name === '결승' || r.name === '3,4위전');
-             if(finals.every(r => r.matches.every(m => m.isFinished))) {
-                state.status = 'complete';
-             } else {
-                state.status = 'round_complete';
-                if(!finals.length) {
                     prepareNextRound(state, user);
+                    const nextRound = state.rounds[state.rounds.length - 1];
+                    nextRound.matches.forEach(m => simulateAndFinishMatch(m, state.players));
+                } else {
+                     break;
                 }
-             }
-
-        } else if (currentRound.matches.length === 1) {
-             state.status = 'complete';
+            }
         } else {
             state.status = 'round_complete';
             prepareNextRound(state, user);
@@ -390,8 +357,8 @@ export const startNextRound = (state: TournamentState, user: User) => {
             state.currentRoundRobinRound = (state.currentRoundRobinRound || 0) + 1;
         }
     
-        const currentRound = state.currentRoundRobinRound || 1;
-        if (currentRound > 5) {
+        const currentRoundNum = state.currentRoundRobinRound || 1;
+        if (currentRoundNum > 5) {
             state.status = 'complete';
             return;
         }
@@ -401,17 +368,17 @@ export const startNextRound = (state: TournamentState, user: User) => {
             [[0, 5], [1, 4], [2, 3]], [[0, 4], [5, 3], [1, 2]], [[0, 3], [4, 2], [5, 1]],
             [[0, 2], [3, 1], [4, 5]], [[0, 1], [2, 5], [3, 4]],
         ];
-        const roundPairings = schedule[currentRound - 1];
-        const roundMatches = roundPairings.map(pair => {
+        const roundPairings = schedule[currentRoundNum - 1];
+        const matchesForThisRound = roundPairings.map(pair => {
             const p1Id = players[pair[0]].id;
             const p2Id = players[pair[1]].id;
             return state.rounds[0].matches.find(m =>
                 (m.players[0]?.id === p1Id && m.players[1]?.id === p2Id) ||
                 (m.players[0]?.id === p2Id && m.players[1]?.id === p1Id)
             );
-        });
+        }).filter((m): m is Match => !!m);
     
-        const userMatchInRound = roundMatches.find(m => m?.isUserMatch && !m.isFinished);
+        const userMatchInRound = matchesForThisRound.find(m => m.isUserMatch && !m.isFinished);
     
         if (userMatchInRound) {
             const matchIndex = state.rounds[0].matches.findIndex(m => m.id === userMatchInRound.id);
@@ -422,12 +389,17 @@ export const startNextRound = (state: TournamentState, user: User) => {
             state.timeElapsed = 0;
             state.currentMatchScores = { player1: 0, player2: 0 };
         } else {
-            roundMatches.forEach(m => {
-                if (m && !m.isFinished) {
-                    simulateAndFinishMatch(m, state.players);
+            matchesForThisRound.forEach(match => {
+                if (!match.isFinished) {
+                    simulateAndFinishMatch(match, state.players);
                 }
             });
-            state.status = 'round_complete';
+            state.status = 'round_complete'; 
+        }
+        
+        const allMatchesInTournamentFinished = state.rounds[0].matches.every(m => m.isFinished);
+        if (allMatchesInTournamentFinished) {
+            state.status = 'complete';
         }
         return;
     }
@@ -550,28 +522,50 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
 };
 
 export const skipToResults = (state: TournamentState, userId: string) => {
-    for (let safety = 0; safety < 10; safety++) {
-        if ((state as any).status === 'complete') break;
-
-        const lastRound = state.rounds[state.rounds.length - 1];
-        if (lastRound.matches.every((m: Match) => m.isFinished)) {
-            if (lastRound.matches.length === 1 && (lastRound.name === '결승' || lastRound.name.includes("3,4위전"))) {
-                 const finalIsDone = state.rounds.find((r: Round) => r.name === '결승')?.matches[0]?.isFinished;
-                 const thirdPlaceIsDone = state.rounds.find((r: Round) => r.name === '3,4위전')?.matches[0]?.isFinished ?? true;
-                 if(finalIsDone && thirdPlaceIsDone) {
-                     state.status = 'complete';
-                     break;
-                 }
-            } else if (lastRound.matches.length === 1) {
-                state.status = 'complete';
-                break;
+    // Simulate any ongoing user match first
+    if (state.status === 'round_in_progress' && state.currentSimulatingMatch) {
+        const { roundIndex, matchIndex } = state.currentSimulatingMatch;
+        const match = state.rounds[roundIndex].matches[matchIndex];
+        if (!match.isFinished) {
+            // Fast-forward simulation
+            let p1Cumulative = state.currentMatchScores?.player1 || 0;
+            let p2Cumulative = state.currentMatchScores?.player2 || 0;
+            const p1 = state.players.find(p => p.id === match.players[0]!.id)!;
+            const p2 = state.players.find(p => p.id === match.players[1]!.id)!;
+            for (let t = state.timeElapsed + 1; t <= TOTAL_GAME_DURATION; t++) {
+                const phase = getPhase(t);
+                p1Cumulative += calculatePower(p1, phase);
+                p2Cumulative += calculatePower(p2, phase);
             }
-            prepareNextRound(state, { id: userId } as User);
-        } else {
-            break;
+            const { winner } = finishMatch(match, p1, p2, p1Cumulative, p2Cumulative);
+            match.winner = winner;
+            match.isFinished = true;
         }
     }
-    
+
+    // Now, simulate all other matches until the end
+    let safety = 0;
+    while (state.status !== 'complete' && safety < 10) {
+        safety++;
+        const lastRound = state.rounds[state.rounds.length - 1];
+        if (lastRound.matches.every(m => m.isFinished)) {
+            prepareNextRound(state, { id: userId } as User);
+        }
+        
+        const currentRoundToSimulate = state.rounds[state.rounds.length - 1];
+        currentRoundToSimulate.matches.forEach(m => {
+            if (!m.isFinished) {
+                simulateAndFinishMatch(m, state.players);
+            }
+        });
+
+        const isLastRoundFinished = state.rounds[state.rounds.length - 1].matches.every(m => m.isFinished);
+        const finalMatchExists = state.rounds.some(r => r.name === '결승');
+        if (isLastRoundFinished && finalMatchExists) {
+             state.status = 'complete';
+             break;
+        }
+    }
     state.status = 'complete';
 };
 

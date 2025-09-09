@@ -9,6 +9,15 @@ export const emptySlotImages: Record<EquipmentSlot, string> = {
     stones: 'images/equipments/EmptyStoneSlot.png',
 };
 
+export const slotNames: Record<EquipmentSlot, string> = {
+    fan: '부채',
+    board: '바둑판',
+    top: '상의',
+    bottom: '하의',
+    bowl: '바둑통',
+    stones: '바둑돌',
+};
+
 export const GRADE_LEVEL_REQUIREMENTS: Record<ItemGrade, number> = {
     normal: 1,
     uncommon: 1,
@@ -84,6 +93,15 @@ export const CONSUMABLE_ITEMS: (Omit<InventoryItem, 'id'|'createdAt'|'isEquipped
     { name: '다이아 꾸러미2', description: '10 ~ 30 다이아 획득', type: 'consumable', slot: null, image: '/images/Box/DiaBox2.png', grade: 'epic' },
     { name: '다이아 꾸러미3', description: '20 ~ 50 다이아 획득', type: 'consumable', slot: null, image: '/images/Box/DiaBox3.png', grade: 'legendary' },
     { name: '다이아 꾸러미4', description: '30 ~ 100 다이아 획득', type: 'consumable', slot: null, image: '/images/Box/DiaBox4.png', grade: 'mythic' },
+    { name: '컨디션물약(소)', description: '토너먼트 경기 시작 전 선수의 컨디션을 1~5만큼 회복시킵니다.', type: 'consumable', slot: null, image: '/images/items/potion_small.png', grade: 'uncommon' },
+    { name: '컨디션물약(중)', description: '토너먼트 경기 시작 전 선수의 컨디션을 5~10만큼 회복시킵니다.', type: 'consumable', slot: null, image: '/images/items/potion_medium.png', grade: 'rare' },
+    { name: '컨디션물약(대)', description: '토너먼트 경기 시작 전 선수의 컨디션을 10~20만큼 회복시킵니다.', type: 'consumable', slot: null, image: '/images/items/potion_large.png', grade: 'epic' },
+];
+
+export const SHOP_CONSUMABLE_ITEMS: { name: string; description: string; cost: { gold?: number, diamonds?: number }; image: string; weeklyLimit: number; type: 'consumable' }[] = [
+    { name: '컨디션물약(소)', description: '컨디션 1~5 회복', cost: { gold: 100 }, image: '/images/items/potion_small.png', weeklyLimit: 10, type: 'consumable' },
+    { name: '컨디션물약(중)', description: '컨디션 5~10 회복', cost: { gold: 250 }, image: '/images/items/potion_medium.png', weeklyLimit: 5, type: 'consumable' },
+    { name: '컨디션물약(대)', description: '컨디션 10~20 회복', cost: { gold: 500 }, image: '/images/items/potion_large.png', weeklyLimit: 3, type: 'consumable' },
 ];
 
 export const MATERIAL_ITEMS: Record<string, Omit<InventoryItem, 'id'|'createdAt'|'isEquipped'|'level'|'stars'|'options'|'enhancementFails'>> = {
@@ -179,6 +197,25 @@ export const ENHANCEMENT_COSTS: Record<ItemGrade, { amount: number; name: string
         /* +10 */[{ amount: 100, name: '신비의 강화석' }],
     ],
 };
+
+export const SYNTHESIS_COSTS: Record<ItemGrade, number> = {
+    normal: 100,
+    uncommon: 300,
+    rare: 500,
+    epic: 1000,
+    legendary: 2000,
+    mythic: 5000,
+};
+
+export const SYNTHESIS_UPGRADE_CHANCES: Record<ItemGrade, number> = {
+    normal: 20,
+    uncommon: 10,
+    rare: 5,
+    epic: 1,
+    legendary: 0.1,
+    mythic: 50, // This is for "great success" to get 2 mythic options
+};
+
 
 export const ITEM_SELL_PRICES: Record<ItemGrade, number> = {
     normal: 50,

@@ -1,4 +1,3 @@
-
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { UserWithStatus, TournamentState, TournamentType, User, ChatMessage, LeagueTier } from '../types.js';
 import { TournamentBracket } from './TournamentBracket.js';
@@ -58,26 +57,26 @@ const WeeklyCompetitorsPanel: React.FC<{ setHasRankChanged: (changed: boolean) =
             return [];
         }
     
-        const MIN_DAILY_SCORE_GAIN = 6;  // 1(동네) + 2(전국) + 3(세계)
-        const MAX_DAILY_SCORE_GAIN = 136; // 32(동네) + 46(전국) + 58(세계)
-        const KST_OFFSET = 9 * 60 * 60 * 1000;
+        const MIN_DAILY_SCORE_GAIN = 6;
+        const MAX_DAILY_SCORE_GAIN = 136;
     
         const lastUpdateTs = currentUserWithStatus.lastWeeklyCompetitorsUpdate || Date.now();
-        
-        const startDate = new Date(lastUpdateTs);
-        startDate.setHours(0, 0, 0, 0); // Use local timezone start of day for calculation
-        
-        const nowDate = new Date();
-        nowDate.setHours(0, 0, 0, 0); // Use local timezone start of today
-    
-        const diffTime = Math.max(0, nowDate.getTime() - startDate.getTime());
+        const startOfUpdateDay = new Date(lastUpdateTs);
+        startOfUpdateDay.setHours(0, 0, 0, 0);
+
+        const now = new Date();
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
+        const diffTime = Math.max(0, startOfToday.getTime() - startOfUpdateDay.getTime());
         const daysPassed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
         return (currentUserWithStatus.weeklyCompetitors).map(competitor => {
             if (competitor.id.startsWith('bot-')) {
                 let totalGain = 0;
-                for (let i = 1; i <= daysPassed; i++) {
-                    const seedStr = `${competitor.id}-${new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}`;
+                for (let i = 0; i <= daysPassed; i++) {
+                    const dateForSeed = new Date(startOfUpdateDay.getTime() + i * 24 * 60 * 60 * 1000);
+                    const seedStr = `${competitor.id}-${dateForSeed.toISOString().slice(0, 10)}`;
                     const seed = stringToSeed(seedStr);
                     const randomVal = seededRandom(seed);
                     const dailyGain = MIN_DAILY_SCORE_GAIN + Math.floor(randomVal * (MAX_DAILY_SCORE_GAIN - MIN_DAILY_SCORE_GAIN + 1));

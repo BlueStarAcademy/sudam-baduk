@@ -1,10 +1,71 @@
+
+
 import * as types from '../../types.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../goLogic.js';
 import { handleSharedAction, updateSharedGameState } from './shared.js';
 import { DICE_GO_MAIN_ROLL_TIME, DICE_GO_MAIN_PLACE_TIME } from '../../constants.js';
+// FIX: Correctly import summaryService to resolve module not found error.
 import { endGame } from '../summaryService.js';
 import { aiUserId } from '../aiPlayer.js';
+
+// FIX: Export function to make it accessible to other modules like `aiPlayer.ts`.
+export const finishThiefPlacingTurn = (game: types.LiveGameSession) => {
+    const now = Date.now();
+
+    game.lastTurnStones = game.stonesPlacedThisTurn;
+    game.stonesPlacedThisTurn = [];
+    game.lastMove = null;
+    
+    game.turnInRound = (game.turnInRound || 0) + 1;
+    const totalTurnsInRound = 10;
+
+    if (game.turnInRound > totalTurnsInRound) {
+        const finalThiefStonesLeft = game.boardState.flat().filter(s => s === types.Player.Black).length;
+        const capturesThisRound = game.thiefCapturesThisRound || 0;
+        
+        game.scores[game.thiefPlayerId!] = (game.scores[game.thiefPlayerId!] || 0) + finalThiefStonesLeft;
+        game.scores[game.policePlayerId!] = (game.scores[game.policePlayerId!] || 0) + capturesThisRound;
+        
+        const p1IsThief = game.player1.id === game.thiefPlayerId;
+
+        game.thiefRoundSummary = {
+            round: game.round,
+            isDeathmatch: !!game.isDeathmatch,
+            player1: {
+                id: game.player1.id,
+                role: p1IsThief ? 'thief' : 'police',
+                roundScore: p1IsThief ? finalThiefStonesLeft : capturesThisRound,
+                cumulativeScore: game.scores[game.player1.id] ?? 0,
+            },
+            player2: {
+                id: game.player2.id,
+                role: !p1IsThief ? 'thief' : 'police',
+                roundScore: !p1IsThief ? finalThiefStonesLeft : capturesThisRound,
+                cumulativeScore: game.scores[game.player2.id] ?? 0,
+            }
+        };
+
+        const p1Score = game.scores[game.player1.id]!;
+        const p2Score = game.scores[game.player2.id]!;
+        
+        if ((game.round === 2 && p1Score !== p2Score) || game.isDeathmatch) {
+            const winnerId = p1Score > p2Score ? game.player1.id : game.player2.id;
+            const winnerEnum = winnerId === game.blackPlayerId ? types.Player.Black : (winnerId === game.whitePlayerId ? types.Player.White : types.Player.None);
+            endGame(game, winnerEnum, 'total_score');
+            return;
+        }
+        
+        game.gameStatus = 'thief_round_end';
+        game.revealEndTime = now + 20000;
+        if (game.isAiGame) game.roundEndConfirmations = { [aiUserId]: now };
+    } else {
+        game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
+        game.gameStatus = 'thief_rolling';
+        game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
+        game.turnStartTime = now;
+    }
+};
 
 export const initializeThief = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {
     const p1 = game.player1;
@@ -166,7 +227,7 @@ export const updateThiefState = (game: types.LiveGameSession, now: number) => {
              const p2Score = game.thiefRoundSummary!.player2.cumulativeScore;
 
              if ((game.round === 2 && p1Score !== p2Score) || game.isDeathmatch) {
-                 const winnerId = p1Score > p2Score ? p1Id : p2Id;
+                 const winnerId = p1Score > p2Score ? p1Id : game.player2.id;
                  const winnerEnum = winnerId === game.blackPlayerId ? types.Player.Black : types.Player.White;
                  endGame(game, winnerEnum, 'total_score');
              } else if (game.round === 2 && p1Score === p2Score) { // Tie after 2 rounds, start deathmatch
@@ -327,58 +388,7 @@ export const handleThiefAction = async (volatileState: types.VolatileState, game
             }
 
             if (game.stonesToPlace <= 0) {
-                game.lastTurnStones = game.stonesPlacedThisTurn;
-                game.stonesPlacedThisTurn = [];
-                game.lastMove = null;
-                
-                game.turnInRound = (game.turnInRound || 0) + 1;
-                const totalTurnsInRound = 10;
-        
-                if (game.turnInRound > totalTurnsInRound || allThievesCaptured) {
-                    const finalThiefStonesLeft = game.boardState.flat().filter(s => s === types.Player.Black).length;
-                    const capturesThisRound = game.thiefCapturesThisRound || 0;
-                    
-                    game.scores[game.thiefPlayerId!] = (game.scores[game.thiefPlayerId!] || 0) + finalThiefStonesLeft;
-                    game.scores[game.policePlayerId!] = (game.scores[game.policePlayerId!] || 0) + capturesThisRound;
-                    
-                    const p1IsThief = game.player1.id === game.thiefPlayerId;
-
-                    game.thiefRoundSummary = {
-                        round: game.round,
-                        isDeathmatch: !!game.isDeathmatch,
-                        player1: {
-                            id: p1Id,
-                            role: p1IsThief ? 'thief' : 'police',
-                            roundScore: p1IsThief ? finalThiefStonesLeft : capturesThisRound,
-                            cumulativeScore: game.scores[p1Id] ?? 0,
-                        },
-                        player2: {
-                            id: game.player2.id,
-                            role: !p1IsThief ? 'thief' : 'police',
-                            roundScore: !p1IsThief ? finalThiefStonesLeft : capturesThisRound,
-                            cumulativeScore: game.scores[game.player2.id] ?? 0,
-                        }
-                    };
-
-                    const p1Score = game.scores[p1Id]!;
-                    const p2Score = game.scores[game.player2.id]!;
-                    
-                    if ((game.round === 2 && p1Score !== p2Score) || game.isDeathmatch) {
-                        const winnerId = p1Score > p2Score ? p1Id : game.player2.id;
-                        const winnerEnum = winnerId === game.blackPlayerId ? types.Player.Black : types.Player.White;
-                        endGame(game, winnerEnum, 'total_score');
-                        return {};
-                    }
-                    
-                    game.gameStatus = 'thief_round_end';
-                    game.revealEndTime = now + 20000;
-                    if(game.isAiGame) game.roundEndConfirmations = { [aiUserId]: now };
-                } else {
-                    game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-                    game.gameStatus = 'thief_rolling';
-                    game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
-                    game.turnStartTime = now;
-                }
+                finishThiefPlacingTurn(game);
             }
             return {};
         }

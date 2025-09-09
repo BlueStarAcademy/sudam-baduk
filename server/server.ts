@@ -1,18 +1,21 @@
+
 import express from 'express';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
-import { handleAction, resetAndGenerateQuests, updateQuestProgress } from './gameActions.js';
+// FIX: Import `resetAndGenerateQuests` from the correct file `questService.js` and remove non-exported members from gameActions import.
+import { handleAction } from './gameActions.js';
+import { resetAndGenerateQuests } from './questService.js';
 import { regenerateActionPoints } from './effectService.js';
 import { updateGameStates } from './gameModes.js';
 import * as db from './db.js';
 import { analyzeGame } from './kataGoService.js';
 // FIX: Import missing types from the centralized types file.
-import * as types from '../types.js';
-import { LiveGameSession, User, UserCredentials, AppState, VolatileState } from '../types.js';
+import * as types from '../types/index.js';
+import { LiveGameSession, User, UserCredentials, AppState, VolatileState, TowerRank } from '../types/index.js';
 import { processGameSummary, endGame } from './summaryService.js';
 // FIX: Correctly import from the placeholder module.
 import { aiUserId, getAiUser } from './aiPlayer.js';
-import { processRankingRewards, processWeeklyLeagueUpdates, updateWeeklyCompetitorsIfNeeded } from './scheduledTasks.js';
+import { processRankingRewards, processWeeklyLeagueUpdates, updateWeeklyCompetitorsIfNeeded, processMonthlyTowerReset } from './scheduledTasks.js';
 import * as tournamentService from './tournamentService.js';
 import { AVATAR_POOL, BOT_NAMES, PLAYFUL_GAME_MODES, SPECIAL_GAME_MODES, SINGLE_PLAYER_MISSIONS } from '../constants.js';
 import { calculateTotalStats } from './statService.js';
@@ -152,6 +155,7 @@ const startServer = async () => {
             
             // Handle ranking rewards
             await processRankingRewards(volatileState);
+            await processMonthlyTowerReset();
 
             // Handle user timeouts and disconnections
             const onlineUserIdsBeforeTimeoutCheck = Object.keys(volatileState.userConnections);
@@ -370,9 +374,12 @@ const startServer = async () => {
             }
 
             const userBeforeUpdate = JSON.stringify(user);
+            // FIX: Defined `allUsersForCompetitors` before its use by fetching all users from the database.
+            const allUsersForCompetitors = await db.getAllUsers();
             let updatedUser = await resetAndGenerateQuests(user);
             updatedUser = await processWeeklyLeagueUpdates(updatedUser);
             updatedUser = await regenerateActionPoints(updatedUser);
+            updatedUser = await updateWeeklyCompetitorsIfNeeded(updatedUser, allUsersForCompetitors);
             updatedUser = processSinglePlayerMissions(updatedUser);
 
             // --- Stats Migration Logic ---
@@ -505,6 +512,22 @@ const startServer = async () => {
                 dbState.users[userId] = updatedUser;
             }
 
+            const allUsersForRanking = Object.values(dbState.users);
+            const towerRankings = allUsersForRanking
+                .filter(u => u.towerProgress && u.towerProgress.highestFloor > 0)
+                .sort((a, b) => {
+                    if (b.towerProgress.highestFloor !== a.towerProgress.highestFloor) {
+                        return b.towerProgress.highestFloor - a.towerProgress.highestFloor;
+                    }
+                    return a.towerProgress.lastClearTimestamp - b.towerProgress.lastClearTimestamp;
+                })
+                .slice(0, 100)
+                .map((u, index): TowerRank => ({
+                    rank: index + 1,
+                    user: { id: u.id, nickname: u.nickname, avatarId: u.avatarId, borderId: u.borderId },
+                    floor: u.towerProgress.highestFloor,
+                }));
+
             // Combine persisted state with in-memory volatile state
             const fullState: Omit<AppState, 'userCredentials'> = {
                 ...dbState,
@@ -514,6 +537,7 @@ const startServer = async () => {
                 waitingRoomChats: volatileState.waitingRoomChats,
                 gameChats: volatileState.gameChats,
                 userLastChatMessage: volatileState.userLastChatMessage,
+                towerRankings: towerRankings,
             };
             
             res.status(200).json(fullState);

@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, ItemOption, ItemGrade, EquipmentSlot, CoreStat, SpecialStat, MythicStat, type ItemOptionType, type BorderInfo } from '../../types.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, ItemOption, ItemGrade, EquipmentSlot, CoreStat, SpecialStat, MythicStat, type ItemOptionType, type BorderInfo } from '../../types/index.js';
 import {
     ENHANCEMENT_SUCCESS_RATES,
     ENHANCEMENT_COSTS,
@@ -11,10 +11,13 @@ import {
     CONSUMABLE_ITEMS,
     GRADE_SUB_OPTION_RULES,
     GRADE_LEVEL_REQUIREMENTS,
-    ENHANCEMENT_FAIL_BONUS_RATES
+    ENHANCEMENT_FAIL_BONUS_RATES,
+    SYNTHESIS_COSTS,
+    SYNTHESIS_UPGRADE_CHANCES,
+    EQUIPMENT_POOL
 } from '../../constants.js';
 import * as effectService from '../effectService.js';
-import { SHOP_ITEMS } from '../shop.js';
+import { SHOP_ITEMS, createItemFromTemplate } from '../shop.js';
 import { updateQuestProgress } from '../questService.js';
 import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
 
@@ -69,6 +72,7 @@ const removeUserItems = (user: User, itemsToRemove: { name: string; amount: numb
     return true;
 };
 
+
 export const handleInventoryAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
 
@@ -81,7 +85,6 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const item = user.inventory[itemIndex];
             if (item.type !== 'consumable') return { error: '사용할 수 없는 아이템입니다.' };
         
-            // Handle currency bundles separately as they don't add to inventory
             const bundleInfo = currencyBundles[item.name];
             if (bundleInfo) {
                 const amount = getRandomInt(bundleInfo.min, bundleInfo.max);
@@ -90,7 +93,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 if (bundleInfo.type === 'gold') {
                     user.gold += amount;
                     obtainedItem = { name: '골드', quantity: amount, image: '/images/Gold.png', type: 'material', grade: 'uncommon' };
-                } else { // diamonds
+                } else {
                     user.diamonds += amount;
                     obtainedItem = { name: '다이아', quantity: amount, image: '/images/Zem.png', type: 'material', grade: 'rare' };
                 }
@@ -104,7 +107,6 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 return { clientResponse: { obtainedItemsBulk: [obtainedItem], updatedUser: user } };
             }
             
-            // Handle item boxes
             const shopItemKey = Object.keys(SHOP_ITEMS).find(key => SHOP_ITEMS[key as keyof typeof SHOP_ITEMS].name === item.name);
             if (!shopItemKey) return { error: '알 수 없는 아이템입니다.' };
             
@@ -112,7 +114,6 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const obtainedItems = shopItem.onPurchase();
             const itemsArray = Array.isArray(obtainedItems) ? obtainedItems : [obtainedItems];
             
-            // Create a temporary inventory state as if the item was used for the check
             const inventoryAfterUse = [...user.inventory];
             const usedItemInTemp = inventoryAfterUse[itemIndex];
             if (usedItemInTemp.quantity && usedItemInTemp.quantity > 1) {
@@ -121,13 +122,11 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 inventoryAfterUse.splice(itemIndex, 1);
             }
         
-            // Check if there's enough space in this temporary state
             const { success } = addItemsToInventoryUtil([...inventoryAfterUse], user.inventorySlots, itemsArray);
             if (!success) return { error: '인벤토리 공간이 부족합니다.' };
             
-            // If successful, apply the changes to the real user object
-            user.inventory = inventoryAfterUse; // This is the inventory with the item used up
-            addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsArray); // This adds the new items to it
+            user.inventory = inventoryAfterUse;
+            addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsArray);
         
             await db.updateUser(user);
             return { clientResponse: { obtainedItemsBulk: itemsArray, updatedUser: user } };
@@ -146,7 +145,6 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const shopItemKey = Object.keys(SHOP_ITEMS).find(key => SHOP_ITEMS[key as keyof typeof SHOP_ITEMS].name === itemName);
             const bundleInfo = currencyBundles[itemName];
             
-            // First, generate all potential rewards
             for (let i = 0; i < totalQuantity; i++) {
                 if (bundleInfo) {
                     const amount = getRandomInt(bundleInfo.min, bundleInfo.max);
@@ -163,14 +161,12 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 }
             }
 
-            // Then, check for inventory space
             const inventoryAfterRemoval = user.inventory.filter(i => i.name !== itemName);
             const { success: hasSpace } = addItemsToInventoryUtil([...inventoryAfterRemoval], user.inventorySlots, allObtainedItems);
             if (!hasSpace) {
                 return { error: '모든 아이템을 받기에 가방 공간이 부족합니다.' };
             }
 
-            // If space is sufficient, apply all changes
             user.inventory = inventoryAfterRemoval;
             user.gold += totalGoldGained;
             user.diamonds += totalDiamondsGained;
@@ -178,7 +174,6 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
 
             await db.updateUser(user);
             
-            // Prepare client response
             const clientResponseItems = [...allObtainedItems];
             if (totalGoldGained > 0) clientResponseItems.push({ name: '골드', quantity: totalGoldGained, image: '/images/Gold.png', type: 'material', grade: 'uncommon' } as any);
             if (totalDiamondsGained > 0) clientResponseItems.push({ name: '다이아', quantity: totalDiamondsGained, image: '/images/Zem.png', type: 'material', grade: 'rare' } as any);
@@ -298,7 +293,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 if(main.baseValue) {
                     let increaseMultiplier = 1;
                     if ([3, 6, 9].includes(item.stars - 1)) {
-                        increaseMultiplier = 2; // Double increase on these milestones
+                        increaseMultiplier = 2;
                     }
                     const increaseAmount = main.baseValue * increaseMultiplier;
                     main.value = parseFloat((main.value + increaseAmount).toFixed(2));
@@ -343,7 +338,6 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                         subToUpgrade.display = `${subToUpgrade.type} +${subToUpgrade.value}${subToUpgrade.isPercentage ? '%' : ''} [${subToUpgrade.range[0]}~${subToUpgrade.range[1]}]`;
 
                     } else {
-                        // Fallback for safety, though this shouldn't happen with valid data
                         subToUpgrade.value = parseFloat((subToUpgrade.value * 1.1).toFixed(2));
                         subToUpgrade.display = `${subToUpgrade.type} +${subToUpgrade.value}${subToUpgrade.isPercentage ? '%' : ''}`;
                     }
@@ -452,7 +446,6 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 return { error: '인벤토리에 공간이 부족합니다.' };
             }
         
-            // All checks passed, apply changes to the real user object
             user.inventory = tempUser.inventory;
             
             updateQuestProgress(user, 'craft_attempt');
@@ -467,6 +460,91 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                     }
                 }
             };
+        }
+        case 'SYNTHESIZE_EQUIPMENT': {
+            const { itemIds } = payload as { itemIds: string[] };
+            if (!itemIds || itemIds.length !== 3) {
+                return { error: '합성에는 3개의 장비가 필요합니다.' };
+            }
+        
+            const itemsToSynthesize = user.inventory.filter(i => itemIds.includes(i.id));
+            if (itemsToSynthesize.length !== 3) {
+                return { error: '선택된 아이템 중 일부를 찾을 수 없습니다.' };
+            }
+        
+            if (itemsToSynthesize.some(i => i.type !== 'equipment')) {
+                return { error: '장비 아이템만 합성할 수 있습니다.' };
+            }
+            
+            const firstItemGrade = itemsToSynthesize[0].grade;
+            if (itemsToSynthesize.some(i => i.grade !== firstItemGrade)) {
+                return { error: '같은 등급의 장비만 합성할 수 있습니다.' };
+            }
+            
+            if (itemsToSynthesize.some(i => i.isEquipped)) {
+                return { error: '장착 중인 아이템은 합성 재료로 사용할 수 없습니다.' };
+            }
+        
+            const synthesisCost = SYNTHESIS_COSTS[firstItemGrade];
+            if (user.gold < synthesisCost) {
+                return { error: `골드가 부족합니다. (필요: ${synthesisCost})` };
+            }
+        
+            if ((user.inventory.length - 3 + 1) > user.inventorySlots) {
+                 return { error: '인벤토리 공간이 부족합니다.' };
+            }
+        
+            user.gold -= synthesisCost;
+            user.inventory = user.inventory.filter(i => !itemIds.includes(i.id));
+        
+            const upgradeChance = SYNTHESIS_UPGRADE_CHANCES[firstItemGrade];
+            const roll = Math.random() * 100;
+            let wasUpgraded = roll < upgradeChance;
+            let newGrade: ItemGrade;
+            let isDoubleMythic = false;
+        
+            const gradeOrder: ItemGrade[] = ['normal', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+            const currentGradeIndex = gradeOrder.indexOf(firstItemGrade);
+        
+            if (firstItemGrade === 'mythic') {
+                wasUpgraded = roll < upgradeChance; // This represents the chance for double mythic option
+                isDoubleMythic = wasUpgraded;
+                newGrade = 'mythic';
+            } else {
+                newGrade = wasUpgraded && currentGradeIndex < gradeOrder.length - 1 
+                    ? gradeOrder[currentGradeIndex + 1] 
+                    : firstItemGrade;
+            }
+            
+            const possibleSlots = [...new Set(itemsToSynthesize.map(i => i.slot))].filter((s): s is EquipmentSlot => s !== null);
+            if (possibleSlots.length === 0) {
+                return { error: '합성 재료의 부위를 결정할 수 없습니다.' };
+            }
+            const newSlot = possibleSlots[Math.floor(Math.random() * possibleSlots.length)];
+            
+            const templatePool = EQUIPMENT_POOL.filter(item => item.grade === newGrade && item.slot === newSlot);
+            let template: (typeof EQUIPMENT_POOL)[0];
+        
+            if (templatePool.length === 0) {
+                const anyTemplateOfGrade = EQUIPMENT_POOL.filter(item => item.grade === newGrade);
+                if (anyTemplateOfGrade.length === 0) {
+                     console.error(`[Synthesis] Could not find ANY template for grade ${newGrade}.`);
+                    return { error: '결과 아이템을 생성할 수 없습니다. (템플릿 없음)' };
+                }
+                const fallbackTemplate = anyTemplateOfGrade[Math.floor(Math.random() * anyTemplateOfGrade.length)];
+                template = { ...fallbackTemplate, slot: newSlot };
+            } else {
+                template = templatePool[Math.floor(Math.random() * templatePool.length)];
+            }
+            
+            const newItem = createItemFromTemplate(template, { forceDoubleMythic: isDoubleMythic });
+            
+            user.inventory.push(newItem);
+            
+            updateQuestProgress(user, 'craft_attempt');
+            await db.updateUser(user);
+        
+            return { clientResponse: { synthesisResult: { item: newItem, wasUpgraded: wasUpgraded } } };
         }
 
         default:

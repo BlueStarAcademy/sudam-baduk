@@ -1,10 +1,9 @@
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
-// FIX: Import the full namespace to access enums and types.
-import * as types from './../types.js';
-import { updateQuestProgress } from './questService.js';
-import { containsProfanity } from './../profanity.js';
-// FIX: Imported the tournament service to handle forfeits on logout.
+import { type ServerAction, type User, type VolatileState, ChatMessage, UserStatus, type Negotiation, TournamentType } from '.././types.js';
+import * as types from '.././types.js';
+import { updateQuestProgress } from '././questService.js';
+import { containsProfanity } from '.././profanity.js';
 import * as tournamentService from './tournamentService.js';
 import * as summaryService from './summaryService.js';
 
@@ -16,7 +15,7 @@ type HandleActionResult = {
 
 const GREETINGS = ['안녕', '하이', '헬로', 'hi', 'hello', '반가', '잘 부탁', '잘부탁'];
 
-export const handleSocialAction = async (volatileState: types.VolatileState, action: types.ServerAction & { userId: string }, user: types.User): Promise<HandleActionResult> => {
+export const handleSocialAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
     const now = Date.now();
 
@@ -27,7 +26,7 @@ export const handleSocialAction = async (volatileState: types.VolatileState, act
                 console.log(`[Logout] User ${user.nickname} has an active tournament. Forfeiting.`);
                 tournamentService.forfeitTournament(activeTournament, user.id);
                 
-                let stateKey: keyof types.User;
+                let stateKey: keyof User;
                 switch (activeTournament.type) {
                     case 'neighborhood': stateKey = 'lastNeighborhoodTournament'; break;
                     case 'national': stateKey = 'lastNationalTournament'; break;
@@ -110,7 +109,7 @@ export const handleSocialAction = async (volatileState: types.VolatileState, act
                     await db.updateUser(user);
                     delete volatileState.userConsecutiveChatMessages[user.id];
 
-                    const banMessage: types.ChatMessage = {
+                    const banMessage: ChatMessage = {
                         id: `msg-${randomUUID()}`,
                         user: { id: 'ai-security-guard', nickname: 'AI 보안관봇' },
                         text: `${user.nickname}님, 동일한 메시지를 반복적으로 전송하여 ${banDurationMinutes}분간 채팅이 금지되었습니다.`,
@@ -123,7 +122,7 @@ export const handleSocialAction = async (volatileState: types.VolatileState, act
                 }
             }
         
-            const message: types.ChatMessage = {
+            const message: ChatMessage = {
                 id: `msg-${randomUUID()}`,
                 user: { id: user.id, nickname: user.nickname },
                 text, emoji, system: false, timestamp: now,
@@ -145,7 +144,7 @@ export const handleSocialAction = async (volatileState: types.VolatileState, act
             return {};
         }
         case 'SET_USER_STATUS': {
-            const { status } = payload as { status: types.UserStatus };
+            const { status } = payload as { status: UserStatus };
             if (status !== 'waiting' && status !== 'resting') {
                 return { error: 'Invalid status for waiting room.' };
             }

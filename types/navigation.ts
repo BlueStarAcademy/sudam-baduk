@@ -2,7 +2,8 @@
 import { GameMode } from './enums.js';
 
 export type AppRoute = {
-    view: 'login' | 'register' | 'profile' | 'lobby' | 'waiting' | 'game' | 'admin' | 'tournament' | 'singleplayer';
+    // FIX: Add 'towerchallenge' to the union type to resolve type comparison errors in the Router.
+    view: 'login' | 'register' | 'profile' | 'lobby' | 'waiting' | 'game' | 'admin' | 'tournament' | 'singleplayer' | 'towerchallenge';
     params: any;
 };
 

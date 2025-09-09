@@ -1,3 +1,5 @@
+
+
 import * as types from '../../types.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../goLogic.js';
@@ -8,7 +10,8 @@ import * as effectService from '../effectService.js';
 import { endGame } from '../summaryService.js';
 import { aiUserId } from '../aiPlayer.js';
 
-function finishPlacingTurn(game: types.LiveGameSession, playerId: string) {
+// FIX: Export `finishPlacingTurn` function to make it accessible to other modules like `aiPlayer.ts`.
+export function finishPlacingTurn(game: types.LiveGameSession, playerId: string) {
     const now = Date.now();
     const humanPlayerId = game.player1.id === aiUserId ? game.player2.id : game.player1.id;
     const aiPlayerId = game.player1.id === aiUserId ? game.player1.id : game.player2.id;
@@ -99,7 +102,7 @@ const handleTimeoutFoul = (game: types.LiveGameSession, timedOutPlayerId: string
     if (game.timeoutFouls[timedOutPlayerId] >= PLAYFUL_MODE_FOUL_LIMIT) {
         const winnerId = game.player1.id === timedOutPlayerId ? game.player2.id : game.player1.id;
         const winnerEnum = winnerId === game.blackPlayerId ? types.Player.Black : types.Player.White;
-        endGame(game, winnerEnum, 'timeout');
+        endGame(game, winnerEnum, 'foul_limit');
         return true; // Game ended
     }
     return false; // Game continues

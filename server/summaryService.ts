@@ -1,8 +1,7 @@
-
 // FIX: Import missing types from the centralized types file.
 import { LiveGameSession, Player, User, GameSummary, StatChange, GameMode, InventoryItem, SpecialStat, WinReason, SinglePlayerStageInfo, QuestReward } from '../types.js';
 import * as db from './db.js';
-import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES } from '../constants.js';
+import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../constants.js';
 import { updateQuestProgress } from './questService.js';
 import * as mannerService from './mannerService.js';
 import { openEquipmentBox1 } from './shop.js';
@@ -17,7 +16,8 @@ const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
 const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
     const user = game.player1; // Human is always player1 in single player
     const isWinner = game.winner === Player.Black; // Human is always black
-    const stage = SINGLE_PLAYER_STAGES.find(s => s.id === game.stageId);
+    const stageList = game.isTowerChallenge ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
+    const stage = stageList.find(s => s.id === game.stageId);
 
     if (!stage) {
         console.error(`[SP Summary] Could not find stage with id: ${game.stageId}`);
@@ -43,30 +43,41 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
     };
     
     if (isWinner) {
-        const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
-        const currentProgress = user.singlePlayerProgress ?? 0;
-
-        const isFirstClear = currentProgress === stageIndex;
-        const rewards = isFirstClear ? stage.rewards.firstClear : stage.rewards.repeatClear;
-        
-        if (isFirstClear) {
-            user.singlePlayerProgress = currentProgress + 1;
+        let isFirstClear = false;
+        if (game.isTowerChallenge) {
+            const currentHighest = user.towerProgress?.highestFloor ?? 0;
+            if (game.floor! > currentHighest) {
+                user.towerProgress = {
+                    highestFloor: game.floor!,
+                    lastClearTimestamp: Date.now()
+                };
+                isFirstClear = true;
+            }
+        } else {
+            const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
+            const currentProgress = user.singlePlayerProgress ?? 0;
+            isFirstClear = currentProgress === stageIndex;
+            if (isFirstClear) {
+                user.singlePlayerProgress = currentProgress + 1;
+            }
         }
 
+        const rewards = isFirstClear ? stage.rewards.firstClear : stage.rewards.repeatClear;
+        
         const itemsToCreate = rewards.items ? createItemInstancesFromReward(rewards.items) : [];
         const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
         
         if (!success) {
             console.error(`[SP Summary] Insufficient inventory space for user ${user.id} on stage ${stage.id}. Items not granted.`);
         } else {
-            user.gold += rewards.gold;
+            user.gold += rewards.gold ?? 0;
             const initialXp = user.strategyXp;
-            const xpGain = rewards.exp;
+            const xpGain = rewards.exp ?? 0;
             user.strategyXp += xpGain;
 
             addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
             
-            summary.gold = rewards.gold;
+            summary.gold = rewards.gold ?? 0;
             summary.xp = { initial: initialXp, change: xpGain, final: user.strategyXp };
             summary.items = itemsToCreate;
 
@@ -129,7 +140,7 @@ export const endGame = async (game: LiveGameSession, winner: Player, winReason: 
     game.winReason = winReason;
     game.gameStatus = 'ended';
 
-    if (game.isSinglePlayer) {
+    if (game.isSinglePlayer || game.isTowerChallenge) {
         await processSinglePlayerGameSummary(game);
     } else {
         const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === game.mode);

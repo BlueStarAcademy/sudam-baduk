@@ -1,10 +1,13 @@
+
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
 import * as types from '../../types/index.js';
-import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../../constants.js';
+import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS, TOWER_STAGES } from '../../constants.js';
 import { initializeGame } from '../gameModes.js';
 import { getAiUser } from '../aiPlayer.js';
 import * as effectService from '../effectService.js';
+// FIX: Import Point type from the centralized types file.
+import { Point } from '../../types/index.js';
 
 
 type HandleActionResult = types.HandleActionResult;
@@ -14,6 +17,118 @@ export const handleSinglePlayerAction = async (volatileState: types.VolatileStat
     const now = Date.now();
 
     switch (type) {
+        case 'START_TOWER_CHALLENGE_GAME': {
+            const { floor } = payload;
+            // FIX: Access 'floor' property which is now added to the stage info.
+            const stage = TOWER_STAGES.find(s => s.floor === floor);
+            if (!stage) {
+                return { error: '유효하지 않은 층입니다.' };
+            }
+
+            const highestClearedFloor = user.towerProgress?.highestFloor ?? 0;
+            if (floor > highestClearedFloor + 1) {
+                 return { error: '아직 잠금 해제되지 않은 층입니다.' };
+            }
+
+            const effects = effectService.calculateUserEffects(user);
+            const maxAP = effects.maxActionPoints;
+            const wasAtMax = user.actionPoints.current >= maxAP;
+            
+            if (user.actionPoints.current < stage.actionPointCost) {
+                return { error: '행동력이 부족합니다.' };
+            }
+
+            user.actionPoints.current -= stage.actionPointCost;
+            if (wasAtMax) {
+                user.lastActionPointUpdate = now;
+            }
+
+            // FIX: The function call had an extra argument which caused a type error.
+            const aiOpponent = getAiUser(types.GameMode.Standard, 10, stage.level);
+            aiOpponent.strategyLevel = stage.katagoLevel;
+
+            const negotiation: types.Negotiation = {
+                id: `neg-tower-${randomUUID()}`,
+                challenger: user,
+                opponent: aiOpponent,
+                mode: types.GameMode.Standard,
+                settings: {
+                    boardSize: stage.boardSize,
+                    komi: 0.5,
+                    timeLimit: stage.timeControl.mainTime,
+                    byoyomiTime: stage.timeControl.byoyomiTime ?? 30,
+                    byoyomiCount: stage.timeControl.byoyomiCount ?? 3,
+                    timeIncrement: stage.timeControl.increment,
+                    player1Color: types.Player.Black,
+                    aiDifficulty: stage.katagoLevel,
+                } as types.GameSettings,
+                proposerId: user.id,
+                status: 'pending',
+                deadline: 0
+            };
+            
+            const game = await initializeGame(negotiation);
+            game.isSinglePlayer = true;
+            game.isTowerChallenge = true;
+            // FIX: Access 'floor' property which is now added to the stage info.
+            game.floor = floor;
+            game.stageId = stage.id;
+            
+            const allPoints: types.Point[] = [];
+            for (let y = 0; y < stage.boardSize; y++) {
+                for (let x = 0; x < stage.boardSize; x++) {
+                    allPoints.push({ x, y });
+                }
+            }
+            allPoints.sort(() => 0.5 - Math.random());
+
+            const placeStones = (count: number, player: types.Player) => {
+                for (let i = 0; i < count; i++) {
+                    if (allPoints.length === 0) break;
+                    const p = allPoints.pop()!;
+                    game.boardState[p.y][p.x] = player;
+                }
+            };
+            
+            const placePatternStones = (count: number, player: types.Player) => {
+                const key = player === types.Player.Black ? 'blackPatternStones' : 'whitePatternStones';
+                if (!game[key]) game[key] = [];
+                 for (let i = 0; i < count; i++) {
+                    if (allPoints.length === 0) break;
+                    const p = allPoints.pop()!;
+                    game.boardState[p.y][p.x] = player;
+                    game[key]!.push(p);
+                }
+            };
+
+            placeStones(stage.placements.black, types.Player.Black);
+            placeStones(stage.placements.white, types.Player.White);
+            placePatternStones(stage.placements.blackPattern, types.Player.Black);
+            placePatternStones(stage.placements.whitePattern, types.Player.White);
+
+            if (stage.placements.centerBlackStoneChance && Math.random() * 100 < stage.placements.centerBlackStoneChance) {
+                 const center = Math.floor(stage.boardSize / 2);
+                 if (game.boardState[center][center] === types.Player.None) {
+                     game.boardState[center][center] = types.Player.Black;
+                 }
+            }
+            
+            game.effectiveCaptureTargets = {
+                [types.Player.Black]: stage.targetScore.black,
+                [types.Player.White]: stage.targetScore.white,
+                [types.Player.None]: 0,
+            };
+            
+            game.blackStonesPlaced = 0;
+            const totalStonesPlaced = (stage.placements.black + stage.placements.white + stage.placements.blackPattern + stage.placements.whitePattern);
+            game.blackStoneLimit = stage.blackStoneLimit !== undefined ? stage.blackStoneLimit : (stage.boardSize * stage.boardSize) - totalStonesPlaced;
+
+            await db.saveGame(game);
+            await db.updateUser(user);
+
+            volatileState.userStatuses[user.id] = { status: 'in-game', mode: game.mode, gameId: game.id };
+            return { clientResponse: { updatedUser: user } };
+        }
         case 'START_SINGLE_PLAYER_GAME': {
             const { stageId } = payload;
             const stage = SINGLE_PLAYER_STAGES.find(s => s.id === stageId);
@@ -39,7 +154,7 @@ export const handleSinglePlayerAction = async (volatileState: types.VolatileStat
                 user.lastActionPointUpdate = now;
             }
 
-            const aiOpponent = getAiUser(types.GameMode.Standard); // Or a specific AI for SP
+            const aiOpponent = getAiUser(types.GameMode.Standard, 1, stage.level); // Or a specific AI for SP
             aiOpponent.strategyLevel = stage.katagoLevel;
 
             const negotiation: types.Negotiation = {
@@ -148,7 +263,7 @@ export const handleSinglePlayerAction = async (volatileState: types.VolatileStat
             game.blackPatternStones = [];
             game.whitePatternStones = [];
 
-            const allPoints: types.Point[] = [];
+            const allPoints: Point[] = [];
             for (let y = 0; y < stage.boardSize; y++) for (let x = 0; x < stage.boardSize; x++) allPoints.push({ x, y });
             allPoints.sort(() => 0.5 - Math.random());
 

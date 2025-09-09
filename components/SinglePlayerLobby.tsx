@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
 import Button from './Button.js';
 import { SinglePlayerLevel, ServerAction, UserWithStatus } from '../types.js';
@@ -372,6 +372,28 @@ const StageList: React.FC<{
     );
 };
 
+const LevelSelectionPanel: React.FC<{
+    activeLevelData: typeof LEVEL_DATA[0];
+    onPrev: () => void;
+    onNext: () => void;
+    className?: string;
+}> = React.memo(({ activeLevelData, onPrev, onNext, className }) => (
+    <div className={`bg-panel border border-color rounded-lg p-4 flex flex-col items-center w-full ${className}`}>
+        <h2 className="text-[clamp(1.1rem,0.9rem+1vw,1.25rem)] font-bold mb-2">레벨 선택</h2>
+        <div className="w-full flex items-center justify-center gap-2 relative group">
+            <button onClick={onPrev} className="absolute left-0 -translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all flex items-center justify-center flex-shrink-0" aria-label="Previous Level">&#x276E;</button>
+            <div className="relative w-full rounded-lg overflow-hidden bg-black">
+                <img key={activeLevelData.id} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-auto object-contain animate-fade-in" />
+                <div className="absolute inset-0 bg-black/20"></div>
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
+                    <h3 key={`${activeLevelData.id}-title`} className="text-[clamp(1.5rem,1rem+2.5vw,1.875rem)] font-bold text-white text-center animate-fade-in drop-shadow-lg">{activeLevelData.name}</h3>
+                </div>
+            </div>
+            <button onClick={onNext} className="absolute right-0 translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all flex items-center justify-center flex-shrink-0" aria-label="Next Level">&#x276F;</button>
+        </div>
+    </div>
+));
+
 
 const SinglePlayerLobby: React.FC = () => {
     const { currentUserWithStatus, handlers } = useAppContext();
@@ -399,26 +421,9 @@ const SinglePlayerLobby: React.FC = () => {
     if (!currentUserWithStatus) return null;
 
     const activeLevelData = LEVEL_DATA[activeLevelIndex];
-
-    const handleNextLevel = () => setActiveLevelIndex(prev => Math.min(LEVEL_DATA.length - 1, prev + 1));
-    const handlePrevLevel = () => setActiveLevelIndex(prev => Math.max(0, prev - 1));
-
-    const LevelSelectionPanel: React.FC<{className?: string}> = ({ className }) => (
-        <div className={`bg-panel border border-color rounded-lg p-4 flex flex-col items-center w-full ${className}`}>
-            <h2 className="text-[clamp(1.1rem,0.9rem+1vw,1.25rem)] font-bold mb-2">레벨 선택</h2>
-            <div className="w-full flex items-center justify-center gap-2 relative group">
-                <button onClick={handlePrevLevel} disabled={activeLevelIndex === 0} className="absolute left-0 -translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0" aria-label="Previous Level">&#x276E;</button>
-                <div className="relative w-full rounded-lg overflow-hidden bg-black">
-                    <img key={activeLevelIndex} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-auto object-contain animate-fade-in" />
-                    <div className="absolute inset-0 bg-black/20"></div>
-                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
-                        <h3 key={activeLevelIndex + '-title'} className="text-[clamp(1.5rem,1rem+2.5vw,1.875rem)] font-bold text-white text-center animate-fade-in drop-shadow-lg">{activeLevelData.name}</h3>
-                    </div>
-                </div>
-                <button onClick={handleNextLevel} disabled={activeLevelIndex >= LEVEL_DATA.length - 1} className="absolute right-0 translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all disabled:opacity-20 disabled:cursor-not-allowed flex items-center justify-center flex-shrink-0" aria-label="Next Level">&#x276F;</button>
-            </div>
-        </div>
-    );
+    
+    const handleNextLevel = useCallback(() => setActiveLevelIndex(prev => (prev + 1) % LEVEL_DATA.length), []);
+    const handlePrevLevel = useCallback(() => setActiveLevelIndex(prev => (prev - 1 + LEVEL_DATA.length) % LEVEL_DATA.length), []);
 
     return (
         <div className="w-full h-full flex flex-col bg-tertiary text-primary p-4 gap-4">
@@ -432,7 +437,8 @@ const SinglePlayerLobby: React.FC = () => {
                 {/* DESKTOP LAYOUT */}
                 <div className="hidden lg:flex flex-row gap-4 h-full">
                     <div className="w-[350px] flex-shrink-0 flex flex-col gap-4">
-                        <LevelSelectionPanel className="h-auto"/>
+                        {/* FIX: Removed invalid activeLevelIndex prop */}
+                        <LevelSelectionPanel className="h-auto" activeLevelData={activeLevelData} onPrev={handlePrevLevel} onNext={handleNextLevel} />
                         <div className="flex-1 min-h-0 w-full">
                            <SinglePlayerMissions />
                         </div>
@@ -444,7 +450,8 @@ const SinglePlayerLobby: React.FC = () => {
 
                 {/* MOBILE LAYOUT */}
                 <div className="lg:hidden flex flex-col h-full gap-4 relative">
-                    <LevelSelectionPanel className="flex-shrink-0 max-w-xl mx-auto" />
+                    {/* FIX: Removed invalid activeLevelIndex prop */}
+                    <LevelSelectionPanel className="flex-shrink-0 max-w-xl mx-auto" activeLevelData={activeLevelData} onPrev={handlePrevLevel} onNext={handleNextLevel} />
                     <div className="flex-1 min-h-0">
                         <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus} handlers={handlers} />
                     </div>

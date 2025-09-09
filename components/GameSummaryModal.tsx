@@ -1,4 +1,3 @@
-
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import { LiveGameSession, User, Player, WinReason, StatChange, AnalysisResult, GameMode, GameSummary, InventoryItem, AvatarInfo, BorderInfo, AlkkagiStone } from '../types.js';
 import Avatar from './Avatar.js';
@@ -28,14 +27,27 @@ const getMannerRank = (score: number) => {
     return getMannerRankShared(score).rank;
 };
 
-
-const XpBar: React.FC<{ summary: GameSummary | undefined, isPlayful: boolean, currentUser: User }> = ({ summary, isPlayful, currentUser }) => {
-    const levelSummary = summary?.level;
-    if (!levelSummary) {
-        // Fallback display if summary is missing
+// Helper to create a stable dependency for the animation effect
+const useAnimationKey = (summary: GameSummary | undefined, isPlayful: boolean, currentUser: User) => {
+    if (!summary) {
         const level = isPlayful ? currentUser.playfulLevel : currentUser.strategyLevel;
         const xp = isPlayful ? currentUser.playfulXp : currentUser.strategyXp;
-        const maxXp = 1000 + (level - 1) * 200;
+        return `${level}-${xp}`;
+    }
+    const { xp, level } = summary;
+    // Using a combination of initial and final values to create a unique key for each result
+    return `${level?.initial}-${level?.final}-${xp?.initial}-${xp?.change}`;
+};
+
+const XpBar: React.FC<{ summary: GameSummary | undefined, isPlayful: boolean, currentUser: User }> = React.memo(({ summary, isPlayful, currentUser }) => {
+    const levelSummary = summary?.level;
+    const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
+
+    // Fallback logic
+    if (!levelSummary) {
+        const level = isPlayful ? currentUser.playfulLevel : currentUser.strategyLevel;
+        const xp = isPlayful ? currentUser.playfulXp : currentUser.strategyXp;
+        const maxXp = getXpForLevel(level);
         const percentage = (xp / maxXp) * 100;
         return (
              <div className="flex items-center gap-3">
@@ -64,7 +76,10 @@ const XpBar: React.FC<{ summary: GameSummary | undefined, isPlayful: boolean, cu
     const finalPercent = progress.max > 0 ? (isLevelUp ? 100 : (progress.final / progress.max) * 100) : 0;
     const gainPercent = finalPercent - initialPercent;
 
+    const animationKey = useAnimationKey(summary, isPlayful, currentUser);
+
     useEffect(() => {
+        // Reset state before animation
         setBarWidth(initialPercent);
         setShowGainText(false);
         setGainFlashOpacity(0);
@@ -89,7 +104,7 @@ const XpBar: React.FC<{ summary: GameSummary | undefined, isPlayful: boolean, cu
         }, 500);
 
         return () => clearTimeout(startTimer);
-    }, [initial, final, progress, isLevelUp, initialPercent, finalPercent, xpGain]);
+    }, [animationKey, initialPercent, finalPercent, xpGain, isLevelUp]);
     
     const gainTextKey = `${xpGain}-${progress.initial}`;
     
@@ -136,7 +151,8 @@ const XpBar: React.FC<{ summary: GameSummary | undefined, isPlayful: boolean, cu
             `}</style>
         </div>
     );
-};
+});
+
 
 const ScoreDetailsComponent: React.FC<{ analysis: AnalysisResult, session: LiveGameSession }> = ({ analysis, session }) => {
     const { scoreDetails } = analysis;
@@ -169,7 +185,7 @@ const ScoreDetailsComponent: React.FC<{ analysis: AnalysisResult, session: LiveG
                     <div className="flex justify-between"><span>덤:</span> <span className="font-mono">{scoreDetails.white.komi}</span></div>
                     {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span className="font-mono">{scoreDetails.white.baseStoneBonus}</span></div>}
                     {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span className="font-mono">{scoreDetails.white.hiddenStoneBonus}</span></div>}
-                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span className="font-mono">{scoreDetails.white.timeBonus.toFixed(1)}</span></div>}
+                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span className="font-mono">{scoreDetails.white.timeBonus}</span></div>}
                     <div className="flex justify-between border-t border-gray-600 pt-1 mt-1 font-bold text-base"><span>총점:</span> <span className="text-yellow-300">{scoreDetails.white.total.toFixed(1)}</span></div>
                 </div>
             </div>
@@ -393,7 +409,6 @@ const GameSummaryModal: React.FC<GameSummaryModalProps> = ({ session, currentUse
                         {renderGameContent()}
                     </div>
                     
-                    {/* My Results & Rewards Panel */}
                     {mySummary && (
                         <div className="w-full flex flex-col gap-2 sm:gap-4">
                              <div className="bg-gray-900/50 p-2 sm:p-4 rounded-lg space-y-4">

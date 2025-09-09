@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { UserWithStatus, TournamentState, PlayerForTournament, ServerAction, User, CoreStat, Match, Round, CommentaryLine, TournamentType, LeagueTier } from '../types.js';
 import Button from './Button.js';
-import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, AVATAR_POOL, BORDER_POOL, CORE_STATS_DATA } from '../constants.js';
+import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, AVATAR_POOL, BORDER_POOL, CORE_STATS_DATA, LEAGUE_DATA } from '../constants.js';
 import Avatar from './Avatar.js';
 import RadarChart from './RadarChart.js';
 import SgfViewer from './SgfViewer.js';
@@ -23,10 +23,10 @@ const getMaxStatValueForLeague = (league: LeagueTier): number => {
         case LeagueTier.Diamond:
             return 300;
         case LeagueTier.Master:
-        case LeagueTier.Grandmaster:
-            return 400;
-        case LeagueTier.Challenger:
             return 500;
+        case LeagueTier.Grandmaster:
+        case LeagueTier.Challenger:
+            return 9999;
         default:
             return 250;
     }
@@ -378,9 +378,9 @@ const MatchBox: React.FC<{ match: Match; currentUser: UserWithStatus }> = ({ mat
 
 const RoundColumn: React.FC<{ name: string; matches: Match[] | undefined; currentUser: UserWithStatus }> = ({ name, matches, currentUser }) => {
     return (
-        <div className="flex flex-col justify-around h-full gap-4 flex-shrink-0 w-44">
+        <div className="flex flex-col gap-4 flex-shrink-0 w-44">
             <h5 className="text-center font-bold text-sm text-gray-400">{name}</h5>
-            <div className="flex flex-col justify-around h-full gap-6">
+            <div className="flex flex-col gap-6">
                 {matches?.map(match => (
                     <MatchBox key={match.id} match={match} currentUser={currentUser} />
                 ))}
@@ -393,7 +393,6 @@ const RoundRobinDisplay: React.FC<{
     tournamentState: TournamentState;
     currentUser: UserWithStatus;
 }> = ({ tournamentState, currentUser }) => {
-    const [activeTab, setActiveTab] = useState<'matches' | 'ranking'>('matches');
     const { players, rounds, status, currentRoundRobinRound } = tournamentState;
     const matches = rounds[0]?.matches || [];
 
@@ -420,8 +419,16 @@ const RoundRobinDisplay: React.FC<{
         [[0, 2], [3, 1], [4, 5]], [[0, 1], [2, 5], [3, 4]],
     ];
     
-    const roundForDisplay = status === 'bracket_ready' ? 1 : (currentRoundRobinRound || 1);
-    const roundPairings = schedule[roundForDisplay - 1];
+    const roundForDisplay = status === 'bracket_ready' ? 1 : Math.min(5, (currentRoundRobinRound || 1));
+    
+    const tabs = Array.from({ length: 5 }, (_, i) => i + 1);
+    const [activeTab, setActiveTab] = useState(roundForDisplay);
+
+    useEffect(() => {
+        setActiveTab(roundForDisplay);
+    }, [roundForDisplay]);
+    
+    const roundPairings = schedule[activeTab - 1];
 
     const currentRoundMatches = useMemo(() => {
         if (!roundPairings) return [];
@@ -439,31 +446,14 @@ const RoundRobinDisplay: React.FC<{
         <div className="h-full flex flex-col min-h-0">
             <h4 className="font-bold text-center mb-2 flex-shrink-0 text-gray-300">풀리그 대진표</h4>
             <div className="flex bg-gray-900/70 p-1 rounded-lg mb-2 flex-shrink-0">
-                <button onClick={() => setActiveTab('matches')} className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === 'matches' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>{roundForDisplay}회차</button>
-                <button onClick={() => setActiveTab('ranking')} className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === 'ranking' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>현재 순위</button>
+                 {tabs.map(tabNum => (
+                    <button key={tabNum} onClick={() => setActiveTab(tabNum)} className={`flex-1 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === tabNum ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>{tabNum}회차</button>
+                 ))}
             </div>
             <div className="overflow-y-auto pr-2 flex-grow min-h-0">
-                {activeTab === 'matches' ? (
-                    <div className="flex flex-col items-center justify-around h-full gap-4">
-                        {currentRoundMatches.map(match => (<MatchBox key={match.id} match={match} currentUser={currentUser} />))}
-                    </div>
-                ) : (
-                    <ul className="space-y-1.5">
-                        {sortedPlayers.map((player, index) => {
-                             const stats = playerStats[player.id];
-                             const isCurrentUser = player.id === currentUser.id;
-                             return (
-                                 <li key={player.id} className={`flex items-center gap-3 p-1.5 rounded-md ${isCurrentUser ? 'bg-blue-900/50' : 'bg-gray-700/50'}`}>
-                                     <span className="font-bold text-lg w-6 text-center flex-shrink-0">{index + 1}</span>
-                                     <span className="flex-grow font-semibold text-sm truncate">{player.nickname}</span>
-                                     <div className="flex items-baseline gap-2 text-xs">
-                                         <span className="font-mono">{stats.wins}승 {stats.losses}패</span>
-                                     </div>
-                                 </li>
-                             );
-                        })}
-                    </ul>
-                )}
+                <div className="flex flex-col items-center justify-around h-full gap-4">
+                    {currentRoundMatches.map(match => (<MatchBox key={match.id} match={match} currentUser={currentUser} />))}
+                </div>
             </div>
         </div>
     );
@@ -471,7 +461,6 @@ const RoundRobinDisplay: React.FC<{
 
 
 const TournamentRoundViewer: React.FC<{ rounds: Round[]; currentUser: UserWithStatus; tournamentType: TournamentType; }> = ({ rounds, currentUser, tournamentType }) => {
-    // FIX: Define the type for tab data to help TypeScript's inference.
     type TabData = { name: string; matches: Match[]; isInProgress: boolean; };
     
     const getRoundsForTabs = useMemo((): TabData[] | null => {
@@ -544,7 +533,7 @@ const TournamentRoundViewer: React.FC<{ rounds: Round[]; currentUser: UserWithSt
              const finalMatch = tab.matches.filter(m => rounds.find(r => r.matches.includes(m))?.name === '결승');
              const thirdPlaceMatch = tab.matches.filter(m => rounds.find(r => r.matches.includes(m))?.name === '3,4위전');
              return (
-                <div className="flex flex-col justify-center items-center h-full gap-12 p-4">
+                <div className="flex flex-col justify-center items-center gap-8 h-full">
                     <RoundColumn name="결승" matches={finalMatch} currentUser={currentUser} />
                     {thirdPlaceMatch.length > 0 && <RoundColumn name="3,4위전" matches={thirdPlaceMatch} currentUser={currentUser} />}
                 </div>
@@ -737,23 +726,31 @@ export const TournamentBracket: React.FC<TournamentBracketProps> = (props) => {
 
     const p1 = p1_from_match ? tournamentState.players.find(p => p.id === p1_from_match.id) || p1_from_match : null;
     const p2 = p2_from_match ? tournamentState.players.find(p => p.id === p2_from_match.id) || p2_from_match : null;
+    
+    const maxStatValue = useMemo(() => {
+        if (!p1 || !p2) return 250;
+        const league1 = p1.league;
+        const league2 = p2.league;
+
+        const isDynamicLeague = [LeagueTier.Grandmaster, LeagueTier.Challenger];
+        if (isDynamicLeague.includes(league1) || isDynamicLeague.includes(league2)) {
+            const allStats = [...Object.values(p1.stats), ...Object.values(p2.stats)];
+            const maxStat = Math.max(...allStats, 0);
+            return Math.max(250, Math.ceil((maxStat + 25) / 50) * 50); // Round up to nearest 50, with a min of 250
+        }
+        
+        const getCap = (league: LeagueTier) => {
+            if ([LeagueTier.Ace, LeagueTier.Diamond, LeagueTier.Master].includes(league)) return 500;
+            return 250;
+        };
+        
+        return Math.max(getCap(league1), getCap(league2));
+    }, [p1, p2]);
 
     const radarDatasets = useMemo(() => [
         { stats: p1?.stats || {}, color: '#60a5fa', fill: 'rgba(59, 130, 246, 0.4)' },
         { stats: p2?.stats || {}, color: '#f87171', fill: 'rgba(239, 68, 68, 0.4)' },
     ], [p1, p2]);
-
-    const maxStatValue = useMemo(() => {
-        if (!p1 || !p2) {
-            return 200; // A reasonable default
-        }
-        const allStats = [
-            ...Object.values(p1.stats),
-            ...Object.values(p2.stats)
-        ];
-        const maxStat = Math.max(...allStats, 0);
-        return Math.ceil((maxStat + 50) / 50) * 50; // Round up to nearest 50
-    }, [p1, p2]);
 
     const currentPhase = useMemo((): 'early' | 'mid' | 'end' | 'none' => {
         if (tournamentState.status !== 'round_in_progress') return 'none';

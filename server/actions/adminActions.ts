@@ -1,10 +1,8 @@
-
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, AdminLog, Announcement, OverrideAnnouncement, GameMode, LiveGameSession, UserStatusInfo, InventoryItem, InventoryItemType } from '../../types.js';
-import * as types from '../../types.js';
+import { type ServerAction, type User, type VolatileState, AdminLog, Announcement, OverrideAnnouncement, GameMode, LiveGameSession, UserStatusInfo, InventoryItem, InventoryItemType } from '../../types/index.js';
+import * as types from '../../types/index.js';
 import { defaultStats, createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultInventory, createDefaultQuests, createDefaultUser } from '../initialData.js';
-// FIX: Correctly import summaryService to resolve module not found error.
 import * as summaryService from '../summaryService.js';
 import { createItemFromTemplate } from '../shop.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants.js';
@@ -53,7 +51,6 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
                 targetUser.chatBanUntil = banUntil;
             } else if (sanctionType === 'connection') {
                 targetUser.connectionBanUntil = banUntil;
-                // Also log them out
                 delete volatileState.userConnections[targetUserId];
                 delete volatileState.userStatuses[targetUserId];
             }
@@ -211,8 +208,10 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
                     isRead: false,
                     attachmentsClaimed: false
                 };
-                target.mail.unshift(newMail);
-                await db.updateUser(target);
+                if(target) {
+                    target.mail.unshift(newMail);
+                    await db.updateUser(target);
+                }
             }
              await createAdminLog(user, 'send_mail', { id: targetSpecifier, nickname: targetSpecifier }, { mailTitle: title });
             return {};
@@ -297,9 +296,8 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             const winnerEnum = game.blackPlayerId === winnerId ? types.Player.Black : types.Player.White;
             const winnerUser = game.player1.id === winnerId ? game.player1 : game.player2;
 
-            await summaryService.endGame(game, winnerEnum, 'resign'); // Use 'resign' as the reason for 기권승
+            await summaryService.endGame(game, winnerEnum, 'resign');
 
-            // Clean up statuses for both players
             if (volatileState.userStatuses[game.player1.id]) {
                 volatileState.userStatuses[game.player1.id].status = 'waiting';
                 volatileState.userStatuses[game.player1.id].mode = game.mode;
@@ -323,7 +321,6 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
 
             const backupData = JSON.parse(JSON.stringify(targetUser));
             
-            // NICKNAME CHANGE VALIDATION
             if (updatedDetails.nickname && updatedDetails.nickname !== targetUser.nickname) {
                 const newNickname = updatedDetails.nickname.trim();
                 if (newNickname.length < 2 || newNickname.length > 12) {
@@ -336,7 +333,6 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
                 if (allUsers.some(u => u.id !== targetUserId && u.nickname.toLowerCase() === newNickname.toLowerCase())) {
                     return { error: '이미 사용 중인 닉네임입니다.' };
                 }
-                // If all checks pass, update the nickname
                 targetUser.nickname = newNickname;
             }
 

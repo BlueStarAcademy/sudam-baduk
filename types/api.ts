@@ -1,8 +1,7 @@
-
 import {
     User, LiveGameSession, Negotiation, KomiBid,
     AdminLog, Announcement, OverrideAnnouncement, InventoryItem,
-    QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, TournamentState, UserWithStatus
+    QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, TournamentState, UserWithStatus, TowerRank
 } from './entities.js';
 import { GameMode, RPSChoice, Point, Player, UserStatus, TournamentType } from './enums.js';
 
@@ -40,6 +39,7 @@ export interface AppState {
     announcements: Announcement[];
     globalOverrideAnnouncement: OverrideAnnouncement | null;
     announcementInterval: number;
+    towerRankings: TowerRank[];
 }
 
 export interface VolatileState {
@@ -73,7 +73,6 @@ export type ServerAction =
     | { type: 'LEAVE_WAITING_ROOM', payload?: never }
     | { type: 'LEAVE_GAME_ROOM', payload: { gameId: string } }
     | { type: 'SPECTATE_GAME', payload: { gameId: string } }
-    // FIX: The payload for LEAVE_SPECTATING is made optional to accommodate different call signatures in the codebase.
     | { type: 'LEAVE_SPECTATING', payload?: { gameId?: string } }
     // Negotiation
     | { type: 'CHALLENGE_USER', payload: { opponentId: string; mode: GameMode } }
@@ -152,6 +151,7 @@ export type ServerAction =
     | { type: 'ENHANCE_ITEM', payload: { itemId: string } }
     | { type: 'DISASSEMBLE_ITEM', payload: { itemIds: string[] } }
     | { type: 'CRAFT_MATERIAL', payload: { materialName: string, craftType: 'upgrade' | 'downgrade', quantity: number } }
+    | { type: 'SYNTHESIZE_EQUIPMENT', payload: { itemIds: string[] } }
     // Reward Actions
     | { type: 'CLAIM_MAIL_ATTACHMENTS', payload: { mailId: string } }
     | { type: 'CLAIM_ALL_MAIL_ATTACHMENTS', payload?: never }
@@ -196,11 +196,14 @@ export type ServerAction =
     | { type: 'CLAIM_TOURNAMENT_REWARD', payload: { tournamentType: TournamentType } }
     | { type: 'ENTER_TOURNAMENT_VIEW', payload?: never }
     | { type: 'LEAVE_TOURNAMENT_VIEW', payload?: never }
+    | { type: 'USE_CONDITION_POTION', payload: { tournamentType: TournamentType; matchId: string; itemName: string; } }
     // Single Player
     | { type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: string } }
     | { type: 'SINGLE_PLAYER_REFRESH_PLACEMENT', payload: { gameId: string } }
     | { type: 'START_SINGLE_PLAYER_MISSION', payload: { missionId: string } }
     | { type: 'CLAIM_SINGLE_PLAYER_MISSION_REWARD', payload: { missionId: string } }
+    // Tower Challenge
+    | { type: 'START_TOWER_CHALLENGE_GAME', payload: { floor: number } }
     ;
 
 export interface GameProps {

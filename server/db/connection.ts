@@ -72,6 +72,7 @@ const migrations: { [version: number]: string } = {
     `,
     31: 'ALTER TABLE users ADD COLUMN singlePlayerMissions TEXT;',
     32: 'ALTER TABLE live_games ADD COLUMN blackStonesPlaced INTEGER; ALTER TABLE live_games ADD COLUMN blackStoneLimit INTEGER;',
+    33: 'ALTER TABLE users ADD COLUMN towerProgress TEXT;'
 };
 
 export const initializeAndGetDb = async (): Promise<Database> => {
@@ -261,7 +262,9 @@ export const initializeAndGetDb = async (): Promise<Database> => {
             whitePatternStones TEXT,
             singlePlayerPlacementRefreshesUsed INTEGER,
             blackStonesPlaced INTEGER,
-            blackStoneLimit INTEGER
+            blackStoneLimit INTEGER,
+            isTowerChallenge BOOLEAN,
+            floor INTEGER
         );
     `);
 

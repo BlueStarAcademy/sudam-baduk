@@ -1,5 +1,5 @@
 
-import * as db from './db.js';
+import * as db from '././db.js';
 // FIX: Import the full namespace to access enums like CoreStat.
 import * as types from './../types.js';
 import { AVATAR_POOL, BORDER_POOL } from './../constants.js';
@@ -81,7 +81,8 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
             
             const levelPoints = (user.strategyLevel - 1) * 2 + (user.playfulLevel - 1) * 2;
             const masteryBonus = user.mannerMasteryApplied ? 20 : 0;
-            const totalAvailablePoints = levelPoints + masteryBonus;
+            const bonusPoints = user.bonusStatPoints || 0;
+            const totalAvailablePoints = levelPoints + masteryBonus + bonusPoints;
             
             const totalSpent = Object.values(newStatPoints).reduce((sum, points) => sum + points, 0);
 

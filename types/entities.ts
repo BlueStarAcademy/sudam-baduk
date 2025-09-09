@@ -161,6 +161,8 @@ export type Match = {
     isUserMatch: boolean;
     finalScore: { player1: number; player2: number } | null;
     sgfFileIndex?: number;
+    potionUsed?: { [playerId: string]: boolean };
+    conditionBoost?: { [playerId: string]: number };
 };
 
 export type Round = {
@@ -196,6 +198,8 @@ export interface LeagueRewardTier {
     rankEnd: number;
     diamonds: number;
     outcome: LeagueOutcome;
+    // FIX: Add the optional 'items' property to the interface to resolve type errors across multiple files where this property was being used but not defined.
+    items?: { itemId: string; quantity: number }[];
 }
 
 export type UserCredentials = {
@@ -221,6 +225,11 @@ export type SinglePlayerMissionState = {
     isStarted: boolean;
     lastCollectionTime: number;
     accumulatedAmount: number;
+};
+
+export type TowerProgress = {
+    highestFloor: number;
+    lastClearTimestamp: number;
 };
 
 export type User = {
@@ -280,6 +289,7 @@ export type User = {
   singlePlayerProgress?: number;
   bonusStatPoints?: number;
   singlePlayerMissions?: Record<string, SinglePlayerMissionState>;
+  towerProgress: TowerProgress;
 };
 
 export type UserWithStatus = User & UserStatusInfo;
@@ -332,6 +342,10 @@ export type SinglePlayerStageInfo = {
         firstClear: { gold: number; exp: number; items?: { itemId: string; quantity: number }[]; bonus?: string };
         repeatClear: { gold: number; exp: number; items?: { itemId: string; quantity: number }[]; bonus?: string };
     };
+    blackStoneLimit?: number;
+    // FIX: Add missing properties for Tower Challenge stages.
+    floor?: number;
+    position?: { x: string; y: string; };
 };
 
 
@@ -666,6 +680,8 @@ export type LiveGameSession = {
   singlePlayerPlacementRefreshesUsed?: number;
   blackStonesPlaced?: number;
   blackStoneLimit?: number;
+  isTowerChallenge?: boolean;
+  floor?: number;
 };
 
 export type Negotiation = {
@@ -711,4 +727,10 @@ export type ActionButton = {
   name: string;
   message: string;
   type: 'manner' | 'unmannerly';
+};
+
+export type TowerRank = {
+    rank: number;
+    user: Pick<User, 'id' | 'nickname' | 'avatarId' | 'borderId'>;
+    floor: number;
 };

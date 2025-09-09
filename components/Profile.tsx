@@ -133,26 +133,6 @@ const LobbyCard: React.FC<{
     );
 };
 
-const PveCard: React.FC<{ title: string; imageUrl: string; layout: 'grid' | 'tall'; footerContent?: React.ReactNode; }> = ({ title, imageUrl, layout, footerContent }) => {
-    const isTall = layout === 'tall';
-    return (
-        <div className={`bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-purple-500/50 rounded-lg p-2 flex flex-col text-center shadow-lg shadow-purple-500/20 h-full text-on-panel relative overflow-hidden cursor-not-allowed group`}>
-            <div className="absolute top-2 -right-10 transform rotate-45 bg-purple-600 text-white text-[10px] font-bold px-10 py-0.5 z-10">
-                Coming Soon
-            </div>
-            <h2 className="text-base font-bold text-purple-300 mt-1 h-6 mb-1">{title}</h2>
-            <div className={`w-full rounded-md flex-1 items-center justify-center text-tertiary overflow-hidden transition-transform duration-300 group-hover:scale-105 bg-black/20`}>
-                <img src={imageUrl} alt={title} className={`w-full h-full rounded-md p-2 ${isTall ? 'object-contain' : 'object-cover'}`} />
-            </div>
-            {footerContent && (
-                <div className="w-full bg-tertiary/50 rounded-md p-1 text-xs mt-2">
-                    {footerContent}
-                </div>
-            )}
-        </div>
-    );
-};
-
 const formatMythicStat = (stat: MythicStat, data: { count: number, totalValue: number }): React.ReactNode => {
     const baseDescription = MYTHIC_STATS_DATA[stat].description;
 
@@ -588,18 +568,18 @@ const Profile: React.FC<ProfileProps> = () => {
                 </div>
             </div>
             
-            <div className="col-span-2 row-span-1 lg:col-span-2 lg:row-span-4">
-                <PveCard 
-                    title="도전의 탑" 
-                    imageUrl={TOWER_CHALLENGE_LOBBY_IMG} 
-                    layout="tall" 
-                    footerContent={
-                        <div className="flex flex-col items-center">
-                            <span>현재 층: 1층</span>
-                            <span className="text-tertiary">{towerTimeLeft}</span>
-                        </div>
-                    }
-                />
+            <div 
+                onClick={() => window.location.hash = '#/towerchallenge'}
+                className="col-span-2 row-span-1 lg:col-span-2 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-red-500/30 cursor-pointer h-full text-on-panel"
+            >
+                <h2 className="text-base font-bold h-6 mb-1 text-red-300">도전의 탑</h2>
+                <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
+                    <img src={TOWER_CHALLENGE_LOBBY_IMG} alt="도전의 탑" className="w-full h-full object-contain p-2" />
+                </div>
+                 <div className="w-full bg-tertiary/50 rounded-md p-1 text-xs mt-2 flex flex-col items-center">
+                    <span>현재 층: {currentUserWithStatus.towerProgress?.highestFloor ?? 0}층</span>
+                    <span className="text-tertiary">{towerTimeLeft}</span>
+                </div>
             </div>
         </div>
     );

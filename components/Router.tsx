@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
 
@@ -12,6 +11,7 @@ import Game from '../Game.js';
 import Admin from './Admin.js';
 import TournamentLobby from './TournamentLobby.js';
 import SinglePlayerLobby from './SinglePlayerLobby.js';
+import TowerChallengeLobby from './TowerChallengeLobby.js';
 
 const Router: React.FC = () => {
     const { currentRoute, currentUser, activeGame } = useAppContext();
@@ -56,6 +56,8 @@ const Router: React.FC = () => {
             return <TournamentLobby />;
         case 'singleplayer':
              return <SinglePlayerLobby />;
+        case 'towerchallenge':
+             return <TowerChallengeLobby />;
         default:
             window.location.hash = '#/profile';
             return null;
