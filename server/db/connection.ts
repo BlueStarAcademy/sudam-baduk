@@ -254,7 +254,14 @@ export const initializeAndGetDb = async (): Promise<Database> => {
             aiTurnStartTime REAL,
             mythicBonuses TEXT,
             lastPlayfulGoldCheck TEXT,
-            pendingSystemMessages TEXT
+            pendingSystemMessages TEXT,
+            isSinglePlayer BOOLEAN,
+            stageId TEXT,
+            blackPatternStones TEXT,
+            whitePatternStones TEXT,
+            singlePlayerPlacementRefreshesUsed INTEGER,
+            blackStonesPlaced INTEGER,
+            blackStoneLimit INTEGER
         );
     `);
 

@@ -564,7 +564,7 @@ const Profile: React.FC<ProfileProps> = () => {
     
             <div 
                 onClick={() => window.location.hash = '#/tournament'} 
-                className="col-span-4 row-span-1 lg:col-span-4 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-purple-500/30 cursor-pointer h-full text-on-panel"
+                className="col-span-6 row-span-1 lg:col-span-6 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-purple-500/30 cursor-pointer h-full text-on-panel"
             >
                 <h2 className="text-base font-bold h-6 mb-1">자동대국 챔피언십</h2>
                 <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
@@ -577,7 +577,7 @@ const Profile: React.FC<ProfileProps> = () => {
             
             <div 
                 onClick={() => window.location.hash = '#/singleplayer'}
-                className="col-span-4 row-span-1 lg:col-span-4 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-green-500/30 cursor-pointer h-full text-on-panel"
+                className="col-span-2 row-span-1 lg:col-span-2 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-green-500/30 cursor-pointer h-full text-on-panel"
             >
                 <h2 className="text-base font-bold h-6 mb-1">싱글플레이</h2>
                 <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">

@@ -430,11 +430,11 @@ const SinglePlayerLobby: React.FC = () => {
 
             <main className="flex-1 min-h-0">
                 {/* DESKTOP LAYOUT */}
-                <div className="hidden lg:flex flex-row-reverse gap-4 h-full">
-                    <div className="w-[400px] xl:w-[450px] flex-shrink-0 flex flex-col gap-4">
-                        <LevelSelectionPanel className="flex-shrink-0"/>
+                <div className="hidden lg:flex flex-row gap-4 h-full">
+                    <div className="w-[350px] flex-shrink-0 flex flex-col gap-4">
+                        <LevelSelectionPanel className="h-auto"/>
                         <div className="flex-1 min-h-0 w-full">
-                            <SinglePlayerMissions />
+                           <SinglePlayerMissions />
                         </div>
                     </div>
                     <div className="flex-1 min-h-0">

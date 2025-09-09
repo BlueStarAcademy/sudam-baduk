@@ -1,5 +1,5 @@
 import { getGoLogic } from './goLogic.js';
-import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_KOMI } from '../constants.js';
+import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_KOMI, DEFAULT_GAME_SETTINGS } from '../constants.js';
 import * as types from '../types.js';
 import { analyzeGame } from './kataGoService.js';
 import type { LiveGameSession, AppState, Negotiation, ActionButton, GameMode } from '../types.js';
@@ -218,8 +218,10 @@ export const getNewActionButtons = (game: types.LiveGameSession): ActionButton[]
 
 export const initializeGame = async (neg: Negotiation): Promise<LiveGameSession> => {
     const gameId = `game-${randomUUID()}`;
-    const { settings, mode } = neg;
+    const { settings: settingsFromNeg, mode } = neg;
     const now = Date.now();
+    
+    const settings: types.GameSettings = { ...DEFAULT_GAME_SETTINGS, ...settingsFromNeg };
     
     const challenger = await db.getUser(neg.challenger.id);
     const opponent = neg.opponent.id === aiUserId ? getAiUser(neg.mode) : await db.getUser(neg.opponent.id);
@@ -338,7 +340,7 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
         const players = [game.player1, game.player2].filter(p => p.id !== aiUserId);
 
         const playableStatuses: types.GameStatus[] = [
-            'playing', 'hidden_placing', 'scanning', 'missile_selecting',
+            'playing',
             'alkkagi_playing',
             'curling_playing',
             'dice_rolling',

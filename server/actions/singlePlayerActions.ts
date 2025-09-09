@@ -1,9 +1,11 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
 import * as types from '../../types/index.js';
-import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../../constants.js';
+import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../../constants.js';
 import { initializeGame } from '../gameModes.js';
 import { getAiUser } from '../aiPlayer.js';
+import * as effectService from '../effectService.js';
+
 
 type HandleActionResult = types.HandleActionResult;
 
@@ -24,11 +26,18 @@ export const handleSinglePlayerAction = async (volatileState: types.VolatileStat
                 return { error: '아직 잠금 해제되지 않은 스테이지입니다.' };
             }
             
+            const effects = effectService.calculateUserEffects(user);
+            const maxAP = effects.maxActionPoints;
+            const wasAtMax = user.actionPoints.current >= maxAP;
+            
             if (user.actionPoints.current < stage.actionPointCost) {
                 return { error: '행동력이 부족합니다.' };
             }
+
             user.actionPoints.current -= stage.actionPointCost;
-            user.lastActionPointUpdate = now;
+            if (wasAtMax) {
+                user.lastActionPointUpdate = now;
+            }
 
             const aiOpponent = getAiUser(types.GameMode.Standard); // Or a specific AI for SP
             aiOpponent.strategyLevel = stage.katagoLevel;
@@ -220,10 +229,14 @@ export const handleSinglePlayerAction = async (volatileState: types.VolatileStat
 
             if (amountToClaim < 1) return { error: '수령할 보상이 없습니다.' };
             
+            const claimedReward: types.QuestReward = {};
+
             if (missionInfo.rewardType === 'gold') {
                 user.gold += amountToClaim;
+                claimedReward.gold = amountToClaim;
             } else if (missionInfo.rewardType === 'diamonds') {
                 user.diamonds += amountToClaim;
+                claimedReward.diamonds = amountToClaim;
             }
             
             missionState.accumulatedAmount -= amountToClaim;
@@ -239,7 +252,16 @@ export const handleSinglePlayerAction = async (volatileState: types.VolatileStat
             }
             
             await db.updateUser(user);
-            return { clientResponse: { updatedUser: user } };
+            return {
+                clientResponse: {
+                    updatedUser: user,
+                    rewardSummary: {
+                        reward: claimedReward,
+                        items: [],
+                        title: `${missionInfo.name} 과제 보상`
+                    }
+                }
+            };
         }
         default:
             return { error: 'Unknown single player action.' };

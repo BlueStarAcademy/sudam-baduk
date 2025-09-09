@@ -57,7 +57,8 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
 
     const handleForfeit = () => {
         if (window.confirm('현재 스테이지를 포기하고 로비로 돌아가시겠습니까?')) {
-            window.location.hash = '#/singleplayer';
+            sessionStorage.setItem('postGameRedirect', '#/singleplayer');
+            onAction({ type: 'LEAVE_AI_GAME', payload: { gameId: session.id } });
         }
     };
 

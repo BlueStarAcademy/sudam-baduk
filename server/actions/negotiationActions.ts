@@ -4,6 +4,8 @@ import { type ServerAction, type User, type VolatileState, Negotiation, GameMode
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_POINT_COST, PLAYFUL_ACTION_POINT_COST, DEFAULT_GAME_SETTINGS } from '../../constants.js';
 import { initializeGame } from '../gameModes.js';
 import { aiUserId, getAiUser } from '../aiPlayer.js';
+import * as effectService from '../effectService.js';
+
 
 type HandleActionResult = { 
     clientResponse?: any;
@@ -58,7 +60,6 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                     return { error: '상대방이 대국을 신청받을 수 있는 상태가 아닙니다.' };
                 }
 
-                // FIX: Only block if the opponent is in a *pending* negotiation (one they have to respond to).
                 const isOpponentInPendingNegotiation = Object.values(volatileState.negotiations).some(
                     neg => (neg.opponent.id === opponent.id || neg.challenger.id === opponent.id) && neg.status === 'pending'
                 );
@@ -163,12 +164,22 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             }
 
             if (!challenger.isAdmin) {
+                const challengerEffects = effectService.calculateUserEffects(challenger);
+                const challengerMaxAP = challengerEffects.maxActionPoints;
+                const challengerWasAtMax = challenger.actionPoints.current >= challengerMaxAP;
                 challenger.actionPoints.current -= cost;
-                challenger.lastActionPointUpdate = now;
+                if (challengerWasAtMax) {
+                    challenger.lastActionPointUpdate = now;
+                }
             }
             if (!opponent.isAdmin) {
+                const opponentEffects = effectService.calculateUserEffects(opponent);
+                const opponentMaxAP = opponentEffects.maxActionPoints;
+                const opponentWasAtMax = opponent.actionPoints.current >= opponentMaxAP;
                 opponent.actionPoints.current -= cost;
-                opponent.lastActionPointUpdate = now;
+                if (opponentWasAtMax) {
+                    opponent.lastActionPointUpdate = now;
+                }
             }
 
             await db.updateUser(challenger);
@@ -245,8 +256,14 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 return { error: `액션 포인트가 부족합니다. (필요: ${cost})` };
             }
             if (!user.isAdmin) {
+                const effects = effectService.calculateUserEffects(user);
+                const maxAP = effects.maxActionPoints;
+                const wasAtMax = user.actionPoints.current >= maxAP;
+                
                 user.actionPoints.current -= cost;
-                user.lastActionPointUpdate = now;
+                if (wasAtMax) {
+                    user.lastActionPointUpdate = now;
+                }
             }
         
             const negotiation: Negotiation = {
