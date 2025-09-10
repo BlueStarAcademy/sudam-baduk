@@ -69,7 +69,7 @@ export type GameStatus =
   | 'curling_turn_selection'
   | 'thief_role_selection'
   | 'thief_role_confirmed'
-  | 'thief_role_dice_roll' // Tiebreaker for role choice
+  | 'thief_role_dice_roll'
   // Alkkagi phases
   | 'alkkagi_placement'
   | 'alkkagi_simultaneous_placement'
@@ -118,35 +118,22 @@ export type RPSChoice = 'rock' | 'paper' | 'scissors';
 export enum DiceGoVariant { Basic = 'basic' }
 export enum AlkkagiPlacementType { TurnByTurn = '교대 배치', Simultaneous = '일괄 배치' }
 export enum AlkkagiLayoutType { Normal = '일반배치', Battle = '전투배치' }
-
-// --- User and Item Enums ---
 export type EquipmentSlot = 'fan' | 'board' | 'top' | 'bottom' | 'bowl' | 'stones';
 export type InventoryItemType = 'equipment' | 'consumable' | 'material';
 export type ItemGrade = 'normal' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
 export enum CoreStat {
-    Concentration = '집중력',
-    ThinkingSpeed = '사고속도',
-    Judgment = '판단력',
-    Calculation = '계산력',
-    CombatPower = '전투력',
-    Stability = '안정감',
+    Concentration = '집중력', ThinkingSpeed = '사고속도', Judgment = '판단력',
+    Calculation = '계산력', CombatPower = '전투력', Stability = '안정감',
 }
 export enum SpecialStat {
-    ActionPointMax = '행동력 최대치',
-    ActionPointRegen = '행동력 회복속도',
-    StrategyXpBonus = '전략 경험치 추가획득',
-    PlayfulXpBonus = '놀이 경험치 추가획득',
-    GoldBonus = '골드보상 추가',
-    ItemDropRate = '장비상자 획득확률 증가',
-    MaterialDropRate = '재료상자 획득확률 증가',
+    ActionPointMax = '행동력 최대치', ActionPointRegen = '행동력 회복속도',
+    StrategyXpBonus = '전략 경험치 추가획득', PlayfulXpBonus = '놀이 경험치 추가획득',
+    GoldBonus = '골드보상 추가', ItemDropRate = '장비상자 획득확률 증가', MaterialDropRate = '재료상자 획득확률 증가',
 }
 export enum MythicStat {
-    MannerActionCooldown = '매너 액션 버튼 생성시간 감소',
-    StrategicGoldBonus = '전략 바둑 경기중 착수시 20%확률로 골드획득(10~50골드) 최대5회',
-    PlayfulGoldBonus = '놀이 바둑 경기중 60초마다 20%확률로 골드획득(10~50골드) 최대5회',
-    DiceGoOddBonus = '주사위 홀/짝 보너스',
-    AlkkagiSlowBonus = '알까기 및 바둑컬링에서 슬로우 아이템 1개추가',
-    AlkkagiAimingBonus = '알까기 및 바둑컬링에서 조준선 아이템 1개추가',
+    MannerActionCooldown = '매너 액션 버튼 생성시간 감소', StrategicGoldBonus = '전략 바둑 경기중 착수시 20%확률로 골드획득(10~50골드) 최대5회',
+    PlayfulGoldBonus = '놀이 바둑 경기중 60초마다 20%확률로 골드획득(10~50골드) 최대5회', DiceGoOddBonus = '주사위 홀/짝 보너스',
+    AlkkagiSlowBonus = '알까기 및 바둑컬링에서 슬로우 아이템 1개추가', AlkkagiAimingBonus = '알까기 및 바둑컬링에서 조준선 아이템 1개추가',
 }
 export type ItemOptionType = CoreStat | SpecialStat | MythicStat;
 

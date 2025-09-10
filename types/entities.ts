@@ -1,4 +1,4 @@
-import { Player, GameMode, LeagueTier, UserStatus, WinReason, RPSChoice, DiceGoVariant, AlkkagiPlacementType, AlkkagiLayoutType, Point, Move, BoardState, EquipmentSlot, InventoryItemType, ItemGrade, CoreStat, ItemOptionType, TournamentType, TournamentSimulationStatus, GameStatus, SinglePlayerLevel } from './enums.js';
+import { Player, GameMode, LeagueTier, UserStatus, WinReason, RPSChoice, DiceGoVariant, AlkkagiPlacementType, AlkkagiLayoutType, Point, Move, BoardState, EquipmentSlot, InventoryItemType, ItemGrade, CoreStat, SpecialStat, MythicStat, ItemOptionType, TournamentType, TournamentSimulationStatus, GameStatus, SinglePlayerLevel } from './enums.js';
 // FIX: ChatMessage is now defined in api.ts to break circular dependency.
 import { UserStatusInfo, ChatMessage } from './api.js';
 
@@ -687,6 +687,9 @@ export type LiveGameSession = {
   blackStoneLimit?: number;
   isTowerChallenge?: boolean;
   floor?: number;
+  gameType?: GameType;
+  whiteStonesPlaced?: number;
+  whiteStoneLimit?: number;
 };
 
 export type Negotiation = {

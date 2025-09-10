@@ -579,15 +579,17 @@ input[type="range"]::-moz-range-thumb {
 
 .bg-tower-default {
     background-image: url('/images/tower/InTower.png');
-    background-size: cover;
+    background-size: contain;
     background-position: center;
+    background-repeat: no-repeat;
     background-color: rgb(var(--bg-tertiary)); /* Fallback color */
 }
 
 .bg-tower-100 {
     background-image: url('/images/tower/Tower4.png');
-    background-size: cover;
+    background-size: contain;
     background-position: center;
+    background-repeat: no-repeat;
     background-color: rgb(var(--bg-tertiary)); /* Fallback color */
 }
 

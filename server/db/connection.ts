@@ -72,7 +72,9 @@ const migrations: { [version: number]: string } = {
     `,
     31: 'ALTER TABLE users ADD COLUMN singlePlayerMissions TEXT;',
     32: 'ALTER TABLE live_games ADD COLUMN blackStonesPlaced INTEGER; ALTER TABLE live_games ADD COLUMN blackStoneLimit INTEGER;',
-    33: 'ALTER TABLE users ADD COLUMN towerProgress TEXT;'
+    33: 'ALTER TABLE users ADD COLUMN towerProgress TEXT;',
+    34: 'ALTER TABLE live_games ADD COLUMN isTowerChallenge BOOLEAN; ALTER TABLE live_games ADD COLUMN floor INTEGER;',
+    35: 'ALTER TABLE live_games ADD COLUMN gameType TEXT; ALTER TABLE live_games ADD COLUMN whiteStonesPlaced INTEGER; ALTER TABLE live_games ADD COLUMN whiteStoneLimit INTEGER;'
 };
 
 export const initializeAndGetDb = async (): Promise<Database> => {
@@ -264,7 +266,10 @@ export const initializeAndGetDb = async (): Promise<Database> => {
             blackStonesPlaced INTEGER,
             blackStoneLimit INTEGER,
             isTowerChallenge BOOLEAN,
-            floor INTEGER
+            floor INTEGER,
+            gameType TEXT,
+            whiteStonesPlaced INTEGER,
+            whiteStoneLimit INTEGER
         );
     `);
 

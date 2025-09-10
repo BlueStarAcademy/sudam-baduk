@@ -1,4 +1,3 @@
-
 import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
 import * as types from '../../types.js';
 // FIX: Import DEFAULT_GAME_SETTINGS to provide a default value when parsing game data.
@@ -277,6 +276,9 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             blackStoneLimit: row.blackStoneLimit ?? undefined,
             isTowerChallenge: !!row.isTowerChallenge,
             floor: row.floor ?? undefined,
+            gameType: row.gameType ?? undefined,
+            whiteStonesPlaced: row.whiteStonesPlaced ?? undefined,
+            whiteStoneLimit: row.whiteStoneLimit ?? undefined,
         };
         return game;
     } catch (e) {

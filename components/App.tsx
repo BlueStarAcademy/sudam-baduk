@@ -59,13 +59,30 @@ const AppContent: React.FC = () => {
     const [showQuestToast, setShowQuestToast] = useState(false);
     
     const prevHasClaimableQuest = usePrevious(hasClaimableQuest);
+    const questToastTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
+        // Clear any existing timer when dependencies change to prevent lingering timers
+        // from keeping the toast open incorrectly.
+        if (questToastTimerRef.current) {
+            clearTimeout(questToastTimerRef.current);
+            questToastTimerRef.current = null;
+        }
+
         if (settings.features.questNotifications && hasClaimableQuest && !prevHasClaimableQuest) {
             setShowQuestToast(true);
-            const timer = setTimeout(() => setShowQuestToast(false), 3000);
-            return () => clearTimeout(timer);
+            questToastTimerRef.current = window.setTimeout(() => {
+                setShowQuestToast(false);
+                questToastTimerRef.current = null;
+            }, 3000);
         }
+
+        // Cleanup function for when the component unmounts or dependencies change
+        return () => {
+            if (questToastTimerRef.current) {
+                clearTimeout(questToastTimerRef.current);
+            }
+        };
     }, [hasClaimableQuest, prevHasClaimableQuest, settings.features.questNotifications]);
 
 

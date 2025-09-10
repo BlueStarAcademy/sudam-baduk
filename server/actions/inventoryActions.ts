@@ -82,10 +82,11 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const itemIndex = user.inventory.findIndex(i => i.id === itemId);
             if (itemIndex === -1) return { error: '아이템을 찾을 수 없습니다.' };
         
-            const item = user.inventory[itemIndex];
-            if (item.type !== 'consumable') return { error: '사용할 수 없는 아이템입니다.' };
+            const itemToConsume = user.inventory[itemIndex];
+            if (itemToConsume.type !== 'consumable') return { error: '사용할 수 없는 아이템입니다.' };
         
-            const bundleInfo = currencyBundles[item.name];
+            // Handle currency bundles
+            const bundleInfo = currencyBundles[itemToConsume.name];
             if (bundleInfo) {
                 const amount = getRandomInt(bundleInfo.min, bundleInfo.max);
                 let obtainedItem: Partial<InventoryItem>;
@@ -98,36 +99,52 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                     obtainedItem = { name: '다이아', quantity: amount, image: '/images/Zem.png', type: 'material', grade: 'rare' };
                 }
         
-                if (item.quantity && item.quantity > 1) {
-                    item.quantity--;
+                if (itemToConsume.quantity && itemToConsume.quantity > 1) {
+                    itemToConsume.quantity--;
                 } else {
                     user.inventory.splice(itemIndex, 1);
                 }
                 await db.updateUser(user);
                 return { clientResponse: { obtainedItemsBulk: [obtainedItem], updatedUser: user } };
             }
-            
-            const shopItemKey = Object.keys(SHOP_ITEMS).find(key => SHOP_ITEMS[key as keyof typeof SHOP_ITEMS].name === item.name);
-            if (!shopItemKey) return { error: '알 수 없는 아이템입니다.' };
-            
+        
+            // Handle other consumable items (boxes, potions, etc.)
+            const shopItemKey = Object.keys(SHOP_ITEMS).find(key => SHOP_ITEMS[key as keyof typeof SHOP_ITEMS].name === itemToConsume.name);
+            if (!shopItemKey) {
+                return { error: '알 수 없는 아이템입니다.' };
+            }
+        
             const shopItem = SHOP_ITEMS[shopItemKey as keyof typeof SHOP_ITEMS];
+
+            if (itemToConsume.name.includes('컨디션물약')) {
+                return { error: '컨디션 물약은 토너먼트 경기 시작 전에만 사용할 수 있습니다.' };
+            }
+
             const obtainedItems = shopItem.onPurchase();
             const itemsArray = Array.isArray(obtainedItems) ? obtainedItems : [obtainedItems];
             
-            const inventoryAfterUse = [...user.inventory];
-            const usedItemInTemp = inventoryAfterUse[itemIndex];
-            if (usedItemInTemp.quantity && usedItemInTemp.quantity > 1) {
-                usedItemInTemp.quantity--;
+            // Create a new inventory array representing the state AFTER consumption.
+            let inventoryAfterConsumption: InventoryItem[];
+            if (itemToConsume.quantity && itemToConsume.quantity > 1) {
+                inventoryAfterConsumption = user.inventory.map(i => 
+                    i.id === itemId ? { ...i, quantity: (i.quantity as number) - 1 } : i
+                );
             } else {
-                inventoryAfterUse.splice(itemIndex, 1);
+                inventoryAfterConsumption = user.inventory.filter(i => i.id !== itemId);
             }
-        
-            const { success } = addItemsToInventoryUtil([...inventoryAfterUse], user.inventorySlots, itemsArray);
-            if (!success) return { error: '인벤토리 공간이 부족합니다.' };
             
-            user.inventory = inventoryAfterUse;
+            // Check for space using a deep copy, because the utility function mutates its input.
+            const inventoryForCheck = JSON.parse(JSON.stringify(inventoryAfterConsumption));
+            const { success } = addItemsToInventoryUtil(inventoryForCheck, user.inventorySlots, itemsArray);
+            
+            if (!success) {
+                return { error: '인벤토리 공간이 부족합니다.' };
+            }
+            
+            // Apply the changes to the actual user object.
+            user.inventory = inventoryAfterConsumption;
             addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsArray);
-        
+            
             await db.updateUser(user);
             return { clientResponse: { obtainedItemsBulk: itemsArray, updatedUser: user } };
         }
@@ -309,7 +326,9 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                         const newSubDef = combatPool[Math.floor(Math.random() * combatPool.length)];
                         const value = getRandomInt(newSubDef.range[0], newSubDef.range[1]);
                         const newSub: ItemOption = {
-                            type: newSubDef.type, value, isPercentage: newSubDef.isPercentage,
+                            type: newSubDef.type,
+                            value,
+                            isPercentage: newSubDef.isPercentage,
                             display: `${newSubDef.type} +${value}${newSubDef.isPercentage ? '%' : ''} [${newSubDef.range[0]}~${newSubDef.range[1]}]`,
                             range: newSubDef.range,
                             enhancements: 0,

@@ -1,6 +1,3 @@
-
-// FIX: Correctly import summaryService to resolve module not found error.
-import * as summaryService from '../summaryService.js';
 import * as types from '../../types.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../goLogic.js';
@@ -12,6 +9,8 @@ import { initializeCapture, updateCaptureState, handleCaptureAction } from './ca
 import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidden.js';
 import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
 import { handleSharedAction, transitionToPlaying } from './shared.js';
+import * as summaryService from '../summaryService.js';
+import { SINGLE_PLAYER_STAGES } from '../../constants.js';
 
 
 export const initializeStrategicGame = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {
@@ -66,14 +65,18 @@ export const updateStrategicGameState = async (game: types.LiveGameSession, now:
         } else if (game[timeKey] > 0) { // Main time expired
             game[timeKey] = 0;
             if (game.settings.byoyomiCount > 0 && game[byoyomiKey] > 0) {
-                game[byoyomiKey]--;
+                if (!game.isSinglePlayer && !game.isTowerChallenge) {
+                    game[byoyomiKey]--;
+                }
                 game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                 game.turnStartTime = now;
                 return;
             }
         } else { // Byoyomi expired
             if (game[byoyomiKey] > 0) {
-                game[byoyomiKey]--;
+                if (!game.isSinglePlayer && !game.isTowerChallenge) {
+                    game[byoyomiKey]--;
+                }
                 game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                 game.turnStartTime = now;
                 return;
@@ -133,6 +136,8 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? types.Player.Black : (user.id === game.whitePlayerId ? types.Player.White : types.Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
+    const opponentPlayerEnum = myPlayerEnum === types.Player.Black ? types.Player.White : (myPlayerEnum === types.Player.White ? types.Player.Black : types.Player.None);
+
 
     switch (type) {
         case 'PLACE_STONE': {
@@ -141,7 +146,6 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             }
 
             const { x, y, isHidden } = payload;
-            const opponentPlayerEnum = myPlayerEnum === types.Player.Black ? types.Player.White : (myPlayerEnum === types.Player.White ? types.Player.Black : types.Player.None);
             const stoneAtTarget = game.boardState[y][x];
 
             const moveIndexAtTarget = game.moveHistory.findIndex(m => m.x === x && m.y === y);
@@ -150,6 +154,12 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
                 moveIndexAtTarget !== -1 &&
                 game.hiddenMoves?.[moveIndexAtTarget] &&
                 !game.permanentlyRevealedStones?.some(p => p.x === x && p.y === y);
+
+            if (game.isTowerChallenge && !isTargetHiddenOpponentStone) {
+                if ((game.blackStonesPlaced || 0) >= game.blackStoneLimit!) {
+                    return { error: 'You have no stones left to place.' };
+                }
+            }
 
             if (stoneAtTarget !== types.Player.None && !isTargetHiddenOpponentStone) {
                 return {}; // Silently fail if placing on a visible stone
@@ -292,18 +302,17 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             if (result.capturedStones.length > 0) {
                 if (!game.justCaptured) game.justCaptured = [];
                 for (const stone of result.capturedStones) {
-                    const capturedPlayerEnum = opponentPlayerEnum;
+                    const capturedPlaye = opponentPlayerEnum;
                     
                     let points = 1;
                     let wasHiddenForJustCaptured = false; // default for justCaptured
 
-                    if (game.isSinglePlayer) {
-                        const patternStones = capturedPlayerEnum === types.Player.Black ? game.blackPatternStones : game.whitePatternStones;
+                    if (game.isSinglePlayer || game.isTowerChallenge) {
+                        const patternStones = capturedPlaye === types.Player.Black ? game.blackPatternStones : game.whitePatternStones;
                         if (patternStones) {
                             const patternIndex = patternStones.findIndex(p => p.x === stone.x && p.y === stone.y);
                             if (patternIndex !== -1) {
                                 points = 2; // Pattern stones are worth 2 points
-                                // Remove the pattern from the list so it's a one-time bonus
                                 patternStones.splice(patternIndex, 1);
                             }
                         }
@@ -325,8 +334,12 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
                     }
 
                     game.captures[myPlayerEnum] += points;
-                    game.justCaptured.push({ point: stone, player: capturedPlayerEnum, wasHidden: wasHiddenForJustCaptured });
+                    game.justCaptured.push({ point: stone, player: capturedPlaye, wasHidden: wasHiddenForJustCaptured });
                 }
+            }
+
+            if (game.isSinglePlayer || game.isTowerChallenge) {
+                game.blackStonesPlaced = (game.blackStonesPlaced || 0) + 1;
             }
 
             const playerWhoMoved = myPlayerEnum;
@@ -370,10 +383,23 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             }
 
             // After move logic
-            if (game.mode === types.GameMode.Capture || game.isSinglePlayer) {
-                const target = game.effectiveCaptureTargets![myPlayerEnum];
-                if (game.captures[myPlayerEnum] >= target) {
-                    await summaryService.endGame(game, myPlayerEnum, 'capture_limit');
+            if ((game.mode === types.GameMode.Capture || game.isSinglePlayer || game.isTowerChallenge) && game.gameType !== 'survival') {
+                if (game.isTowerChallenge) {
+                    const humanTarget = game.effectiveCaptureTargets![myPlayerEnum];
+                    if (game.captures[myPlayerEnum] >= humanTarget) {
+                        await summaryService.endGame(game, myPlayerEnum, 'capture_limit');
+                        return {}; // Game over by capture
+                    }
+                
+                    if (game.blackStonesPlaced! >= game.blackStoneLimit!) {
+                        await summaryService.endGame(game, opponentPlayerEnum, 'stone_limit_exceeded');
+                        return {}; // Game over by stone limit
+                    }
+                } else { // Regular Single Player Capture
+                    const target = game.effectiveCaptureTargets![myPlayerEnum];
+                    if (game.captures[myPlayerEnum] >= target) {
+                        await summaryService.endGame(game, myPlayerEnum, 'capture_limit');
+                    }
                 }
             }
             

@@ -16,7 +16,7 @@ function usePrevious<T>(value: T): T | undefined {
 }
 
 const getGameStatusText = (session: LiveGameSession): string => {
-    const { gameStatus, currentPlayer, blackPlayerId, whitePlayerId, player1, player2, mode, settings, passCount, moveHistory, alkkagiRound } = session;
+    const { gameStatus, currentPlayer, blackPlayerId, whitePlayerId, player1, player2, mode, settings, passCount, moveHistory, alkkagiRound, blackStonesPlaced, blackStoneLimit, gameType, whiteStonesPlaced, whiteStoneLimit } = session;
 
     const getPlayerByEnum = (playerEnum: Player): User | null => {
         const targetId = playerEnum === Player.Black ? blackPlayerId : whitePlayerId;
@@ -25,6 +25,16 @@ const getGameStatusText = (session: LiveGameSession): string => {
     };
 
     const player = getPlayerByEnum(currentPlayer);
+
+    if (session.isTowerChallenge && gameStatus === 'playing' && player) {
+        const stonesLeft = (blackStoneLimit ?? 0) - (blackStonesPlaced ?? 0);
+        return `${session.floor}층 도전 (남은 흑돌: ${stonesLeft}) - ${player.nickname}님 차례`;
+    }
+    
+    if (session.gameType === 'survival' && gameStatus === 'playing' && player) {
+        const stonesLeft = (whiteStoneLimit ?? 0) - (whiteStonesPlaced ?? 0);
+        return `AI의 남은 돌: ${stonesLeft} - ${player.nickname}님 차례`;
+    }
 
     if (session.mode === GameMode.Dice && session.lastWhiteGroupInfo && session.lastWhiteGroupInfo.liberties <= 6) {
         const totalRounds = session.settings.diceGoRounds ?? 1;
@@ -194,11 +204,15 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
     }, [isItemMode, session.itemUseDeadline]);
 
     const isSinglePlayer = session.isSinglePlayer;
+    const isTowerChallenge = session.isTowerChallenge;
     const baseClasses = "flex-shrink-0 rounded-lg flex flex-col items-center justify-center shadow-inner py-1 h-12 border";
-    const themeClasses = isSinglePlayer 
-        ? "bg-stone-800/70 backdrop-blur-sm border-stone-700/50" 
-        : "bg-secondary border-color";
-    const textClass = isSinglePlayer ? "text-amber-300" : "text-highlight";
+    
+    const themeClasses = isTowerChallenge 
+        ? "bg-black/50 border-red-800/50"
+        : isSinglePlayer 
+            ? "bg-stone-800/70 backdrop-blur-sm border-stone-700/50" 
+            : "bg-secondary border-color";
+    const textClass = isTowerChallenge ? "text-red-300" : isSinglePlayer ? "text-amber-300" : "text-highlight";
     
     if (foulMessage) {
         return (

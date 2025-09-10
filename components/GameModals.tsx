@@ -1,5 +1,7 @@
 import React from 'react';
-import { GameProps, GameStatus, Negotiation } from './../types.js';
+// FIX: Corrected import path for types. The path was './../types.js' which pointed to 'components/types.js', but the file is in the root directory.
+import { GameProps, GameStatus, Negotiation } from '../types/index.js';
+// FIX: Corrected import path for GameSummaryModal.
 import GameSummaryModal from './GameSummaryModal.js';
 import NigiriModal from './NigiriModal.js';
 import CaptureBidModal from './CaptureBidModal.js';
@@ -23,7 +25,9 @@ import AlkkagiRoundSummary from './AlkkagiRoundSummary.js';
 import DiceGoStartConfirmationModal from './DiceGoStartConfirmationModal.js';
 import CurlingStartConfirmationModal from './CurlingStartConfirmationModal.js';
 import AlkkagiStartConfirmationModal from './AlkkagiStartConfirmationModal.js';
+// FIX: Corrected import path for SinglePlayerSummaryModal.
 import SinglePlayerSummaryModal from './SinglePlayerSummaryModal.js';
+import TowerChallengeSummaryModal from './TowerChallengeSummaryModal.js';
 
 interface GameModalsProps extends GameProps {
     confirmModalType: 'resign' | null;
@@ -39,6 +43,10 @@ const GameModals: React.FC<GameModalsProps> = (props) => {
     const renderModals = () => {
         if (activeNegotiation) {
             return <NegotiationModal negotiation={activeNegotiation} currentUser={currentUser} onAction={onAction} onlineUsers={onlineUsers} />;
+        }
+        
+        if (session.isTowerChallenge && showResultModal) {
+            return <TowerChallengeSummaryModal session={session} currentUser={currentUser} onAction={onAction} onClose={onCloseResults} />;
         }
 
         if (session.isSinglePlayer && showResultModal) {
@@ -64,6 +72,7 @@ const GameModals: React.FC<GameModalsProps> = (props) => {
         
         const rpsStates: GameStatus[] = ['dice_rps', 'dice_rps_reveal', 'thief_rps', 'thief_rps_reveal', 'alkkagi_rps', 'alkkagi_rps_reveal', 'curling_rps', 'curling_rps_reveal', 'omok_rps', 'omok_rps_reveal', 'ttamok_rps', 'ttamok_rps_reveal'];
         
+        if (gameStatus === 'thief_role_selection') return <ThiefRoleSelection session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'dice_turn_rolling' || gameStatus === 'dice_turn_rolling_animating' || gameStatus === 'dice_turn_choice') return <DiceGoTurnSelectionModal session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'dice_start_confirmation') return <DiceGoStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'turn_preference_selection') return <TurnPreferenceSelection session={session} currentUser={currentUser} onAction={onAction} tiebreaker={session.turnSelectionTiebreaker} />;
@@ -76,7 +85,6 @@ const GameModals: React.FC<GameModalsProps> = (props) => {
         if (rpsStates.includes(gameStatus)) return <RPSMinigame session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'alkkagi_start_confirmation') return <AlkkagiStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'curling_start_confirmation') return <CurlingStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'thief_role_selection') return <ThiefRoleSelection session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'thief_role_confirmed') return <ThiefRoleConfirmedModal session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'thief_round_end') return <ThiefRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
         if (gameStatus === 'curling_round_end') return <CurlingRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;

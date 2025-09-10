@@ -48,7 +48,10 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     }
     
     // --- AI Game Routing ---
-    if (session.isTowerChallenge) {
+    // FIX: Add a more robust check for Tower Challenge mode to handle cases where `isTowerChallenge` might not be set correctly from the server for existing users.
+    const isTower = session.isTowerChallenge || (session.stageId && session.stageId.startsWith('tower-'));
+
+    if (isTower) {
         return <TowerChallengeArena session={session} />;
     }
     if (session.isSinglePlayer) {

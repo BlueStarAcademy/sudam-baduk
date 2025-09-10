@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { LiveGameSession, User, Player, ServerAction, UserWithStatus } from '../types.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
-import { SINGLE_PLAYER_STAGES } from '../constants.js';
+import { TOWER_STAGES } from '../constants.js';
 import { audioService } from '../services/audioService.js';
 import { CONSUMABLE_ITEMS } from '../constants.js';
 
-interface SinglePlayerSummaryModalProps {
+interface TowerChallengeSummaryModalProps {
     session: LiveGameSession;
     currentUser: UserWithStatus;
     onAction: (action: ServerAction) => void;
@@ -66,7 +66,6 @@ const XpBar: React.FC<{
     const animationKey = useAnimationKey(summary, currentUser);
 
     useEffect(() => {
-        // Reset state before animation
         setBarWidth(initialPercent);
         setShowGainText(false);
         setGainFlashOpacity(0);
@@ -103,16 +102,10 @@ const XpBar: React.FC<{
                     className="h-full bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-full transition-all duration-1000 ease-out"
                     style={{ width: `${barWidth}%` }}
                 ></div>
-                
                 <div 
                     className="absolute top-0 h-full bg-gradient-to-r from-green-400 to-green-500 rounded-r-full transition-opacity duration-500 ease-out pointer-events-none"
-                    style={{ 
-                        left: `${initialPercent}%`, 
-                        width: `${gainPercent}%`,
-                        opacity: gainFlashOpacity
-                    }}
+                    style={{ left: `${initialPercent}%`, width: `${gainPercent}%`, opacity: gainFlashOpacity }}
                 ></div>
-
                 <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-black/80 drop-shadow-sm">
                    {isLevelUp ? `${progress.max} / ${progress.max}` : `${progress.final} / ${progress.max}`}
                 </span>
@@ -127,26 +120,17 @@ const XpBar: React.FC<{
                     +{xpGain} XP
                 </span>
              )}
-             <style>{`
-                @keyframes fadeInXp {
-                    from { opacity: 0; transform: scale(0.8); }
-                    to { opacity: 1; transform: scale(1); }
-                }
-                .animate-fade-in-xp {
-                    animation: fadeInXp 0.5s ease-out forwards;
-                }
-            `}</style>
         </div>
     );
 });
 
 
-const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ session, currentUser, onAction, onClose, isTopmost }) => {
+const TowerChallengeSummaryModal: React.FC<TowerChallengeSummaryModalProps> = ({ session, currentUser, onAction, onClose, isTopmost }) => {
     const isWinner = session.winner === Player.Black;
     const soundPlayed = useRef(false);
 
     const mySummary = session.summary?.[currentUser.id];
-    const stage = SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId);
+    const stage = TOWER_STAGES.find(s => s.id === session.stageId);
     const hasLeveledUp = useMemo(() => mySummary?.level?.initial !== mySummary?.level?.final, [mySummary]);
 
     useEffect(() => {
@@ -164,32 +148,32 @@ const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ ses
         return () => clearTimeout(soundTimer);
     }, [isWinner, hasLeveledUp]);
 
-    const title = isWinner ? '승리' : '패배';
+    const title = isWinner ? '도전 성공!' : '도전 실패!';
     const color = isWinner ? 'text-green-400' : 'text-red-400';
 
-    const currentStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId);
-    const nextStage = SINGLE_PLAYER_STAGES[currentStageIndex + 1];
-    const canTryNext = isWinner && nextStage && (currentUser.singlePlayerProgress ?? 0) > currentStageIndex;
+    const currentStageIndex = TOWER_STAGES.findIndex(s => s.id === session.stageId);
+    const nextStage = TOWER_STAGES[currentStageIndex + 1];
+    const canTryNext = isWinner && nextStage && (currentUser.towerProgress?.highestFloor ?? 0) >= stage!.floor!;
     
     const currentStageCost = stage?.actionPointCost;
     const nextStageCost = nextStage?.actionPointCost;
 
     const handleRetry = () => {
         if (stage && currentUser.actionPoints.current >= stage.actionPointCost) {
-            onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: session.stageId! } });
+            onAction({ type: 'START_TOWER_CHALLENGE_GAME', payload: { floor: stage.floor! } });
             onClose();
         }
     };
 
     const handleNextStage = () => {
         if (canTryNext && currentUser.actionPoints.current >= nextStage.actionPointCost) {
-            onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: nextStage.id } });
+            onAction({ type: 'START_TOWER_CHALLENGE_GAME', payload: { floor: nextStage.floor! } });
             onClose();
         }
     };
 
     const handleExitToLobby = () => {
-        sessionStorage.setItem('postGameRedirect', '#/singleplayer');
+        sessionStorage.setItem('postGameRedirect', '#/towerchallenge');
         onAction({ type: 'LEAVE_AI_GAME', payload: { gameId: session.id } });
         onClose();
     };
@@ -198,7 +182,7 @@ const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ ses
     const rewardItemTemplate = rewardItem ? CONSUMABLE_ITEMS.find(item => item.name === rewardItem.name) : null;
 
     return (
-        <DraggableWindow title="대국 결과" onClose={onClose} windowId="singleplayer-summary" initialWidth={500} isTopmost={isTopmost}>
+        <DraggableWindow title={`${stage?.floor}층 결과`} onClose={onClose} windowId="tower-summary" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-white text-center">
                 <h1 className={`text-5xl font-black mb-4 ${color}`}>{title}</h1>
                 <p className="text-gray-300 mb-6">{isWinner ? `축하합니다! ${stage?.name}을(를) 클리어했습니다.` : `아쉽지만 다음 기회에 다시 도전해보세요.`}</p>
@@ -257,4 +241,4 @@ const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ ses
     );
 };
 
-export default SinglePlayerSummaryModal;
+export default TowerChallengeSummaryModal;

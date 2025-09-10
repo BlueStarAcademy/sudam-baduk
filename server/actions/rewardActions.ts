@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward } from '../../types.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward } from '../../types/index.js';
+import * as types from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
 import { SHOP_ITEMS } from '../shop.js';
 import { 
@@ -13,10 +14,13 @@ import {
     MONTHLY_MILESTONE_REWARDS,
     MONTHLY_MILESTONE_THRESHOLDS,
     BASE_TOURNAMENT_REWARDS,
-    TOURNAMENT_SCORE_REWARDS
+    TOURNAMENT_SCORE_REWARDS,
+    // FIX: Import SINGLE_PLAYER_MISSIONS constant.
+    SINGLE_PLAYER_MISSIONS
 } from '../../constants.js';
 import { calculateRanks } from '../tournamentService.js';
 import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
+import { getKSTDate } from '.././timeUtils.js';
 
 
 type HandleActionResult = {
@@ -28,6 +32,47 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
     const { type, payload } = action;
 
     switch (type) {
+        case 'CLAIM_SINGLE_PLAYER_MISSION_REWARD': {
+            const { missionId } = payload;
+            const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
+            if (!missionInfo) return { error: 'Mission not found.' };
+            if (!user.singlePlayerMissions || !user.singlePlayerMissions[missionId] || !user.singlePlayerMissions[missionId].isStarted) {
+                return { error: 'Mission not started.' };
+            }
+            
+            const missionState = user.singlePlayerMissions[missionId];
+            const amountToClaim = missionState.accumulatedAmount;
+            if (amountToClaim < 1) return { error: 'No rewards to claim.' };
+    
+            const reward: types.QuestReward = {
+                gold: missionInfo.rewardType === 'gold' ? amountToClaim : 0,
+                diamonds: missionInfo.rewardType === 'diamonds' ? amountToClaim : 0,
+            };
+
+            if (missionInfo.rewardType === 'gold') {
+                user.gold += amountToClaim;
+            } else if (missionInfo.rewardType === 'diamonds') {
+                user.diamonds += amountToClaim;
+            }
+    
+            missionState.accumulatedAmount = 0;
+            missionState.lastCollectionTime = Date.now();
+    
+            updateQuestProgress(user, 'claim_single_player_mission', undefined, amountToClaim);
+    
+            await db.updateUser(user);
+            
+            return { 
+                clientResponse: { 
+                    updatedUser: user,
+                    rewardSummary: {
+                        reward,
+                        items: [], // Missions only give currency
+                        title: "수련 과제 보상"
+                    }
+                } 
+            };
+        }
         case 'CLAIM_MAIL_ATTACHMENTS': {
             const { mailId } = payload;
             const mail = user.mail.find(m => m.id === mailId);
@@ -231,6 +276,13 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             
             data.claimedMilestones[milestoneIndex] = true;
 
+            if (questType === 'monthly' && milestoneIndex === 4) { // 100 points
+                const now = new Date();
+                const kstNow = getKSTDate(now.getTime());
+                const endOfMonth = new Date(Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+                user.monthlyGoldBuffExpiresAt = endOfMonth.getTime() - (9 * 60 * 60 * 1000); // Convert back to UTC from KST
+            }
+
             if (milestoneIndex === 4) { // 100 activity points milestone is at index 4
                 if (questType === 'daily') {
                     updateQuestProgress(user, 'claim_daily_milestone_100');
@@ -269,100 +321,6 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             user.mail = user.mail.filter(m => !(m.attachments && m.attachmentsClaimed));
             await db.updateUser(user);
             return {};
-        }
-        case 'CLAIM_TOURNAMENT_REWARD': {
-            const { tournamentType } = payload as { tournamentType: TournamentType };
-            
-            let statusKey: keyof User;
-            let tourneyKey: keyof User;
-
-            switch (tournamentType) {
-                case 'neighborhood':
-                    statusKey = 'neighborhoodRewardClaimed';
-                    tourneyKey = 'lastNeighborhoodTournament';
-                    break;
-                case 'national':
-                    statusKey = 'nationalRewardClaimed';
-                    tourneyKey = 'lastNationalTournament';
-                    break;
-                case 'world':
-                    statusKey = 'worldRewardClaimed';
-                    tourneyKey = 'lastWorldTournament';
-                    break;
-                default:
-                    return { error: 'Invalid tournament type.' };
-            }
-
-            if ((user as any)[statusKey]) return { error: '이미 보상을 수령했습니다.' };
-            
-            const tournamentState = (user as any)[tourneyKey] as TournamentState | null;
-            if (!tournamentState || (tournamentState.status !== 'complete' && tournamentState.status !== 'eliminated')) {
-                 return { error: '토너먼트가 아직 종료되지 않았습니다.' };
-            }
-            
-            const itemRewardInfo = BASE_TOURNAMENT_REWARDS[tournamentType];
-            
-            const rankings = calculateRanks(tournamentState);
-            const userRanking = rankings.find(r => r.id === user.id);
-            if (!userRanking) return { error: '순위를 결정할 수 없습니다.' };
-            const userRank = userRanking.rank;
-
-            let itemRewardKey: number;
-            if (tournamentType === 'neighborhood') itemRewardKey = userRank <= 3 ? userRank : 4;
-            else if (tournamentType === 'national') itemRewardKey = userRank <= 4 ? userRank : 5;
-            else { // world
-                if (userRank <= 4) itemRewardKey = userRank;
-                else if (userRank <= 8) itemRewardKey = 5;
-                else itemRewardKey = 9;
-            }
-            
-            const scoreRewardInfo = TOURNAMENT_SCORE_REWARDS[tournamentType];
-            let scoreRewardKey: number;
-            if (tournamentType === 'neighborhood') {
-                scoreRewardKey = userRank;
-            } else if (tournamentType === 'national') {
-                scoreRewardKey = userRank <= 4 ? userRank : 5;
-            } else { // world
-                if (userRank <= 4) scoreRewardKey = userRank;
-                else if (userRank <= 8) scoreRewardKey = 5;
-                else scoreRewardKey = 9;
-            }
-            const scoreReward = scoreRewardInfo[scoreRewardKey] || 0;
-            
-            const itemReward = itemRewardInfo.rewards[itemRewardKey];
-
-            if (!itemReward) {
-                (user as any)[statusKey] = true;
-                user.tournamentScore = (user.tournamentScore || 0) + scoreReward;
-                updateQuestProgress(user, 'tournament_complete');
-                await db.updateUser(user);
-                return { clientResponse: { obtainedItemsBulk: [] }};
-            }
-
-            const itemsToCreate = itemReward.items ? createItemInstancesFromReward(itemReward.items as {itemId: string, quantity: number}[]) : [];
-            
-            const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
-            if (!success) {
-                return { error: '보상을 받기에 가방 공간이 부족합니다. 가방을 비우고 다시 시도해주세요.' };
-            }
-            
-            // If we'vepassed the check, apply all changes
-            (user as any)[statusKey] = true;
-            user.tournamentScore = (user.tournamentScore || 0) + scoreReward;
-            
-            user.gold += itemReward.gold || 0;
-            user.diamonds += itemReward.diamonds || 0;
-            addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
-            
-            updateQuestProgress(user, 'tournament_complete');
-
-            await db.updateUser(user);
-
-            const allObtainedItems = [...itemsToCreate];
-            if (itemReward.gold) allObtainedItems.unshift({ name: `${itemReward.gold} 골드`, image: '/images/Gold.png' } as InventoryItem);
-            if (itemReward.diamonds) allObtainedItems.unshift({ name: `${itemReward.diamonds} 다이아`, image: '/images/Zem.png' } as InventoryItem);
-
-            return { clientResponse: { obtainedItemsBulk: allObtainedItems }};
         }
         default:
             return { error: 'Unknown reward action.' };

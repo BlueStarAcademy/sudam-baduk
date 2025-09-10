@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 // FIX: Import missing types from the centralized types file.
 import { Player, GameProps, GameMode, User, AlkkagiPlacementType, GameSettings, GameStatus, UserWithStatus } from '../../types/index.js';
@@ -107,12 +106,12 @@ interface SinglePlayerPanelProps {
     captureTarget?: number; role?: '도둑' | '경찰';
     isAiPlayer?: boolean;
     mode: GameMode;
-    // FIX: Add isSinglePlayer prop to handle different UI themes
     isSinglePlayer?: boolean;
+    isTowerChallenge?: boolean;
 }
 
 const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
-    const { user, playerEnum, score, isActive, timeLeft, totalTime, mainTimeLeft, byoyomiPeriodsLeft, totalByoyomi, byoyomiTime, isLeft, session, captureTarget, role, isAiPlayer, mode, isSinglePlayer } = props;
+    const { user, playerEnum, score, isActive, timeLeft, totalTime, mainTimeLeft, byoyomiPeriodsLeft, totalByoyomi, byoyomiTime, isLeft, session, captureTarget, role, isAiPlayer, mode, isSinglePlayer, isTowerChallenge } = props;
     const { gameStatus, winner, blackPlayerId, whitePlayerId } = session;
 
     const avatarUrl = useMemo(() => AVATAR_POOL.find(a => a.id === user.avatarId)?.url, [user.avatarId]);
@@ -153,8 +152,14 @@ const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
     let levelTextClasses = '';
     let timeTextClasses = '';
 
-    // FIX: Apply single-player specific styling
-    if (isSinglePlayer) {
+    const isAiGameTheme = isSinglePlayer || isTowerChallenge;
+
+    if (isTowerChallenge) {
+        panelColorClasses = isActive && !isGameEnded ? 'bg-red-900/60 ring-2 ring-red-500 border-red-800/50' : 'bg-black/50 border-stone-700/50';
+        nameTextClasses = 'text-stone-100';
+        levelTextClasses = 'text-stone-400';
+        timeTextClasses = 'text-stone-200';
+    } else if (isSinglePlayer) {
         panelColorClasses = isActive && !isGameEnded ? 'bg-stone-800 ring-2 ring-amber-400 border-stone-600' : 'bg-stone-900/50 border-stone-700';
         nameTextClasses = 'text-stone-100';
         levelTextClasses = 'text-stone-400';
@@ -178,8 +183,8 @@ const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
         }
     }
     
-    const winnerColor = isSinglePlayer ? 'text-amber-300' : (isBlackPanel ? 'text-yellow-300' : 'text-yellow-600');
-    const loserColor = isSinglePlayer ? 'text-stone-500' : 'text-gray-500';
+    const winnerColor = isAiGameTheme ? 'text-amber-300' : (isBlackPanel ? 'text-yellow-300' : 'text-yellow-600');
+    const loserColor = isAiGameTheme ? 'text-stone-500' : 'text-gray-500';
     const finalNameClass = isWinner ? winnerColor : isLoser ? loserColor : nameTextClasses;
 
     const totalStones = session.settings.curlingStoneCount || 5;
@@ -222,8 +227,8 @@ const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
 
 interface PlayerPanelProps extends GameProps {
   clientTimes: { black: number; white: number; };
-  // FIX: Add isSinglePlayer prop to handle different UI themes
   isSinglePlayer?: boolean;
+  isTowerChallenge?: boolean;
 }
 
 const getTurnDuration = (mode: GameMode, gameStatus: GameStatus, settings: GameSettings): number => {
@@ -258,7 +263,7 @@ const getTurnDuration = (mode: GameMode, gameStatus: GameStatus, settings: GameS
 
 
 const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
-    const { session, clientTimes, isSinglePlayer } = props;
+    const { session, clientTimes, isSinglePlayer, isTowerChallenge } = props;
     const { player1, player2, blackPlayerId, whitePlayerId, captures, mode, settings, effectiveCaptureTargets, scores, currentPlayer } = session;
 
     const isScoreMode = [GameMode.Dice, GameMode.Thief, GameMode.Curling].includes(mode);
@@ -298,7 +303,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
     const rightPlayerRole = mode === GameMode.Thief ? (rightPlayerUser.id === session.thiefPlayerId ? '도둑' : '경찰') : undefined;
     
     const getCaptureTargetForPlayer = (playerEnum: Player) => {
-        if (session.isSinglePlayer || mode === GameMode.Capture) {
+        if (session.isSinglePlayer || session.isTowerChallenge || mode === GameMode.Capture) {
             return effectiveCaptureTargets?.[playerEnum];
         }
         if (mode === GameMode.Ttamok) {
@@ -332,6 +337,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
                 isAiPlayer={isLeftAi}
                 mode={mode}
                 isSinglePlayer={isSinglePlayer}
+                isTowerChallenge={isTowerChallenge}
             />
              <SinglePlayerPanel
                 user={rightPlayerUser}
@@ -351,6 +357,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
                 isAiPlayer={isRightAi}
                 mode={mode}
                 isSinglePlayer={isSinglePlayer}
+                isTowerChallenge={isTowerChallenge}
             />
         </div>
     );

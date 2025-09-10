@@ -12,7 +12,12 @@ import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inv
 const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
 
 const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
-    const user = game.player1; // Human is always player1 in single player
+    const userFromGame = game.player1; // Human is always player1 in single player
+    const user = await db.getUser(userFromGame.id); // Fetch the LATEST user data
+    if (!user) {
+        console.error(`[SP Summary] Could not find user with ID ${userFromGame.id} in the database.`);
+        return; // Cannot proceed without user data
+    }
     const isWinner = game.winner === Player.Black; // Human is always black
     const stageList = game.isTowerChallenge ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
     const stage = stageList.find(s => s.id === game.stageId);

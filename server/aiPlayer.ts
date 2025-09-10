@@ -90,6 +90,25 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
     const humanPlayer = aiPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
     const aiLevel = game.settings.aiDifficulty || 1;
 
+    const handleSurvivalPostAiMove = async () => {
+        if (game.gameType !== 'survival') return false; // Not a survival game
+        
+        game.whiteStonesPlaced = (game.whiteStonesPlaced ?? 0) + 1;
+
+        const aiTarget = game.effectiveCaptureTargets![aiPlayer];
+        if (game.captures[aiPlayer] >= aiTarget) {
+            await endGame(game, aiPlayer, 'capture_limit');
+            return true; // Game ended
+        }
+
+        if (game.whiteStonesPlaced! >= game.whiteStoneLimit!) {
+            await endGame(game, humanPlayer, 'stone_limit_exceeded');
+            return true; // Game ended
+        }
+        
+        return false; // Game continues
+    }
+
     const setHumanPlayerTurn = () => {
         const now = Date.now();
         game.currentPlayer = humanPlayer;
@@ -118,33 +137,38 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
             game.moveHistory.push({ player: aiPlayer, ...move });
             game.passCount = 0;
 
-            if (game.isSinglePlayer || game.isTowerChallenge) {
-                // Check if AI (current player) won
+            const gameEnded = await handleSurvivalPostAiMove();
+            if (gameEnded) return;
+
+            if ((game.isSinglePlayer || game.isTowerChallenge) && game.gameType !== 'survival') {
                 const aiTarget = game.effectiveCaptureTargets![aiPlayer];
                 if (game.captures[aiPlayer] >= aiTarget) {
                     await endGame(game, aiPlayer, 'capture_limit');
-                    return; // Game ended
+                    return;
                 }
     
-                // Check if Human (opponent) won (this might happen if AI's move completes a capture for human, e.g. suicide)
                 const humanTarget = game.effectiveCaptureTargets![humanPlayer];
                 if (game.captures[humanPlayer] >= humanTarget) {
                     await endGame(game, humanPlayer, 'capture_limit');
-                    return; // Game ended
+                    return;
                 }
             }
 
             setHumanPlayerTurn();
         } else {
             console.error(`[AI Error] AI tried to make an invalid move: ${JSON.stringify(move)}, reason: ${result.reason}`);
-            passTurn();
+            await passTurn();
         }
     };
 
-    const passTurn = () => {
+    const passTurn = async () => {
         game.passCount++;
         game.lastMove = { x: -1, y: -1 };
         game.moveHistory.push({ player: aiPlayer, x: -1, y: -1 });
+        
+        const gameEnded = await handleSurvivalPostAiMove();
+        if (gameEnded) return;
+
         setHumanPlayerTurn();
     };
     
@@ -156,7 +180,22 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
             }
         }
     }
-    
+
+    const avoidSelfAtariProb = 0.5 + (aiLevel - 1) * 0.05;
+    const shouldAvoidSelfAtari = Math.random() < avoidSelfAtariProb;
+
+    const isSelfAtari = (move: Point, currentBoard: types.BoardState): boolean => {
+        const captureResult = processMove(currentBoard, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
+        if (captureResult.capturedStones.length > 0) {
+            return false;
+        }
+
+        const tempBoard = JSON.parse(JSON.stringify(currentBoard));
+        tempBoard[move.y][move.x] = aiPlayer;
+        const group = logic.findGroup(move.x, move.y, aiPlayer, tempBoard);
+        return group !== null && group.liberties === 1;
+    };
+
     // --- 1. Immediate Capture (100% rule) ---
     const capturingMoves: { move: Point; captures: number }[] = [];
     for (const p of allEmptyPoints) {
@@ -166,10 +205,15 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         }
     }
 
-    if (capturingMoves.length > 0) {
-        capturingMoves.sort((a, b) => b.captures - a.captures);
-        const bestCaptureCount = capturingMoves[0].captures;
-        const bestMoves = capturingMoves.filter(m => m.captures === bestCaptureCount);
+    let validCapturingMoves = capturingMoves;
+    if (shouldAvoidSelfAtari) {
+        validCapturingMoves = capturingMoves.filter(m => !isSelfAtari(m.move, board));
+    }
+
+    if (validCapturingMoves.length > 0) {
+        validCapturingMoves.sort((a, b) => b.captures - a.captures);
+        const bestCaptureCount = validCapturingMoves[0].captures;
+        const bestMoves = validCapturingMoves.filter(m => m.captures === bestCaptureCount);
         const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
         await makeMove(chosenMove);
         return;
@@ -192,10 +236,16 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
             }
         }
     }
-    if (atariMoves.length > 0) {
-        atariMoves.sort((a, b) => b.groupSize - a.groupSize);
-        const bestGroupSize = atariMoves[0].groupSize;
-        const bestMoves = atariMoves.filter(m => m.groupSize === bestGroupSize);
+
+    let validAtariMoves = atariMoves;
+    if (shouldAvoidSelfAtari) {
+        validAtariMoves = atariMoves.filter(m => !isSelfAtari(m.move, board));
+    }
+
+    if (validAtariMoves.length > 0) {
+        validAtariMoves.sort((a, b) => b.groupSize - a.groupSize);
+        const bestGroupSize = validAtariMoves[0].groupSize;
+        const bestMoves = validAtariMoves.filter(m => m.groupSize === bestGroupSize);
         const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
         await makeMove(chosenMove);
         return;
@@ -235,17 +285,25 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
     // --- 4. Center-oriented positional play (100% rule) ---
     const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
     if (validMoves.length === 0) {
-        passTurn();
+        await passTurn();
         return;
     }
 
-    const centerPoints = validMoves.filter(p => p.x >= 2 && p.x < boardSize - 2 && p.y >= 2 && p.y < boardSize - 2);
+    let validPositionalMoves = validMoves;
+    if (shouldAvoidSelfAtari) {
+        validPositionalMoves = validMoves.filter(p => !isSelfAtari(p, board));
+        if (validPositionalMoves.length === 0) {
+            validPositionalMoves = validMoves;
+        }
+    }
+
+    const centerPoints = validPositionalMoves.filter(p => p.x >= 2 && p.x < boardSize - 2 && p.y >= 2 && p.y < boardSize - 2);
     if (centerPoints.length > 0) {
         const chosenMove = centerPoints[Math.floor(Math.random() * centerPoints.length)];
         await makeMove(chosenMove);
         return;
     } else {
-        const chosenMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+        const chosenMove = validPositionalMoves[Math.floor(Math.random() * validPositionalMoves.length)];
         await makeMove(chosenMove);
         return;
     }

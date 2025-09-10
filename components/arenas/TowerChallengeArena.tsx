@@ -10,6 +10,7 @@ import TowerChallengeInfoPanel from '../game/TowerChallengeInfoPanel.js';
 import { useClientTimer } from '../../hooks/useClientTimer.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import TimeoutFoulModal from '../TimeoutFoulModal.js';
+import TowerStatusPanel from '../game/TowerStatusPanel.js';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -43,6 +44,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     
     const prevGameStatus = usePrevious(gameStatus);
     const prevByoyomiBlack = usePrevious(session.blackByoyomiPeriodsLeft);
+    const prevLastMove = usePrevious(session.lastMove);
 
     useEffect(() => {
         const gameHasJustEnded =
@@ -61,6 +63,12 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
             }
         }
     }, [gameStatus, prevGameStatus, session.winner]);
+
+    useEffect(() => {
+        if (session.lastMove && session.lastMove.x !== -1 && JSON.stringify(session.lastMove) !== JSON.stringify(prevLastMove)) {
+            audioService.placeStone();
+        }
+    }, [session.lastMove, prevLastMove]);
 
     const myPlayerEnum = useMemo(() => Player.Black, []);
     
@@ -94,23 +102,28 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
             <button onClick={handlers.openSettingsModal} className="absolute top-2 right-2 z-30 p-2 rounded-lg text-xl hover:bg-black/20 transition-colors" title="설정">⚙️</button>
             {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={() => setShowTimeoutFoulModal(false)} />}
             
-            <main className="flex-1 flex flex-col items-center justify-center gap-2 lg:gap-4 max-w-5xl w-full mx-auto min-h-0">
+            <main className="flex-1 flex flex-col items-center justify-center gap-2 lg:gap-4 max-w-7xl w-full mx-auto min-h-0">
                 <div className="w-full flex-shrink-0">
-                    <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isSinglePlayer={true} />
+                    <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isTowerChallenge={true} />
                 </div>
-                <div className="flex-1 w-full relative">
-                    <div className="absolute inset-0">
-                         <GameArena 
-                            {...gameProps}
-                            isMyTurn={isMyTurn} 
-                            myPlayerEnum={myPlayerEnum} 
-                            handleBoardClick={handleBoardClick} 
-                            isItemModeActive={false} 
-                            showTerritoryOverlay={showFinalTerritory} 
-                            isMobile={false}
-                            myRevealedMoves={[]}
-                            showLastMoveMarker={settings.features.lastMoveMarker}
-                        />
+                <div className="flex-1 w-full flex flex-row items-stretch gap-4 min-h-0">
+                    <div className="flex-1 w-full relative">
+                        <div className="absolute inset-0">
+                             <GameArena 
+                                {...gameProps}
+                                isMyTurn={isMyTurn} 
+                                myPlayerEnum={myPlayerEnum} 
+                                handleBoardClick={handleBoardClick} 
+                                isItemModeActive={false} 
+                                showTerritoryOverlay={showFinalTerritory} 
+                                isMobile={false}
+                                myRevealedMoves={[]}
+                                showLastMoveMarker={settings.features.lastMoveMarker}
+                            />
+                        </div>
+                    </div>
+                    <div className="flex-shrink-0 flex items-center">
+                        <TowerStatusPanel session={session} />
                     </div>
                 </div>
                 <div className="w-full flex flex-col-reverse md:flex-row gap-2 lg:gap-4 items-stretch flex-shrink-0">

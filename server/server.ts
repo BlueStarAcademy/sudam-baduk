@@ -18,7 +18,7 @@ import { calculateTotalStats } from './statService.js';
 import { isSameDayKST } from '../utils/timeUtils.js';
 import { createDefaultBaseStats, createDefaultUser } from './initialData.js';
 import { containsProfanity } from '../profanity.js';
-import { handleAiGameAction } from './actions/aiGameActions.js';
+import { handleAiGameAction } from './actions/singlePlayerActions.js';
 
 const processSinglePlayerMissions = (user: types.User): types.User => {
     const now = Date.now();
@@ -326,6 +326,16 @@ const startServer = async () => {
             let user = await db.getUser(credentials.userId);
             if (!user) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
             
+            let userNeedsInitialProgress = false;
+            if (user.singlePlayerProgress === undefined || user.singlePlayerProgress === null) {
+                user.singlePlayerProgress = 0;
+                userNeedsInitialProgress = true;
+            }
+            if (user.towerProgress === undefined || user.towerProgress === null) {
+                user.towerProgress = { highestFloor: 0, lastClearTimestamp: 0 };
+                userNeedsInitialProgress = true;
+            }
+
             if (!user.ownedBorders?.includes('simple_black')) {
                 if (!user.ownedBorders) user.ownedBorders = ['default'];
                 user.ownedBorders.push('simple_black');
@@ -349,7 +359,7 @@ const startServer = async () => {
                 }
             }
 
-            if (userBeforeUpdate !== JSON.stringify(updatedUser) || statsMigrated) {
+            if (userBeforeUpdate !== JSON.stringify(updatedUser) || statsMigrated || userNeedsInitialProgress) {
                 await db.updateUser(updatedUser);
                 user = updatedUser;
             }

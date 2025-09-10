@@ -2,6 +2,7 @@ import { TournamentState, PlayerForTournament, CoreStat, CommentaryLine, Match, 
 import { calculateTotalStats } from './statService.js';
 import { randomUUID } from 'crypto';
 import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS } from '../constants.js';
+import { updateQuestProgress } from './questService.js';
 
 const EARLY_GAME_DURATION = 40;
 const MID_GAME_DURATION = 60;
@@ -210,6 +211,8 @@ const prepareNextRound = (state: TournamentState, user: User) => {
 const processMatchCompletion = (state: TournamentState, user: User, completedMatch: Match, roundIndex: number) => {
     state.currentSimulatingMatch = null;
 
+    updateQuestProgress(user, 'tournament_match_played');
+
     completedMatch.players.forEach(p => {
         if (p) {
             const playerInState = state.players.find(player => player.id === p.id);
@@ -251,11 +254,12 @@ const processMatchCompletion = (state: TournamentState, user: User, completedMat
             state.status = 'complete';
         }
     } else { // Knockout tournament logic
-        const currentRound = state.rounds[roundIndex];
         const userWon = completedMatch.winner?.id === user.id;
 
         if (!userWon) {
             state.status = 'eliminated';
+            // FIX: Define 'currentRound' before use to resolve 'Cannot find name' error.
+            const currentRound = state.rounds[roundIndex];
             currentRound.matches.forEach(match => {
                 if (!match.isFinished) {
                     simulateAndFinishMatch(match, state.players);

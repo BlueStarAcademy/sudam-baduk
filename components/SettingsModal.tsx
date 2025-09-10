@@ -1,6 +1,3 @@
-
-
-
 import React, { useState } from 'react';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
@@ -15,7 +12,7 @@ interface SettingsModalProps {
     isTopmost?: boolean;
 }
 
-type SettingsTab = 'graphics' | 'sound' | 'features';
+type SettingsTab = 'graphics' | 'sound' | 'features' | 'account';
 
 const THEMES: { id: Theme; name: string; colors: string[] }[] = [
     { id: 'black', name: '슬레이트', colors: ['#0f172a', '#1e293b', '#e2e8f0', '#eab308'] },
@@ -26,13 +23,14 @@ const THEMES: { id: Theme; name: string; colors: string[] }[] = [
 ];
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isTopmost }) => {
-    const { settings, updateTheme, updateSoundSetting, updateFeatureSetting, updatePanelColor, updateTextColor, resetGraphicsToDefault } = useAppContext();
+    const { settings, updateTheme, updateSoundSetting, updateFeatureSetting, updatePanelColor, updateTextColor, resetGraphicsToDefault, handlers } = useAppContext();
     const [activeTab, setActiveTab] = useState<SettingsTab>('graphics');
     
     const tabs: { id: SettingsTab; label: string }[] = [
         { id: 'graphics', label: '그래픽' },
         { id: 'sound', label: '사운드' },
         { id: 'features', label: '기능' },
+        { id: 'account', label: '계정' },
     ];
 
     const soundCategories: { key: SoundCategory, label: string }[] = [
@@ -42,6 +40,73 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isTopmost }) => 
         { key: 'countdown', label: '초읽기/카운트다운 소리' },
         { key: 'turn', label: '내 턴 알림 소리' },
     ];
+
+    const AccountSettingsPanel = () => {
+        const [currentPassword, setCurrentPassword] = useState('');
+        const [newPassword, setNewPassword] = useState('');
+        const [confirmPassword, setConfirmPassword] = useState('');
+        const [passwordError, setPasswordError] = useState('');
+        const [passwordSuccess, setPasswordSuccess] = useState('');
+
+        const handleChangePassword = async () => {
+            setPasswordError('');
+            setPasswordSuccess('');
+            if (!currentPassword || !newPassword || !confirmPassword) {
+                setPasswordError('모든 필드를 입력해주세요.');
+                return;
+            }
+            if (newPassword.length < 4) {
+                setPasswordError('새 비밀번호는 4자 이상이어야 합니다.');
+                return;
+            }
+            if (newPassword !== confirmPassword) {
+                setPasswordError('새 비밀번호가 일치하지 않습니다.');
+                return;
+            }
+            
+            const result = await handlers.handleAction({
+                type: 'CHANGE_PASSWORD',
+                payload: { currentPassword, newPassword }
+            });
+
+            if (result && result.success) {
+                 setPasswordSuccess('비밀번호가 성공적으로 변경되었습니다.');
+                 setCurrentPassword('');
+                 setNewPassword('');
+                 setConfirmPassword('');
+            } else if (result && result.error) {
+                setPasswordError(result.error);
+            }
+        };
+
+        const handleDeleteAccount = () => {
+            if (window.confirm('정말로 회원 탈퇴를 하시겠습니까? 탈퇴 시 일주일간 같은 주민등록번호로 재가입이 불가능합니다. 모든 데이터는 영구적으로 삭제되며 이 작업은 되돌릴 수 없습니다.')) {
+                handlers.handleAction({ type: 'DELETE_ACCOUNT', payload: {} });
+                onClose();
+            }
+        };
+
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h3 className="text-lg font-semibold text-text-secondary mb-3">비밀번호 변경</h3>
+                    <div className="space-y-3 max-w-sm">
+                        <input type="password" placeholder="현재 비밀번호" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="w-full bg-tertiary border border-color rounded-md p-2 text-primary" />
+                        <input type="password" placeholder="새 비밀번호" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-tertiary border border-color rounded-md p-2 text-primary" />
+                        <input type="password" placeholder="새 비밀번호 확인" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="w-full bg-tertiary border border-color rounded-md p-2 text-primary" />
+                        {passwordError && <p className="text-xs text-red-400">{passwordError}</p>}
+                        {passwordSuccess && <p className="text-xs text-green-400">{passwordSuccess}</p>}
+                        <Button onClick={handleChangePassword} colorScheme="blue" className="w-full">변경하기</Button>
+                    </div>
+                </div>
+                <div className="pt-6 border-t border-color">
+                    <h3 className="text-lg font-semibold text-danger mb-3">회원 탈퇴</h3>
+                    <p className="text-sm text-text-secondary mb-3">계정을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.</p>
+                    <Button onClick={handleDeleteAccount} colorScheme="red">계정 삭제</Button>
+                </div>
+            </div>
+        );
+    };
 
     const renderContent = () => {
         switch (activeTab) {
@@ -154,6 +219,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isTopmost }) => 
                         </div>
                     </div>
                 );
+            case 'account':
+                return <AccountSettingsPanel />;
         }
     };
     

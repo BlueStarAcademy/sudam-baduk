@@ -143,6 +143,8 @@ export type ServerAction =
     | { type: 'CONFIRM_STAT_ALLOCATION', payload: { newStatPoints: any } }
     | { type: 'RESET_SINGLE_STAT', payload: { mode: GameMode } }
     | { type: 'RESET_STATS_CATEGORY', payload: { category: 'strategic' | 'playful' } }
+    | { type: 'CHANGE_PASSWORD', payload: { currentPassword: string, newPassword: string } }
+    | { type: 'DELETE_ACCOUNT', payload: {} }
     // Inventory & Item Actions
     | { type: 'USE_ITEM', payload: { itemId: string } }
     | { type: 'USE_ALL_ITEMS_OF_TYPE', payload: { itemName: string } }

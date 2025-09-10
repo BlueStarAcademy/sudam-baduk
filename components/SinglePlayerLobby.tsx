@@ -293,12 +293,12 @@ const SinglePlayerMissions: React.FC<{onClose?: () => void}> = ({ onClose }) => 
     const userProgress = currentUserWithStatus.singlePlayerProgress ?? 0;
 
     return (
-        <div className="bg-panel border border-color rounded-lg p-2 flex flex-col h-full min-h-0 w-full">
-            <div className="flex justify-between items-center mb-2 flex-shrink-0">
-                <h2 className="text-xl font-bold text-center text-highlight">수련 과제</h2>
-                {onClose && <button onClick={onClose} className="text-2xl font-bold text-tertiary hover:text-primary">&times;</button>}
+        <div className="bg-panel border border-color rounded-lg p-2 lg:p-4 flex flex-col min-h-0 w-full lg:min-h-fit lg:h-auto">
+            <div className="flex justify-between items-center mb-2 lg:justify-center lg:mb-4 flex-shrink-0">
+                <h2 className="text-xl font-bold text-highlight">수련 과제</h2>
+                {onClose && <button onClick={onClose} className="lg:hidden text-2xl font-bold text-tertiary hover:text-primary">&times;</button>}
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 flex-grow overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 lg:gap-4 flex-grow lg:flex-grow-0 overflow-y-auto lg:overflow-visible pr-1 lg:pr-0">
                 {SINGLE_PLAYER_MISSIONS.map(mission => {
                     const requiredProgress = getRequiredProgressForStageId(mission.unlockStageId);
                     const isUnlocked = userProgress >= requiredProgress;
@@ -351,7 +351,7 @@ const StageList: React.FC<{
         return "모든 이전 단계를 클리어해야 합니다.";
     };
 
-    const isCurrentLevelLocked = userProgress < activeLevelData.unlockRequirement;
+    const isCurrentLevelLocked = !currentUserWithStatus.isAdmin && userProgress < activeLevelData.unlockRequirement;
 
     return (
         <div key={activeLevelData.id} className="w-full bg-panel border border-color rounded-lg p-4 flex flex-col animate-fade-in flex-1 min-h-0">
@@ -369,7 +369,7 @@ const StageList: React.FC<{
             <div className="flex-grow overflow-y-auto space-y-2 pr-2">
                 {stagesForLevel.map(stage => {
                     const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
-                    const isLocked = userProgress < stageIndex;
+                    const isLocked = !currentUserWithStatus.isAdmin && userProgress < stageIndex;
                     const isCleared = userProgress > stageIndex;
                     const isCurrent = userProgress === stageIndex;
                     return (
@@ -397,10 +397,10 @@ const LevelSelectionPanel: React.FC<{
 }> = React.memo(({ activeLevelData, onPrev, onNext, className }) => (
     <div className={`bg-panel border border-color rounded-lg p-4 flex flex-col items-center w-full ${className}`}>
         <h2 className="text-[clamp(1.1rem,0.9rem+1vw,1.25rem)] font-bold mb-2">레벨 선택</h2>
-        <div className="w-full flex items-center justify-center gap-2 relative group">
+        <div className="w-full flex items-center justify-center gap-2 relative group flex-1 min-h-0">
             <button onClick={onPrev} className="absolute left-0 -translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all flex items-center justify-center flex-shrink-0" aria-label="Previous Level">&#x276E;</button>
-            <div className="relative w-full rounded-lg overflow-hidden bg-black">
-                <img key={activeLevelData.id} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-auto object-contain animate-fade-in" />
+            <div className="relative w-full h-full rounded-lg overflow-hidden bg-black">
+                <img key={activeLevelData.id} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-full object-contain animate-fade-in" />
                 <div className="absolute inset-0 bg-black/20"></div>
                 <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
                     <h3 key={`${activeLevelData.id}-title`} className="text-[clamp(1.5rem,1rem+2.5vw,1.875rem)] font-bold text-white text-center animate-fade-in drop-shadow-lg">{activeLevelData.name}</h3>
@@ -415,7 +415,7 @@ const LevelSelectionPanel: React.FC<{
 const SinglePlayerLobby: React.FC = () => {
     const { currentUserWithStatus, handlers } = useAppContext();
     const [activeLevelIndex, setActiveLevelIndex] = useState(0);
-    const [isMissionsPanelOpen, setIsMissionsPanelOpen] = useState(false);
+    const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
 
     const userProgress = useMemo(() => {
         return currentUserWithStatus?.singlePlayerProgress ?? 0;
@@ -443,7 +443,7 @@ const SinglePlayerLobby: React.FC = () => {
     const handlePrevLevel = useCallback(() => setActiveLevelIndex(prev => (prev - 1 + LEVEL_DATA.length) % LEVEL_DATA.length), []);
 
     return (
-        <div className="w-full h-full flex flex-col bg-tertiary text-primary p-4 gap-4">
+        <div className="w-full h-full flex flex-col bg-tertiary text-primary p-4 gap-4 overflow-hidden">
             <header className="flex justify-between items-center flex-shrink-0">
                  <Button onClick={() => window.location.hash = '#/profile'} colorScheme="gray">&larr; 프로필로</Button>
                 <h1 className="text-[clamp(1.75rem,1.25rem+2.5vw,2.25rem)] font-bold whitespace-nowrap">싱글플레이</h1>
@@ -452,34 +452,61 @@ const SinglePlayerLobby: React.FC = () => {
 
             <main className="flex-1 min-h-0 flex flex-col">
                 {/* DESKTOP LAYOUT */}
-                <div className="hidden lg:flex flex-row gap-4 h-full">
-                    <div className="w-[350px] flex-shrink-0 flex flex-col gap-4">
-                        <LevelSelectionPanel className="h-auto" activeLevelData={activeLevelData} onPrev={handlePrevLevel} onNext={handleNextLevel} />
-                        <div className="flex-1 min-h-0 w-full">
-                           <SinglePlayerMissions />
+                <div className="hidden lg:flex flex-col gap-4 h-full">
+                    {/* Top Row: Level Selection + Stage List */}
+                    <div className="flex-1 flex flex-row gap-4 min-h-0">
+                        <div className="w-[420px] flex-shrink-0 flex flex-col">
+                            <LevelSelectionPanel
+                                className="h-full"
+                                activeLevelData={activeLevelData}
+                                onPrev={handlePrevLevel}
+                                onNext={handleNextLevel}
+                            />
+                        </div>
+                        <div className="flex-1 min-w-0 flex">
+                            <StageList
+                                activeLevelData={activeLevelData}
+                                userProgress={userProgress}
+                                currentUserWithStatus={currentUserWithStatus!}
+                                handlers={handlers}
+                            />
                         </div>
                     </div>
-                    <div className="flex-1 min-h-0">
-                        <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus} handlers={handlers} />
+                    {/* Bottom Row: Training Tasks */}
+                    <div className="flex-shrink-0">
+                        <SinglePlayerMissions />
                     </div>
                 </div>
 
                 {/* MOBILE LAYOUT */}
                 <div className="lg:hidden flex flex-col flex-1 min-h-0 gap-4 relative">
-                    <LevelSelectionPanel className="flex-shrink-0 max-w-xl mx-auto" activeLevelData={activeLevelData} onPrev={handlePrevLevel} onNext={handleNextLevel} />
-                    <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus!} handlers={handlers} />
+                    <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+                        <LevelSelectionPanel
+                            className="flex-shrink-0 max-w-xl mx-auto"
+                            activeLevelData={activeLevelData}
+                            onPrev={handlePrevLevel}
+                            onNext={handleNextLevel}
+                        />
+                        <div className="flex-shrink-0">
+                            <SinglePlayerMissions onClose={() => setIsMobilePanelOpen(false)} />
+                        </div>
+                    </div>
                     
                     <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
-                        <button onClick={() => setIsMissionsPanelOpen(true)} className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg" aria-label="수련 과제 열기">
+                        <button onClick={() => setIsMobilePanelOpen(true)} className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg" aria-label="스테이지 목록 열기">
                             <span className="font-bold text-lg">{'<'}</span>
                         </button>
                     </div>
-                    <div className={`fixed top-0 right-0 h-full w-[320px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMissionsPanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                        <div className="p-2 h-full">
-                            <SinglePlayerMissions onClose={() => setIsMissionsPanelOpen(false)} />
+                    <div className={`fixed top-0 right-0 h-full w-[320px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMobilePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                         <div className="flex justify-between items-center p-2 border-b border-color flex-shrink-0">
+                            <h3 className="text-lg font-bold">스테이지 목록</h3>
+                            <button onClick={() => setIsMobilePanelOpen(false)} className="text-2xl font-bold text-tertiary hover:text-primary">&times;</button>
+                        </div>
+                        <div className="flex-1 min-h-0">
+                            <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus!} handlers={handlers} />
                         </div>
                     </div>
-                    {isMissionsPanelOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMissionsPanelOpen(false)}></div>}
+                    {isMobilePanelOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMobilePanelOpen(false)}></div>}
                 </div>
             </main>
         </div>

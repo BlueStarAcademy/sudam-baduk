@@ -27,7 +27,7 @@ const GoGameArena: React.FC<GoGameArenaProps> = (props) => {
         showLastMoveMarker,
     } = props;
     
-    const { blackPlayerId, whitePlayerId, player1, player2, settings, lastMove, gameStatus } = session;
+    const { blackPlayerId, whitePlayerId, player1, player2, settings, lastMove, gameStatus, blackPatternStones, whitePatternStones } = session;
 
     const players = [player1, player2];
     const blackPlayer = players.find(p => p.id === blackPlayerId) || null;
@@ -95,6 +95,8 @@ const GoGameArena: React.FC<GoGameArenaProps> = (props) => {
         isItemModeActive={isItemModeActive}
         animation={session.animation}
         isMobile={isMobile}
+        blackPatternStones={blackPatternStones}
+        whitePatternStones={whitePatternStones}
     />;
 }
 

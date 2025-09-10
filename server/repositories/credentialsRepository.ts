@@ -15,6 +15,10 @@ export const createUserCredentials = async (db: Database, username: string, pass
     await db.run('INSERT INTO user_credentials (username, passwordHash, userId) VALUES (?, ?, ?)', username.toLowerCase(), passwordHash, userId);
 };
 
+export const updateUserPassword = async (db: Database, userId: string, newPasswordHash: string): Promise<void> => {
+    await db.run('UPDATE user_credentials SET passwordHash = ? WHERE userId = ?', newPasswordHash, userId);
+};
+
 export const deleteUserCredentials = async (db: Database, username: string): Promise<void> => {
     await db.run('DELETE FROM user_credentials WHERE username = ?', username.toLowerCase());
 };

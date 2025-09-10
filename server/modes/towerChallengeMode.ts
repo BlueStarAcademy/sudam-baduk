@@ -5,6 +5,16 @@ import { TOWER_STAGES } from '../../constants.js';
 import { initializeGame } from '../gameModes.js';
 import { getAiUser } from '../aiPlayer.js';
 import * as effectService from '../effectService.js';
+import { getGoLogic } from '../goLogic.js';
+
+const areAnyStonesCaptured = (boardState: types.BoardState, boardSize: number): boolean => {
+    const logic = getGoLogic({ boardState, settings: { boardSize } } as types.LiveGameSession);
+    const blackGroups = logic.getAllGroups(types.Player.Black, boardState);
+    if (blackGroups.some(g => g.liberties === 0)) return true;
+    const whiteGroups = logic.getAllGroups(types.Player.White, boardState);
+    if (whiteGroups.some(g => g.liberties === 0)) return true;
+    return false;
+};
 
 export const handleTowerChallengeGameStart = async (volatileState: types.VolatileState, payload: any, user: types.User): Promise<types.HandleActionResult> => {
     const { floor } = payload;
@@ -14,7 +24,7 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
     }
 
     const highestClearedFloor = user.towerProgress?.highestFloor ?? 0;
-    if (floor > highestClearedFloor + 1) {
+    if (!user.isAdmin && floor > highestClearedFloor + 1) {
          return { error: '아직 잠금 해제되지 않은 층입니다.' };
     }
 
@@ -56,21 +66,43 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
     };
     
     const game = await initializeGame(negotiation);
-    game.isSinglePlayer = true;
     game.isTowerChallenge = true;
     game.floor = floor;
     game.stageId = stage.id;
+    game.blackStoneLimit = stage.blackStoneLimit;
     
-    const allPoints: types.Point[] = Array.from({ length: stage.boardSize * stage.boardSize }, (_, i) => ({ x: i % stage.boardSize, y: Math.floor(i / stage.boardSize) })).sort(() => 0.5 - Math.random());
-    const placeStones = (count: number, player: types.Player) => {
-        for (let i = 0; i < count; i++) {
-            if (allPoints.length === 0) break;
-            const p = allPoints.pop()!;
-            game.boardState[p.y][p.x] = player;
+    let attempts = 0;
+    const MAX_PLACEMENT_ATTEMPTS = 10;
+    do {
+        game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(types.Player.None));
+        game.blackPatternStones = [];
+        game.whitePatternStones = [];
+        
+        const allPoints: types.Point[] = Array.from({ length: stage.boardSize * stage.boardSize }, (_, i) => ({ x: i % stage.boardSize, y: Math.floor(i / stage.boardSize) })).sort(() => 0.5 - Math.random());
+        
+        const placeStones = (count: number, player: types.Player, isPattern: boolean) => {
+            const key = player === types.Player.Black ? 'blackPatternStones' : 'whitePatternStones';
+            if (isPattern && !game[key]) game[key] = [];
+            for (let i = 0; i < count; i++) {
+                if (allPoints.length === 0) break;
+                const p = allPoints.pop()!;
+                game.boardState[p.y][p.x] = player;
+                if (isPattern) game[key]!.push(p);
+            }
+        };
+
+        placeStones(stage.placements.black, types.Player.Black, false);
+        placeStones(stage.placements.white, types.Player.White, false);
+        placeStones(stage.placements.blackPattern, types.Player.Black, true);
+        placeStones(stage.placements.whitePattern, types.Player.White, true);
+
+        attempts++;
+        if (attempts >= MAX_PLACEMENT_ATTEMPTS) {
+            console.warn(`[Placement] Could not generate a stable board for tower stage ${stage.id} after ${MAX_PLACEMENT_ATTEMPTS} attempts.`);
+            break;
         }
-    };
-    placeStones(stage.placements.black, types.Player.Black);
-    placeStones(stage.placements.white, types.Player.White);
+    } while (areAnyStonesCaptured(game.boardState, stage.boardSize));
+
 
     game.effectiveCaptureTargets = {
         [types.Player.Black]: stage.targetScore?.black ?? 0,

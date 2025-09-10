@@ -43,6 +43,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     
     const prevGameStatus = usePrevious(gameStatus);
     const prevByoyomiBlack = usePrevious(session.blackByoyomiPeriodsLeft);
+    const prevLastMove = usePrevious(session.lastMove);
 
     useEffect(() => {
         const gameHasJustEnded =
@@ -61,6 +62,12 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
             }
         }
     }, [gameStatus, prevGameStatus, session.winner]);
+
+    useEffect(() => {
+        if (session.lastMove && session.lastMove.x !== -1 && JSON.stringify(session.lastMove) !== JSON.stringify(prevLastMove)) {
+            audioService.placeStone();
+        }
+    }, [session.lastMove, prevLastMove]);
 
     const myPlayerEnum = useMemo(() => Player.Black, []);
     

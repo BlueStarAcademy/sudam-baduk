@@ -2,6 +2,7 @@ import * as types from '../../types/index.js';
 import * as db from '../db.js';
 import { handleSinglePlayerGameStart, handleSinglePlayerRefresh } from '../modes/singlePlayerMode.js';
 import { handleTowerChallengeGameStart } from '../modes/towerChallengeMode.js';
+import { updateQuestProgress } from '../questService.js';
 
 type HandleActionResult = types.HandleActionResult;
 
@@ -21,6 +22,7 @@ export const handleAiGameAction = async (volatileState: types.VolatileState, act
         }
 
         case 'START_TOWER_CHALLENGE_GAME':
+            updateQuestProgress(user, 'tower_challenge_participate');
             return handleTowerChallengeGameStart(volatileState, payload, user);
         
         // LEAVE_AI_GAME is handled in socialActions, as it's more about session management

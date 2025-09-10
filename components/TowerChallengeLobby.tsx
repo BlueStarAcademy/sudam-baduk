@@ -119,6 +119,8 @@ const TowerChallengeLobby: React.FC = () => {
         }
     }, [highestFloor]);
     
+    if (!currentUserWithStatus) return null;
+
     return (
         <div className="w-full h-full flex flex-col bg-stone-900 text-stone-200 p-4 gap-4 overflow-hidden">
             <header className="flex justify-between items-center flex-shrink-0">
@@ -147,7 +149,7 @@ const TowerChallengeLobby: React.FC = () => {
                                         <div className="absolute inset-0 top-[20%] h-[80%]" style={{ backgroundImage: `url(${TOWER_MAP_3})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
                                         <div className="absolute inset-0 bottom-[80%] h-[20%]" style={{ backgroundImage: `url(${TOWER_MAP_4})`, backgroundSize: 'cover', backgroundPosition: 'center' }}></div>
                                         {chunk.map((stage, index) => {
-                                            const isLocked = stage.floor! > highestFloor + 1;
+                                            const isLocked = !currentUserWithStatus.isAdmin && stage.floor! > highestFloor + 1;
                                             const isCleared = stage.floor! <= highestFloor;
                                             const position = {
                                                 top: `${10 + (chunkSize - 1 - index) * 20}%`,
@@ -162,7 +164,7 @@ const TowerChallengeLobby: React.FC = () => {
                             return (
                                 <div key={`chunk-${chunkIndex}`} className="h-screen w-full relative flex-shrink-0" style={{ backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundRepeat: 'repeat-y', backgroundPosition: 'center' }}>
                                     {chunk.map((stage, index) => {
-                                        const isLocked = stage.floor! > highestFloor + 1;
+                                        const isLocked = !currentUserWithStatus.isAdmin && stage.floor! > highestFloor + 1;
                                         const isCleared = stage.floor! <= highestFloor;
                                         const position = {
                                             top: `${10 + (chunkSize - 1 - index) * 18}%`,

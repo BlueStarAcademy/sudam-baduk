@@ -7,7 +7,6 @@ import AlkkagiArena from './arenas/AlkkagiArena.js';
 import CurlingArena from './arenas/CurlingArena.js';
 import DiceGoArena from './arenas/DiceGoArena.js';
 import ThiefGoArena from './arenas/ThiefGoArena.js';
-import SinglePlayerArena from './arenas/SinglePlayerArena.js';
 
 interface GameArenaProps extends GameProps {
     isMyTurn: boolean;
@@ -22,11 +21,7 @@ interface GameArenaProps extends GameProps {
 
 const GameArena: React.FC<GameArenaProps> = (props) => {
     const { session } = props;
-    const { mode, isSinglePlayer } = session;
-    
-    if (isSinglePlayer) {
-        return <SinglePlayerArena {...props} />;
-    }
+    const { mode } = session;
 
     // This component is now a simple dispatcher.
     switch(mode) {

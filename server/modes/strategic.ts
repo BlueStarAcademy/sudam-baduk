@@ -1,4 +1,5 @@
 
+
 // FIX: Correctly import summaryService to resolve module not found error.
 import * as summaryService from '../summaryService.js';
 import * as types from '../../types.js';
@@ -292,12 +293,14 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             if (result.capturedStones.length > 0) {
                 if (!game.justCaptured) game.justCaptured = [];
                 for (const stone of result.capturedStones) {
+                    // FIX: Corrected typo from capturedPlaye to opponentPlayerEnum to fix compilation error.
                     const capturedPlayerEnum = opponentPlayerEnum;
                     
                     let points = 1;
                     let wasHiddenForJustCaptured = false; // default for justCaptured
 
                     if (game.isSinglePlayer) {
+                        // FIX: Corrected typo from capturedPlaye to capturedPlayerEnum.
                         const patternStones = capturedPlayerEnum === types.Player.Black ? game.blackPatternStones : game.whitePatternStones;
                         if (patternStones) {
                             const patternIndex = patternStones.findIndex(p => p.x === stone.x && p.y === stone.y);
@@ -325,6 +328,7 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
                     }
 
                     game.captures[myPlayerEnum] += points;
+                    // FIX: Corrected typo from capturedPlaye to capturedPlayerEnum.
                     game.justCaptured.push({ point: stone, player: capturedPlayerEnum, wasHidden: wasHiddenForJustCaptured });
                 }
             }

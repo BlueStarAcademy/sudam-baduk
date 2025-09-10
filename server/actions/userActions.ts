@@ -92,6 +92,31 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
             await db.updateUser(user);
             return {};
         }
+        case 'CHANGE_PASSWORD': {
+            const { currentPassword, newPassword } = payload;
+            const credentials = await db.getUserCredentialsByUserId(user.id);
+            if (!credentials || credentials.passwordHash !== currentPassword) {
+                return { error: '현재 비밀번호가 일치하지 않습니다.' };
+            }
+            if (newPassword.trim().length < 4) {
+                return { error: "새 비밀번호는 4자 이상이어야 합니다." };
+            }
+            
+            await db.updateUserPassword(user.id, newPassword); 
+            return { clientResponse: { success: true, message: "비밀번호가 변경되었습니다." } };
+        }
+        case 'DELETE_ACCOUNT': {
+            if (user.isAdmin) {
+                return { error: '관리자 계정은 탈퇴할 수 없습니다.' };
+            }
+            
+            await db.deleteUser(user.id);
+            
+            delete volatileState.userConnections[user.id];
+            delete volatileState.userStatuses[user.id];
+            
+            return { clientResponse: { success: true } };
+        }
         default:
             return { error: 'Unknown user action.' };
     }

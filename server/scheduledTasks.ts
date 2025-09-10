@@ -353,7 +353,14 @@ ${year}년 ${month}월 ${week}주차 주간 경쟁 결과, ${finalRankings.lengt
 
 export async function updateWeeklyCompetitorsIfNeeded(user: types.User, allUsers: types.User[]): Promise<types.User> {
     const now = Date.now();
-    if (!isDifferentWeekKST(user.lastWeeklyCompetitorsUpdate, now)) {
+    
+    // Check if an update is needed
+    const needsUpdate = isDifferentWeekKST(user.lastWeeklyCompetitorsUpdate, now) ||
+                        !user.weeklyCompetitors || 
+                        user.weeklyCompetitors.length === 0 || 
+                        !user.weeklyCompetitors.some(c => c.id === user.id);
+
+    if (!needsUpdate) {
         return user; // No update needed
     }
 

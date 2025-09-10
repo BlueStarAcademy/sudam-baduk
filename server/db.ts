@@ -96,6 +96,11 @@ export const createUserCredentials = async (username: string, passwordHash: stri
     const credentialsRepository = await import('./repositories/credentialsRepository.js');
     return credentialsRepository.createUserCredentials(await getDb(), username, passwordHash, userId);
 };
+export const updateUserPassword = async (userId: string, newPasswordHash: string): Promise<void> => {
+    const credentialsRepository = await import('./repositories/credentialsRepository.js');
+    return credentialsRepository.updateUserPassword(await getDb(), userId, newPasswordHash);
+};
+
 
 // --- Game Functions ---
 export const getLiveGame = async (id: string): Promise<LiveGameSession | null> => {
