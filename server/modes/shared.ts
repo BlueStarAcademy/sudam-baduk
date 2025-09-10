@@ -1,4 +1,4 @@
-// FIX: Correctly import summaryService to resolve module not found error.
+
 import * as summaryService from '../summaryService.js';
 import { LiveGameSession, RPSChoice, GameStatus, HandleActionResult, VolatileState, ServerAction, User, Player, ChatMessage } from '../../types.js';
 import * as db from '../db.js';
@@ -8,7 +8,6 @@ import { aiUserId } from '../aiPlayer.js';
 import { updateQuestProgress } from '../questService.js';
 import * as types from '../../types.js';
 
-// FIX: Corrected the type definition for `rpsStatusMap`. `Partial` takes one type argument, and the original code provided two. This also fixes a typo with an extra '>' and resolves subsequent parsing errors on the following lines.
 const rpsStatusMap: Partial<Record<types.GameMode, types.GameStatus>> = {
     [types.GameMode.Alkkagi]: 'alkkagi_rps',
     [types.GameMode.Curling]: 'curling_rps',

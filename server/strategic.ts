@@ -1,16 +1,15 @@
-
-import * as summaryService from '../summaryService.js';
-import * as types from '../../types/index.js';
-import * as db from '../db.js';
-import { getGoLogic, processMove } from '../goLogic.js';
-import { getGameResult } from '../summaryService.js';
-import { analyzeGame } from '../kataGoService.js';
-import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
-import { initializeBase, updateBaseState, handleBaseAction } from './base.js';
-import { initializeCapture, updateCaptureState, handleCaptureAction } from './capture.js';
-import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidden.js';
-import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
-import { handleSharedAction, transitionToPlaying } from './shared.js';
+import * as summaryService from './summaryService.js';
+import * as types from '../types/index.js';
+import * as db from './db.js';
+import { getGoLogic, processMove } from './goLogic.js';
+import { getGameResult } from './summaryService.js';
+import { analyzeGame } from './kataGoService.js';
+import { initializeNigiri, updateNigiriState, handleNigiriAction } from './modes/nigiri.js';
+import { initializeBase, updateBaseState, handleBaseAction } from './modes/base.js';
+import { initializeCapture, updateCaptureState, handleCaptureAction } from './modes/capture.js';
+import { initializeHidden, updateHiddenState, handleHiddenAction } from './modes/hidden.js';
+import { initializeMissile, updateMissileState, handleMissileAction } from './modes/missile.js';
+import { handleSharedAction, transitionToPlaying } from './modes/shared.js';
 
 
 export const initializeStrategicGame = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {

@@ -1,5 +1,7 @@
+
+
 import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
-import * as types from '../../types.js';
+import * as types from '../../types/index.js';
 // FIX: Import DEFAULT_GAME_SETTINGS to provide a default value when parsing game data.
 import { DEFAULT_GAME_SETTINGS } from '../../constants.js';
 
@@ -238,7 +240,7 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             curlingRoundSummary: safeParse(row.curlingRoundSummary, null, row.id, 'curlingRoundSummary'),
             curlingItemUses: safeParse(row.curlingItemUses, {}, row.id, 'curlingItemUses'),
             activeCurlingItems: safeParse(row.activeCurlingItems, {}, row.id, 'activeCurlingItems'),
-            hammerPlayerId: row.hammerPlayerId ?? undefined,
+            hammerPlayerId: row.hammerPlayerId ?? undefined, // Player with last stone advantage
             isTiebreaker: !!row.isTiebreaker,
             tiebreakerStonesThrown: row.tiebreakerStonesThrown ?? undefined,
             stonesThrownThisRound: safeParse(row.stonesThrownThisRound, {}, row.id, 'stonesThrownThisRound'),
@@ -251,7 +253,6 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             isAnalyzing: !!row.isAnalyzing,
             analysisResult: safeParse(row.analysisResult, null, row.id, 'analysisResult'),
             previousAnalysisResult: safeParse(row.previousAnalysisResult, null, row.id, 'previousAnalysisResult'),
-            // FIX: The 'settings' property was missing from the database-to-object mapping, causing a type error.
             settings: { ...DEFAULT_GAME_SETTINGS, ...safeParse(row.settings, {}, row.id, 'settings') },
             canRequestNoContest: safeParse(row.canRequestNoContest, null, row.id, 'canRequestNoContest'),
             pausedTurnTimeLeft: row.pausedTurnTimeLeft ?? undefined,
@@ -279,6 +280,7 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             gameType: row.gameType ?? undefined,
             whiteStonesPlaced: row.whiteStonesPlaced ?? undefined,
             whiteStoneLimit: row.whiteStoneLimit ?? undefined,
+            autoEndTurnCount: row.autoEndTurnCount ?? undefined,
         };
         return game;
     } catch (e) {

@@ -1,16 +1,13 @@
 
 
-
-import * as types from '../../types/index.js';
+import * as types from '../../types.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../goLogic.js';
 import { handleSharedAction, updateSharedGameState } from './shared.js';
 import { DICE_GO_MAIN_ROLL_TIME, DICE_GO_MAIN_PLACE_TIME } from '../../constants.js';
-// FIX: Correctly import summaryService to resolve module not found error.
 import { endGame } from '../summaryService.js';
 import { aiUserId } from '../aiPlayer.js';
 
-// FIX: Export function to make it accessible to other modules like `aiPlayer.ts`.
 export const finishThiefPlacingTurn = (game: types.LiveGameSession) => {
     const now = Date.now();
 

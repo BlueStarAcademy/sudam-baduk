@@ -1,9 +1,10 @@
-import * as types from '../../types.js';
+
+
+import * as types from '../../types/index.js';
 import * as db from '../db.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul } from './shared.js';
 import { aiUserId } from '../aiPlayer.js';
 import { CURLING_TURN_TIME_LIMIT, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
-// FIX: Correctly import summaryService to resolve module not found error.
 import { endGame } from '../summaryService.js';
 import * as effectService from '../effectService.js';
 
@@ -385,7 +386,7 @@ export const handleCurlingAction = async (volatileState: types.VolatileState, ga
             if (game.gameStatus !== 'curling_round_end') return { error: "라운드 종료 확인 단계가 아닙니다." };
             if (!game.roundEndConfirmations) game.roundEndConfirmations = {};
             game.roundEndConfirmations[user.id] = now;
-            return {};
+                        return {};
         }
     }
     

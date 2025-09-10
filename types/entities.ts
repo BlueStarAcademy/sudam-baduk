@@ -1,6 +1,5 @@
 import { Player, GameMode, LeagueTier, UserStatus, WinReason, RPSChoice, DiceGoVariant, AlkkagiPlacementType, AlkkagiLayoutType, Point, Move, BoardState, EquipmentSlot, InventoryItemType, ItemGrade, CoreStat, SpecialStat, MythicStat, ItemOptionType, TournamentType, TournamentSimulationStatus, GameStatus, SinglePlayerLevel } from './enums.js';
-// FIX: ChatMessage is now defined in api.ts to break circular dependency.
-import { UserStatusInfo, ChatMessage } from './api.js';
+import type { UserStatusInfo, ChatMessage } from './api.js';
 
 // --- Item & Equipment ---
 export type Equipment = Partial<Record<EquipmentSlot, string>>;
@@ -198,7 +197,6 @@ export interface LeagueRewardTier {
     rankEnd: number;
     diamonds: number;
     outcome: LeagueOutcome;
-    // FIX: Add the optional 'items' property to the interface to resolve type errors across multiple files where this property was being used but not defined.
     items?: { itemId: string; quantity: number }[];
 }
 
@@ -690,6 +688,9 @@ export type LiveGameSession = {
   gameType?: GameType;
   whiteStonesPlaced?: number;
   whiteStoneLimit?: number;
+  autoEndTurnCount?: number;
+  towerChallengePlacementRefreshesUsed?: number;
+  addedStonesItemUsed?: boolean;
 };
 
 export type Negotiation = {
@@ -717,8 +718,8 @@ export type AdminLog = {
   adminNickname: string;
   targetUserId: string;
   targetNickname: string;
-  action: 'reset_stats' | 'reset_full' | 'delete_user' | 'force_logout' | 'force_delete_game' | 'send_mail' | 'set_game_description' | 'update_user_details' | 'apply_sanction' | 'lift_sanction' | 'force_win';
-  backupData: Partial<User> | { status: UserStatusInfo } | LiveGameSession | { mailTitle: string } | SanctionLogData | { gameId: string, winnerId: string };
+  action: 'reset_stats' | 'reset_full' | 'delete_user' | 'force_logout' | 'force_delete_game' | 'send_mail' | 'set_game_description' | 'update_user_details' | 'apply_sanction' | 'lift_sanction' | 'force_win' | 'give_action_points';
+  backupData: Partial<User> | { status: UserStatusInfo } | LiveGameSession | { mailTitle: string } | SanctionLogData | { gameId: string, winnerId: string } | { amount: number };
 };
 
 export type Announcement = {

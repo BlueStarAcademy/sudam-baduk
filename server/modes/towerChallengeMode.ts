@@ -28,19 +28,22 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
          return { error: '아직 잠금 해제되지 않은 층입니다.' };
     }
 
-    const effects = effectService.calculateUserEffects(user);
-    const maxAP = effects.maxActionPoints;
-    const wasAtMax = user.actionPoints.current >= maxAP;
-    
-    if (user.actionPoints.current < stage.actionPointCost) {
-        return { error: '행동력이 부족합니다.' };
+    const now = Date.now();
+    if (!user.isAdmin) {
+        const effects = effectService.calculateUserEffects(user);
+        const maxAP = effects.maxActionPoints;
+        const wasAtMax = user.actionPoints.current >= maxAP;
+        
+        if (user.actionPoints.current < stage.actionPointCost) {
+            return { error: '행동력이 부족합니다.' };
+        }
+
+        user.actionPoints.current -= stage.actionPointCost;
+        if (wasAtMax) {
+            user.lastActionPointUpdate = now;
+        }
     }
 
-    const now = Date.now();
-    user.actionPoints.current -= stage.actionPointCost;
-    if (wasAtMax) {
-        user.lastActionPointUpdate = now;
-    }
 
     const aiOpponent = getAiUser(types.GameMode.Standard, 10, stage.level);
     aiOpponent.strategyLevel = stage.katagoLevel;
@@ -70,7 +73,9 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
     game.floor = floor;
     game.stageId = stage.id;
     game.blackStoneLimit = stage.blackStoneLimit;
-    
+    game.towerChallengePlacementRefreshesUsed = 0;
+    game.addedStonesItemUsed = false;
+
     let attempts = 0;
     const MAX_PLACEMENT_ATTEMPTS = 10;
     do {
@@ -114,5 +119,60 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
     await db.updateUser(user);
 
     volatileState.userStatuses[user.id] = { status: 'in-game', mode: game.mode, gameId: game.id };
+    return { clientResponse: { updatedUser: user } };
+};
+
+
+export const handleTowerChallengeRefresh = async (game: types.LiveGameSession, user: types.User): Promise<types.HandleActionResult> => {
+    if (game.moveHistory.length > 0) return { error: 'Game has already started.' };
+    const refreshesUsed = game.towerChallengePlacementRefreshesUsed || 0;
+    if (refreshesUsed >= 5) return { error: 'No more refreshes available.' };
+    
+    const costs = [0, 50, 100, 200, 300];
+    const cost = costs[refreshesUsed];
+    if (user.gold < cost && !user.isAdmin) return { error: '골드가 부족합니다.' };
+    
+    if (!user.isAdmin) {
+        user.gold -= cost;
+    }
+    game.towerChallengePlacementRefreshesUsed = refreshesUsed + 1;
+
+    const stage = TOWER_STAGES.find(s => s.id === game.stageId);
+    if (!stage) return { error: 'Stage not found.' };
+
+    let attempts = 0;
+    const MAX_PLACEMENT_ATTEMPTS = 10;
+    do {
+        game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(types.Player.None));
+        game.blackPatternStones = [];
+        game.whitePatternStones = [];
+        
+        const allPoints: types.Point[] = Array.from({ length: stage.boardSize * stage.boardSize }, (_, i) => ({ x: i % stage.boardSize, y: Math.floor(i / stage.boardSize) })).sort(() => 0.5 - Math.random());
+        
+        const placeStones = (count: number, player: types.Player, isPattern: boolean) => {
+            const key = player === types.Player.Black ? 'blackPatternStones' : 'whitePatternStones';
+            if (isPattern && !game[key]) game[key] = [];
+            for (let i = 0; i < count; i++) {
+                if (allPoints.length === 0) break;
+                const p = allPoints.pop()!;
+                game.boardState[p.y][p.x] = player;
+                if (isPattern) game[key]!.push(p);
+            }
+        };
+
+        placeStones(stage.placements.black, types.Player.Black, false);
+        placeStones(stage.placements.white, types.Player.White, false);
+        placeStones(stage.placements.blackPattern, types.Player.Black, true);
+        placeStones(stage.placements.whitePattern, types.Player.White, true);
+
+        attempts++;
+        if (attempts >= MAX_PLACEMENT_ATTEMPTS) {
+            console.warn(`[Placement] Could not generate a stable board for tower stage ${stage.id} after ${MAX_PLACEMENT_ATTEMPTS} attempts.`);
+            break;
+        }
+    } while (areAnyStonesCaptured(game.boardState, stage.boardSize));
+    
+    await db.saveGame(game);
+    await db.updateUser(user);
     return { clientResponse: { updatedUser: user } };
 };

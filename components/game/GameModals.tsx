@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 // FIX: Corrected import path for types. The path was './../types.js' which pointed to 'components/types.js', but the file is in the root directory.
 import { GameProps, GameStatus, Negotiation } from '../../types/index.js';
@@ -28,6 +29,7 @@ import CurlingStartConfirmationModal from '../CurlingStartConfirmationModal.js';
 import AlkkagiStartConfirmationModal from '../AlkkagiStartConfirmationModal.js';
 // FIX: Corrected import path for SinglePlayerSummaryModal.
 import SinglePlayerSummaryModal from '../SinglePlayerSummaryModal.js';
+import TowerChallengeSummaryModal from '../TowerChallengeSummaryModal.js';
 
 interface GameModalsProps extends GameProps {
     confirmModalType: 'resign' | null;
@@ -43,6 +45,10 @@ const GameModals: React.FC<GameModalsProps> = (props) => {
     const renderModals = () => {
         if (activeNegotiation) {
             return <NegotiationModal negotiation={activeNegotiation} currentUser={currentUser} onAction={onAction} onlineUsers={onlineUsers} />;
+        }
+        
+        if (session.isTowerChallenge && showResultModal) {
+            return <TowerChallengeSummaryModal session={session} currentUser={currentUser} onAction={onAction} onClose={onCloseResults} />;
         }
 
         if (session.isSinglePlayer && showResultModal) {

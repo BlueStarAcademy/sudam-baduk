@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { LiveGameSession, Player, GameStatus, GameMode, User } from '../../types.js';
+import { LiveGameSession, Player, GameStatus, GameMode, User } from '../../types/index.js';
 import { PLAYFUL_GAME_MODES, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS } from '../../constants.js';
 import { audioService } from '../../services/audioService.js';
 
@@ -27,8 +27,7 @@ const getGameStatusText = (session: LiveGameSession): string => {
     const player = getPlayerByEnum(currentPlayer);
 
     if (session.isTowerChallenge && gameStatus === 'playing' && player) {
-        const stonesLeft = (blackStoneLimit ?? 0) - (blackStonesPlaced ?? 0);
-        return `${session.floor}층 도전 (남은 흑돌: ${stonesLeft}) - ${player.nickname}님 차례`;
+        return `${session.floor}층 도전 - ${player.nickname}님 차례`;
     }
     
     if (session.gameType === 'survival' && gameStatus === 'playing' && player) {
@@ -202,10 +201,10 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
 
         return () => clearInterval(timerId);
     }, [isItemMode, session.itemUseDeadline]);
-
+    
     const isSinglePlayer = session.isSinglePlayer;
     const isTowerChallenge = session.isTowerChallenge;
-    const baseClasses = "flex-shrink-0 rounded-lg flex flex-col items-center justify-center shadow-inner py-1 h-12 border";
+    const baseClasses = "flex-shrink-0 rounded-lg flex flex-col items-center justify-center shadow-inner py-3 h-auto border";
     
     const themeClasses = isTowerChallenge 
         ? "bg-black/50 border-red-800/50"
@@ -213,11 +212,13 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
             ? "bg-stone-800/70 backdrop-blur-sm border-stone-700/50" 
             : "bg-secondary border-color";
     const textClass = isTowerChallenge ? "text-red-300" : isSinglePlayer ? "text-amber-300" : "text-highlight";
-    
+    const statusTextSize = "text-[clamp(1.1rem,3.5vmin,1.5rem)]";
+    const foulTextSize = "text-[clamp(1.1rem,4vmin,1.75rem)]";
+
     if (foulMessage) {
         return (
-            <div className="flex-shrink-0 bg-danger rounded-lg flex items-center justify-center shadow-inner animate-pulse py-1 h-12 border-2 border-red-500">
-                <p className="font-bold text-white tracking-wider text-[clamp(0.875rem,3vmin,1.125rem)]">{foulMessage}</p>
+            <div className={`flex-shrink-0 bg-danger rounded-lg flex items-center justify-center shadow-inner animate-pulse py-3 h-auto border-2 border-red-500`}>
+                <p className={`font-bold text-white tracking-wider ${foulTextSize}`}>{foulMessage}</p>
             </div>
         );
     }
@@ -226,9 +227,9 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
         return (
             <div className={`${baseClasses} ${themeClasses} px-4 gap-1`}>
                 <div className="flex items-center gap-2">
-                    <span className={`font-bold text-tertiary text-[clamp(0.8rem,2.5vmin,1rem)]`}>주사위: <span className={`${textClass} text-[clamp(0.9rem,3vmin,1.1rem)]`}>{session.dice.dice1}</span></span>
+                    <span className={`font-bold text-tertiary ${statusTextSize}`}>주사위: <span className={`${textClass}`}>{session.dice.dice1}</span></span>
                     <div className={`w-px h-5 ${isSinglePlayer ? 'bg-stone-600' : 'bg-border-color'}`}></div>
-                    <span className={`font-bold text-tertiary text-[clamp(0.8rem,2.5vmin,1rem)]`}>남은 돌: <span className={`${textClass} text-[clamp(0.9rem,3vmin,1.1rem)]`}>{session.stonesToPlace}</span></span>
+                    <span className={`font-bold text-tertiary ${statusTextSize}`}>남은 돌: <span className={`${textClass}`}>{session.stonesToPlace}</span></span>
                 </div>
                 {isPlayfulTurn && <div className="w-full h-1 bg-tertiary rounded-full mt-1"><div className="h-1 bg-red-500 rounded-full" style={{width: `${percentage}%`}} /></div>}
             </div>
@@ -240,9 +241,9 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
         const diceDisplay = dice2 > 0 ? `${dice1}, ${dice2}` : `${dice1}`;
         return (
              <div className={`${baseClasses} ${themeClasses} px-4 gap-2`}>
-                 <span className={`font-bold text-tertiary text-[clamp(0.8rem,2.5vmin,1rem)]`}>주사위: <span className={`${textClass} text-[clamp(0.9rem,3vmin,1.1rem)]`}>{diceDisplay}</span></span>
+                 <span className={`font-bold text-tertiary ${statusTextSize}`}>주사위: <span className={`${textClass}`}>{diceDisplay}</span></span>
                  <div className={`w-px h-5 ${isSinglePlayer ? 'bg-stone-600' : 'bg-border-color'}`}></div>
-                 <span className={`font-bold text-tertiary text-[clamp(0.8rem,2.5vmin,1rem)]`}>남은 착수: <span className={`${textClass} text-[clamp(0.9rem,3vmin,1.1rem)]`}>{session.stonesToPlace}</span></span>
+                 <span className={`font-bold text-tertiary ${statusTextSize}`}>남은 착수: <span className={`${textClass}`}>{session.stonesToPlace}</span></span>
             </div>
         )
     }
@@ -257,11 +258,11 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
 
         return (
             <div className={`${baseClasses} ${themeClasses} px-4 gap-2`}>
-                <span className={`font-bold ${textClass} tracking-wider flex-shrink-0 text-[clamp(0.8rem,2.5vmin,1rem)]`}>{itemText}</span>
+                <span className={`font-bold ${textClass} tracking-wider flex-shrink-0 ${statusTextSize}`}>{itemText}</span>
                 <div className={`w-full bg-tertiary rounded-full h-[clamp(0.5rem,1.5vh,0.75rem)] relative overflow-hidden border-2 ${isSinglePlayer ? 'border-black/20' : 'border-tertiary'}`}>
                     <div className="absolute inset-0 bg-highlight rounded-full" style={{ width: `${percentage}%`, transition: 'width 0.5s linear' }}></div>
                 </div>
-                <span className={`font-mono font-bold text-primary w-[clamp(2rem,8vmin,2.5rem)] text-center text-[clamp(0.9rem,3vmin,1.1rem)]`}>{timeLeft}초</span>
+                <span className={`font-mono font-bold text-primary w-[clamp(3rem,10vmin,4rem)] text-center text-[clamp(1.2rem,4vmin,1.6rem)]`}>{timeLeft}초</span>
             </div>
         );
     }
@@ -270,7 +271,7 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
 
     return (
         <div className={`${baseClasses} ${themeClasses}`}>
-            <p className={`font-bold ${textClass} tracking-wider text-[clamp(0.8rem,2.5vmin,1rem)] text-center px-2`}>{statusText}</p>
+            <p className={`font-bold ${textClass} tracking-wider ${statusTextSize} text-center px-2`}>{statusText}</p>
             {isPlayfulTurn && <div className="w-11/12 h-1 bg-tertiary rounded-full mt-1"><div className="h-1 bg-red-500 rounded-full" style={{width: `${percentage}%`}} /></div>}
         </div>
     );

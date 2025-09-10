@@ -1,12 +1,10 @@
 import * as types from '../types/index.js';
-// FIX: Import Point type from centralized types.
 import { Point } from '../types/index.js';
 import { aiUserId, BOT_NAMES, AVATAR_POOL, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
 import { createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultInventory, defaultStats, createDefaultQuests } from './initialData.js';
 import { getGoLogic, processMove } from './goLogic.js';
 import { getOmokLogic } from './omokLogic.js';
-import { endGame } from './summaryService.js';
-// FIX: Corrected import paths for diceGo and thief mode helper functions to resolve module export errors.
+import { endGame, getGameResult } from './summaryService.js';
 import { finishPlacingTurn as finishDiceGoPlacingTurn } from './modes/diceGo.js';
 import { finishThiefPlacingTurn } from './modes/thief.js';
 import { SinglePlayerLevel } from '../types/index.js';
@@ -16,9 +14,7 @@ export { aiUserId }; // Re-export for other modules
 export const getAiUser = (mode: types.GameMode, difficulty: number = 1, singlePlayerLevel?: SinglePlayerLevel): types.User => {
     let botName: string;
 
-    if (mode === types.GameMode.Standard && singlePlayerLevel === undefined) {
-        botName = '탑봇';
-    } else if (singlePlayerLevel) {
+    if (singlePlayerLevel) { // This is for Single Player or Tower Challenge with a defined level
         switch (singlePlayerLevel) {
             case SinglePlayerLevel.입문: botName = '입문봇'; break;
             case SinglePlayerLevel.초급: botName = '초급봇'; break;
@@ -27,8 +23,9 @@ export const getAiUser = (mode: types.GameMode, difficulty: number = 1, singlePl
             case SinglePlayerLevel.유단자: botName = '유단자봇'; break;
             default: botName = 'AI 상대'; break;
         }
-    } else {
+    } else { // Waiting room AI or Tower bot without a level
         switch (mode) {
+            case types.GameMode.Standard: botName = '탑봇'; break; // Generic strategic bot (used for Tower)
             case types.GameMode.Dice: botName = '주사위바둑봇'; break;
             case types.GameMode.Omok: botName = '오목봇'; break;
             case types.GameMode.Ttamok: botName = '따목봇'; break;
@@ -127,7 +124,7 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         }
     };
 
-    const makeMove = async (move: Point) => {
+    const makeMove = async (move: Point, isHidden: boolean = false) => {
         const result = processMove(game.boardState, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
         if (result.isValid) {
             game.boardState = result.newBoardState;
@@ -135,12 +132,22 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
             game.koInfo = result.newKoInfo;
             game.lastMove = move;
             game.moveHistory.push({ player: aiPlayer, ...move });
+            if (isHidden) {
+                if (!game.hiddenMoves) game.hiddenMoves = {};
+                game.hiddenMoves[game.moveHistory.length - 1] = true;
+                game.hidden_stones_used_p2 = (game.hidden_stones_used_p2 || 0) + 1;
+            }
             game.passCount = 0;
+
+            if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
+                getGameResult(game);
+                return;
+            }
 
             const gameEnded = await handleSurvivalPostAiMove();
             if (gameEnded) return;
 
-            if ((game.isSinglePlayer || game.isTowerChallenge) && game.gameType !== 'survival') {
+            if ((game.isSinglePlayer || game.isTowerChallenge) && (game.gameType === 'capture' || game.gameType === 'survival')) {
                 const aiTarget = game.effectiveCaptureTargets![aiPlayer];
                 if (game.captures[aiPlayer] >= aiTarget) {
                     await endGame(game, aiPlayer, 'capture_limit');
@@ -165,6 +172,11 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         game.passCount++;
         game.lastMove = { x: -1, y: -1 };
         game.moveHistory.push({ player: aiPlayer, x: -1, y: -1 });
+
+        if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
+            getGameResult(game);
+            return;
+        }
         
         const gameEnded = await handleSurvivalPostAiMove();
         if (gameEnded) return;
@@ -177,6 +189,34 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         for (let x = 0; x < boardSize; x++) {
             if (board[y][x] === types.Player.None) {
                 allEmptyPoints.push({ x, y });
+            }
+        }
+    }
+    
+    // AI Hidden stone logic
+    if (game.isSinglePlayer && game.gameType === 'hidden' && aiPlayer === types.Player.White) {
+        const hiddenStonesLeft = (game.settings.hiddenStoneCount || 0) - (game.hidden_stones_used_p2 || 0);
+        if (hiddenStonesLeft > 0) {
+            const moveNumber = game.moveHistory.length + 1;
+            const turnNumber = Math.ceil(moveNumber / 2);
+
+            let shouldPlaceHidden = false;
+            // First hidden stone
+            if ((game.hidden_stones_used_p2 || 0) === 0 && turnNumber >= 1 && turnNumber <= 10) {
+                shouldPlaceHidden = true;
+            }
+            // Second hidden stone (if applicable)
+            if ((game.settings.hiddenStoneCount || 0) >= 2 && (game.hidden_stones_used_p2 || 0) === 1 && turnNumber >= 25 && turnNumber <= 30) {
+                shouldPlaceHidden = true;
+            }
+
+            if (shouldPlaceHidden) {
+                const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
+                if (validMoves.length > 0) {
+                    const chosenMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                    await makeMove(chosenMove, true);
+                    return; // Move made, exit function
+                }
             }
         }
     }

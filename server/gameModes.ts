@@ -1,17 +1,14 @@
 import { getGoLogic } from './goLogic.js';
-import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_KOMI, DEFAULT_GAME_SETTINGS } from '../constants.js';
-import * as types from '../types.js';
-import { analyzeGame } from './kataGoService.js';
+import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS, TOWER_STAGES, SINGLE_PLAYER_STAGES } from '../constants.js';
+import * as types from '../types/index.js';
 import type { LiveGameSession, AppState, Negotiation, ActionButton, GameMode } from '../types.js';
 import { aiUserId, makeAiMove, getAiUser } from './aiPlayer.js';
-// FIX: The imported functions were not found. They are now exported from `standard.ts` with the correct names.
-import { initializeStrategicGame, updateStrategicGameState } from './modes/standard.js';
-import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.js';
+import { initializeStrategicGame, updateStrategicGameState } from './strategic.js';
+import { initializePlayfulGame, updatePlayfulGameState } from './playful.js';
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
 import * as effectService from './effectService.js';
-// FIX: Correctly import summaryService to resolve module not found error.
-import { endGame } from './summaryService.js';
+import { endGame, getGameResult } from './summaryService.js';
 
 export const finalizeAnalysisResult = (baseAnalysis: types.AnalysisResult, session: types.LiveGameSession): types.AnalysisResult => {
     const finalAnalysis = JSON.parse(JSON.stringify(baseAnalysis)); // Deep copy
@@ -19,7 +16,7 @@ export const finalizeAnalysisResult = (baseAnalysis: types.AnalysisResult, sessi
     const { mode, settings, baseStoneCaptures, hiddenStoneCaptures } = session;
     const isBaseMode = mode === types.GameMode.Base || (mode === types.GameMode.Mix && settings.mixedModes?.includes(types.GameMode.Base));
     const isHiddenMode = mode === types.GameMode.Hidden || (mode === types.GameMode.Mix && settings.mixedModes?.includes(types.GameMode.Hidden));
-
+    
     // Base stone bonus
     if (isBaseMode && baseStoneCaptures) {
         finalAnalysis.scoreDetails.black.baseStoneBonus = (baseStoneCaptures[types.Player.Black] || 0) * 5;
@@ -61,94 +58,6 @@ export const finalizeAnalysisResult = (baseAnalysis: types.AnalysisResult, sessi
     return finalAnalysis;
 };
 
-
-export const getGameResult = (game: LiveGameSession): LiveGameSession => {
-    const isMissileMode = game.mode === types.GameMode.Missile || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Missile));
-    const p1MissilesUsed = (game.settings.missileCount ?? 0) - (game.missiles_p1 ?? game.settings.missileCount ?? 0);
-    const p2MissilesUsed = (game.settings.missileCount ?? 0) - (game.missiles_p2 ?? game.settings.missileCount ?? 0);
-    const hasUsedMissile = isMissileMode && (p1MissilesUsed > 0 || p2MissilesUsed > 0);
-
-    const isHiddenMode = game.mode === types.GameMode.Hidden || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Hidden));
-    const p1ScansUsed = (game.settings.scanCount ?? 0) - (game.scans_p1 ?? game.settings.scanCount ?? 0);
-    const p2ScansUsed = (game.settings.scanCount ?? 0) - (game.scans_p2 ?? game.settings.scanCount ?? 0);
-    const hasUsedScan = isHiddenMode && (p1ScansUsed > 0 || p2ScansUsed > 0);
-
-    if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode) && game.moveHistory.length < NO_CONTEST_MOVE_THRESHOLD && !hasUsedMissile && !hasUsedScan) {
-        game.gameStatus = 'no_contest';
-        if (!game.noContestInitiatorIds) game.noContestInitiatorIds = [];
-        if (!game.noContestInitiatorIds.includes(game.player1.id)) game.noContestInitiatorIds.push(game.player1.id);
-        if (!game.noContestInitiatorIds.includes(game.player2.id)) game.noContestInitiatorIds.push(game.player2.id);
-        return game;
-    }
-    
-    const isGoBased = SPECIAL_GAME_MODES.some(m => m.mode === game.mode);
-    if (!isGoBased) {
-        game.gameStatus = 'ended';
-        return game;
-    }
-    
-    game.gameStatus = 'scoring';
-    game.winReason = 'score';
-    game.isAnalyzing = true;
-
-    const fallbackToInfluenceScoring = async (failedGame: LiveGameSession, reason: string) => {
-        console.warn(`[Scoring] KataGo analysis failed or was inconclusive. Reason: ${reason}. Falling back to influence-based scoring.`);
-        
-        const logic = getGoLogic(failedGame);
-        const { score } = logic.getScore();
-        
-        const komi = failedGame.finalKomi ?? failedGame.settings.komi ?? DEFAULT_KOMI;
-        failedGame.finalScores = {
-            black: score.black,
-            white: score.white + komi
-        };
-        
-        failedGame.isAnalyzing = false;
-        
-        const winner = failedGame.finalScores.black > failedGame.finalScores.white
-            ? types.Player.Black
-            : types.Player.White;
-            
-        await endGame(failedGame, winner, 'score');
-    };
-
-    analyzeGame(game, { maxVisits: 100 })
-        .then(async (baseAnalysis) => {
-            const freshGame = await db.getLiveGame(game.id);
-            if (!freshGame || freshGame.gameStatus !== 'scoring') return;
-
-            // Check for the error condition from kataGoService (empty/default result)
-            if (baseAnalysis.areaScore.black === 0 && baseAnalysis.areaScore.white === 0 && baseAnalysis.recommendedMoves.length === 0) {
-                await fallbackToInfluenceScoring(freshGame, "KataGo returned empty/default result.");
-                return;
-            }
-
-            const finalAnalysis = finalizeAnalysisResult(baseAnalysis, freshGame);
-
-            if (!freshGame.analysisResult) freshGame.analysisResult = {};
-            freshGame.analysisResult['system'] = finalAnalysis;
-            freshGame.finalScores = {
-                black: finalAnalysis.scoreDetails.black.total,
-                white: finalAnalysis.scoreDetails.white.total
-            };
-            freshGame.isAnalyzing = false;
-            
-            const winner = finalAnalysis.scoreDetails.black.total > finalAnalysis.scoreDetails.white.total
-                ? types.Player.Black
-                : types.Player.White;
-            
-            await endGame(freshGame, winner, 'score');
-        })
-        .catch(async (error) => {
-            console.error(`[AI Analysis] Scoring analysis promise rejected for game ${game.id}.`, error);
-            const freshGame = await db.getLiveGame(game.id);
-            if (freshGame && freshGame.gameStatus === 'scoring') {
-                await fallbackToInfluenceScoring(freshGame, "Promise rejection during analysis.");
-            }
-        });
-        
-    return game;
-};
 
 export const getNewActionButtons = (game: types.LiveGameSession): ActionButton[] => {
     const { mode, moveHistory } = game;
@@ -257,7 +166,7 @@ export const initializeGame = async (neg: Negotiation): Promise<LiveGameSession>
     };
 
     if (SPECIAL_GAME_MODES.some(m => m.mode === mode)) {
-        await initializeStrategicGame(game, neg, now);
+        initializeStrategicGame(game, neg, now);
     } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode; }) => m.mode === mode)) {
         await initializePlayfulGame(game, neg, now);
     }
@@ -324,14 +233,25 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
             game.lastTimeoutPlayerIdClearTime = undefined;
         }
 
-        // Add null checks for players to prevent crashes on corrupted game data.
         if (!game.player1 || !game.player2) {
             console.warn(`[Game Loop] Skipping corrupted game ${game.id} with missing player data.`);
             continue;
         }
 
         const p1 = await db.getUser(game.player1.id);
-        const p2 = game.player2.id === aiUserId ? getAiUser(game.mode) : await db.getUser(game.player2.id);
+        
+        let p2;
+        if (game.player2.id === aiUserId) {
+            const stageList = game.isTowerChallenge ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
+            const stage = stageList.find(s => s.id === game.stageId);
+            p2 = getAiUser(game.mode, 1, stage?.level);
+            if (stage) {
+                p2.strategyLevel = stage.katagoLevel;
+            }
+        } else {
+            p2 = await db.getUser(game.player2.id);
+        }
+
         if (p1) game.player1 = p1;
         if (p2) game.player2 = p2;
 
@@ -380,7 +300,7 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
             }
         }
         
-        if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer) {
+        if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
             await updateStrategicGameState(game, now);
         } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === game.mode)) {
             await updatePlayfulGameState(game, now);

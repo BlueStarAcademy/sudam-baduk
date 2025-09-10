@@ -6,11 +6,11 @@ import { SINGLE_PLAYER_STAGES } from '../../constants.js';
 interface SinglePlayerControlsProps extends Pick<GameProps, 'session' | 'onAction' | 'currentUser'> {}
 
 const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, onAction, currentUser }) => {
-    
+    const isWinner = session.winner === Player.Black;
+
     if (session.gameStatus === 'ended' || session.gameStatus === 'no_contest') {
         const currentStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId);
         const nextStage = SINGLE_PLAYER_STAGES[currentStageIndex + 1];
-        const isWinner = session.winner === Player.Black;
 
         const canTryNext = useMemo(() => {
             if (!isWinner || !nextStage) return false;
@@ -46,6 +46,10 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
         );
     }
     
+    const { id: gameId, gameStatus, gameType } = session;
+    const isMyTurn = session.currentPlayer === Player.Black;
+
+    // --- Refresh Logic ---
     const refreshesUsed = session.singlePlayerPlacementRefreshesUsed || 0;
     const canRefresh = session.moveHistory.length === 0 && refreshesUsed < 5;
     const costs = [0, 50, 100, 200, 300];
@@ -64,6 +68,7 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
         }
     };
 
+    // --- Forfeit Logic ---
     const handleForfeit = () => {
         if (window.confirm('현재 스테이지를 포기하고 로비로 돌아가시겠습니까?')) {
             sessionStorage.setItem('postGameRedirect', '#/singleplayer');
@@ -71,16 +76,49 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
         }
     };
 
+    // --- Item Logic ---
+    const isHiddenMode = gameType === 'hidden';
+    const isMissileMode = gameType === 'missile';
+
+    const myHiddenUsed = session.hidden_stones_used_p1 ?? 0;
+    const myScansLeft = session.scans_p1 ?? 0;
+    const myMissilesLeft = session.missiles_p1 ?? 0;
+    const hiddenLeft = (session.settings.hiddenStoneCount || 0) - myHiddenUsed;
+
+    const canScan = useMemo(() => {
+        if (!session.hiddenMoves || !session.moveHistory) return false;
+        return Object.entries(session.hiddenMoves).some(([moveIndexStr, isHidden]) => {
+            if (!isHidden) return false;
+            const move = session.moveHistory[parseInt(moveIndexStr)];
+            if (!move || move.player !== Player.White) return false; // Opponent is always White in SP
+            const { x, y } = move;
+            if (session.boardState[y]?.[x] !== Player.White) return false; // Stone must be on board
+            const isPermanentlyRevealed = session.permanentlyRevealedStones?.some(p => p.x === x && p.y === y);
+            return !isPermanentlyRevealed;
+        });
+    }, [session.hiddenMoves, session.moveHistory, session.boardState, session.permanentlyRevealedStones]);
+
+    const handleUseItem = (item: 'hidden' | 'scan' | 'missile') => {
+        if(gameStatus !== 'playing' || !isMyTurn) return;
+        const actionType = item === 'hidden' ? 'START_HIDDEN_PLACEMENT' : (item === 'scan' ? 'START_SCANNING' : 'START_MISSILE_SELECTION');
+        onAction({ type: actionType, payload: { gameId } });
+    };
+    
+    const buttonClasses = "!text-xs !py-1";
+
     return (
-        <div className="bg-stone-800/60 backdrop-blur-sm rounded-lg p-2 flex items-center justify-between gap-4 w-full h-full border border-stone-700/50">
-            <Button onClick={handleForfeit} colorScheme="red" className="!text-sm">
-                포기하기
-            </Button>
+        <div className="bg-stone-800/60 backdrop-blur-sm rounded-lg p-2 flex items-center justify-between gap-2 w-full h-full border border-stone-700/50">
+            <Button onClick={handleForfeit} colorScheme="red" className={buttonClasses}>포기하기</Button>
+            
             <div className="flex items-center gap-2">
-                <span className="text-xs text-stone-400">
-                    다음 비용: 💰{canRefresh ? nextCost : '-'}
-                </span>
-                <Button onClick={handleRefresh} colorScheme="accent" className="!text-sm" disabled={!canRefresh || !canAfford} title={!canAfford ? '골드가 부족합니다.' : ''}>
+                {isHiddenMode && <Button onClick={() => handleUseItem('hidden')} disabled={!isMyTurn || gameStatus !== 'playing' || hiddenLeft <= 0} colorScheme="purple" className={buttonClasses}>히든 ({hiddenLeft})</Button>}
+                {isHiddenMode && <Button onClick={() => handleUseItem('scan')} disabled={!isMyTurn || gameStatus !== 'playing' || myScansLeft <= 0 || !canScan} colorScheme="purple" className={buttonClasses}>스캔 ({myScansLeft})</Button>}
+                {isMissileMode && <Button onClick={() => handleUseItem('missile')} disabled={!isMyTurn || gameStatus !== 'playing' || myMissilesLeft <= 0} colorScheme="orange" className={buttonClasses}>미사일 ({myMissilesLeft})</Button>}
+            </div>
+
+            <div className="flex items-center gap-2">
+                <span className="text-[10px] text-stone-400 text-center">다음 비용:<br/>💰{canRefresh ? nextCost : '-'}</span>
+                <Button onClick={handleRefresh} colorScheme="accent" className={buttonClasses} disabled={!canRefresh || !canAfford} title={!canAfford ? '골드가 부족합니다.' : ''}>
                     배치 새로고침 ({5 - refreshesUsed}/5)
                 </Button>
             </div>

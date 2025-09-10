@@ -1,4 +1,3 @@
-
 import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
@@ -48,8 +47,8 @@ const kataGoResponseToAnalysisResult = (session: LiveGameSession, response: any,
         const ownershipBoardSize = Math.sqrt(ownership.length);
 
         if (Number.isInteger(ownershipBoardSize) && ownershipBoardSize >= boardSize) {
-            const TERRITORY_THRESHOLD = 0.75;
-            const DEAD_STONE_THRESHOLD = 0.75;
+            const TERRITORY_THRESHOLD = 0.90; // Increased from 0.75
+            const DEAD_STONE_THRESHOLD = 0.90; // Increased from 0.75
             for (let y = 0; y < boardSize; y++) {
                 for (let x = 0; x < boardSize; x++) {
                     const index = y * ownershipBoardSize + x;

@@ -221,10 +221,10 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             if (!game) return { error: 'Game not found.' };
 
             if (volatileState.userStatuses[user.id]) {
-                // Set to 'online' so the client can handle redirection via sessionStorage
                 volatileState.userStatuses[user.id].status = 'online';
                 delete volatileState.userStatuses[user.id].mode;
                 delete volatileState.userStatuses[user.id].gameId;
+                delete volatileState.userStatuses[user.id].spectatingGameId;
             }
             
             // If the user leaves before the game is officially over (e.g. resigns), end the game.

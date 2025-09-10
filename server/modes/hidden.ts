@@ -1,6 +1,6 @@
 import * as types from '../../types.js';
 import * as db from '../db.js';
-import { getGameResult } from '../gameModes.js';
+import { getGameResult } from '../summaryService.js';
 
 type HandleActionResult = types.HandleActionResult;
 

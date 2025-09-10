@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 // FIX: Import missing types from the centralized types file.
-import { User, ServerAction, AdminProps, LiveGameSession, GameMode, Quest, DailyQuestData, WeeklyQuestData, MonthlyQuestData } from '../../types/index.js';
+import { User, ServerAction, AdminProps, GameMode, Quest, DailyQuestData, WeeklyQuestData, MonthlyQuestData } from '../../types/index.js';
 import DraggableWindow from '../DraggableWindow.js';
 import Button from '../Button.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
@@ -16,6 +16,7 @@ interface UserManagementModalProps {
 const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, currentUser, onClose, onAction }) => {
     const [editedUser, setEditedUser] = useState<User>(JSON.parse(JSON.stringify(user)));
     const [activeTab, setActiveTab] = useState<'general' | 'strategic' | 'playful' | 'quests' | 'danger'>('general');
+    const [apToGrant, setApToGrant] = useState(10);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -41,6 +42,32 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, current
             newStats[mode]!.rankingScore = Number(value);
             return { ...prev, stats: newStats };
         });
+    };
+
+    const handleApCurrentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { value } = e.target;
+        setEditedUser(prev => ({ 
+            ...prev, 
+            actionPoints: { 
+                ...prev.actionPoints, 
+                current: Number(value) 
+            } 
+        }));
+    };
+
+    const handleGrantAp = () => {
+        if (apToGrant > 0) {
+            onAction({ type: 'ADMIN_GIVE_ACTION_POINTS', payload: { targetUserId: user.id, amount: apToGrant } });
+            // Optimistic update
+            setEditedUser(prev => ({
+                ...prev,
+                actionPoints: {
+                    ...prev.actionPoints,
+                    current: prev.actionPoints.current + apToGrant
+                }
+            }));
+            setApToGrant(10); // Reset for next grant
+        }
     };
 
     const handleQuestPropertyChange = (questType: 'daily' | 'weekly' | 'monthly', questId: string, field: 'progress' | 'isClaimed', value: number | boolean) => {
@@ -174,6 +201,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, current
                             <div className="grid grid-cols-2 gap-2"><label>놀이 XP</label><input type="number" name="playfulXp" value={editedUser.playfulXp} onChange={handleInputChange} className="bg-tertiary p-1 rounded" /></div>
                             <div className="grid grid-cols-2 gap-2"><label>골드</label><input type="number" name="gold" value={editedUser.gold} onChange={handleInputChange} className="bg-tertiary p-1 rounded" /></div>
                             <div className="grid grid-cols-2 gap-2"><label>다이아</label><input type="number" name="diamonds" value={editedUser.diamonds} onChange={handleInputChange} className="bg-tertiary p-1 rounded" /></div>
+                            <div className="grid grid-cols-2 gap-2"><label>행동력</label><input type="number" name="actionPoints" value={editedUser.actionPoints.current} onChange={handleApCurrentChange} className="bg-tertiary p-1 rounded" /></div>
                             <div className="grid grid-cols-2 gap-2"><label>매너 점수</label><input type="number" name="mannerScore" value={editedUser.mannerScore} onChange={handleInputChange} className="bg-tertiary p-1 rounded" /></div>
                              <div className="grid grid-cols-2 gap-2 items-center">
                                 <label>관리자 권한</label>
@@ -186,6 +214,14 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, current
                                     disabled={user.id === currentUser.id}
                                     title={user.id === currentUser.id ? "자신의 관리자 권한은 변경할 수 없습니다." : ""}
                                 />
+                            </div>
+                            <div className="pt-3 mt-3 border-t border-color">
+                                <h4 className="font-semibold text-secondary mb-2 text-sm">재화 지급</h4>
+                                <div className="flex items-center gap-2">
+                                    <label className="text-sm">⚡ 행동력 지급:</label>
+                                    <input type="number" value={apToGrant} onChange={e => setApToGrant(Number(e.target.value))} className="bg-tertiary p-1 rounded w-24 text-sm" />
+                                    <Button onClick={handleGrantAp} colorScheme="blue" className="!text-xs !py-1">지급</Button>
+                                </div>
                             </div>
                         </div>
                     )}

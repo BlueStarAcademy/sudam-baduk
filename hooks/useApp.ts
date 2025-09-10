@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { User, LiveGameSession, UserWithStatus, ServerAction, GameMode, Negotiation, ChatMessage, UserStatus, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank } from '../types/index.js';
 import { audioService } from '../services/audioService.js';
@@ -143,7 +144,6 @@ export const useApp = () => {
     const [lastUsedItemResult, setLastUsedItemResult] = useState<InventoryItem[] | null>(null);
     const [disassemblyResult, setDisassemblyResult] = useState<{ gained: { name: string, amount: number }[], jackpot: boolean } | null>(null);
     const [craftResult, setCraftResult] = useState<{ gained: { name: string; amount: number }[]; used: { name: string; amount: number }[]; craftType: 'upgrade' | 'downgrade'; } | null>(null);
-    // FIX: Add state for synthesis result modal
     const [synthesisResult, setSynthesisResult] = useState<{ item: InventoryItem; wasUpgraded: boolean; } | null>(null);
     const [rewardSummary, setRewardSummary] = useState<{ reward: QuestReward; items: InventoryItem[]; title: string } | null>(null);
     const [isClaimAllSummaryOpen, setIsClaimAllSummaryOpen] = useState(false);
@@ -236,7 +236,7 @@ export const useApp = () => {
     }, [currentUser]);
 
     // --- Action Handler ---
-    const handleAction = useCallback(async (action: ServerAction) => {
+    const handleAction = useCallback(async (action: ServerAction): Promise<{success: boolean, error?: string} | undefined> => {
         if (action.type === 'CLEAR_TOURNAMENT_SESSION') {
             setCurrentUser(prev => {
                 if (!prev) return null;
@@ -292,6 +292,7 @@ export const useApp = () => {
                  if (action.type === 'TOGGLE_EQUIP_ITEM' || action.type === 'USE_ITEM') {
                     setCurrentUser(prevUser => prevUser ? { ...prevUser } : null);
                  }
+                return { success: false, error: errorData.message || 'An unknown error occurred.' };
             } else {
                 const result = await res.json();
                 if (result.updatedUser) {
@@ -310,7 +311,6 @@ export const useApp = () => {
                 if (result.craftResult) {
                     setCraftResult(result.craftResult);
                 }
-                // FIX: Handle synthesisResult from server response
                 if (result.synthesisResult) {
                     setSynthesisResult(result.synthesisResult);
                 }
@@ -325,9 +325,11 @@ export const useApp = () => {
                     }
                 }
                 if (result.enhancementAnimationTarget) setEnhancementAnimationTarget(result.enhancementAnimationTarget);
+                 return { success: true };
             }
         } catch (err: any) {
             showError(err.message);
+            return { success: false, error: err.message };
         }
     }, [currentUser?.id, enhancingItem]);
 
@@ -407,6 +409,7 @@ export const useApp = () => {
                 if (exitToastTimer.current) clearTimeout(exitToastTimer.current);
                 if (showExitToast) setShowExitToast(false);
             }
+            
             setCurrentRoute(newRoute);
         };
         window.addEventListener('hashchange', handleHashChange);
@@ -555,7 +558,6 @@ export const useApp = () => {
         setClaimAllSummary(null);
     }, []);
 
-    // FIX: Add handler for closing synthesis result modal
     const closeSynthesisResult = useCallback(() => setSynthesisResult(null), []);
 
     return {
@@ -614,7 +616,6 @@ export const useApp = () => {
             closeItemObtained: () => setLastUsedItemResult(null),
             closeDisassemblyResult: () => setDisassemblyResult(null),
             closeCraftResult: () => setCraftResult(null),
-            // FIX: Add handler for closing synthesis result modal
             closeSynthesisResult,
             closeRewardSummary: () => setRewardSummary(null),
             closeClaimAllSummary,

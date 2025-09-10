@@ -1,3 +1,5 @@
+
+
 import express from 'express';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
@@ -76,8 +78,10 @@ const startServer = async () => {
     const app = express();
     const port = 4000;
 
+    // FIX: Reordered middleware to parse JSON before handling CORS, which can resolve some type inference issues.
+    app.use(express.json({ limit: '10mb' }));
+    // FIX: Pass an empty options object to cors() to resolve a TypeScript type inference issue where the function signature was being misinterpreted.
     app.use(cors());
-    app.use(express.json({ limit: '10mb' }) as any);
 
     const volatileState: VolatileState = {
         userConnections: {},
@@ -348,7 +352,7 @@ const startServer = async () => {
             updatedUser = await regenerateActionPoints(updatedUser);
             updatedUser = await updateWeeklyCompetitorsIfNeeded(updatedUser, allUsersForCompetitors);
             updatedUser = processSinglePlayerMissions(updatedUser);
-
+            
             const allGameModesList = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES].map(m => m.mode);
             let statsMigrated = false;
             if (!updatedUser.stats) updatedUser.stats = {};

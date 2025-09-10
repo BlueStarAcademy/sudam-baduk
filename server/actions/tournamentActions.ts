@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, TournamentType, PlayerForTournament, InventoryItem, InventoryItemType, TournamentState, LeagueTier, CoreStat } from '../../types.js';
-import * as types from '../../types.js';
+import { type ServerAction, type User, type VolatileState, TournamentType, PlayerForTournament, InventoryItem, InventoryItemType, TournamentState, LeagueTier, CoreStat } from '../../types/index.js';
+import * as types from '../../types/index.js';
 import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, MATERIAL_ITEMS, TOURNAMENT_SCORE_REWARDS, BOT_NAMES, AVATAR_POOL } from '../../constants.js';
 import { updateQuestProgress } from '../questService.js';
 import { createItemFromTemplate, SHOP_ITEMS } from '../shop.js';
@@ -340,9 +340,9 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             }
 
             let recovery = 0;
-            if (itemName === '컨디션물약(소)') recovery = getRandomInt(1, 5);
-            else if (itemName === '컨디션물약(중)') recovery = getRandomInt(5, 10);
-            else if (itemName === '컨디션물약(대)') recovery = getRandomInt(10, 20);
+            if (itemName === '컨디션 물약(소)') recovery = getRandomInt(1, 5);
+            else if (itemName === '컨디션 물약(중)') recovery = getRandomInt(5, 10);
+            else if (itemName === '컨디션 물약(대)') recovery = getRandomInt(10, 20);
 
             playerInTournament.condition = Math.min(100, playerInTournament.condition + recovery);
             

@@ -47,20 +47,19 @@ const StageSelectionModal: React.FC<StageSelectionModalProps> = ({ currentUser, 
                                 {isCleared && <div className="absolute top-2 right-2 text-2xl">✅</div>}
                                 <div className="flex-grow flex flex-col items-center justify-center">
                                     <h3 className="font-bold text-lg">{stage.name}</h3>
-                                    {/* FIX: The 'stage.targetScore' object is formatted as a string to be properly rendered as a ReactNode. */}
-                                    <p className="text-xs text-gray-400 mt-1">{`목표 점수: 흑${stage.targetScore.black}/백${stage.targetScore.white}집`}</p>
+                                    <p className="text-xs text-gray-400 mt-1">{`목표 점수: 흑${stage.targetScore!.black}/백${stage.targetScore!.white}집`}</p>
                                     <p className="text-xs text-gray-400 mt-1">AI 레벨: {stage.katagoLevel}</p>
                                 </div>
                                 <div className="mt-4 pt-2 border-t border-gray-600 w-full flex-shrink-0">
                                     <p className="text-xs font-semibold text-yellow-300">최초 보상</p>
                                     <div className="flex items-center justify-center gap-2 mt-1 text-xs">
-                                        {stage.rewards.firstClear.gold > 0 && (
-                                            <span className="flex items-center gap-1">
+                                        {(stage.rewards.firstClear?.gold ?? 0) > 0 && (
+                                            <span className="flex items-center gap-1" title={`골드 ${stage.rewards.firstClear?.gold}`}>
                                                 <img src="/images/Gold.png" alt="골드" className="w-4 h-4" />
-                                                {stage.rewards.firstClear.gold}
+                                                {stage.rewards.firstClear?.gold}
                                             </span>
                                         )}
-                                        {stage.rewards.firstClear.items?.map((itemRef, idx) => {
+                                        {stage.rewards.firstClear?.items?.map((itemRef, idx) => {
                                             const itemTemplate = CONSUMABLE_ITEMS.find(ci => ci.name === itemRef.itemId);
                                             if (!itemTemplate?.image) return null;
                                             return (

@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Header from './Header.js';
 import { AppProvider } from '../contexts/AppContext.js';
@@ -121,7 +122,6 @@ const AppContent: React.FC = () => {
         if (modals.lastUsedItemResult) ids.push('itemObtained');
         if (modals.disassemblyResult) ids.push('disassemblyResult');
         if (modals.craftResult) ids.push('craftResult');
-        // FIX: Add synthesisResult to the active modal list to manage z-index correctly.
         if (modals.synthesisResult) ids.push('synthesisResult');
         if (modals.viewingUser) ids.push('viewingUser');
         if (modals.isInfoModalOpen) ids.push('infoModal');
@@ -195,7 +195,6 @@ const AppContent: React.FC = () => {
 
                     {modals.disassemblyResult && <DisassemblyResultModal result={modals.disassemblyResult} onClose={handlers.closeDisassemblyResult} isTopmost={topmostModalId === 'disassemblyResult'} />}
                     {modals.craftResult && <CraftingResultModal result={modals.craftResult} onClose={handlers.closeCraftResult} isTopmost={topmostModalId === 'craftResult'} />}
-                    {/* FIX: Render SynthesisResultModal and pass necessary props */}
                     {modals.synthesisResult && <SynthesisResultModal result={modals.synthesisResult} onClose={handlers.closeSynthesisResult} isTopmost={topmostModalId === 'synthesisResult'} />}
                     {modals.viewingUser && <UserProfileModal user={modals.viewingUser} onClose={handlers.closeViewingUser} onViewItem={handlers.openViewingItem} isTopmost={topmostModalId === 'viewingUser'} />}
                     {modals.isInfoModalOpen && <InfoModal onClose={handlers.closeInfoModal} isTopmost={topmostModalId === 'infoModal'} />}

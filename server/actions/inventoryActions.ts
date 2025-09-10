@@ -1,30 +1,46 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, ItemOption, ItemGrade, EquipmentSlot, CoreStat, SpecialStat, MythicStat, type ItemOptionType, type BorderInfo } from '../../types/index.js';
-import {
-    ENHANCEMENT_SUCCESS_RATES,
-    ENHANCEMENT_COSTS,
-    MATERIAL_ITEMS,
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade } from '../../types/index.js';
+import * as types from '../../types/index.js';
+import { updateQuestProgress } from '../questService.js';
+import { SHOP_ITEMS, createItemFromTemplate } from '../shop.js';
+import { 
+    CONSUMABLE_ITEMS, 
+    MATERIAL_ITEMS, 
+    DAILY_MILESTONE_REWARDS, 
+    DAILY_MILESTONE_THRESHOLDS,
+    WEEKLY_MILESTONE_REWARDS,
+    WEEKLY_MILESTONE_THRESHOLDS,
+    MONTHLY_MILESTONE_REWARDS,
+    MONTHLY_MILESTONE_THRESHOLDS,
+    BASE_TOURNAMENT_REWARDS,
+    TOURNAMENT_SCORE_REWARDS,
+    SINGLE_PLAYER_MISSIONS,
+    GRADE_LEVEL_REQUIREMENTS,
     ITEM_SELL_PRICES,
     MATERIAL_SELL_PRICES,
-    SUB_OPTION_POOLS,
-    CONSUMABLE_ITEMS,
-    GRADE_SUB_OPTION_RULES,
-    GRADE_LEVEL_REQUIREMENTS,
+    ENHANCEMENT_COSTS,
+    ENHANCEMENT_SUCCESS_RATES,
     ENHANCEMENT_FAIL_BONUS_RATES,
+    GRADE_SUB_OPTION_RULES,
+    SUB_OPTION_POOLS,
     SYNTHESIS_COSTS,
     SYNTHESIS_UPGRADE_CHANCES,
     EQUIPMENT_POOL
 } from '../../constants.js';
-import * as effectService from '../effectService.js';
-import { SHOP_ITEMS, createItemFromTemplate } from '../shop.js';
-import { updateQuestProgress } from '../questService.js';
+import { calculateRanks } from '../tournamentService.js';
 import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
+import { getKSTDate } from '.././timeUtils.js';
+import { createDefaultQuests } from '../initialData.js';
+import * as effectService from '../effectService.js';
 
 type HandleActionResult = {
     clientResponse?: any;
     error?: string;
 };
+
+type SubOptionDefinition = { type: CoreStat, isPercentage: boolean, range: [number, number] };
+
 
 const currencyBundles: Record<string, { type: 'gold' | 'diamonds', min: number, max: number }> = {
     '골드 꾸러미1': { type: 'gold', min: 10, max: 500 },
@@ -84,6 +100,18 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
         
             const itemToConsume = user.inventory[itemIndex];
             if (itemToConsume.type !== 'consumable') return { error: '사용할 수 없는 아이템입니다.' };
+
+            if (itemToConsume.name === '싱글플레이 초기화권') {
+                user.singlePlayerProgress = 0;
+                user.singlePlayerMissions = {}; // Reset all missions
+                 if (itemToConsume.quantity && itemToConsume.quantity > 1) {
+                    itemToConsume.quantity--;
+                } else {
+                    user.inventory.splice(itemIndex, 1);
+                }
+                await db.updateUser(user);
+                return { clientResponse: { updatedUser: user } };
+            }
         
             // Handle currency bundles
             const bundleInfo = currencyBundles[itemToConsume.name];
@@ -116,7 +144,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
         
             const shopItem = SHOP_ITEMS[shopItemKey as keyof typeof SHOP_ITEMS];
 
-            if (itemToConsume.name.includes('컨디션물약')) {
+            if (itemToConsume.name.includes('컨디션 물약')) {
                 return { error: '컨디션 물약은 토너먼트 경기 시작 전에만 사용할 수 있습니다.' };
             }
 
@@ -201,7 +229,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
         case 'TOGGLE_EQUIP_ITEM': {
             const { itemId } = payload;
             const itemToToggle = user.inventory.find(i => i.id === itemId);
-
+    
             if (!itemToToggle || itemToToggle.type !== 'equipment' || !itemToToggle.slot) {
                 return { error: 'Invalid equipment item.' };
             }
@@ -287,8 +315,10 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const costs = ENHANCEMENT_COSTS[item.grade]?.[item.stars];
             if (!costs) return { error: '강화 정보를 찾을 수 없습니다.' };
 
-            if (!removeUserItems(user, costs)) {
-                return { error: '재료가 부족합니다.' };
+            if (!user.isAdmin) {
+                if (!removeUserItems(user, costs)) {
+                    return { error: '재료가 부족합니다.' };
+                }
             }
             
             updateQuestProgress(user, 'enhancement_attempt');
@@ -451,8 +481,10 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
         
             const tempUser = JSON.parse(JSON.stringify(user));
         
-            if (!removeUserItems(tempUser, [{ name: fromMaterialName, amount: fromCost }])) {
-                return { error: '재료가 부족합니다.' };
+            if (!user.isAdmin) {
+                if (!removeUserItems(tempUser, [{ name: fromMaterialName, amount: fromCost }])) {
+                    return { error: '재료가 부족합니다.' };
+                }
             }
         
             const toAddTemplate = MATERIAL_ITEMS[toMaterialName];
@@ -505,24 +537,26 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             }
         
             const synthesisCost = SYNTHESIS_COSTS[firstItemGrade];
-            if (user.gold < synthesisCost) {
+            if (user.gold < synthesisCost && !user.isAdmin) {
                 return { error: `골드가 부족합니다. (필요: ${synthesisCost})` };
             }
         
             if ((user.inventory.length - 3 + 1) > user.inventorySlots) {
                  return { error: '인벤토리 공간이 부족합니다.' };
             }
-        
-            user.gold -= synthesisCost;
+            
+            if (!user.isAdmin) {
+                user.gold -= synthesisCost;
+            }
             user.inventory = user.inventory.filter(i => !itemIds.includes(i.id));
         
             const upgradeChance = SYNTHESIS_UPGRADE_CHANCES[firstItemGrade];
             const roll = Math.random() * 100;
             let wasUpgraded = roll < upgradeChance;
-            let newGrade: ItemGrade;
+            let newGrade: types.ItemGrade;
             let isDoubleMythic = false;
         
-            const gradeOrder: ItemGrade[] = ['normal', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+            const gradeOrder: types.ItemGrade[] = ['normal', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
             const currentGradeIndex = gradeOrder.indexOf(firstItemGrade);
         
             if (firstItemGrade === 'mythic') {

@@ -177,6 +177,7 @@ export type ServerAction =
     | { type: 'ADMIN_CREATE_USER', payload: { username: string, password: string, nickname: string } }
     | { type: 'ADMIN_FORCE_LOGOUT', payload: { targetUserId: string } }
     | { type: 'ADMIN_SEND_MAIL', payload: any }
+    | { type: 'ADMIN_GIVE_ACTION_POINTS', payload: { targetUserId: string; amount: number } }
     | { type: 'ADMIN_REORDER_ANNOUNCEMENTS', payload: { announcements: Announcement[] } }
     | { type: 'ADMIN_ADD_ANNOUNCEMENT', payload: { message: string } }
     | { type: 'ADMIN_REMOVE_ANNOUNCEMENT', payload: { id: string } }
@@ -206,7 +207,8 @@ export type ServerAction =
     | { type: 'CLAIM_SINGLE_PLAYER_MISSION_REWARD', payload: { missionId: string } }
     // Tower Challenge
     | { type: 'START_TOWER_CHALLENGE_GAME', payload: { floor: number } }
-    ;
+    | { type: 'TOWER_CHALLENGE_REFRESH_PLACEMENT', payload: { gameId: string } }
+    | { type: 'TOWER_CHALLENGE_ADD_STONES', payload: { gameId: string } };
 
 export interface GameProps {
     session: LiveGameSession;

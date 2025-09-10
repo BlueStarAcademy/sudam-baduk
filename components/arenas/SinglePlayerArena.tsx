@@ -10,6 +10,7 @@ import SinglePlayerInfoPanel from '../game/SinglePlayerInfoPanel.js';
 import { useClientTimer } from '../../hooks/useClientTimer.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import TimeoutFoulModal from '../TimeoutFoulModal.js';
+import TurnCounterPanel from '../game/TurnCounterPanel.js';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -41,6 +42,20 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     const [showFinalTerritory, setShowFinalTerritory] = useState(false);
     const [showTimeoutFoulModal, setShowTimeoutFoulModal] = useState(false);
     
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+    const isItemModeActive = useMemo(() => 
+        ['hidden_placing', 'scanning', 'missile_selecting'].includes(session.gameStatus), 
+        [session.gameStatus]
+    );
+
+    useEffect(() => {
+        const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
+        window.addEventListener('resize', checkIsMobile);
+        return () => window.removeEventListener('resize', checkIsMobile);
+    }, []);
+
     const prevGameStatus = usePrevious(gameStatus);
     const prevByoyomiBlack = usePrevious(session.blackByoyomiPeriodsLeft);
     const prevLastMove = usePrevious(session.lastMove);
@@ -94,40 +109,67 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
 
     const backgroundClass = 'bg-academy-bg';
     
+    const isTurnLimitedGame = !!session.autoEndTurnCount && session.autoEndTurnCount > 0;
+    
     return (
-        <div className={`w-full h-dvh flex flex-col px-4 py-1 lg:p-4 ${backgroundClass} text-stone-200`}>
-            <button onClick={handlers.openSettingsModal} className="absolute top-2 right-2 z-30 p-2 rounded-lg text-xl hover:bg-black/20 transition-colors" title="설정">⚙️</button>
+        <div className={`w-full h-dvh flex flex-col p-2 lg:p-4 ${backgroundClass} text-stone-200`}>
             {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={() => setShowTimeoutFoulModal(false)} />}
             
-            <main className="flex-1 flex flex-col items-center justify-center gap-2 lg:gap-4 max-w-5xl w-full mx-auto min-h-0">
-                <div className="w-full flex-shrink-0">
-                    <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isSinglePlayer={true} />
-                </div>
-                <div className="flex-1 w-full relative">
-                    <div className="absolute inset-0">
-                         <GameArena 
-                            {...gameProps}
-                            isMyTurn={isMyTurn} 
-                            myPlayerEnum={myPlayerEnum} 
-                            handleBoardClick={handleBoardClick} 
-                            isItemModeActive={false} 
-                            showTerritoryOverlay={showFinalTerritory} 
-                            isMobile={false}
-                            myRevealedMoves={[]}
-                            showLastMoveMarker={settings.features.lastMoveMarker}
-                        />
+            <div className="flex-1 flex flex-col gap-2 min-h-0 max-w-7xl w-full mx-auto">
+                 <main className="flex-1 flex flex-col items-center justify-center min-w-0 min-h-0 gap-2">
+                    <div className="w-full flex-shrink-0">
+                        <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isSinglePlayer={true} />
                     </div>
-                </div>
-                <div className="w-full flex flex-col-reverse md:flex-row gap-2 lg:gap-4 items-stretch flex-shrink-0">
-                    <div className="flex-1">
-                        <SinglePlayerInfoPanel session={session} />
+                    <div className="flex-1 w-full flex flex-row items-stretch gap-4 min-h-0">
+                        <div className="flex-1 relative">
+                             <GameArena 
+                                {...gameProps}
+                                isMyTurn={isMyTurn} 
+                                myPlayerEnum={myPlayerEnum} 
+                                handleBoardClick={handleBoardClick} 
+                                isItemModeActive={isItemModeActive} 
+                                showTerritoryOverlay={showFinalTerritory} 
+                                isMobile={isMobile}
+                                myRevealedMoves={[]}
+                                showLastMoveMarker={settings.features.lastMoveMarker}
+                            />
+                        </div>
                     </div>
-                    <div className="flex flex-col gap-2 flex-shrink-0 w-full md:w-auto">
-                        <TurnDisplay session={session} />
-                        <SinglePlayerControls {...gameProps} currentUser={currentUserWithStatus} />
+                    <div className="w-full flex-shrink-0 flex flex-col lg:flex-row gap-2">
+                        <div className="flex-1 min-h-[120px]">
+                           <SinglePlayerInfoPanel session={session} onOpenSettings={handlers.openSettingsModal} />
+                        </div>
+                        <div className="lg:w-1/3 flex flex-col gap-2">
+                            <TurnDisplay session={session} />
+                            <SinglePlayerControls {...gameProps} currentUser={currentUserWithStatus} />
+                        </div>
                     </div>
-                </div>
-            </main>
+                </main>
+                
+                {isMobile && isTurnLimitedGame && (
+                    <>
+                        <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
+                            <button 
+                                onClick={() => setIsMobileSidebarOpen(true)} 
+                                className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg"
+                                aria-label="턴 카운터 보기"
+                            >
+                                <span className="relative font-bold text-lg">{'<'}</span>
+                            </button>
+                        </div>
+
+                        <div className={`fixed top-0 right-0 h-full w-[200px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMobileSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                            <div className="flex flex-col h-full p-2">
+                                 <button onClick={() => setIsMobileSidebarOpen(false)} className="self-end text-2xl font-bold text-tertiary hover:text-primary">&times;</button>
+                                 <div className="flex-grow">
+                                    <TurnCounterPanel session={session} />
+                                 </div>
+                            </div>
+                        </div>
+                        {isMobileSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMobileSidebarOpen(false)}></div>}
+                    </>
+                )}
+            </div>
 
              <GameModals 
                 {...gameProps}

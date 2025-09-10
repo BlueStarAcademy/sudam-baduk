@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LiveGameSession, GameMode, SinglePlayerLevel } from '../../types.js';
+import { LiveGameSession, GameMode, SinglePlayerLevel } from '../../types/index.js';
 import { SINGLE_PLAYER_STAGES } from '../../constants.js';
 
 const GO_TERMS_BY_LEVEL: Record<SinglePlayerLevel, { term: string; meaning: string }[]> = {
@@ -44,7 +44,12 @@ const GO_TERMS_BY_LEVEL: Record<SinglePlayerLevel, { term: string; meaning: stri
     ],
 };
 
-const GameInfoPanel: React.FC<{ session: LiveGameSession }> = ({ session }) => {
+interface GameInfoPanelProps {
+    session: LiveGameSession;
+    onOpenSettings: () => void;
+}
+
+const GameInfoPanel: React.FC<GameInfoPanelProps> = ({ session, onOpenSettings }) => {
     const { settings, stageId } = session;
     const stageInfo = useMemo(() => SINGLE_PLAYER_STAGES.find(s => s.id === stageId), [stageId]);
 
@@ -56,8 +61,9 @@ const GameInfoPanel: React.FC<{ session: LiveGameSession }> = ({ session }) => {
 
     return (
         <div className="h-full bg-stone-800/60 backdrop-blur-sm p-3 rounded-md flex-shrink-0 border border-stone-700/50 text-stone-300">
-            <h3 className="text-base font-bold border-b border-stone-600/50 pb-1 mb-2 text-amber-300 text-center">
-                대국 정보
+            <h3 className="text-base font-bold border-b border-stone-600/50 pb-1 mb-2 text-amber-300 text-center flex justify-between items-center">
+                <span>대국 정보</span>
+                <button onClick={onOpenSettings} className="p-1 rounded-full text-lg hover:bg-black/20 transition-colors" title="설정">⚙️</button>
             </h3>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
                 <div className="font-semibold text-stone-400">스테이지:</div>
@@ -107,12 +113,13 @@ const ProverbPanel: React.FC<{ session: LiveGameSession }> = ({ session }) => {
 
 interface SinglePlayerInfoPanelProps {
     session: LiveGameSession;
+    onOpenSettings: () => void;
 }
 
-const SinglePlayerInfoPanel: React.FC<SinglePlayerInfoPanelProps> = ({ session }) => {
+const SinglePlayerInfoPanel: React.FC<SinglePlayerInfoPanelProps> = ({ session, onOpenSettings }) => {
     return (
         <div className="flex flex-col md:flex-row h-full gap-2">
-            <GameInfoPanel session={session} />
+            <GameInfoPanel session={session} onOpenSettings={onOpenSettings} />
             <ProverbPanel session={session} />
         </div>
     );

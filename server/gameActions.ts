@@ -1,3 +1,4 @@
+
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
 import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, Negotiation, Player, LeagueTier, TournamentType, GameMode } from '../types/index.js';
@@ -8,7 +9,7 @@ import { regenerateActionPoints } from './effectService.js';
 import { updateGameStates } from './gameModes.js';
 import { DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ACTION_POINT_REGEN_INTERVAL_MS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SINGLE_PLAYER_MISSIONS, SINGLE_PLAYER_STAGES } from '../constants.js';
 import { initializeGame } from './gameModes.js';
-import { handleStrategicGameAction } from './modes/standard.js';
+import { handleStrategicGameAction } from './modes/strategic.js';
 import { handlePlayfulGameAction } from './modes/playful.js';
 import { createDefaultUser, createDefaultQuests } from './initialData.js';
 import { containsProfanity } from '../profanity.js';
@@ -23,7 +24,6 @@ import { handleShopAction } from './actions/shopActions.js';
 import { handleSocialAction } from './actions/socialActions.js';
 import { handleTournamentAction } from './actions/tournamentActions.js';
 import { handleUserAction } from './actions/userActions.js';
-// FIX: Correctly import handleAiGameAction from singlePlayerActions.js
 import { handleAiGameAction } from './actions/singlePlayerActions.js';
 
 
@@ -114,7 +114,7 @@ export const resetAndGenerateQuests = async (user: User): Promise<User> => {
     return modified ? updatedUser : user;
 };
 
-export const updateQuestProgress = (user: User, type: 'win' | 'participate' | 'action_button' | 'tournament_participate' | 'enhancement_attempt' | 'craft_attempt' | 'chat_greeting' | 'tournament_complete' | 'login' | 'claim_daily_milestone_100' | 'claim_weekly_milestone_100', mode?: GameMode, amount: number = 1) => {
+export const updateQuestProgress = (user: User, type: 'win' | 'participate' | 'action_button' | 'tournament_participate' | 'enhancement_attempt' | 'craft_attempt' | 'chat_greeting' | 'tournament_complete' | 'login' | 'claim_daily_milestone_100' | 'claim_weekly_milestone_100' | 'tower_challenge_participate' | 'claim_single_player_mission' | 'tournament_match_played', mode?: GameMode, amount: number = 1) => {
     if (!user.quests) return;
     const isStrategic = mode ? SPECIAL_GAME_MODES.some(m => m.mode === mode) : false;
     const isPlayful = mode ? PLAYFUL_GAME_MODES.some(m => m.mode === mode) : false;
@@ -141,9 +141,11 @@ export const updateQuestProgress = (user: User, type: 'win' | 'participate' | 'a
             case '자동대국 토너먼트 참여하기': if (type === 'tournament_participate') shouldUpdate = true; break;
             case '장비 강화시도': if (type === 'enhancement_attempt') shouldUpdate = true; break;
             case '재료 합성시도': if (type === 'craft_attempt') shouldUpdate = true; break;
-            case '일일퀘스트 활약도100보상 받기(3/3)': if (type === 'claim_daily_milestone_100') shouldUpdate = true; break;
-            case '일일 퀘스트 활약도100 보상받기 10회': if (type === 'claim_daily_milestone_100') shouldUpdate = true; break;
-            case '주간퀘스트 활약도100보상 받기(2/2)': if (type === 'claim_weekly_milestone_100') shouldUpdate = true; break;
+            case '일일 퀘스트 활약도100 보상받기': if (type === 'claim_daily_milestone_100') shouldUpdate = true; break;
+            case '주간 퀘스트 활약도100 보상받기': if (type === 'claim_weekly_milestone_100') shouldUpdate = true; break;
+            case '도전의탑 도전하기': if (type === 'tower_challenge_participate') shouldUpdate = true; break;
+            case '싱글플레이 수련과제 수령하기': if (type === 'claim_single_player_mission') shouldUpdate = true; break;
+            case '자동대국 토너먼트 경기하기': if (type === 'tournament_match_played') shouldUpdate = true; break;
         }
 
         if (shouldUpdate) {

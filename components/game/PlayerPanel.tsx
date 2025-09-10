@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-// FIX: Import missing types from the centralized types file.
 import { Player, GameProps, GameMode, User, AlkkagiPlacementType, GameSettings, GameStatus, UserWithStatus } from '../../types/index.js';
 import Avatar from '../Avatar.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ALKKAGI_TURN_TIME_LIMIT, CURLING_TURN_TIME_LIMIT, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, aiUserId, AVATAR_POOL, BORDER_POOL, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
+import TurnCounterPanel from './TurnCounterPanel.js';
 
 const formatTime = (seconds: number) => {
     if (seconds < 0) seconds = 0;
@@ -316,9 +316,10 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
     const isRightAi = session.isAiGame && rightPlayerUser.id === aiUserId;
     
     const turnDuration = getTurnDuration(mode, session.gameStatus, settings);
+    const isTurnLimitedGame = !!session.autoEndTurnCount && session.autoEndTurnCount > 0;
 
     return (
-        <div className="flex justify-between items-start gap-2 flex-shrink-0 h-full">
+        <div className="flex justify-center items-stretch gap-2 flex-shrink-0 h-full">
             <SinglePlayerPanel
                 user={leftPlayerUser}
                 playerEnum={leftPlayerEnum}
@@ -339,6 +340,11 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
                 isSinglePlayer={isSinglePlayer}
                 isTowerChallenge={isTowerChallenge}
             />
+            {isSinglePlayer && isTurnLimitedGame && (
+                 <div className="hidden lg:flex flex-col justify-center items-center w-48 flex-shrink-0">
+                    <TurnCounterPanel session={session} />
+                </div>
+            )}
              <SinglePlayerPanel
                 user={rightPlayerUser}
                 playerEnum={rightPlayerEnum}

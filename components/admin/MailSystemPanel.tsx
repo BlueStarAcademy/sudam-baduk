@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 // FIX: Import missing types from the centralized types file.
-import { ServerAction, AdminProps, InventoryItem, InventoryItemType, User } from '../../types/index.js';
+import { ServerAction, AdminProps, InventoryItemType, User } from '../../types/index.js';
 import DraggableWindow from '../DraggableWindow.js';
 import Button from '../Button.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants.js';

@@ -1,7 +1,7 @@
-import * as types from '../../types.js';
-// FIX: Changed import path to avoid circular dependency
+
+
+import * as types from '../../types/index.js';
 import { transitionToPlaying } from './shared.js';
-// FIX: Correctly import endGame from summaryService.
 import { endGame } from '../summaryService.js';
 
 export const initializeCapture = (game: types.LiveGameSession, now: number) => {
@@ -104,14 +104,18 @@ export const updateCaptureState = (game: types.LiveGameSession, now: number) => 
                 if (game[timeKey] > 0) { // Main time expired
                     game[timeKey] = 0;
                     if (game.settings.byoyomiCount > 0 && game[byoyomiKey] > 0) {
-                        game[byoyomiKey]--;
+                        if (!game.isSinglePlayer && !game.isTowerChallenge) {
+                            game[byoyomiKey]--;
+                        }
                         game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                         game.turnStartTime = now;
                         return;
                     }
                 } else { // Byoyomi expired
                     if (game[byoyomiKey] > 0) {
-                        game[byoyomiKey]--;
+                        if (!game.isSinglePlayer && !game.isTowerChallenge) {
+                            game[byoyomiKey]--;
+                        }
                         game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                         game.turnStartTime = now;
                         return;

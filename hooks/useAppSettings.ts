@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Theme, SoundSettings, FeatureSettings, AppSettings, SoundCategory } from '../types.js';
+
+import { Theme, SoundSettings, FeatureSettings, AppSettings } from '../types.js';
 
 export const defaultSettings: AppSettings = {
     graphics: {

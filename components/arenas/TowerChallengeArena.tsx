@@ -10,7 +10,6 @@ import TowerChallengeInfoPanel from '../game/TowerChallengeInfoPanel.js';
 import { useClientTimer } from '../../hooks/useClientTimer.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import TimeoutFoulModal from '../TimeoutFoulModal.js';
-import TowerStatusPanel from '../game/TowerStatusPanel.js';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -42,6 +41,15 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     const [showFinalTerritory, setShowFinalTerritory] = useState(false);
     const [showTimeoutFoulModal, setShowTimeoutFoulModal] = useState(false);
     
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+    useEffect(() => {
+        const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
+        window.addEventListener('resize', checkIsMobile);
+        return () => window.removeEventListener('resize', checkIsMobile);
+    }, []);
+
     const prevGameStatus = usePrevious(gameStatus);
     const prevByoyomiBlack = usePrevious(session.blackByoyomiPeriodsLeft);
     const prevLastMove = usePrevious(session.lastMove);
@@ -98,15 +106,14 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     }, [session.floor]);
     
     return (
-        <div className={`w-full h-dvh flex flex-col px-4 py-1 lg:p-4 ${backgroundClass} text-stone-200`}>
-            <button onClick={handlers.openSettingsModal} className="absolute top-2 right-2 z-30 p-2 rounded-lg text-xl hover:bg-black/20 transition-colors" title="설정">⚙️</button>
+        <div className={`w-full h-dvh flex flex-col p-2 lg:p-4 ${backgroundClass} text-stone-200`}>
             {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={() => setShowTimeoutFoulModal(false)} />}
             
-            <main className="flex-1 flex flex-col items-center justify-center gap-2 lg:gap-4 max-w-7xl w-full mx-auto min-h-0">
-                <div className="w-full flex-shrink-0">
-                    <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isTowerChallenge={true} />
-                </div>
-                <div className="flex-1 w-full flex flex-row items-stretch gap-4 min-h-0">
+            <div className="flex-1 flex flex-col gap-2 min-h-0 max-w-7xl w-full mx-auto">
+                 <main className="flex-1 flex flex-col items-center justify-center min-w-0 min-h-0 gap-2">
+                    <div className="w-full flex-shrink-0">
+                        <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isTowerChallenge={true} />
+                    </div>
                     <div className="flex-1 w-full relative">
                         <div className="absolute inset-0">
                              <GameArena 
@@ -114,28 +121,52 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
                                 isMyTurn={isMyTurn} 
                                 myPlayerEnum={myPlayerEnum} 
                                 handleBoardClick={handleBoardClick} 
-                                isItemModeActive={false} 
+                                isItemModeActive={false}
                                 showTerritoryOverlay={showFinalTerritory} 
-                                isMobile={false}
+                                isMobile={isMobile}
                                 myRevealedMoves={[]}
                                 showLastMoveMarker={settings.features.lastMoveMarker}
                             />
                         </div>
                     </div>
-                    <div className="flex-shrink-0 flex items-center">
-                        <TowerStatusPanel session={session} />
-                    </div>
-                </div>
-                <div className="w-full flex flex-col-reverse md:flex-row gap-2 lg:gap-4 items-stretch flex-shrink-0">
-                    <div className="flex-1">
-                        <TowerChallengeInfoPanel session={session} />
-                    </div>
-                    <div className="flex flex-col gap-2 flex-shrink-0 w-full md:w-auto">
+                    <div className="w-full flex-shrink-0">
                         <TurnDisplay session={session} />
-                        <TowerChallengeControls {...gameProps} currentUser={currentUserWithStatus} />
                     </div>
-                </div>
-            </main>
+                     <div className="w-full flex-shrink-0 flex flex-col lg:flex-row gap-2">
+                        {!isMobile && (
+                            <div className="flex-1 min-h-[120px]">
+                               <TowerChallengeInfoPanel session={session} onOpenSettings={handlers.openSettingsModal} />
+                            </div>
+                        )}
+                        <div className={isMobile ? "w-full" : "lg:w-1/3"}>
+                            <TowerChallengeControls {...gameProps} currentUser={currentUserWithStatus} />
+                        </div>
+                    </div>
+                </main>
+                 {isMobile && (
+                    <>
+                        <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
+                            <button 
+                                onClick={() => setIsMobileSidebarOpen(true)} 
+                                className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg"
+                                aria-label="정보 보기"
+                            >
+                                <span className="relative font-bold text-lg">{'<'}</span>
+                            </button>
+                        </div>
+
+                        <div className={`fixed top-0 right-0 h-full w-[280px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMobileSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                            <div className="flex flex-col h-full p-2">
+                                 <button onClick={() => setIsMobileSidebarOpen(false)} className="self-end text-2xl font-bold text-tertiary hover:text-primary">&times;</button>
+                                 <div className="flex-grow">
+                                    <TowerChallengeInfoPanel session={session} onOpenSettings={handlers.openSettingsModal} />
+                                 </div>
+                            </div>
+                        </div>
+                        {isMobileSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMobileSidebarOpen(false)}></div>}
+                    </>
+                )}
+            </div>
 
              <GameModals 
                 {...gameProps}

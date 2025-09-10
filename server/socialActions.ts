@@ -1,7 +1,8 @@
+
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
-import { type ServerAction, type User, type VolatileState, ChatMessage, UserStatus, type Negotiation, TournamentType } from '.././types.js';
-import * as types from '.././types.js';
+import { type ServerAction, type User, type VolatileState, ChatMessage, UserStatus, type Negotiation, TournamentType } from '../types/index.js';
+import * as types from '../types/index.js';
 import { updateQuestProgress } from '././questService.js';
 import { containsProfanity } from '.././profanity.js';
 import * as tournamentService from './tournamentService.js';
@@ -220,8 +221,12 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             const game = await db.getLiveGame(gameId);
             if (!game) return { error: 'Game not found.' };
 
+            // FIX: AI games should return to 'online' status, not a waiting room.
             if (volatileState.userStatuses[user.id]) {
-                volatileState.userStatuses[user.id] = { status: 'waiting', mode: game.mode };
+                volatileState.userStatuses[user.id] = { status: 'online' };
+                delete volatileState.userStatuses[user.id].mode;
+                delete volatileState.userStatuses[user.id].gameId;
+                delete volatileState.userStatuses[user.id].spectatingGameId;
             }
             
             // If the user leaves before the game is officially over (e.g. resigns), end the game.

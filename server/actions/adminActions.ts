@@ -8,6 +8,7 @@ import { createItemFromTemplate } from '../shop.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants.js';
 import * as mannerService from '../mannerService.js';
 import { containsProfanity } from '../../profanity.js';
+import * as effectService from '../effectService.js';
 
 type HandleActionResult = { 
     clientResponse?: any;
@@ -216,6 +217,21 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
              await createAdminLog(user, 'send_mail', { id: targetSpecifier, nickname: targetSpecifier }, { mailTitle: title });
             return {};
         }
+        case 'ADMIN_GIVE_ACTION_POINTS': {
+            const { targetUserId, amount } = payload as { targetUserId: string; amount: number };
+            const targetUser = await db.getUser(targetUserId);
+            if (!targetUser) return { error: '대상 사용자를 찾을 수 없습니다.' };
+            if (isNaN(amount) || amount <= 0) return { error: '유효한 수량을 입력하세요.' };
+        
+            targetUser.actionPoints.current += amount;
+            
+            const effects = effectService.calculateUserEffects(targetUser);
+            targetUser.actionPoints.max = effects.maxActionPoints;
+        
+            await db.updateUser(targetUser);
+            await createAdminLog(user, 'give_action_points', targetUser, { amount });
+            return {};
+        }
         case 'ADMIN_REORDER_ANNOUNCEMENTS': {
             await db.setKV('announcements', payload.announcements);
             return {};
@@ -345,6 +361,7 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             targetUser.playfulXp = Number(updatedDetails.playfulXp) || 0;
             targetUser.gold = Number(updatedDetails.gold) || 0;
             targetUser.diamonds = Number(updatedDetails.diamonds) || 0;
+            targetUser.actionPoints.current = Number(updatedDetails.actionPoints.current) || 0;
             targetUser.mannerScore = Number(updatedDetails.mannerScore) || 200;
             
             if (updatedDetails.quests) {

@@ -1,6 +1,6 @@
-import { LiveGameSession, Player, User, GameSummary, StatChange, GameMode, InventoryItem, SpecialStat, WinReason, SinglePlayerStageInfo, QuestReward } from '../types.js';
+import { LiveGameSession, Player, User, GameSummary, StatChange, GameMode, InventoryItem, SpecialStat, WinReason, SinglePlayerStageInfo, QuestReward, AnalysisResult } from '../types.js';
 import * as db from './db.js';
-import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../constants.js';
+import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, TOWER_STAGES, NO_CONTEST_MOVE_THRESHOLD, DEFAULT_KOMI } from '../constants.js';
 import { updateQuestProgress } from './questService.js';
 import * as mannerService from './mannerService.js';
 import { openEquipmentBox1 } from './shop.js';
@@ -8,8 +8,101 @@ import * as effectService from './effectService.js';
 import { randomUUID } from 'crypto';
 import { aiUserId, getAiUser } from './aiPlayer.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inventoryUtils.js';
+import { getGoLogic } from './goLogic.js';
+import * as types from '../types/index.js';
+import { analyzeGame } from './kataGoService.js';
+import { finalizeAnalysisResult } from './gameModes.js';
 
 const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
+
+// FIX: Moved getGameResult here from gameModes.ts to resolve circular dependency.
+export const getGameResult = (game: LiveGameSession): LiveGameSession => {
+    const isMissileMode = game.mode === types.GameMode.Missile || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Missile));
+    const p1MissilesUsed = (game.settings.missileCount ?? 0) - (game.missiles_p1 ?? game.settings.missileCount ?? 0);
+    const p2MissilesUsed = (game.settings.missileCount ?? 0) - (game.missiles_p2 ?? game.settings.missileCount ?? 0);
+    const hasUsedMissile = isMissileMode && (p1MissilesUsed > 0 || p2MissilesUsed > 0);
+
+    const isHiddenMode = game.mode === types.GameMode.Hidden || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Hidden));
+    const p1ScansUsed = (game.settings.scanCount ?? 0) - (game.scans_p1 ?? game.settings.scanCount ?? 0);
+    const p2ScansUsed = (game.settings.scanCount ?? 0) - (game.scans_p2 ?? game.settings.scanCount ?? 0);
+    const hasUsedScan = isHiddenMode && (p1ScansUsed > 0 || p2ScansUsed > 0);
+
+    if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode) && game.moveHistory.length < NO_CONTEST_MOVE_THRESHOLD && !hasUsedMissile && !hasUsedScan) {
+        game.gameStatus = 'no_contest';
+        if (!game.noContestInitiatorIds) game.noContestInitiatorIds = [];
+        if (!game.noContestInitiatorIds.includes(game.player1.id)) game.noContestInitiatorIds.push(game.player1.id);
+        if (!game.noContestInitiatorIds.includes(game.player2.id)) game.noContestInitiatorIds.push(game.player2.id);
+        return game;
+    }
+    
+    const isGoBased = SPECIAL_GAME_MODES.some(m => m.mode === game.mode);
+    if (!isGoBased) {
+        game.gameStatus = 'ended';
+        return game;
+    }
+    
+    game.gameStatus = 'scoring';
+    game.winReason = 'score';
+    game.isAnalyzing = true;
+
+    const fallbackToInfluenceScoring = async (failedGame: LiveGameSession, reason: string) => {
+        console.warn(`[Scoring] KataGo analysis failed or was inconclusive. Reason: ${reason}. Falling back to influence-based scoring.`);
+        
+        const logic = getGoLogic(failedGame);
+        const { score } = logic.getScore();
+        
+        const komi = failedGame.finalKomi ?? failedGame.settings.komi ?? DEFAULT_KOMI;
+        failedGame.finalScores = {
+            black: score.black,
+            white: score.white + komi
+        };
+        
+        failedGame.isAnalyzing = false;
+        
+        const winner = failedGame.finalScores.black > failedGame.finalScores.white
+            ? types.Player.Black
+            : types.Player.White;
+            
+        await endGame(failedGame, winner, 'score');
+    };
+
+    analyzeGame(game, { maxVisits: 100 })
+        .then(async (baseAnalysis) => {
+            const freshGame = await db.getLiveGame(game.id);
+            if (!freshGame || freshGame.gameStatus !== 'scoring') return;
+
+            // Check for the error condition from kataGoService (empty/default result)
+            if (baseAnalysis.areaScore.black === 0 && baseAnalysis.areaScore.white === 0 && baseAnalysis.recommendedMoves.length === 0) {
+                await fallbackToInfluenceScoring(freshGame, "KataGo returned empty/default result.");
+                return;
+            }
+
+            const finalAnalysis = finalizeAnalysisResult(baseAnalysis, freshGame);
+
+            if (!freshGame.analysisResult) freshGame.analysisResult = {};
+            freshGame.analysisResult['system'] = finalAnalysis;
+            freshGame.finalScores = {
+                black: finalAnalysis.scoreDetails.black.total,
+                white: finalAnalysis.scoreDetails.white.total
+            };
+            freshGame.isAnalyzing = false;
+            
+            const winner = finalAnalysis.scoreDetails.black.total > finalAnalysis.scoreDetails.white.total
+                ? types.Player.Black
+                : types.Player.White;
+            
+            await endGame(freshGame, winner, 'score');
+        })
+        .catch(async (error) => {
+            console.error(`[AI Analysis] Scoring analysis promise rejected for game ${game.id}.`, error);
+            const freshGame = await db.getLiveGame(game.id);
+            if (freshGame && freshGame.gameStatus === 'scoring') {
+                await fallbackToInfluenceScoring(freshGame, "Promise rejection during analysis.");
+            }
+        });
+        
+    return game;
+};
 
 const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
     const userFromGame = game.player1; // Human is always player1 in single player
@@ -48,13 +141,17 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
     if (isWinner) {
         let isFirstClear = false;
         if (game.isTowerChallenge) {
-            const currentHighest = user.towerProgress?.highestFloor ?? 0;
-            if (game.floor! > currentHighest) {
-                user.towerProgress = {
-                    highestFloor: game.floor!,
-                    lastClearTimestamp: Date.now()
-                };
-                isFirstClear = true;
+            if (!user.towerProgress) {
+                user.towerProgress = { highestFloor: 0, lastClearTimestamp: 0 };
+            }
+            const currentHighest = user.towerProgress.highestFloor ?? 0;
+            if (typeof game.floor === 'number') {
+                const newHighest = Math.max(currentHighest, game.floor);
+                user.towerProgress.highestFloor = newHighest; // Always update to the max
+                if (newHighest > currentHighest) {
+                    isFirstClear = true;
+                }
+                user.towerProgress.lastClearTimestamp = Date.now();
             }
         } else { // Regular single player
             const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
