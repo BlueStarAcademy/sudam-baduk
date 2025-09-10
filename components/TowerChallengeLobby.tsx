@@ -92,7 +92,7 @@ const StagePanel: React.FC<{
             <div className="text-xs text-stone-300 mt-1 pt-1 border-t border-stone-600">
                 <span className="font-semibold text-stone-400">최초 보상:</span>
                 <div className="flex items-center gap-3 mt-1">
-                    {stage.rewards.firstClear.gold > 0 && <span className="flex items-center gap-1"><img src="/images/Gold.png" alt="Gold" className="w-4 h-4"/>{stage.rewards.firstClear.gold}</span>}
+                    {(stage.rewards.firstClear.gold ?? 0) > 0 && <span className="flex items-center gap-1"><img src="/images/Gold.png" alt="Gold" className="w-4 h-4"/>{stage.rewards.firstClear.gold}</span>}
                     {stage.rewards.firstClear.exp > 0 && <span className="flex items-center gap-1">⭐{stage.rewards.firstClear.exp}</span>}
                     {stage.rewards.firstClear.items?.map(renderRewardItem)}
                 </div>

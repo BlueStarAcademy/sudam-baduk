@@ -1,19 +1,15 @@
-
 import express from 'express';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
-// FIX: Import `resetAndGenerateQuests` from the correct file `questService.js` and remove non-exported members from gameActions import.
-import { handleAction } from './gameActions.js';
+import { handleAction as mainHandleAction } from './gameActions.js';
 import { resetAndGenerateQuests } from './questService.js';
 import { regenerateActionPoints } from './effectService.js';
 import { updateGameStates } from './gameModes.js';
 import * as db from './db.js';
 import { analyzeGame } from './kataGoService.js';
-// FIX: Import missing types from the centralized types file.
 import * as types from '../types/index.js';
 import { LiveGameSession, User, UserCredentials, AppState, VolatileState, TowerRank } from '../types/index.js';
 import { processGameSummary, endGame } from './summaryService.js';
-// FIX: Correctly import from the placeholder module.
 import { aiUserId, getAiUser } from './aiPlayer.js';
 import { processRankingRewards, processWeeklyLeagueUpdates, updateWeeklyCompetitorsIfNeeded, processMonthlyTowerReset } from './scheduledTasks.js';
 import * as tournamentService from './tournamentService.js';
@@ -22,6 +18,7 @@ import { calculateTotalStats } from './statService.js';
 import { isSameDayKST } from '../utils/timeUtils.js';
 import { createDefaultBaseStats, createDefaultUser } from './initialData.js';
 import { containsProfanity } from '../profanity.js';
+import { handleAiGameAction } from './actions/aiGameActions.js';
 
 const processSinglePlayerMissions = (user: types.User): types.User => {
     const now = Date.now();
@@ -30,7 +27,6 @@ const processSinglePlayerMissions = (user: types.User): types.User => {
     }
 
     let userModified = false;
-    // We make a copy of the user object to modify. This is safer and avoids null issues.
     const updatedUser: types.User = JSON.parse(JSON.stringify(user));
 
     for (const missionId in updatedUser.singlePlayerMissions) {
@@ -38,7 +34,6 @@ const processSinglePlayerMissions = (user: types.User): types.User => {
         const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
 
         if (missionState && missionInfo && missionState.isStarted) {
-            // Ensure accumulatedAmount is a number
             if (typeof missionState.accumulatedAmount !== 'number') {
                 missionState.accumulatedAmount = 0;
                 userModified = true;
@@ -66,13 +61,11 @@ const processSinglePlayerMissions = (user: types.User): types.User => {
             }
         }
     }
-    // Return the updated user only if there were modifications.
     return userModified ? updatedUser : user;
 };
 
 
 const startServer = async () => {
-    // --- Initialize Database on Start ---
     try {
         await db.initializeDatabase();
     } catch (err) {
@@ -86,7 +79,6 @@ const startServer = async () => {
     app.use(cors());
     app.use(express.json({ limit: '10mb' }) as any);
 
-    // In-memory state for things that don't need to be persisted or are frequently changing.
     const volatileState: VolatileState = {
         userConnections: {},
         userStatuses: {},
@@ -97,23 +89,17 @@ const startServer = async () => {
         activeTournamentViewers: new Set(),
     };
 
-    // --- Constants ---
     const LOBBY_TIMEOUT_MS = 90 * 1000;
     const GAME_DISCONNECT_TIMEOUT_MS = 90 * 1000;
-    const DISCONNECT_TIMER_S = 90;
 
-    // --- Main Game Loop ---
     setInterval(async () => {
         try {
             const now = Date.now();
 
-            // --- START NEW OFFLINE AP REGEN LOGIC ---
-            // Fetch all users to regenerate AP even for those offline.
             const allUsers = await db.getAllUsers();
             for (const user of allUsers) {
                 let updatedUser = await regenerateActionPoints(user);
                 
-                // Ensure all users have base stats set to 100. This is a one-time migration for existing users.
                 const defaultBaseStats = createDefaultBaseStats();
                 let statsNeedUpdate = false;
                 if (!updatedUser.baseStats || 
@@ -124,14 +110,12 @@ const startServer = async () => {
                 }
         
                 if (statsNeedUpdate) {
-                    // If regenerateActionPoints didn't make a copy, we need to make one before mutating.
                     if (updatedUser === user) {
                         updatedUser = JSON.parse(JSON.stringify(user));
                     }
                     updatedUser.baseStats = defaultBaseStats;
                 }
                 
-                // --- Tournament Simulation Logic ---
                 let userModifiedByTournament = false;
                 const tournamentTypes: types.TournamentType[] = ['neighborhood', 'national', 'world'];
                 for (const type of tournamentTypes) {
@@ -143,24 +127,19 @@ const startServer = async () => {
                     }
                 }
                 
-                // Use the original check, but rename my flag to avoid confusion
                 if (userModifiedByTournament || JSON.stringify(user) !== JSON.stringify(updatedUser)) {
                     await db.updateUser(updatedUser);
                 }
             }
-            // --- END NEW OFFLINE AP REGEN LOGIC ---
 
             const activeGames = await db.getAllActiveGames();
             const originalGamesJson = activeGames.map(g => JSON.stringify(g));
             
-            // Handle ranking rewards
             await processRankingRewards(volatileState);
             await processMonthlyTowerReset();
 
-            // Handle user timeouts and disconnections
             const onlineUserIdsBeforeTimeoutCheck = Object.keys(volatileState.userConnections);
             for (const userId of onlineUserIdsBeforeTimeoutCheck) {
-                // Re-check if user is still connected, as they might have been removed by a previous iteration
                 if (!volatileState.userConnections[userId]) continue;
 
                 const user = await db.getUser(userId);
@@ -171,13 +150,10 @@ const startServer = async () => {
                 const timeoutDuration = (activeGame || (userStatus?.status === 'in-game' && userStatus?.gameId)) ? GAME_DISCONNECT_TIMEOUT_MS : LOBBY_TIMEOUT_MS;
 
                 if (now - volatileState.userConnections[userId] > timeoutDuration) {
-                    // User timed out. They are now disconnected. Remove them from active connections.
                     delete volatileState.userConnections[userId];
                     volatileState.activeTournamentViewers.delete(userId);
             
                     if (activeGame) {
-                        // User was in a game. Set the disconnection state for the single-player-disconnect logic.
-                        // Their userStatus remains for now, so we know they were in this game.
                         if (!activeGame.disconnectionState) {
                             activeGame.disconnectionCounts[userId] = (activeGame.disconnectionCounts[userId] || 0) + 1;
                             if (activeGame.disconnectionCounts[userId] >= 3) {
@@ -194,28 +170,22 @@ const startServer = async () => {
                             }
                         }
                     } else if (userStatus?.status === 'waiting') {
-                        // User was in waiting room, just remove connection, keep status for potential reconnect.
-                        // This allows them to refresh without being kicked out of the user list.
                         delete volatileState.userConnections[userId];
                     }
                     else {
-                        // User was not in a game (e.g., lobby), so we can safely remove their status too.
                         delete volatileState.userConnections[userId];
                         delete volatileState.userStatuses[userId];
                     }
                 }
             }
             
-            // Cleanup expired negotiations
             for (const negId of Object.keys(volatileState.negotiations)) {
                  const neg = volatileState.negotiations[negId];
                  if (now > neg.deadline) {
-                    // Only the challenger's status is 'negotiating', so only they need a status reset.
                     const challengerId = neg.challenger.id;
                     const challengerStatus = volatileState.userStatuses[challengerId];
 
                     if (challengerStatus?.status === 'negotiating') {
-                        // Check if they are part of another negotiation before setting to waiting
                         const hasOtherNegotiations = Object.values(volatileState.negotiations).some(
                             otherNeg => otherNeg.id !== negId && otherNeg.challenger.id === challengerId
                         );
@@ -238,7 +208,6 @@ const startServer = async () => {
             const onlineUserIds = Object.keys(volatileState.userConnections);
             let updatedGames = await updateGameStates(activeGames, now);
 
-            // Check for mutual disconnection
             for (const game of updatedGames) {
                 if (game.isAiGame || game.gameStatus === 'ended' || game.gameStatus === 'no_contest' || game.disconnectionState) continue;
 
@@ -259,14 +228,12 @@ const startServer = async () => {
                 }
             }
             
-            // Save any game that has been modified by the update function
             for (let i = 0; i < updatedGames.length; i++) {
                 if (JSON.stringify(updatedGames[i]) !== originalGamesJson[i]) {
                     await db.saveGame(updatedGames[i]);
                 }
             }
 
-            // Process any system messages generated by time-based events
             for (const game of updatedGames) {
                 if (game.pendingSystemMessages && game.pendingSystemMessages.length > 0) {
                     if (!volatileState.gameChats[game.id]) {
@@ -278,7 +245,6 @@ const startServer = async () => {
                 }
             }
 
-            // Handle post-game summary processing for strategic games that finished via analysis
             for (const game of updatedGames) {
                 if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode) && (game.gameStatus === 'ended' || game.gameStatus === 'no_contest') && !game.statsUpdated) {
                     await processGameSummary(game);
@@ -287,9 +253,7 @@ const startServer = async () => {
                 }
             }
             
-            // --- Game Room Garbage Collection for Ended Games ---
             const endedGames = await db.getAllEndedGames();
-
             for (const game of endedGames) {
                 const isAnyoneInRoom = Object.keys(volatileState.userConnections).some(onlineUserId => {
                     const status = volatileState.userStatuses[onlineUserId];
@@ -297,7 +261,6 @@ const startServer = async () => {
                 });
 
                 if (!isAnyoneInRoom) {
-                     // Also check if a rematch negotiation is active for this game
                     const isRematchBeingNegotiated = Object.values(volatileState.negotiations).some(
                         neg => neg.rematchOfGameId === game.id
                     );
@@ -314,7 +277,6 @@ const startServer = async () => {
         }
     }, 1000);
     
-    // --- API Endpoints ---
     app.post('/api/auth/register', async (req, res) => {
         try {
             const { username, nickname, password } = req.body;
@@ -352,7 +314,6 @@ const startServer = async () => {
             let credentials = await db.getUserCredentials(username);
 
             if (!credentials) {
-                // If not found by username, try by nickname
                 const userByNickname = await db.getUserByNickname(username);
                 if (userByNickname) {
                     credentials = await db.getUserCredentialsByUserId(userByNickname.id);
@@ -365,16 +326,12 @@ const startServer = async () => {
             let user = await db.getUser(credentials.userId);
             if (!user) return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
             
-            // Grant simple_black border to existing users on login if they don't have it
             if (!user.ownedBorders?.includes('simple_black')) {
-                if (!user.ownedBorders) {
-                    user.ownedBorders = ['default']; // Ensure array exists, though it should from user creation
-                }
+                if (!user.ownedBorders) user.ownedBorders = ['default'];
                 user.ownedBorders.push('simple_black');
             }
 
             const userBeforeUpdate = JSON.stringify(user);
-            // FIX: Defined `allUsersForCompetitors` before its use by fetching all users from the database.
             const allUsersForCompetitors = await db.getAllUsers();
             let updatedUser = await resetAndGenerateQuests(user);
             updatedUser = await processWeeklyLeagueUpdates(updatedUser);
@@ -382,55 +339,42 @@ const startServer = async () => {
             updatedUser = await updateWeeklyCompetitorsIfNeeded(updatedUser, allUsersForCompetitors);
             updatedUser = processSinglePlayerMissions(updatedUser);
 
-            // --- Stats Migration Logic ---
             const allGameModesList = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES].map(m => m.mode);
             let statsMigrated = false;
-            if (!updatedUser.stats) {
-                updatedUser.stats = {};
-            }
+            if (!updatedUser.stats) updatedUser.stats = {};
             for (const mode of allGameModesList) {
                 if (!updatedUser.stats[mode]) {
                     updatedUser.stats[mode] = { wins: 0, losses: 0, rankingScore: 1200 };
                     statsMigrated = true;
                 }
             }
-            // --- End Migration Logic ---
-
 
             if (userBeforeUpdate !== JSON.stringify(updatedUser) || statsMigrated) {
                 await db.updateUser(updatedUser);
                 user = updatedUser;
             }
 
-            // --- CONCURRENT LOGIN HANDLING ---
             if (volatileState.userConnections[user.id]) {
                 console.log(`[Auth] Concurrent login for ${user.nickname}. Terminating old session and establishing new one.`);
             }
             volatileState.userConnections[user.id] = Date.now();
             
-            // Find if the user has ANY active game, not just a disconnected one.
             const allActiveGames = await db.getAllActiveGames();
             const activeGame = allActiveGames.find(g => 
                 (g.player1.id === user!.id || g.player2.id === user!.id)
             );
     
             if (activeGame) {
-                // Reconnect them to the game.
-                // If there's a disconnection state for this user, clear it.
                 if (activeGame.disconnectionState?.disconnectedPlayerId === user!.id) {
                     activeGame.disconnectionState = null;
-                    // Clear the "no contest" option for the other player
                     const otherPlayerId = activeGame.player1.id === user!.id ? activeGame.player2.id : activeGame.player1.id;
                     if (activeGame.canRequestNoContest?.[otherPlayerId]) {
                         delete activeGame.canRequestNoContest[otherPlayerId];
                     }
                     await db.saveGame(activeGame);
                 }
-                // Always set their status to in-game, taking over the session.
                 volatileState.userStatuses[user!.id] = { status: 'in-game', mode: activeGame.mode, gameId: activeGame.id };
             } else {
-                // If they are not in an active game, just log them in as online.
-                // This correctly handles cases where they were in the waiting room or profile, overwriting the old status.
                 volatileState.userStatuses[user!.id] = { status: 'online' };
             }
             
@@ -451,16 +395,13 @@ const startServer = async () => {
 
             let user = await db.getUser(userId);
             if (!user) {
-                delete volatileState.userConnections[userId]; // Clean up just in case
+                delete volatileState.userConnections[userId];
                 return res.status(401).json({ message: '세션이 만료되었습니다. 다시 로그인해주세요.' });
             }
 
-            // Re-establish connection if user is valid but not in volatile memory (e.g., after server restart)
             if (!volatileState.userConnections[userId]) {
                 console.log(`[Auth] Re-establishing connection for user: ${user.nickname} (${userId})`);
                 volatileState.userConnections[userId] = Date.now();
-                // If user status is not present (e.g., server restart), set to online.
-                // If it IS present (e.g., they just refreshed), do NOT change it, preserving their 'waiting' status.
                 if (!volatileState.userStatuses[userId]) {
                     volatileState.userStatuses[userId] = { status: 'online' };
                 }
@@ -476,19 +417,15 @@ const startServer = async () => {
             updatedUser = await updateWeeklyCompetitorsIfNeeded(updatedUser, allUsersForCompetitors);
             updatedUser = processSinglePlayerMissions(updatedUser);
             
-            // --- Stats Migration Logic ---
             const allGameModesList = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES].map(m => m.mode);
             let statsMigrated = false;
-            if (!updatedUser.stats) {
-                updatedUser.stats = {};
-            }
+            if (!updatedUser.stats) updatedUser.stats = {};
             for (const mode of allGameModesList) {
                 if (!updatedUser.stats[mode]) {
                     updatedUser.stats[mode] = { wins: 0, losses: 0, rankingScore: 1200 };
                     statsMigrated = true;
                 }
             }
-            // --- End Migration Logic ---
 
             if (userBeforeUpdate !== JSON.stringify(updatedUser) || statsMigrated) {
                 await db.updateUser(updatedUser);
@@ -496,9 +433,7 @@ const startServer = async () => {
             
             const dbState = await db.getAllData();
     
-            // Add ended games that users are still in to the liveGames object
             for (const status of Object.values(volatileState.userStatuses)) {
-                // FIX: Cast status to any to access properties that may not exist on all UserStatusInfo types.
                 const gameId = (status as any).gameId || (status as any).spectatingGameId;
                 if (gameId && !dbState.liveGames[gameId]) {
                     const endedGame = await db.getLiveGame(gameId);
@@ -528,7 +463,6 @@ const startServer = async () => {
                     floor: u.towerProgress.highestFloor,
                 }));
 
-            // Combine persisted state with in-memory volatile state
             const fullState: Omit<AppState, 'userCredentials'> = {
                 ...dbState,
                 userConnections: volatileState.userConnections,
@@ -549,11 +483,10 @@ const startServer = async () => {
 
     app.post('/api/action', async (req, res) => {
         try {
-            const { userId } = req.body;
+            const { userId, type } = req.body;
 
-            // Allow registration without auth
-            if (req.body.type === 'REGISTER') {
-                 const result = await handleAction(volatileState, req.body);
+            if (type === 'REGISTER') {
+                 const result = await mainHandleAction(volatileState, req.body);
                  if (result.error) return res.status(400).json({ message: result.error });
                  return res.status(200).json({ success: true, ...result.clientResponse });
             }
@@ -568,16 +501,24 @@ const startServer = async () => {
                 return res.status(401).json({ message: '유효하지 않은 사용자입니다.' });
             }
 
-            // Re-establish connection if needed
             if (!volatileState.userConnections[userId]) {
                 console.log(`[Auth] Re-establishing connection on action for user: ${user.nickname} (${userId})`);
                 volatileState.userConnections[userId] = Date.now();
-                volatileState.userStatuses[userId] = { status: 'online' };
+                if (!volatileState.userStatuses[userId]) {
+                    volatileState.userStatuses[userId] = { status: 'online' };
+                }
             }
             
             volatileState.userConnections[userId] = Date.now();
 
-            const result = await handleAction(volatileState, req.body);
+            let result: types.HandleActionResult;
+            
+            const aiGameActions = ['START_SINGLE_PLAYER_GAME', 'START_TOWER_CHALLENGE_GAME', 'SINGLE_PLAYER_REFRESH_PLACEMENT'];
+            if (aiGameActions.includes(type)) {
+                result = await handleAiGameAction(volatileState, req.body, user);
+            } else {
+                result = await mainHandleAction(volatileState, req.body);
+            }
             
             if (result.error) {
                 return res.status(400).json({ message: result.error });

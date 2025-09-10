@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
 import Button from './Button.js';
-import { SinglePlayerLevel, ServerAction, UserWithStatus } from '../types.js';
+import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType } from '../types/index.js';
 import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../constants.js';
 
 const LEVEL_DATA: { id: SinglePlayerLevel; name: string; unlockRequirement: number; image: string; }[] = [
@@ -11,6 +11,14 @@ const LEVEL_DATA: { id: SinglePlayerLevel; name: string; unlockRequirement: numb
     { id: SinglePlayerLevel.고급, name: '고급반', unlockRequirement: 60, image: '/images/single/Academy3.png' },
     { id: SinglePlayerLevel.유단자, name: '유단자', unlockRequirement: 80, image: '/images/single/Academy4.png' },
 ];
+
+const gameTypeKorean: Record<GameType, string> = {
+    'capture': '따내기',
+    'survival': '살리기',
+    'speed': '스피드',
+    'missile': '미사일',
+    'hidden': '히든'
+};
 
 const StoneDisplay: React.FC<{
     baseSrc: string;
@@ -51,6 +59,12 @@ const StageListItem: React.FC<{
                       
     const rewards = isCleared ? stage.rewards.repeatClear : stage.rewards.firstClear;
     const rewardTitle = isCleared ? "반복 클리어 보상" : "최초 클리어 보상";
+    
+    const hasTargetScore = !!stage.targetScore;
+    const targetScoreText = hasTargetScore ? `흑${stage.targetScore!.black}/백${stage.targetScore!.white}` : '계가';
+    const targetScoreTitleText = hasTargetScore ? `목표 점수 흑 ${stage.targetScore!.black} / 백 ${stage.targetScore!.white}` : '자동 계가';
+    
+    const gameTypeDisplay = stage.gameType ? gameTypeKorean[stage.gameType] : '클래식';
 
     return (
         <div className={`flex items-center gap-3 p-2 rounded-lg border-2 transition-all duration-200 ${
@@ -63,6 +77,7 @@ const StageListItem: React.FC<{
                     <>
                         <span className="text-xs text-tertiary">스테이지</span>
                         <span className="font-bold text-[clamp(1.125rem,0.9rem+1.5vw,1.5rem)] text-primary">{stage.name.replace('스테이지 ', '')}</span>
+                        <span className="text-xs text-highlight -mt-1 font-semibold">{gameTypeDisplay}</span>
                     </>
                 )}
             </div>
@@ -72,9 +87,9 @@ const StageListItem: React.FC<{
                     <span className="text-xl">🤖</span>
                     <span className="font-semibold">Lv.{stage.katagoLevel}</span>
                 </div>
-                <div className="flex items-center gap-2 text-[clamp(0.875rem,0.75rem+1vw,1.125rem)]" title={`목표 점수 흑 ${stage.targetScore.black} / 백 ${stage.targetScore.white}`}>
+                <div className="flex items-center gap-2 text-[clamp(0.875rem,0.75rem+1vw,1.125rem)]" title={targetScoreTitleText}>
                     <span className="font-bold text-tertiary">목표:</span>
-                    <span className="font-bold text-highlight">흑{stage.targetScore.black}/백{stage.targetScore.white}</span>
+                    <span className="font-bold text-highlight">{targetScoreText}</span>
                 </div>
                 <div className="flex items-center gap-3">
                     <StoneDisplay baseSrc="/images/single/Black.png" count={stage.placements.black} title={`흑돌 ${stage.placements.black}개`} />
@@ -90,7 +105,7 @@ const StageListItem: React.FC<{
                 <div className="flex flex-col items-start gap-1" title={rewardTitle}>
                     <p className="text-xs text-yellow-400 font-semibold">{rewardTitle}</p>
                     <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
-                        {rewards.gold > 0 &&
+                        {(rewards.gold ?? 0) > 0 &&
                             <span className="flex items-center gap-1 text-xs" title={`골드 ${rewards.gold}`}>
                                 <img src="/images/Gold.png" alt="골드" className="w-5 h-5" />
                                 {rewards.gold}
@@ -167,10 +182,12 @@ const MissionCard: React.FC<{
     const [tick, setTick] = useState(0);
 
     useEffect(() => {
-        if (!isStarted) return;
+        if (!isStarted || accumulatedAmount >= mission.maxCapacity) {
+            return;
+        }
         const timerId = setInterval(() => setTick(t => t + 1), 1000);
         return () => clearInterval(timerId);
-    }, [isStarted]);
+    }, [isStarted, accumulatedAmount, mission.maxCapacity]);
 
     const { displayAmount, timeToNextReward } = useMemo(() => {
         if (!isStarted) {
@@ -337,7 +354,7 @@ const StageList: React.FC<{
     const isCurrentLevelLocked = userProgress < activeLevelData.unlockRequirement;
 
     return (
-        <div key={activeLevelData.id} className="w-full bg-panel border border-color rounded-lg p-4 flex flex-col min-h-0 animate-fade-in h-full">
+        <div key={activeLevelData.id} className="w-full bg-panel border border-color rounded-lg p-4 flex flex-col animate-fade-in flex-1 min-h-0">
             <h2 className="text-[clamp(1rem,0.8rem+1vw,1.25rem)] font-bold mb-4 flex-shrink-0 flex flex-wrap items-baseline gap-x-2">
                 <span>{activeLevelData.id} 스테이지 목록 ({clearedInLevel}/{stagesInLevel})</span>
                 <span className="text-sm font-normal text-tertiary ml-2 whitespace-nowrap">(총 진행도: {userProgress}/{SINGLE_PLAYER_STAGES.length})</span>
@@ -433,11 +450,10 @@ const SinglePlayerLobby: React.FC = () => {
                 <div className="w-32"></div>
             </header>
 
-            <main className="flex-1 min-h-0">
+            <main className="flex-1 min-h-0 flex flex-col">
                 {/* DESKTOP LAYOUT */}
                 <div className="hidden lg:flex flex-row gap-4 h-full">
                     <div className="w-[350px] flex-shrink-0 flex flex-col gap-4">
-                        {/* FIX: Removed invalid activeLevelIndex prop */}
                         <LevelSelectionPanel className="h-auto" activeLevelData={activeLevelData} onPrev={handlePrevLevel} onNext={handleNextLevel} />
                         <div className="flex-1 min-h-0 w-full">
                            <SinglePlayerMissions />
@@ -449,12 +465,9 @@ const SinglePlayerLobby: React.FC = () => {
                 </div>
 
                 {/* MOBILE LAYOUT */}
-                <div className="lg:hidden flex flex-col h-full gap-4 relative">
-                    {/* FIX: Removed invalid activeLevelIndex prop */}
+                <div className="lg:hidden flex flex-col flex-1 min-h-0 gap-4 relative">
                     <LevelSelectionPanel className="flex-shrink-0 max-w-xl mx-auto" activeLevelData={activeLevelData} onPrev={handlePrevLevel} onNext={handleNextLevel} />
-                    <div className="flex-1 min-h-0">
-                        <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus} handlers={handlers} />
-                    </div>
+                    <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus!} handlers={handlers} />
                     
                     <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
                         <button onClick={() => setIsMissionsPanelOpen(true)} className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg" aria-label="수련 과제 열기">

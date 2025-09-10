@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, ChatMessage, UserStatus, type Negotiation, TournamentType } from '../../types.js';
-import * as types from '../../types.js';
+import { type ServerAction, type User, type VolatileState, ChatMessage, UserStatus, type Negotiation, TournamentType } from '../../types/index.js';
+import * as types from '../../types/index.js';
 import { updateQuestProgress } from './../questService.js';
 import { containsProfanity } from '../../profanity.js';
 import * as tournamentService from '../tournamentService.js';
@@ -221,7 +221,10 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             if (!game) return { error: 'Game not found.' };
 
             if (volatileState.userStatuses[user.id]) {
-                volatileState.userStatuses[user.id] = { status: 'waiting', mode: game.mode };
+                // Set to 'online' so the client can handle redirection via sessionStorage
+                volatileState.userStatuses[user.id].status = 'online';
+                delete volatileState.userStatuses[user.id].mode;
+                delete volatileState.userStatuses[user.id].gameId;
             }
             
             // If the user leaves before the game is officially over (e.g. resigns), end the game.

@@ -11,7 +11,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@google/genai": "^1.17.0",
+    "@google/genai": "^1.13.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "react": "^18.3.1",

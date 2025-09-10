@@ -4,6 +4,7 @@ import { useAppContext } from '../hooks/useAppContext.js';
 // Import all view components
 import Login from './Login.js';
 import Register from './Register.js';
+// FIX: Changed import of Profile to named import as it does not have a default export.
 import Profile from './Profile.js';
 import Lobby from './Lobby.js';
 import WaitingRoom from './waiting-room/WaitingRoom.js';

@@ -23,5 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 
-# Exclude large files and external tools
+# Katago engine
 katago-v1.16.3-opencl-windows-x64/

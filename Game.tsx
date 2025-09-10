@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-// FIX: Import types from the new centralized types barrel file
 import { Player, GameMode, GameStatus, Point, GameProps, LiveGameSession, ServerAction, AlkkagiStone } from './types/index.js';
 import GameArena from './components/GameArena.js';
 import Sidebar from './components/game/Sidebar.js';
@@ -12,10 +11,9 @@ import GameControls from './components/game/GameControls.js';
 import { PLAYFUL_GAME_MODES, SPECIAL_GAME_MODES } from './constants.js';
 import { useAppContext } from './hooks/useAppContext.js';
 import DisconnectionModal from './components/DisconnectionModal.js';
-// FIX: Import TimeoutFoulModal component to resolve 'Cannot find name' error.
 import TimeoutFoulModal from './components/TimeoutFoulModal.js';
-import SinglePlayerControls from './components/game/SinglePlayerControls.js';
-import SinglePlayerInfoPanel from './components/game/SinglePlayerInfoPanel.js';
+import SinglePlayerArena from './components/arenas/SinglePlayerArena.js';
+import TowerChallengeArena from './components/arenas/TowerChallengeArena.js';
 import { useClientTimer } from './hooks/useClientTimer.js';
 
 function usePrevious<T>(value: T): T | undefined {
@@ -48,7 +46,17 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     if (!player1?.id || !player2?.id || !currentUser || !currentUserWithStatus) {
         return <div className="flex items-center justify-center min-h-screen">플레이어 정보를 불러오는 중...</div>;
     }
-
+    
+    // --- AI Game Routing ---
+    if (session.isTowerChallenge) {
+        return <TowerChallengeArena session={session} />;
+    }
+    if (session.isSinglePlayer) {
+        return <SinglePlayerArena session={session} />;
+    }
+    // --- End AI Game Routing ---
+    
+    // --- PvP Game Logic ---
     const [confirmModalType, setConfirmModalType] = useState<'resign' | null>(null);
     const clientTimes = useClientTimer(session);
     const [showResultModal, setShowResultModal] = useState(false);
@@ -56,7 +64,6 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     const [justScanned, setJustScanned] = useState(false);
     const [pendingMove, setPendingMove] = useState<Point | null>(null);
     const [isAnalysisActive, setIsAnalysisActive] = useState(false);
-    const [showTimeoutFoulModal, setShowTimeoutFoulModal] = useState(false);
     
     const prevGameStatus = usePrevious(gameStatus);
     const prevCurrentPlayer = usePrevious(currentPlayer);
@@ -68,7 +75,6 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     const prevByoyomiWhite = usePrevious(session.whiteByoyomiPeriodsLeft);
 
     const isSpectator = useMemo(() => currentUserWithStatus?.status === 'spectating', [currentUserWithStatus]);
-    const isSinglePlayer = session.isSinglePlayer;
     
     // --- Mobile UI State ---
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -104,16 +110,8 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
         if (gameHasJustEnded) {
             setShowResultModal(true);
             setShowFinalTerritory(true);
-            if (isSinglePlayer) {
-                // Human is always black in single player
-                if (session.winner === Player.Black) {
-                    audioService.gameWin();
-                } else {
-                    audioService.gameLose();
-                }
-            }
         }
-    }, [gameStatus, prevGameStatus, isSinglePlayer, session.winner]);
+    }, [gameStatus, prevGameStatus]);
     
     const myPlayerEnum = useMemo(() => {
         if (isSpectator) return Player.None;
@@ -211,19 +209,19 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
         
         if (isMyTurn && !isGameOver) {
             const myTime = myPlayerEnum === Player.Black ? clientTimes.clientTimes.black : clientTimes.clientTimes.white;
-            if (myTime <= 10 && myTime > 0 && !warningSoundPlayedForTurn.current) {
+            
+            const myMainTimeLeft = myPlayerEnum === Player.Black ? session.blackTimeLeft : session.whiteTimeLeft;
+            const hasByoyomi = (session.settings.byoyomiCount ?? 0) > 0;
+            
+            const isInByoyomi = myMainTimeLeft <= 0 && hasByoyomi;
+            const isPlayfulFoulMode = PLAYFUL_GAME_MODES.some(m => m.mode === session.mode) && ![GameMode.Omok, GameMode.Ttamok].includes(session.mode);
+
+            if ((isInByoyomi || isPlayfulFoulMode) && myTime <= 10 && myTime > 0 && !warningSoundPlayedForTurn.current) {
                 audioService.timerWarning();
                 warningSoundPlayedForTurn.current = true;
             }
         }
-    }, [isMyTurn, clientTimes.clientTimes, myPlayerEnum, session.moveHistory, prevMoveCount, gameStatus, session.blackByoyomiPeriodsLeft, session.whiteByoyomiPeriodsLeft, prevByoyomiBlack, prevByoyomiWhite]);
-
-    useEffect(() => {
-        if (isSinglePlayer && prevByoyomiBlack !== undefined && session.blackByoyomiPeriodsLeft < prevByoyomiBlack) {
-            audioService.timeoutFoul();
-            setShowTimeoutFoulModal(true);
-        }
-    }, [isSinglePlayer, session.blackByoyomiPeriodsLeft, prevByoyomiBlack]);
+    }, [isMyTurn, clientTimes.clientTimes, myPlayerEnum, session.moveHistory, prevMoveCount, gameStatus, session.blackByoyomiPeriodsLeft, session.whiteByoyomiPeriodsLeft, prevByoyomiBlack, prevByoyomiWhite, session.blackTimeLeft, session.whiteTimeLeft, session.settings.byoyomiCount, session.mode, session.settings.mixedModes]);
 
 
     const isItemModeActive = ['hidden_placing', 'scanning', 'missile_selecting', 'missile_animating', 'scanning_animating'].includes(gameStatus);
@@ -292,8 +290,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
             return;
         }
         if (['ended', 'no_contest', 'rematch_pending'].includes(gameStatus)) {
-            const actionType = session.isAiGame ? 'LEAVE_AI_GAME' : 'LEAVE_GAME_ROOM';
-            handlers.handleAction({ type: actionType, payload: { gameId } });
+            handlers.handleAction({ type: 'LEAVE_GAME_ROOM', payload: { gameId } });
             return;
         }
         if (isNoContestLeaveAvailable) {
@@ -303,7 +300,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
         } else {
             setConfirmModalType('resign');
         }
-    }, [isSpectator, handlers.handleAction, session.isAiGame, gameId, gameStatus, isNoContestLeaveAvailable]);
+    }, [isSpectator, handlers.handleAction, session.isAiGame, session.mode, gameId, gameStatus, isNoContestLeaveAvailable]);
     
     const globalChat = useMemo(() => waitingRoomChats['global'] || [], [waitingRoomChats]);
     
@@ -321,69 +318,8 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
         onlineUsers, pendingMove, onConfirmMove: handleConfirmMove, onCancelMove: handleCancelMove, settings, isMobile,
     };
 
-    const backgroundClass = useMemo(() => {
-        if (session.isTowerChallenge) {
-            return session.floor === 100 ? 'bg-tower-100' : 'bg-tower-default';
-        }
-        if (isSinglePlayer) {
-            return 'bg-wood-pattern';
-        }
-        return 'bg-tertiary'; // Default for PvP games
-    }, [isSinglePlayer, session.isTowerChallenge, session.floor]);
-    
-    if (isSinglePlayer) {
-        return (
-            <div className={`w-full h-dvh flex flex-col px-4 py-1 lg:p-4 ${backgroundClass} text-stone-200`}>
-                <button
-                    onClick={handlers.openSettingsModal}
-                    className="absolute top-2 right-2 z-30 p-2 rounded-lg text-xl hover:bg-black/20 transition-colors"
-                    title="설정"
-                >
-                    ⚙️
-                </button>
-                {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={() => setShowTimeoutFoulModal(false)} />}
-                <main className="flex-1 flex flex-col items-center justify-center gap-2 lg:gap-4 max-w-5xl w-full mx-auto min-h-0">
-                    <div className="w-full flex-shrink-0">
-                        <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isSinglePlayer={true} />
-                    </div>
-                    <div className="flex-1 w-full relative">
-                        <div className="absolute inset-0">
-                             <GameArena 
-                                {...gameProps}
-                                isMyTurn={isMyTurn} 
-                                myPlayerEnum={myPlayerEnum} 
-                                handleBoardClick={handleBoardClick} 
-                                isItemModeActive={isItemModeActive} 
-                                showTerritoryOverlay={showFinalTerritory} 
-                                isMobile={isMobile}
-                                myRevealedMoves={session.revealedHiddenMoves?.[currentUser.id] || []}
-                                showLastMoveMarker={settings.features.lastMoveMarker}
-                            />
-                        </div>
-                    </div>
-                    <div className="w-full flex flex-col-reverse md:flex-row gap-2 lg:gap-4 items-stretch flex-shrink-0">
-                        <div className="flex-1">
-                            <SinglePlayerInfoPanel session={session} />
-                        </div>
-                        <div className="flex flex-col gap-2 flex-shrink-0 w-full md:w-auto">
-                            <TurnDisplay session={session} />
-                            <SinglePlayerControls {...gameProps} currentUser={currentUserWithStatus} />
-                        </div>
-                    </div>
-                </main>
-                 <GameModals 
-                    {...gameProps}
-                    confirmModalType={confirmModalType}
-                    onHideConfirmModal={() => setConfirmModalType(null)}
-                    showResultModal={showResultModal}
-                    onCloseResults={handleCloseResults}
-                />
-            </div>
-        );
-    }
-
     return (
-        <div className={`w-full h-dvh flex flex-col p-1 lg:p-2 relative max-w-full ${backgroundClass}`}>
+        <div className="w-full h-dvh flex flex-col p-1 lg:p-2 relative max-w-full bg-tertiary">
             {session.disconnectionState && <DisconnectionModal session={session} currentUser={currentUser} />}
             {session.gameStatus === 'scoring' && (
                 <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-30">

@@ -1,7 +1,8 @@
 import * as types from '../../types.js';
 // FIX: Changed import path to avoid circular dependency
 import { transitionToPlaying } from './shared.js';
-import * as summaryService from '../summaryService.js';
+// FIX: Correctly import endGame from summaryService.
+import { endGame } from '../summaryService.js';
 
 export const initializeCapture = (game: types.LiveGameSession, now: number) => {
     const p1Id = game.player1.id;
@@ -122,7 +123,7 @@ export const updateCaptureState = (game: types.LiveGameSession, now: number) => 
                 game.lastTimeoutPlayerId = game.currentPlayer === types.Player.Black ? game.blackPlayerId : game.whitePlayerId;
                 game.lastTimeoutPlayerIdClearTime = now + 5000;
                 
-                summaryService.endGame(game, winner, 'timeout');
+                endGame(game, winner, 'timeout');
             }
             break;
         }

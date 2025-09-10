@@ -115,14 +115,14 @@ const PlayerList: React.FC<PlayerListProps> = ({ users, onAction, currentUser, m
     };
 
     return (
-        <div className="p-3 flex flex-col min-h-0 text-on-panel">
+        <div className="p-3 flex flex-col min-h-0 text-on-panel h-full">
              <h2 className="text-xl font-semibold mb-2 border-b border-color pb-2 flex-shrink-0">유저 목록</h2>
             {me && (
               <div className="flex-shrink-0 mb-2">
                   {renderUserItem(me, true)}
               </div>
             )}
-            <ul className="space-y-2 overflow-y-auto pr-2 max-h-[calc(var(--vh,1vh)*25)] min-h-[96px]">
+            <ul className="space-y-2 overflow-y-auto pr-2 flex-1 min-h-0">
                 {otherUsers.length > 0 ? otherUsers.map(user => renderUserItem(user, false)) : (
                     <p className="text-center text-tertiary pt-8">다른 플레이어가 없습니다.</p>
                 )}

@@ -3,6 +3,7 @@ import * as db from '../db.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul } from './shared.js';
 import { aiUserId } from '../aiPlayer.js';
 import { CURLING_TURN_TIME_LIMIT, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
+// FIX: Correctly import summaryService to resolve module not found error.
 import { endGame } from '../summaryService.js';
 import * as effectService from '../effectService.js';
 

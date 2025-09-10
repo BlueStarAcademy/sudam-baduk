@@ -316,13 +316,19 @@ export type StageInfo = {
     };
 };
 
+export type GameType = 'capture' | 'survival' | 'speed' | 'missile' | 'hidden';
+
+export type TimeControl =
+  | { type: 'byoyomi'; mainTime: number; byoyomiTime: number; byoyomiCount: number }
+  | { type: 'fischer'; mainTime: number; increment: number };
+
 export type SinglePlayerStageInfo = {
     id: string;
     name: string;
     level: SinglePlayerLevel;
     actionPointCost: number;
     boardSize: 7 | 9 | 11 | 13;
-    targetScore: { black: number; white: number; };
+    targetScore?: { black: number; white: number; };
     katagoLevel: number;
     placements: {
         black: number;
@@ -331,19 +337,18 @@ export type SinglePlayerStageInfo = {
         whitePattern: number;
         centerBlackStoneChance?: number;
     };
-    timeControl: {
-        type: 'byoyomi' | 'fischer';
-        mainTime: number; // minutes
-        byoyomiTime?: number; // seconds
-        byoyomiCount?: number;
-        increment?: number; // seconds
-    };
+    timeControl: TimeControl;
     rewards: {
-        firstClear: { gold: number; exp: number; items?: { itemId: string; quantity: number }[]; bonus?: string };
+        firstClear: { gold?: number; exp: number; items?: { itemId: string; quantity: number }[]; bonus?: string };
         repeatClear: { gold: number; exp: number; items?: { itemId: string; quantity: number }[]; bonus?: string };
     };
+    gameType?: GameType;
+    autoEndTurnCount?: number;
     blackStoneLimit?: number;
-    // FIX: Add missing properties for Tower Challenge stages.
+    whiteStoneLimit?: number;
+    missileCount?: number;
+    hiddenStoneCount?: number;
+    scanCount?: number;
     floor?: number;
     position?: { x: string; y: string; };
 };

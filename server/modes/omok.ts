@@ -3,9 +3,7 @@ import * as db from '../db.js';
 import { getOmokLogic } from '../omokLogic.js';
 import { handleSharedAction, updateSharedGameState } from './shared.js';
 import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
-// FIX: Changed import path to avoid circular dependency
 import { transitionToPlaying } from './shared.js';
-
 
 export const initializeOmok = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {
     if (game.isAiGame) {
@@ -34,6 +32,49 @@ export const updateOmokState = (game: types.LiveGameSession, now: number) => {
         game.winner = timedOutPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
         game.winReason = 'timeout';
         game.gameStatus = 'ended';
+    }
+    
+    // Handle RPS reveal for Omok/Ttamok after a tie in turn preference
+    const p1Id = game.player1.id;
+    const p2Id = game.player2.id;
+    if (game.gameStatus === 'omok_rps_reveal' || game.gameStatus === 'ttamok_rps_reveal') {
+        if (game.revealEndTime && now > game.revealEndTime) {
+            const p1Choice = game.rpsState?.[p1Id];
+            const p2Choice = game.rpsState?.[p2Id];
+
+            if (p1Choice && p2Choice) {
+                let winnerId: string | null = null;
+                if (p1Choice !== p2Choice) {
+                    const p1Wins = (p1Choice === 'rock' && p2Choice === 'scissors') ||
+                                   (p1Choice === 'scissors' && p2Choice === 'paper') ||
+                                   (p1Choice === 'paper' && p2Choice === 'rock');
+                    winnerId = p1Wins ? p1Id : p2Id;
+                } else { // Tie on final round
+                    if ((game.rpsRound || 1) >= 3) {
+                        winnerId = Math.random() < 0.5 ? p1Id : p2Id;
+                    }
+                }
+                
+                if (winnerId) {
+                    const loserId = winnerId === p1Id ? p2Id : p1Id;
+                    const winnerChoice = game.turnChoices![winnerId]!;
+
+                    if (winnerChoice === 'first') {
+                        game.blackPlayerId = winnerId;
+                        game.whitePlayerId = loserId;
+                    } else {
+                        game.whitePlayerId = winnerId;
+                        game.blackPlayerId = loserId;
+                    }
+                    
+                    transitionToPlaying(game, now);
+                    // Clean up RPS state
+                    game.turnChoices = undefined;
+                    game.rpsState = undefined;
+                    game.rpsRound = undefined;
+                }
+            }
+        }
     }
 };
 
@@ -119,8 +160,8 @@ export const handleOmokAction = async (volatileState: types.VolatileState, game:
                     if (game.settings.timeLimit > 0) {
                         const nextPlayer = game.currentPlayer;
                         const nextTimeKey = nextPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                         const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
-                        const isNextInByoyomi = game[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
+                        const isNextInByoyomi = game[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0;
+
                         if (isNextInByoyomi) {
                             game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                         } else {

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ServerAction, AdminProps, GameMode, Announcement, OverrideAnnouncement } from '../../types.js';
+// FIX: Import missing types from the centralized types file.
+import { ServerAction, AdminProps, GameMode, Announcement, OverrideAnnouncement } from '../../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
 import Button from '../Button.js';
 

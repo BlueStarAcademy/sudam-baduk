@@ -77,78 +77,177 @@ export const getAiUser = (mode: types.GameMode, difficulty: number = 1, singlePl
         isMbtiPublic: false,
         singlePlayerProgress: 0,
         singlePlayerMissions: {},
-        // FIX: Add missing 'towerProgress' property to conform to User type.
         towerProgress: { highestFloor: 0, lastClearTimestamp: 0 },
     };
     return user;
 };
 
-
 const makeStrategicAiMove = async (game: types.LiveGameSession) => {
-    const { boardSize } = game.settings;
+    const logic = getGoLogic(game);
+    const board = game.boardState;
+    const boardSize = game.settings.boardSize;
+    const aiPlayer = game.currentPlayer;
+    const humanPlayer = aiPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
+    const aiLevel = game.settings.aiDifficulty || 1;
 
-    const allEmptyPoints: types.Point[] = [];
-    for(let y=0; y<boardSize; y++) {
-        for(let x=0; x<boardSize; x++) {
-            if(game.boardState[y][x] === types.Player.None) {
-                allEmptyPoints.push({x,y});
+    const setHumanPlayerTurn = () => {
+        const now = Date.now();
+        game.currentPlayer = humanPlayer;
+        game.turnStartTime = now;
+        if (game.settings.timeLimit > 0 || game.isSinglePlayer || game.isTowerChallenge) { // SP also needs timer reset.
+            const humanTimeKey = humanPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+            const byoyomiKey = humanPlayer === types.Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
+            const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
+            
+            const isInByoyomi = game[humanTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
+            if (isInByoyomi) {
+                game.turnDeadline = now + game.settings.byoyomiTime * 1000;
+            } else {
+                game.turnDeadline = now + game[humanTimeKey] * 1000;
+            }
+        }
+    };
+
+    const makeMove = async (move: Point) => {
+        const result = processMove(game.boardState, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
+        if (result.isValid) {
+            game.boardState = result.newBoardState;
+            game.captures[aiPlayer] += result.capturedStones.length;
+            game.koInfo = result.newKoInfo;
+            game.lastMove = move;
+            game.moveHistory.push({ player: aiPlayer, ...move });
+            game.passCount = 0;
+
+            if (game.isSinglePlayer || game.isTowerChallenge) {
+                // Check if AI (current player) won
+                const aiTarget = game.effectiveCaptureTargets![aiPlayer];
+                if (game.captures[aiPlayer] >= aiTarget) {
+                    await endGame(game, aiPlayer, 'capture_limit');
+                    return; // Game ended
+                }
+    
+                // Check if Human (opponent) won (this might happen if AI's move completes a capture for human, e.g. suicide)
+                const humanTarget = game.effectiveCaptureTargets![humanPlayer];
+                if (game.captures[humanPlayer] >= humanTarget) {
+                    await endGame(game, humanPlayer, 'capture_limit');
+                    return; // Game ended
+                }
+            }
+
+            setHumanPlayerTurn();
+        } else {
+            console.error(`[AI Error] AI tried to make an invalid move: ${JSON.stringify(move)}, reason: ${result.reason}`);
+            passTurn();
+        }
+    };
+
+    const passTurn = () => {
+        game.passCount++;
+        game.lastMove = { x: -1, y: -1 };
+        game.moveHistory.push({ player: aiPlayer, x: -1, y: -1 });
+        setHumanPlayerTurn();
+    };
+    
+    const allEmptyPoints: Point[] = [];
+    for (let y = 0; y < boardSize; y++) {
+        for (let x = 0; x < boardSize; x++) {
+            if (board[y][x] === types.Player.None) {
+                allEmptyPoints.push({ x, y });
             }
         }
     }
     
-    let movesToTry: Point[];
-
-    if (game.isTowerChallenge) {
-        const edgeZoneSize = 2; // Outermost 2 lines are considered edges
-        const centerPoints = allEmptyPoints.filter(p => 
-            p.x >= edgeZoneSize && p.x < boardSize - edgeZoneSize &&
-            p.y >= edgeZoneSize && p.y < boardSize - edgeZoneSize
-        );
-        const edgePoints = allEmptyPoints.filter(p => 
-            p.x < edgeZoneSize || p.x >= boardSize - edgeZoneSize ||
-            p.y < edgeZoneSize || p.y >= boardSize - edgeZoneSize
-        );
-
-        // Shuffle both to add variety within the zones
-        centerPoints.sort(() => 0.5 - Math.random());
-        edgePoints.sort(() => 0.5 - Math.random());
-
-        movesToTry = [...centerPoints, ...edgePoints];
-    } else {
-        allEmptyPoints.sort(() => 0.5 - Math.random());
-        movesToTry = allEmptyPoints;
-    }
-
-    for (const p of movesToTry) {
-        const move = { x: p.x, y: p.y, player: game.currentPlayer };
-        const result = processMove(game.boardState, move, game.koInfo, game.moveHistory.length);
-        if (result.isValid) {
-            game.boardState = result.newBoardState;
-            game.captures[game.currentPlayer] += result.capturedStones.length;
-            game.koInfo = result.newKoInfo;
-            game.lastMove = { x: p.x, y: p.y };
-            game.moveHistory.push(move);
-            game.passCount = 0;
-            
-            game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-            game.turnStartTime = Date.now();
-            if (game.settings.timeLimit > 0) {
-                const timeLeftKey = game.currentPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                game.turnDeadline = Date.now() + game[timeLeftKey] * 1000;
-            }
-            return;
+    // --- 1. Immediate Capture (100% rule) ---
+    const capturingMoves: { move: Point; captures: number }[] = [];
+    for (const p of allEmptyPoints) {
+        const result = processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length);
+        if (result.isValid && result.capturedStones.length > 0) {
+            capturingMoves.push({ move: p, captures: result.capturedStones.length });
         }
     }
 
-    // if no valid move, pass
-    game.passCount++;
-    game.lastMove = {x: -1, y: -1};
-    game.moveHistory.push({ player: game.currentPlayer, x: -1, y: -1 });
-    game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-    game.turnStartTime = Date.now();
-    if (game.settings.timeLimit > 0) {
-        const timeLeftKey = game.currentPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        game.turnDeadline = Date.now() + game[timeLeftKey] * 1000;
+    if (capturingMoves.length > 0) {
+        capturingMoves.sort((a, b) => b.captures - a.captures);
+        const bestCaptureCount = capturingMoves[0].captures;
+        const bestMoves = capturingMoves.filter(m => m.captures === bestCaptureCount);
+        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+        await makeMove(chosenMove);
+        return;
+    }
+
+    // --- 2. Put opponent groups in atari (100% rule) ---
+    const atariMoves: { move: Point; groupSize: number }[] = [];
+    const opponentGroups = logic.getAllGroups(humanPlayer, board);
+    for (const p of allEmptyPoints) {
+        const result = processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length);
+        if (result.isValid) {
+            for (const group of opponentGroups) {
+                if (group.libertyPoints.has(`${p.x},${p.y}`)) {
+                    const groupAfterMove = logic.findGroup(group.stones[0].x, group.stones[0].y, humanPlayer, result.newBoardState);
+                    if (groupAfterMove && groupAfterMove.liberties === 1) {
+                        atariMoves.push({ move: p, groupSize: group.stones.length });
+                        break; 
+                    }
+                }
+            }
+        }
+    }
+    if (atariMoves.length > 0) {
+        atariMoves.sort((a, b) => b.groupSize - a.groupSize);
+        const bestGroupSize = atariMoves[0].groupSize;
+        const bestMoves = atariMoves.filter(m => m.groupSize === bestGroupSize);
+        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+        await makeMove(chosenMove);
+        return;
+    }
+
+    // --- 3. Save own groups from atari (Probabilistic rule) ---
+    let saveProb = 0.5 + (aiLevel - 1) * 0.05;
+    if (aiLevel >= 10) saveProb = 1;
+
+    if (Math.random() < saveProb) {
+        const myGroups = logic.getAllGroups(aiPlayer, board);
+        const atariGroups = myGroups.filter(g => g.liberties === 1);
+        if (atariGroups.length > 0) {
+            const savingMoves: { move: Point; groupSize: number }[] = [];
+            for (const group of atariGroups) {
+                const libertyPointKey = group.libertyPoints.values().next().value;
+                if (libertyPointKey) {
+                    const [x, y] = libertyPointKey.split(',').map(Number);
+                    const move = { x, y };
+                    // Ensure the saving move isn't suicide
+                    const result = processMove(board, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
+                    if (result.isValid) {
+                        savingMoves.push({ move, groupSize: group.stones.length });
+                    }
+                }
+            }
+
+            if (savingMoves.length > 0) {
+                savingMoves.sort((a, b) => b.groupSize - a.groupSize); // Prioritize saving larger groups
+                const chosenMove = savingMoves[0].move;
+                await makeMove(chosenMove);
+                return;
+            }
+        }
+    }
+    
+    // --- 4. Center-oriented positional play (100% rule) ---
+    const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
+    if (validMoves.length === 0) {
+        passTurn();
+        return;
+    }
+
+    const centerPoints = validMoves.filter(p => p.x >= 2 && p.x < boardSize - 2 && p.y >= 2 && p.y < boardSize - 2);
+    if (centerPoints.length > 0) {
+        const chosenMove = centerPoints[Math.floor(Math.random() * centerPoints.length)];
+        await makeMove(chosenMove);
+        return;
+    } else {
+        const chosenMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+        await makeMove(chosenMove);
+        return;
     }
 };
 
@@ -162,15 +261,62 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
             const logic = getOmokLogic(game);
             let bestMove: types.Point | null = null;
             let maxScore = -1;
+            const opponent = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
+
+            const calculateScore = (x: number, y: number, player: types.Player, board: types.BoardState) => {
+                let score = 0;
+                const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
+                
+                const tempBoard = JSON.parse(JSON.stringify(board));
+                tempBoard[y][x] = player;
+
+                for (const { dx, dy } of directions) {
+                    const { length, openEnds } = logic.getLineStats(x, y, player, tempBoard, dx, dy);
+                    
+                    if (length >= 5) {
+                         if (player === types.Player.Black && game.settings.hasOverlineForbidden && length > 5) {
+                            return -100000;
+                        }
+                        return 100000;
+                    }
+                    if (length === 4) {
+                        if (openEnds === 2) score += 5000;
+                        else if (openEnds === 1) score += 500;
+                    }
+                    if (length === 3) {
+                        if (openEnds === 2) score += 200;
+                        else if (openEnds === 1) score += 20;
+                    }
+                    if (length === 2) {
+                        if (openEnds === 2) score += 5;
+                        else if (openEnds === 1) score += 1;
+                    }
+                }
+                
+                if (game.mode === types.GameMode.Ttamok) {
+                    const potentialCaptures = logic.checkPotentialCaptures(x, y, player, tempBoard);
+                    if (potentialCaptures > 0) {
+                        score += potentialCaptures * 25;
+                    }
+                }
+
+                return score;
+            };
 
             for (let y = 0; y < boardSize; y++) {
                 for (let x = 0; x < boardSize; x++) {
                     if (game.boardState[y][x] === types.Player.None) {
-                        let score = 0;
-                        const neighbors = logic.getLineInfo(x, y, game.boardState);
-                        score += Object.values(neighbors).reduce((s, l) => s + l, 0);
-                        if (score > maxScore) {
-                            maxScore = score;
+                        if (game.settings.has33Forbidden && game.currentPlayer === types.Player.Black && logic.is33(x, y, game.boardState)) {
+                            continue;
+                        }
+                        
+                        const myScore = calculateScore(x, y, game.currentPlayer, game.boardState);
+                        const opponentScore = calculateScore(x, y, opponent, game.boardState);
+
+                        const totalScore = myScore + opponentScore * 0.9;
+
+                        if (totalScore > maxScore) {
+                            maxScore = totalScore;
                             bestMove = { x, y };
                         }
                     }
@@ -197,7 +343,22 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                     }
                 }
             } else {
-                game.passCount++;
+                 const emptyPoints: Point[] = [];
+                for (let y = 0; y < boardSize; y++) {
+                    for (let x = 0; x < boardSize; x++) {
+                        if (game.boardState[y][x] === types.Player.None) {
+                            emptyPoints.push({ x, y });
+                        }
+                    }
+                }
+                if (emptyPoints.length > 0) {
+                    bestMove = emptyPoints[Math.floor(Math.random() * emptyPoints.length)];
+                    game.boardState[bestMove.y][bestMove.x] = game.currentPlayer;
+                    game.lastMove = bestMove;
+                    game.moveHistory.push({ player: game.currentPlayer, ...bestMove });
+                } else {
+                    game.passCount++;
+                }
             }
 
             game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
@@ -214,6 +375,57 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                 game.stonesToPlace = isOvershot ? -1 : dice1;
                 game.animation = { type: 'dice_roll_main', dice: { dice1, dice2: 0, dice3: 0 }, startTime: now, duration: 1500 };
                 game.gameStatus = 'dice_rolling_animating';
+            } else if (game.gameStatus === 'dice_placing') {
+                const goLogic = getGoLogic(game);
+                while ((game.stonesToPlace ?? 0) > 0) {
+                    const liberties = goLogic.getAllLibertiesOfPlayer(types.Player.White, game.boardState);
+                    if (liberties.length === 0) {
+                        break;
+                    }
+
+                    let maxCaptures = -1;
+                    let bestMoves: types.Point[] = [];
+
+                    for (const liberty of liberties) {
+                        // Simulate placing a stone at the liberty to see the outcome
+                        const tempResult = processMove(game.boardState, { ...liberty, player: types.Player.Black }, game.koInfo, game.moveHistory.length, { ignoreSuicide: true });
+                        
+                        if (tempResult.isValid) {
+                            const captures = tempResult.capturedStones.length;
+                            if (captures > maxCaptures) {
+                                maxCaptures = captures;
+                                bestMoves = [liberty]; // New best move found, start a new list
+                            } else if (captures === maxCaptures) {
+                                bestMoves.push(liberty); // Another move with the same capture count
+                            }
+                        }
+                    }
+                    
+                    if (bestMoves.length === 0) {
+                        // This should technically not be reached if liberties.length > 0
+                        // because maxCaptures starts at -1 and any valid move has captures >= 0.
+                        // But as a safeguard:
+                        console.warn("[AI Dice Go] No valid moves found among liberties. Breaking.");
+                        break;
+                    }
+
+                    const move = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+                    const result = processMove(game.boardState, { ...move, player: types.Player.Black }, game.koInfo, game.moveHistory.length, { ignoreSuicide: true });
+                    
+                    if(result.isValid) {
+                        game.boardState = result.newBoardState;
+                        game.diceCapturesThisTurn = (game.diceCapturesThisTurn || 0) + result.capturedStones.length;
+                        if(result.capturedStones.length > 0) {
+                            game.diceLastCaptureStones = result.capturedStones;
+                        }
+                    } else {
+                        console.error(`AI Dice Go placement failed for a chosen 'best move'. Liberty was: ${JSON.stringify(move)}`);
+                        // If somehow the best move is invalid, break to avoid issues.
+                        break;
+                    }
+                    game.stonesToPlace = (game.stonesToPlace ?? 1) - 1;
+                }
+                finishDiceGoPlacingTurn(game, aiUserId);
             }
             return;
         }
@@ -232,24 +444,52 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                 game.animation = { type: 'dice_roll_main', dice: { dice1, dice2, dice3: 0 }, startTime: now, duration: 1500 };
                 game.gameStatus = 'thief_rolling_animating';
             } else if (game.gameStatus === 'thief_placing') {
-                const goLogic = getGoLogic(game);
                 while ((game.stonesToPlace ?? 0) > 0) {
+                    const goLogic = getGoLogic(game);
                     let liberties: types.Point[];
                     if (myRole === 'thief') {
                         const noBlackStonesOnBoard = !game.boardState.flat().includes(types.Player.Black);
                         if (game.turnInRound === 1 || noBlackStonesOnBoard) {
-                            liberties = []; // Placeholder for all empty points
-                            for(let y=0; y<boardSize; y++) for(let x=0; x<boardSize; x++) if(game.boardState[y][x] === types.Player.None) liberties.push({x,y});
+                            liberties = [];
+                            for (let y = 0; y < boardSize; y++) for (let x = 0; x < boardSize; x++) if (game.boardState[y][x] === types.Player.None) liberties.push({ x, y });
                         } else {
                             liberties = goLogic.getAllLibertiesOfPlayer(types.Player.Black, game.boardState);
                         }
                     } else { // police
                         liberties = goLogic.getAllLibertiesOfPlayer(types.Player.Black, game.boardState);
                     }
-
                     if (liberties.length === 0) break;
+        
+                    let move: types.Point;
+                    if (myRole === 'thief') {
+                        let bestMoves: types.Point[] = [];
+                        let maxLiberties = -1;
+        
+                        for (const liberty of liberties) {
+                            const tempBoard = JSON.parse(JSON.stringify(game.boardState));
+                            tempBoard[liberty.y][liberty.x] = types.Player.Black;
+                            const tempGameForLogic = { ...game, boardState: tempBoard };
+                            const tempGoLogic = getGoLogic(tempGameForLogic);
+                            const newLiberties = tempGoLogic.getAllLibertiesOfPlayer(types.Player.Black, tempBoard).length;
+        
+                            if (newLiberties > maxLiberties) {
+                                maxLiberties = newLiberties;
+                                bestMoves = [liberty];
+                            } else if (newLiberties === maxLiberties) {
+                                bestMoves.push(liberty);
+                            }
+                        }
+                        
+                        if (bestMoves.length > 0) {
+                            move = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+                        } else {
+                            move = liberties[Math.floor(Math.random() * liberties.length)];
+                        }
+                    } else {
+                        // Police logic remains random
+                        move = liberties[Math.floor(Math.random() * liberties.length)];
+                    }
                     
-                    const move = liberties[Math.floor(Math.random() * liberties.length)];
                     const result = processMove(game.boardState, { ...move, player: game.currentPlayer }, game.koInfo, game.moveHistory.length, { ignoreSuicide: true });
                     if (result.isValid) {
                         game.boardState = result.newBoardState;

@@ -1,4 +1,3 @@
-// FIX: Import missing types from the centralized types file.
 import { LiveGameSession, Player, User, GameSummary, StatChange, GameMode, InventoryItem, SpecialStat, WinReason, SinglePlayerStageInfo, QuestReward } from '../types.js';
 import * as db from './db.js';
 import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../constants.js';
@@ -7,7 +6,6 @@ import * as mannerService from './mannerService.js';
 import { openEquipmentBox1 } from './shop.js';
 import * as effectService from './effectService.js';
 import { randomUUID } from 'crypto';
-// FIX: Correctly import aiUser and getAiUser.
 import { aiUserId, getAiUser } from './aiPlayer.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inventoryUtils.js';
 
@@ -53,7 +51,7 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
                 };
                 isFirstClear = true;
             }
-        } else {
+        } else { // Regular single player
             const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
             const currentProgress = user.singlePlayerProgress ?? 0;
             isFirstClear = currentProgress === stageIndex;

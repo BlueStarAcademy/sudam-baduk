@@ -1,16 +1,12 @@
-
-
-import * as types from '../../types.js';
+import * as types from '../../types/index.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../goLogic.js';
 import { handleSharedAction, updateSharedGameState } from './shared.js';
 import { DICE_GO_INITIAL_WHITE_STONES_BY_ROUND, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_TURN_CHOICE_TIME, DICE_GO_TURN_ROLL_TIME, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
 import * as effectService from '../effectService.js';
-// FIX: Correctly import summaryService to resolve module not found error.
 import { endGame } from '../summaryService.js';
 import { aiUserId } from '../aiPlayer.js';
 
-// FIX: Export `finishPlacingTurn` function to make it accessible to other modules like `aiPlayer.ts`.
 export function finishPlacingTurn(game: types.LiveGameSession, playerId: string) {
     const now = Date.now();
     const humanPlayerId = game.player1.id === aiUserId ? game.player2.id : game.player1.id;
@@ -609,27 +605,25 @@ export const handleDiceGoAction = async (volatileState: types.VolatileState, gam
             game.boardState = result.newBoardState;
             game.lastMove = { x, y };
             
-            const logicForWhiteGroup = getGoLogic(game);
-            const allWhiteLiberties = logicForWhiteGroup.getAllLibertiesOfPlayer(types.Player.White, game.boardState);
-            const whiteStoneCount = game.boardState.flat().filter(s => s === types.Player.White).length;
+            game.stonesToPlace = (game.stonesToPlace ?? 1) - 1;
 
-            if (whiteStoneCount > 0) {
-                game.lastWhiteGroupInfo = { size: whiteStoneCount, liberties: allWhiteLiberties.length };
+            const logicForWhiteGroup = getGoLogic(game);
+            const whiteStonesLeft = game.boardState.flat().filter(s => s === types.Player.White).length;
+            const remainingLiberties = whiteStonesLeft > 0 ? logicForWhiteGroup.getAllLibertiesOfPlayer(types.Player.White, game.boardState).length : 0;
+            
+            if (whiteStonesLeft > 0) {
+                game.lastWhiteGroupInfo = { size: whiteStonesLeft, liberties: remainingLiberties };
             } else {
                 game.lastWhiteGroupInfo = null;
             }
 
-            game.stonesToPlace = (game.stonesToPlace ?? 1) - 1;
-            const whiteStonesLeft = game.boardState.flat().filter(s => s === types.Player.White).length;
-
-            if (game.isDeathmatch && whiteStonesLeft === 0) {
-                endGame(game, myPlayerEnum, 'dice_win');
-                return {};
-            }
-
-            if (whiteStonesLeft === 0 || game.stonesToPlace <= 0) {
+            if (whiteStonesLeft === 0 || game.stonesToPlace <= 0 || remainingLiberties === 0) {
+                if (remainingLiberties === 0 && game.stonesToPlace > 0) {
+                     game.foulInfo = { message: `놓을 곳이 없어 턴이 종료됩니다.`, expiry: now + 4000 };
+                }
                 finishPlacingTurn(game, user.id);
             }
+
             await db.saveGame(game);
             return {};
         }

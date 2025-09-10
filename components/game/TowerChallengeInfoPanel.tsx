@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { LiveGameSession, GameMode, SinglePlayerLevel } from '../../types.js';
-import { SINGLE_PLAYER_STAGES } from '../../constants.js';
+import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants.js';
 
+// Re-using the proverb data from SinglePlayerInfoPanel
 const GO_TERMS_BY_LEVEL: Record<SinglePlayerLevel, { term: string; meaning: string }[]> = {
     [SinglePlayerLevel.입문]: [
         { term: "활로", meaning: "돌이 살아가는 길. 이 길이 모두 막히면 돌은 잡히게 됩니다." },
@@ -45,23 +46,17 @@ const GO_TERMS_BY_LEVEL: Record<SinglePlayerLevel, { term: string; meaning: stri
 };
 
 const GameInfoPanel: React.FC<{ session: LiveGameSession }> = ({ session }) => {
-    const { settings, stageId } = session;
-    const stageInfo = useMemo(() => SINGLE_PLAYER_STAGES.find(s => s.id === stageId), [stageId]);
-
-    const stageDisplayName = useMemo(() => {
-        if (!stageInfo) return stageId || '알 수 없는 스테이지';
-        // e.g., stageId "초급-4" becomes "초급-4 스테이지"
-        return `${stageInfo.id} 스테이지`;
-    }, [stageInfo, stageId]);
+    const { settings, stageId, floor } = session;
+    const stageInfo = useMemo(() => TOWER_STAGES.find(s => s.id === stageId), [stageId]);
 
     return (
         <div className="h-full bg-stone-800/60 backdrop-blur-sm p-3 rounded-md flex-shrink-0 border border-stone-700/50 text-stone-300">
-            <h3 className="text-base font-bold border-b border-stone-600/50 pb-1 mb-2 text-amber-300 text-center">
+            <h3 className="text-base font-bold border-b border-stone-600/50 pb-1 mb-2 text-red-300 text-center">
                 대국 정보
             </h3>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs">
-                <div className="font-semibold text-stone-400">스테이지:</div>
-                <div>{stageDisplayName}</div>
+                <div className="font-semibold text-stone-400">도전 층수:</div>
+                <div>{floor}층</div>
                 <div className="font-semibold text-stone-400">판 크기:</div>
                 <div>{settings.boardSize}x{settings.boardSize}</div>
                 <div className="font-semibold text-stone-400">AI 레벨:</div>
@@ -74,28 +69,27 @@ const GameInfoPanel: React.FC<{ session: LiveGameSession }> = ({ session }) => {
 };
 
 const ProverbPanel: React.FC<{ session: LiveGameSession }> = ({ session }) => {
-    const stageInfo = useMemo(() => SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId), [session.stageId]);
+    const stageInfo = useMemo(() => TOWER_STAGES.find(s => s.id === session.stageId), [session.stageId]);
     const currentLevel = useMemo(() => stageInfo?.level || SinglePlayerLevel.입문, [stageInfo]);
-    const termsForLevel = useMemo(() => GO_TERMS_BY_LEVEL[currentLevel], [currentLevel]);
+    const termsForLevel = useMemo(() => GO_TERMS_BY_LEVEL[currentLevel] || GO_TERMS_BY_LEVEL[SinglePlayerLevel.입문], [currentLevel]);
 
     const [termIndex, setTermIndex] = useState(0);
 
     useEffect(() => {
-        // When the level changes, reset the index to show a new term immediately.
         setTermIndex(Math.floor(Math.random() * termsForLevel.length));
-
         const timer = setInterval(() => {
             setTermIndex(prev => (prev + 1) % termsForLevel.length);
-        }, 15000); // Change term every 15 seconds
+        }, 15000);
         return () => clearInterval(timer);
     }, [termsForLevel]);
 
     const currentTerm = termsForLevel[termIndex % termsForLevel.length];
+    if (!currentTerm) return null;
 
     return (
         <div className="bg-stone-800/60 backdrop-blur-sm p-3 rounded-md flex-1 border border-stone-700/50 text-stone-300 flex flex-col items-center justify-center text-center">
-            <h3 className="text-base font-bold border-b border-stone-600/50 pb-1 mb-2 text-amber-300">
-                바둑 용어
+            <h3 className="text-base font-bold border-b border-stone-600/50 pb-1 mb-2 text-red-300">
+                바둑 격언
             </h3>
             <div className="flex-grow flex flex-col items-center justify-center">
                 <p className="text-2xl font-semibold text-stone-100">{currentTerm.term}</p>
@@ -105,11 +99,11 @@ const ProverbPanel: React.FC<{ session: LiveGameSession }> = ({ session }) => {
     );
 };
 
-interface SinglePlayerInfoPanelProps {
+interface TowerChallengeInfoPanelProps {
     session: LiveGameSession;
 }
 
-const SinglePlayerInfoPanel: React.FC<SinglePlayerInfoPanelProps> = ({ session }) => {
+const TowerChallengeInfoPanel: React.FC<TowerChallengeInfoPanelProps> = ({ session }) => {
     return (
         <div className="flex flex-col md:flex-row h-full gap-2">
             <GameInfoPanel session={session} />
@@ -118,4 +112,4 @@ const SinglePlayerInfoPanel: React.FC<SinglePlayerInfoPanelProps> = ({ session }
     );
 };
 
-export default SinglePlayerInfoPanel;
+export default TowerChallengeInfoPanel;

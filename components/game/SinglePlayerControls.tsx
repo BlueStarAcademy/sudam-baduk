@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { GameProps, Player } from '../../types.js';
 import Button from '../Button.js';
 import { SINGLE_PLAYER_STAGES } from '../../constants.js';
@@ -8,19 +8,28 @@ interface SinglePlayerControlsProps extends Pick<GameProps, 'session' | 'onActio
 const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, onAction, currentUser }) => {
     
     if (session.gameStatus === 'ended' || session.gameStatus === 'no_contest') {
-        const isWinner = session.winner === Player.Black;
         const currentStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId);
         const nextStage = SINGLE_PLAYER_STAGES[currentStageIndex + 1];
-        const canTryNext = isWinner && nextStage && (currentUser.singlePlayerProgress ?? 0) > currentStageIndex;
+        const isWinner = session.winner === Player.Black;
+
+        const canTryNext = useMemo(() => {
+            if (!isWinner || !nextStage) return false;
+            // The progress is the index of the *next* stage to be played.
+            // So if you just beat stage 5 (index 4), your progress is 5.
+            // You can try stage 6 (index 5) if your progress is >= 5.
+            return (currentUser.singlePlayerProgress ?? 0) > currentStageIndex;
+        }, [isWinner, nextStage, currentUser.singlePlayerProgress, currentStageIndex]);
 
         const handleRetry = () => {
             onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: session.stageId! } });
         };
+
         const handleNextStage = () => {
             if (canTryNext) {
                 onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: nextStage.id } });
             }
         };
+
         const handleExitToLobby = () => {
             sessionStorage.setItem('postGameRedirect', '#/singleplayer');
             onAction({ type: 'LEAVE_AI_GAME', payload: { gameId: session.id } });

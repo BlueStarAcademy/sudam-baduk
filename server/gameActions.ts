@@ -6,7 +6,7 @@ import { isDifferentDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../u
 import * as effectService from './effectService.js';
 import { regenerateActionPoints } from './effectService.js';
 import { updateGameStates } from './gameModes.js';
-import { DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ACTION_POINT_REGEN_INTERVAL_MS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES } from '../constants.js';
+import { DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ACTION_POINT_REGEN_INTERVAL_MS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SINGLE_PLAYER_MISSIONS, SINGLE_PLAYER_STAGES } from '../constants.js';
 import { initializeGame } from './gameModes.js';
 import { handleStrategicGameAction } from './modes/standard.js';
 import { handlePlayfulGameAction } from './modes/playful.js';
@@ -23,7 +23,8 @@ import { handleShopAction } from './actions/shopActions.js';
 import { handleSocialAction } from './actions/socialActions.js';
 import { handleTournamentAction } from './actions/tournamentActions.js';
 import { handleUserAction } from './actions/userActions.js';
-import { handleSinglePlayerAction } from './actions/singlePlayerActions.js';
+// FIX: Correctly import handleAiGameAction from singlePlayerActions.js
+import { handleAiGameAction } from './actions/singlePlayerActions.js';
 
 
 export type HandleActionResult = { 
@@ -179,7 +180,54 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
 
     // Non-Game actions
     if (type.startsWith('ADMIN_')) return handleAdminAction(volatileState, action, user);
-    if (type.includes('SINGLE_PLAYER') || type.includes('TOWER_CHALLENGE')) return handleSinglePlayerAction(volatileState, action, user);
+
+    if (type === 'START_SINGLE_PLAYER_MISSION') {
+        const { missionId } = payload;
+        const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
+        if (!missionInfo) return { error: 'Mission not found.' };
+
+        const requiredProgress = SINGLE_PLAYER_STAGES.findIndex(s => s.id === missionInfo.unlockStageId) + 1;
+        if ((user.singlePlayerProgress || 0) < requiredProgress) return { error: 'Mission not unlocked.' };
+
+        if (!user.singlePlayerMissions) user.singlePlayerMissions = {};
+        if (user.singlePlayerMissions[missionId]?.isStarted) return { error: 'Mission already started.' };
+
+        user.singlePlayerMissions[missionId] = {
+            id: missionId,
+            isStarted: true,
+            lastCollectionTime: Date.now(),
+            accumulatedAmount: 0,
+        };
+
+        await db.updateUser(user);
+        return { clientResponse: { updatedUser: user } };
+    }
+    if (type === 'CLAIM_SINGLE_PLAYER_MISSION_REWARD') {
+        const { missionId } = payload;
+        const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
+        if (!missionInfo) return { error: 'Mission not found.' };
+        if (!user.singlePlayerMissions || !user.singlePlayerMissions[missionId] || !user.singlePlayerMissions[missionId].isStarted) {
+            return { error: 'Mission not started.' };
+        }
+        
+        const missionState = user.singlePlayerMissions[missionId];
+        const amountToClaim = missionState.accumulatedAmount;
+        if (amountToClaim < 1) return { error: 'No rewards to claim.' };
+
+        if (missionInfo.rewardType === 'gold') {
+            user.gold += amountToClaim;
+        } else if (missionInfo.rewardType === 'diamonds') {
+            user.diamonds += amountToClaim;
+        }
+
+        missionState.accumulatedAmount = 0;
+        missionState.lastCollectionTime = Date.now();
+
+        await db.updateUser(user);
+        return { clientResponse: { updatedUser: user } };
+    }
+
+    if (type.includes('SINGLE_PLAYER') || type.includes('TOWER_CHALLENGE')) return handleAiGameAction(volatileState, action, user);
     if (type.includes('NEGOTIATION') || type === 'START_AI_GAME' || type === 'REQUEST_REMATCH' || type === 'CHALLENGE_USER' || type === 'SEND_CHALLENGE') return handleNegotiationAction(volatileState, action, user);
     if (type.startsWith('CLAIM_') || type.startsWith('DELETE_MAIL')) return handleRewardAction(volatileState, action, user);
     if (type.startsWith('BUY_') || type === 'PURCHASE_ACTION_POINTS' || type === 'EXPAND_INVENTORY') return handleShopAction(volatileState, action, user);

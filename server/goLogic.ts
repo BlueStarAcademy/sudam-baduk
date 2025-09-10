@@ -1,4 +1,3 @@
-
 import * as types from '../types.js';
 import type { LiveGameSession, Point, BoardState, Player as PlayerType } from '../types.js';
 

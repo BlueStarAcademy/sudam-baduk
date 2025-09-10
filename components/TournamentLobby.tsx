@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { UserWithStatus, TournamentState, TournamentType, User, ChatMessage, LeagueTier } from '../types.js';
+import { UserWithStatus, TournamentState, TournamentType, User, ChatMessage, LeagueTier } from '../types/index.js';
 import { TournamentBracket } from './TournamentBracket.js';
 import Button from './Button.js';
 import { TOURNAMENT_DEFINITIONS, AVATAR_POOL, LEAGUE_DATA, BORDER_POOL } from '../constants.js';
@@ -513,8 +513,8 @@ const TournamentLobby: React.FC = () => {
                         <div className="flex-1 min-w-0">
                             <WeeklyCompetitorsPanel setHasRankChanged={setHasRankChanged}/>
                         </div>
-                        <div className="w-auto flex-shrink-0">
-                            <QuickAccessSidebar fillHeight={true} compact={true}/>
+                        <div className="w-32 flex-shrink-0">
+                            <QuickAccessSidebar fillHeight={true} />
                         </div>
                     </div>
                     <div className="flex-1 min-h-0">

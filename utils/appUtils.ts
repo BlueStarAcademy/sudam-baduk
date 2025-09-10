@@ -1,4 +1,3 @@
-
 import { GameMode } from "../types.js";
 
 export type AppRoute = {

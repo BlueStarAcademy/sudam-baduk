@@ -5,8 +5,8 @@ import PlayerPanel from '../game/PlayerPanel.js';
 import GameModals from '../game/GameModals.js';
 import TurnDisplay from '../game/TurnDisplay.js';
 import { audioService } from '../../services/audioService.js';
-import SinglePlayerControls from '../game/SinglePlayerControls.js';
-import SinglePlayerInfoPanel from '../game/SinglePlayerInfoPanel.js';
+import TowerChallengeControls from '../game/TowerChallengeControls.js';
+import TowerChallengeInfoPanel from '../game/TowerChallengeInfoPanel.js';
 import { useClientTimer } from '../../hooks/useClientTimer.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import TimeoutFoulModal from '../TimeoutFoulModal.js';
@@ -19,11 +19,11 @@ function usePrevious<T>(value: T): T | undefined {
   return ref.current;
 }
 
-interface SinglePlayerArenaProps {
+interface TowerChallengeArenaProps {
     session: LiveGameSession;
 }
 
-const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
+const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) => {
     const { 
         currentUser, currentUserWithStatus, handlers, onlineUsers,
         waitingRoomChats, gameChats, negotiations, activeNegotiation, settings,
@@ -84,8 +84,10 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         session, onAction: handlers.handleAction, currentUser: currentUserWithStatus, waitingRoomChat: waitingRoomChats['global'] || [],
         gameChat: gameChats[session.id] || [], isSpectator: false, onlineUsers, activeNegotiation, negotiations: Object.values(negotiations), onViewUser: handlers.openViewingUser
     };
-
-    const backgroundClass = 'bg-academy-bg';
+    
+    const backgroundClass = useMemo(() => {
+        return session.floor === 100 ? 'bg-tower-100' : 'bg-tower-default';
+    }, [session.floor]);
     
     return (
         <div className={`w-full h-dvh flex flex-col px-4 py-1 lg:p-4 ${backgroundClass} text-stone-200`}>
@@ -113,11 +115,11 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                 </div>
                 <div className="w-full flex flex-col-reverse md:flex-row gap-2 lg:gap-4 items-stretch flex-shrink-0">
                     <div className="flex-1">
-                        <SinglePlayerInfoPanel session={session} />
+                        <TowerChallengeInfoPanel session={session} />
                     </div>
                     <div className="flex flex-col gap-2 flex-shrink-0 w-full md:w-auto">
                         <TurnDisplay session={session} />
-                        <SinglePlayerControls {...gameProps} currentUser={currentUserWithStatus} />
+                        <TowerChallengeControls {...gameProps} currentUser={currentUserWithStatus} />
                     </div>
                 </div>
             </main>
@@ -133,4 +135,4 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     );
 };
 
-export default SinglePlayerArena;
+export default TowerChallengeArena;

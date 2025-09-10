@@ -115,17 +115,9 @@ export type UserStatus = 'online' | 'waiting' | 'resting' | 'negotiating' | 'in-
 
 export type WinReason = 'resign' | 'timeout' | 'disconnect' | 'score' | 'capture_limit' | 'omok_win' | 'thief_captured' | 'police_win' | 'alkkagi_win' | 'curling_win' | 'total_score' | 'dice_win' | 'foul_limit' | 'stone_limit_exceeded';
 export type RPSChoice = 'rock' | 'paper' | 'scissors';
-export enum DiceGoVariant {
-    Basic = 'basic',
-}
-export enum AlkkagiPlacementType {
-    TurnByTurn = '교대 배치',
-    Simultaneous = '일괄 배치',
-}
-export enum AlkkagiLayoutType {
-    Normal = '일반배치',
-    Battle = '전투배치',
-}
+export enum DiceGoVariant { Basic = 'basic' }
+export enum AlkkagiPlacementType { TurnByTurn = '교대 배치', Simultaneous = '일괄 배치' }
+export enum AlkkagiLayoutType { Normal = '일반배치', Battle = '전투배치' }
 
 // --- User and Item Enums ---
 export type EquipmentSlot = 'fan' | 'board' | 'top' | 'bottom' | 'bowl' | 'stones';

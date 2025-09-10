@@ -590,3 +590,10 @@ input[type="range"]::-moz-range-thumb {
     background-position: center;
     background-color: rgb(var(--bg-tertiary)); /* Fallback color */
 }
+
+.bg-academy-bg {
+    background-image: url('/images/single/AcademyBG.png');
+    background-size: cover;
+    background-position: center;
+    background-color: rgb(var(--bg-tertiary)); /* Fallback color */
+}

@@ -3,5 +3,5 @@
   "compilerOptions": {
     "lib": ["ESNext"]
   },
-  "include": ["**/*.ts", "../components/tournaments.ts"]
+  "include": ["**/*.ts"]
 }

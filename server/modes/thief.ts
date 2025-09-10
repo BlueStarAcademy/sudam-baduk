@@ -1,6 +1,7 @@
 
 
-import * as types from '../../types.js';
+
+import * as types from '../../types/index.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../goLogic.js';
 import { handleSharedAction, updateSharedGameState } from './shared.js';
@@ -97,6 +98,7 @@ export const initializeThief = (game: types.LiveGameSession, neg: types.Negotiat
         game.round = 1; // Initialize round
         game.scores = { [p1.id]: 0, [p2.id]: 0 }; // Initialize scores
         game.turnInRound = 1; // Initialize turn in round
+        game.thiefCapturesThisRound = 0;
     } else {
         // Original logic for human players
         game.gameStatus = 'thief_role_selection';
@@ -184,6 +186,7 @@ export const updateThiefState = (game: types.LiveGameSession, now: number) => {
                 game.whitePlayerId = game.policePlayerId;
                 game.gameStatus = 'thief_role_confirmed';
                 game.revealEndTime = now + 10000;
+                if (game.isAiGame) game.preGameConfirmations = { [aiUserId]: true };
             }
         }
     } else if (game.gameStatus === 'thief_role_confirmed') {
