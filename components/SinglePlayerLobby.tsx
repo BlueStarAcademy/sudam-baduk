@@ -61,8 +61,6 @@ const StageListItem: React.FC<{
     const rewardTitle = isCleared ? "반복 클리어 보상" : "최초 클리어 보상";
     
     const hasTargetScore = !!stage.targetScore;
-    const targetScoreText = hasTargetScore ? `흑${stage.targetScore!.black}/백${stage.targetScore!.white}` : '계가';
-    const targetScoreTitleText = hasTargetScore ? `목표 점수 흑 ${stage.targetScore!.black} / 백 ${stage.targetScore!.white}` : '자동 계가';
     
     const gameTypeDisplay = stage.gameType ? gameTypeKorean[stage.gameType] : '클래식';
 
@@ -87,10 +85,17 @@ const StageListItem: React.FC<{
                     <span className="text-xl">🤖</span>
                     <span className="font-semibold">Lv.{stage.katagoLevel}</span>
                 </div>
-                <div className="flex items-center gap-2 text-[clamp(0.875rem,0.75rem+1vw,1.125rem)]" title={targetScoreTitleText}>
-                    <span className="font-bold text-tertiary">목표:</span>
-                    <span className="font-bold text-highlight">{targetScoreText}</span>
-                </div>
+                {hasTargetScore ? (
+                    <div className="flex items-center gap-2 text-[clamp(0.875rem,0.75rem+1vw,1.125rem)]" title={`목표 점수 흑 ${stage.targetScore!.black} / 백 ${stage.targetScore!.white}`}>
+                        <span className="font-bold text-tertiary">목표:</span>
+                        <span className="font-bold text-highlight">{`흑${stage.targetScore!.black}/백${stage.targetScore!.white}`}</span>
+                    </div>
+                ) : stage.autoEndTurnCount ? (
+                    <div className="flex items-center gap-2 text-[clamp(0.875rem,0.75rem+1vw,1.125rem)]" title="자동 계가">
+                        <span className="font-bold text-tertiary">종료:</span>
+                        <span className="font-bold text-highlight">{stage.autoEndTurnCount}수</span>
+                    </div>
+                ) : null}
                 <div className="flex items-center gap-3">
                     <StoneDisplay baseSrc="/images/single/Black.png" count={stage.placements.black} title={`흑돌 ${stage.placements.black}개`} />
                     <StoneDisplay baseSrc="/images/single/Black.png" patternSrc="/images/single/BlackDouble.png" count={stage.placements.blackPattern} title={`흑 문양돌 ${stage.placements.blackPattern}개`} />

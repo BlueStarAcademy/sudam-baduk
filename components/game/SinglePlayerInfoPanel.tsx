@@ -72,8 +72,17 @@ const GameInfoPanel: React.FC<GameInfoPanelProps> = ({ session, onOpenSettings }
                 <div>{settings.boardSize}x{settings.boardSize}</div>
                 <div className="font-semibold text-stone-400">AI 레벨:</div>
                 <div>{settings.aiDifficulty}</div>
-                <div className="font-semibold text-stone-400">목표 점수:</div>
-                <div>흑{stageInfo?.targetScore?.black ?? 0} / 백{stageInfo?.targetScore?.white ?? 0}</div>
+                {stageInfo?.targetScore ? (
+                    <>
+                        <div className="font-semibold text-stone-400">목표 점수:</div>
+                        <div>흑{stageInfo.targetScore.black} / 백{stageInfo.targetScore.white}</div>
+                    </>
+                ) : stageInfo?.autoEndTurnCount ? (
+                    <>
+                        <div className="font-semibold text-stone-400">종료 조건:</div>
+                        <div>{stageInfo.autoEndTurnCount}수 후 자동 계가</div>
+                    </>
+                ) : null}
             </div>
         </div>
     );

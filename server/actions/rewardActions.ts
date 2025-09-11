@@ -3,7 +3,7 @@ import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward } from '../../types/index.js';
 import * as types from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
-import { SHOP_ITEMS } from '../shop.js';
+import { SHOP_ITEMS, createItemFromTemplate } from '../shop.js';
 import { 
     CONSUMABLE_ITEMS, 
     MATERIAL_ITEMS, 
@@ -20,7 +20,8 @@ import {
 import { calculateRanks } from '../tournamentService.js';
 import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
 import { getKSTDate } from '.././timeUtils.js';
-
+import { createDefaultQuests } from '../initialData.js';
+import * as effectService from '../effectService.js';
 
 type HandleActionResult = {
     clientResponse?: any;
@@ -266,7 +267,9 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             }
 
             const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
-            if (!success) return { error: '보상을 받기에 인벤토리 공간이 부족합니다.' };
+            if (!success) {
+                return { error: '보상을 받기에 인벤토리 공간이 부족합니다.' };
+            }
             
             user.gold += reward.gold || 0;
             user.diamonds += reward.diamonds || 0;

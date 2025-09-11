@@ -6,34 +6,21 @@ interface TurnCounterPanelProps {
 }
 
 const TurnCounterPanel: React.FC<TurnCounterPanelProps> = ({ session }) => {
-    const { moveHistory, autoEndTurnCount, blackPlayerId, whitePlayerId, player1, player2 } = session;
+    const { moveHistory, autoEndTurnCount } = session;
 
     if (!autoEndTurnCount) {
         return null;
     }
-
-    const totalTurnsPerPlayer = autoEndTurnCount / 2;
-    const blackTurns = moveHistory.filter(m => m.player === Player.Black).length;
-    const whiteTurns = moveHistory.filter(m => m.player === Player.White).length;
-
-    const blackPlayer = player1.id === blackPlayerId ? player1 : player2;
-    const whitePlayer = player1.id === whitePlayerId ? player1 : player2;
     
+    const totalTurns = moveHistory.length;
+    const remainingTurns = Math.max(0, autoEndTurnCount - totalTurns);
+
     return (
-        <div className="bg-stone-800/60 backdrop-blur-sm rounded-lg p-3 flex flex-col items-center justify-center w-full h-full border border-stone-700/50 text-stone-200">
-            <h3 className="text-lg font-bold text-amber-300 mb-4">남은 턴</h3>
-            <div className="space-y-4 w-full text-center">
-                <div>
-                    <p className="font-semibold">{blackPlayer.nickname} (흑)</p>
-                    <p className="text-3xl font-mono font-black">{Math.max(0, totalTurnsPerPlayer - blackTurns)}</p>
-                    <p className="text-xs text-stone-400">({blackTurns}/{totalTurnsPerPlayer})</p>
-                </div>
-                <div>
-                    <p className="font-semibold">{whitePlayer.nickname} (백)</p>
-                    <p className="text-3xl font-mono font-black">{Math.max(0, totalTurnsPerPlayer - whiteTurns)}</p>
-                    <p className="text-xs text-stone-400">({whiteTurns}/{totalTurnsPerPlayer})</p>
-                </div>
-            </div>
+        <div className="flex flex-col items-center justify-center w-full h-full rounded-lg shadow-lg border-2 p-1 text-center bg-gradient-to-br from-gray-800 to-black border-gray-600">
+            <span className="text-gray-300 text-[clamp(0.6rem,2vmin,0.75rem)] font-semibold whitespace-nowrap">남은 수</span>
+            <span className="font-mono font-bold text-[clamp(1.5rem,6vmin,2.5rem)] tracking-tighter my-1 text-white">
+                {remainingTurns}
+            </span>
         </div>
     );
 };

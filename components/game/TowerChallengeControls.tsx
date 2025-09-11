@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { GameProps, Player } from '../../types.js';
+import { GameProps, Player } from '../../types/index.js';
 import Button from '../Button.js';
 import { TOWER_STAGES } from '../../constants.js';
 

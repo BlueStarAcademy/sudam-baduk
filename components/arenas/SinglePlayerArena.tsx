@@ -1,5 +1,7 @@
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction } from '../../types/index.js';
+// FIX: Changed LivePlayerSession to LiveGameSession.
+import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel } from '../../types/index.js';
 import GameArena from '../GameArena.js';
 import PlayerPanel from '../game/PlayerPanel.js';
 import GameModals from '../game/GameModals.js';
@@ -11,6 +13,7 @@ import { useClientTimer } from '../../hooks/useClientTimer.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import TimeoutFoulModal from '../TimeoutFoulModal.js';
 import TurnCounterPanel from '../game/TurnCounterPanel.js';
+import { SINGLE_PLAYER_STAGES } from '../../constants.js';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -43,7 +46,6 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     const [showTimeoutFoulModal, setShowTimeoutFoulModal] = useState(false);
     
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
-    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
     const isItemModeActive = useMemo(() => 
         ['hidden_placing', 'scanning', 'missile_selecting'].includes(session.gameStatus), 
@@ -107,7 +109,25 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         gameChat: gameChats[session.id] || [], isSpectator: false, onlineUsers, activeNegotiation, negotiations: Object.values(negotiations), onViewUser: handlers.openViewingUser
     };
 
-    const backgroundClass = 'bg-academy-bg';
+    const stageInfo = useMemo(() => SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId), [session.stageId]);
+
+    const backgroundClass = useMemo(() => {
+        if (!stageInfo) return 'bg-academy-bg';
+        switch (stageInfo.level) {
+            case SinglePlayerLevel.입문:
+                return 'bg-academy-bg';
+            case SinglePlayerLevel.초급:
+                return 'bg-wood-pattern';
+            case SinglePlayerLevel.중급:
+                return 'bg-tower-default';
+            case SinglePlayerLevel.고급:
+                return 'bg-tower-100';
+            case SinglePlayerLevel.유단자:
+                return 'bg-tertiary';
+            default:
+                return 'bg-academy-bg';
+        }
+    }, [stageInfo]);
     
     const isTurnLimitedGame = !!session.autoEndTurnCount && session.autoEndTurnCount > 0;
     
@@ -140,35 +160,20 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                            <SinglePlayerInfoPanel session={session} onOpenSettings={handlers.openSettingsModal} />
                         </div>
                         <div className="lg:w-1/3 flex flex-col gap-2">
-                            <TurnDisplay session={session} />
+                             <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <TurnDisplay session={session} />
+                                </div>
+                                {isTurnLimitedGame && (
+                                    <div className="w-24 flex-shrink-0">
+                                        <TurnCounterPanel session={session} />
+                                    </div>
+                                )}
+                            </div>
                             <SinglePlayerControls {...gameProps} currentUser={currentUserWithStatus} />
                         </div>
                     </div>
                 </main>
-                
-                {isMobile && isTurnLimitedGame && (
-                    <>
-                        <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
-                            <button 
-                                onClick={() => setIsMobileSidebarOpen(true)} 
-                                className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg"
-                                aria-label="턴 카운터 보기"
-                            >
-                                <span className="relative font-bold text-lg">{'<'}</span>
-                            </button>
-                        </div>
-
-                        <div className={`fixed top-0 right-0 h-full w-[200px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMobileSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                            <div className="flex flex-col h-full p-2">
-                                 <button onClick={() => setIsMobileSidebarOpen(false)} className="self-end text-2xl font-bold text-tertiary hover:text-primary">&times;</button>
-                                 <div className="flex-grow">
-                                    <TurnCounterPanel session={session} />
-                                 </div>
-                            </div>
-                        </div>
-                        {isMobileSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMobileSidebarOpen(false)}></div>}
-                    </>
-                )}
             </div>
 
              <GameModals 

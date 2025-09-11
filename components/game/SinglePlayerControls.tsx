@@ -46,12 +46,12 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
         );
     }
     
-    const { id: gameId, gameStatus, gameType } = session;
+    const { id: gameId, gameStatus, gameType, moveHistory, singlePlayerPlacementRefreshesUsed } = session;
     const isMyTurn = session.currentPlayer === Player.Black;
 
     // --- Refresh Logic ---
-    const refreshesUsed = session.singlePlayerPlacementRefreshesUsed || 0;
-    const canRefresh = session.moveHistory.length === 0 && refreshesUsed < 5;
+    const refreshesUsed = singlePlayerPlacementRefreshesUsed || 0;
+    const canRefresh = moveHistory.length === 0 && refreshesUsed < 5;
     const costs = [0, 50, 100, 200, 300];
     const nextCost = costs[refreshesUsed] || 0;
     const canAfford = currentUser.gold >= nextCost;

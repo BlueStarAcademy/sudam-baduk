@@ -316,7 +316,6 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
     const isRightAi = session.isAiGame && rightPlayerUser.id === aiUserId;
     
     const turnDuration = getTurnDuration(mode, session.gameStatus, settings);
-    const isTurnLimitedGame = !!session.autoEndTurnCount && session.autoEndTurnCount > 0;
 
     return (
         <div className="flex justify-center items-stretch gap-2 flex-shrink-0 h-full">
@@ -340,11 +339,6 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
                 isSinglePlayer={isSinglePlayer}
                 isTowerChallenge={isTowerChallenge}
             />
-            {isSinglePlayer && isTurnLimitedGame && (
-                 <div className="hidden lg:flex flex-col justify-center items-center w-48 flex-shrink-0">
-                    <TurnCounterPanel session={session} />
-                </div>
-            )}
              <SinglePlayerPanel
                 user={rightPlayerUser}
                 playerEnum={rightPlayerEnum}

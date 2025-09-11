@@ -78,10 +78,9 @@ const startServer = async () => {
     const app = express();
     const port = 4000;
 
-    // FIX: Reordered middleware to parse JSON before handling CORS, which can resolve some type inference issues.
-    app.use(express.json({ limit: '10mb' }));
-    // FIX: Pass an empty options object to cors() to resolve a TypeScript type inference issue where the function signature was being misinterpreted.
+    // Handle CORS before JSON parsing.
     app.use(cors());
+    app.use(express.json({ limit: '10mb' }));
 
     const volatileState: VolatileState = {
         userConnections: {},
@@ -154,10 +153,7 @@ const startServer = async () => {
                 const timeoutDuration = (activeGame || (userStatus?.status === 'in-game' && userStatus?.gameId)) ? GAME_DISCONNECT_TIMEOUT_MS : LOBBY_TIMEOUT_MS;
 
                 if (now - volatileState.userConnections[userId] > timeoutDuration) {
-                    delete volatileState.userConnections[userId];
-                    volatileState.activeTournamentViewers.delete(userId);
-            
-                    if (activeGame) {
+                    if (activeGame && !activeGame.isSinglePlayer && !activeGame.isTowerChallenge) {
                         if (!activeGame.disconnectionState) {
                             activeGame.disconnectionCounts[userId] = (activeGame.disconnectionCounts[userId] || 0) + 1;
                             if (activeGame.disconnectionCounts[userId] >= 3) {
@@ -173,13 +169,14 @@ const startServer = async () => {
                                 await db.saveGame(activeGame);
                             }
                         }
-                    } else if (userStatus?.status === 'waiting') {
-                        delete volatileState.userConnections[userId];
+                    } else if (activeGame && (activeGame.isSinglePlayer || activeGame.isTowerChallenge)) {
+                        console.log(`[Disconnect] Deleting abandoned AI game: ${activeGame.id}`);
+                        await db.deleteGame(activeGame.id);
                     }
-                    else {
-                        delete volatileState.userConnections[userId];
-                        delete volatileState.userStatuses[userId];
-                    }
+
+                    delete volatileState.userConnections[userId];
+                    delete volatileState.userStatuses[userId];
+                    volatileState.activeTournamentViewers.delete(userId);
                 }
             }
             
@@ -527,12 +524,7 @@ const startServer = async () => {
 
             let result: types.HandleActionResult;
             
-            const aiGameActions = ['START_SINGLE_PLAYER_GAME', 'START_TOWER_CHALLENGE_GAME', 'SINGLE_PLAYER_REFRESH_PLACEMENT'];
-            if (aiGameActions.includes(type)) {
-                result = await handleAiGameAction(volatileState, req.body, user);
-            } else {
-                result = await mainHandleAction(volatileState, req.body);
-            }
+            result = await mainHandleAction(volatileState, req.body);
             
             if (result.error) {
                 return res.status(400).json({ message: result.error });

@@ -219,18 +219,20 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             const { gameId } = payload;
             const game = await db.getLiveGame(gameId);
             if (!game) return { error: 'Game not found.' };
-
+        
             if (volatileState.userStatuses[user.id]) {
-                volatileState.userStatuses[user.id].status = 'online';
+                volatileState.userStatuses[user.id] = { status: 'online' };
                 delete volatileState.userStatuses[user.id].mode;
                 delete volatileState.userStatuses[user.id].gameId;
                 delete volatileState.userStatuses[user.id].spectatingGameId;
             }
             
-            // If the user leaves before the game is officially over (e.g. resigns), end the game.
             if (!['ended', 'no_contest'].includes(game.gameStatus)) {
-                 await summaryService.endGame(game, types.Player.White, 'disconnect'); // AI is always P2/White and wins on disconnect
+                await summaryService.endGame(game, types.Player.White, 'resign'); 
             }
+            
+            // Delete the game from the database as it's finished and not needed anymore
+            await db.deleteGame(game.id);
             
             return {};
         }

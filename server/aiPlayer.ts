@@ -1,3 +1,4 @@
+
 import * as types from '../types/index.js';
 import { Point } from '../types/index.js';
 import { aiUserId, BOT_NAMES, AVATAR_POOL, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
@@ -87,6 +88,21 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
     const humanPlayer = aiPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
     const aiLevel = game.settings.aiDifficulty || 1;
 
+    const allEmptyPoints: Point[] = [];
+    for (let y = 0; y < boardSize; y++) {
+        for (let x = 0; x < boardSize; x++) {
+            if (board[y][x] === types.Player.None) {
+                allEmptyPoints.push({ x, y });
+            }
+        }
+    }
+
+    const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
+    if (validMoves.length === 0) {
+        await endGame(game, humanPlayer, 'resign');
+        return;
+    }
+
     const handleSurvivalPostAiMove = async () => {
         if (game.gameType !== 'survival') return false; // Not a survival game
         
@@ -113,12 +129,18 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         if (game.settings.timeLimit > 0 || game.isSinglePlayer || game.isTowerChallenge) { // SP also needs timer reset.
             const humanTimeKey = humanPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
             const byoyomiKey = humanPlayer === types.Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
-            const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
+            // FIX: The `timeControl` property does not exist on `LiveGameSession`.
+            // For single-player AI games, the mode is set directly, so we can check `game.mode`.
+            const isFischer = game.mode === types.GameMode.Speed;
             
             const isInByoyomi = game[humanTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
             if (isInByoyomi) {
                 game.turnDeadline = now + game.settings.byoyomiTime * 1000;
             } else {
+                if (isFischer) {
+                    // FIX: The time increment is stored in `game.settings`, not on a `timeControl` object.
+                    game[humanTimeKey] += game.settings.timeIncrement || 0;
+                }
                 game.turnDeadline = now + game[humanTimeKey] * 1000;
             }
         }
@@ -138,6 +160,14 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
                 game.hidden_stones_used_p2 = (game.hidden_stones_used_p2 || 0) + 1;
             }
             game.passCount = 0;
+
+            // FIX: The `timeControl` property does not exist on `LiveGameSession`.
+            // For single-player AI games, the mode is set directly, so we can check `game.mode`.
+            if (game.mode === types.GameMode.Speed) {
+                const aiTimeKey = aiPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+                // FIX: The time increment is stored in `game.settings`, not on a `timeControl` object.
+                game[aiTimeKey] += game.settings.timeIncrement || 0;
+            }
 
             if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
                 getGameResult(game);
@@ -173,6 +203,14 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         game.lastMove = { x: -1, y: -1 };
         game.moveHistory.push({ player: aiPlayer, x: -1, y: -1 });
 
+        // FIX: The `timeControl` property does not exist on `LiveGameSession`.
+        // For single-player AI games, the mode is set directly, so we can check `game.mode`.
+        if (game.mode === types.GameMode.Speed) {
+            const aiTimeKey = aiPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+            // FIX: The time increment is stored in `game.settings`, not on a `timeControl` object.
+            game[aiTimeKey] += game.settings.timeIncrement || 0;
+        }
+
         if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
             getGameResult(game);
             return;
@@ -183,15 +221,6 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
 
         setHumanPlayerTurn();
     };
-    
-    const allEmptyPoints: Point[] = [];
-    for (let y = 0; y < boardSize; y++) {
-        for (let x = 0; x < boardSize; x++) {
-            if (board[y][x] === types.Player.None) {
-                allEmptyPoints.push({ x, y });
-            }
-        }
-    }
     
     // AI Hidden stone logic
     if (game.isSinglePlayer && game.gameType === 'hidden' && aiPlayer === types.Player.White) {
@@ -211,7 +240,6 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
             }
 
             if (shouldPlaceHidden) {
-                const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
                 if (validMoves.length > 0) {
                     const chosenMove = validMoves[Math.floor(Math.random() * validMoves.length)];
                     await makeMove(chosenMove, true);
@@ -323,12 +351,6 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
     }
     
     // --- 4. Center-oriented positional play (100% rule) ---
-    const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
-    if (validMoves.length === 0) {
-        await passTurn();
-        return;
-    }
-
     let validPositionalMoves = validMoves;
     if (shouldAvoidSelfAtari) {
         validPositionalMoves = validMoves.filter(p => !isSelfAtari(p, board));

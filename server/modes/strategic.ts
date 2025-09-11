@@ -1,4 +1,3 @@
-
 import * as summaryService from '../summaryService.js';
 import * as types from '../../types/index.js';
 import * as db from '../db.js';
@@ -54,6 +53,13 @@ export const initializeStrategicGame = (game: types.LiveGameSession, neg: types.
 
 export const updateStrategicGameState = async (game: types.LiveGameSession, now: number) => {
     // This is the core update logic for all Go-based games.
+    if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
+        if (game.gameStatus !== 'scoring' && game.gameStatus !== 'ended' && game.gameStatus !== 'no_contest') {
+            getGameResult(game);
+            return;
+        }
+    }
+
     if (game.gameStatus === 'playing' && game.turnDeadline && now > game.turnDeadline) {
         const timedOutPlayer = game.currentPlayer;
         const timeKey = timedOutPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
@@ -142,7 +148,7 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
     switch (type) {
         case 'PLACE_STONE': {
             if (!isMyTurn || (game.gameStatus !== 'playing' && game.gameStatus !== 'hidden_placing')) {
-                return { error: '내 차례가 아닙니다.' };
+                return {};
             }
 
             const { x, y, isHidden } = payload;
