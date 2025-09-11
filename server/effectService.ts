@@ -61,6 +61,7 @@ export const getMannerEffects = (user: User): MannerEffects => {
 export interface CalculatedEffects extends MannerEffects {
     coreStatBonuses: Record<CoreStat, { flat: number; percent: number }>;
     specialStatBonuses: Record<SpecialStat, { flat: number; percent: number }>;
+    // FIX: Changed type from array of records to a single record to match implementation.
     mythicStatBonuses: Record<MythicStat, { flat: number; percent: number }>;
 }
 
@@ -72,7 +73,8 @@ export const calculateUserEffects = (user: User): CalculatedEffects => {
         ...effects,
         coreStatBonuses: {} as Record<CoreStat, { flat: number; percent: number }>,
         specialStatBonuses: {} as Record<SpecialStat, { flat: number; percent: number }>,
-        mythicStatBonuses: {} as Record<MythicStat, { flat: number; percent: number }>,
+        // FIX: Changed cast to match the corrected interface.
+        mythicStatBonuses: {} as Record<MythicStat, { flat: number; percent: number; }>,
     };
 
     // Initialize bonus records

@@ -203,11 +203,8 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         game.lastMove = { x: -1, y: -1 };
         game.moveHistory.push({ player: aiPlayer, x: -1, y: -1 });
 
-        // FIX: The `timeControl` property does not exist on `LiveGameSession`.
-        // For single-player AI games, the mode is set directly, so we can check `game.mode`.
         if (game.mode === types.GameMode.Speed) {
             const aiTimeKey = aiPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-            // FIX: The time increment is stored in `game.settings`, not on a `timeControl` object.
             game[aiTimeKey] += game.settings.timeIncrement || 0;
         }
 

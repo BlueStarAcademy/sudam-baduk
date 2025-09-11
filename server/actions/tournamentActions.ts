@@ -9,7 +9,6 @@ import { isSameDayKST } from '../../utils/timeUtils.js';
 import * as tournamentService from '../tournamentService.js';
 import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
 import { calculateTotalStats } from '../statService.js';
-import { handleRewardAction } from './rewardActions.js';
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -364,7 +363,88 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             return { clientResponse: { updatedUser: user } };
         }
         case 'CLAIM_TOURNAMENT_REWARD': {
-            return handleRewardAction(volatileState, action, user);
+            const { tournamentType } = payload as { tournamentType: TournamentType };
+            let stateKey: keyof User;
+            let rewardClaimedKey: keyof User;
+
+            switch (tournamentType) {
+                case 'neighborhood':
+                    stateKey = 'lastNeighborhoodTournament';
+                    rewardClaimedKey = 'neighborhoodRewardClaimed';
+                    break;
+                case 'national':
+                    stateKey = 'lastNationalTournament';
+                    rewardClaimedKey = 'nationalRewardClaimed';
+                    break;
+                case 'world':
+                    stateKey = 'lastWorldTournament';
+                    rewardClaimedKey = 'worldRewardClaimed';
+                    break;
+                default:
+                    return { error: 'Invalid tournament type for reward claim.' };
+            }
+
+            const tournamentState = (user as any)[stateKey] as TournamentState | null;
+            if (!tournamentState || tournamentState.status !== 'complete') {
+                return { error: 'Cannot claim rewards for an incomplete tournament.' };
+            }
+
+            if ((user as any)[rewardClaimedKey]) {
+                return { error: 'Reward already claimed.' };
+            }
+
+            const ranks = tournamentService.calculateRanks(tournamentState);
+            const myRankInfo = ranks.find(r => r.id === user.id);
+            if (!myRankInfo) {
+                return { error: 'Could not determine your rank.' };
+            }
+
+            const rewardInfo = BASE_TOURNAMENT_REWARDS[tournamentType];
+            let rewardKey: number;
+            
+            if (tournamentType === 'neighborhood') rewardKey = myRankInfo.rank <= 3 ? myRankInfo.rank : 4;
+            else if (tournamentType === 'national') rewardKey = myRankInfo.rank <= 4 ? myRankInfo.rank : 5;
+            else { // world
+                if (myRankInfo.rank <= 4) rewardKey = myRankInfo.rank;
+                else if (myRankInfo.rank <= 8) rewardKey = 5;
+                else rewardKey = 9;
+            }
+            
+            const reward = rewardInfo?.rewards[rewardKey];
+            if (!reward) {
+                (user as any)[rewardClaimedKey] = true;
+                await db.updateUser(user);
+                return { clientResponse: { updatedUser: user } };
+            }
+
+            const itemsToCreate = createItemInstancesFromReward(reward.items || []);
+            const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
+
+            if (!success) {
+                return { error: '보상을 받기에 인벤토리 공간이 부족합니다.' };
+            }
+
+            addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
+            (user as any)[rewardClaimedKey] = true;
+            
+            const scoreRewardKey = myRankInfo.rank;
+            const scoreReward = TOURNAMENT_SCORE_REWARDS[tournamentType]?.[scoreRewardKey];
+            if (scoreReward) {
+                user.tournamentScore = (user.tournamentScore || 0) + scoreReward;
+            }
+            
+            await db.updateUser(user);
+            
+            return {
+                clientResponse: {
+                    rewardSummary: {
+                        reward: { items: itemsToCreate },
+                        items: itemsToCreate,
+                        title: `${tournamentState.title} 보상`
+                    },
+                    updatedUser: user
+                }
+            };
         }
 
         default:

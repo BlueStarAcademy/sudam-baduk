@@ -1,8 +1,6 @@
-
-
 import React from 'react';
 // FIX: Corrected import path for types. The path was './../types.js' which pointed to 'components/types.js', but the file is in the root directory.
-import { GameProps, GameStatus, Negotiation } from '../../types/index.js';
+import { GameProps, GameStatus, Negotiation } from '../../types.js';
 // FIX: Corrected import path for GameSummaryModal.
 import GameSummaryModal from '../GameSummaryModal.js';
 import NigiriModal from '../NigiriModal.js';

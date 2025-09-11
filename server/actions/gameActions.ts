@@ -1,30 +1,31 @@
-
 import { randomUUID } from 'crypto';
-import * as db from './db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, Negotiation, Player, LeagueTier, TournamentType, GameMode } from '../types/index.js';
-import * as types from '../types/index.js';
-import { isDifferentDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../utils/timeUtils.js';
-import * as effectService from './effectService.js';
-import { regenerateActionPoints } from './effectService.js';
-import { updateGameStates } from './gameModes.js';
-import { DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ACTION_POINT_REGEN_INTERVAL_MS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SINGLE_PLAYER_MISSIONS, SINGLE_PLAYER_STAGES } from '../constants.js';
-import { initializeGame } from './gameModes.js';
-import { handleStrategicGameAction } from './modes/strategic.js';
-import { handlePlayfulGameAction } from './modes/playful.js';
-import { createDefaultUser, createDefaultQuests } from './initialData.js';
-import { containsProfanity } from '../profanity.js';
-import * as mannerService from './mannerService.js';
+import * as db from '../db.js';
+// FIX: Added TournamentType to the import list.
+import { type ServerAction, type User, type VolatileState, Player, LiveGameSession, GameMode, GameStatus, Move, Point, WinReason, RPSChoice, DiceGoVariant, KomiBid, AlkkagiPlacementType, AlkkagiLayoutType, UserWithStatus, TournamentType } from '../../types/index.js';
+import * as types from '../../types/index.js';
+import { isDifferentDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../../utils/timeUtils.js';
+import * as effectService from '../effectService.js';
+import { regenerateActionPoints } from '../effectService.js';
+import { updateGameStates } from '../gameModes.js';
+// FIX: Added DAILY_QUESTS, WEEKLY_QUESTS, and MONTHLY_QUESTS to the import list.
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ACTION_POINT_REGEN_INTERVAL_MS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SINGLE_PLAYER_MISSIONS, SINGLE_PLAYER_STAGES, DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS } from '../../constants.js';
+import { initializeGame } from '../gameModes.js';
+import { handleStrategicGameAction } from '../modes/strategic.js';
+import { handlePlayfulGameAction } from '../modes/playful.js';
+import { createDefaultUser, createDefaultQuests } from '../initialData.js';
+import { containsProfanity } from '../../profanity.js';
+import * as mannerService from '../mannerService.js';
 
 // Import new action handlers
-import { handleAdminAction } from './actions/adminActions.js';
-import { handleInventoryAction } from './actions/inventoryActions.js';
-import { handleNegotiationAction } from './actions/negotiationActions.js';
-import { handleRewardAction } from './actions/rewardActions.js';
-import { handleShopAction } from './actions/shopActions.js';
-import { handleSocialAction } from './actions/socialActions.js';
-import { handleTournamentAction } from './actions/tournamentActions.js';
-import { handleUserAction } from './actions/userActions.js';
-import { handleAiGameAction } from './actions/singlePlayerActions.js';
+import { handleAdminAction } from './adminActions.js';
+import { handleInventoryAction } from './inventoryActions.js';
+import { handleNegotiationAction } from './negotiationActions.js';
+import { handleRewardAction } from './rewardActions.js';
+import { handleShopAction } from './shopActions.js';
+import { handleSocialAction } from './socialActions.js';
+import { handleTournamentAction } from './tournamentActions.js';
+import { handleUserAction } from './userActions.js';
+import { handleAiGameAction } from './singlePlayerActions.js';
 
 
 export type HandleActionResult = { 
@@ -58,7 +59,7 @@ export const resetAndGenerateQuests = async (user: User): Promise<User> => {
             claimedMilestones: [false, false, false, false, false],
             lastReset: now,
         };
-        const newQuests: Quest[] = DAILY_QUESTS.map((q, i) => ({
+        const newQuests: types.Quest[] = DAILY_QUESTS.map((q: Omit<types.Quest, 'id' | 'progress' | 'isClaimed'>, i: number) => ({
             ...q, id: `q-d-${i}-${now}`, progress: 0, isClaimed: false,
         }));
         updatedUser.quests.daily.quests = newQuests;
@@ -75,7 +76,7 @@ export const resetAndGenerateQuests = async (user: User): Promise<User> => {
             claimedMilestones: [false, false, false, false, false],
             lastReset: now,
         };
-        const newQuests: Quest[] = WEEKLY_QUESTS.map((q, i) => ({
+        const newQuests: types.Quest[] = WEEKLY_QUESTS.map((q: Omit<types.Quest, 'id' | 'progress' | 'isClaimed'>, i: number) => ({
             ...q, id: `q-w-${i}-${now}`, progress: 0, isClaimed: false,
         }));
         updatedUser.quests.weekly.quests = newQuests;
@@ -90,7 +91,7 @@ export const resetAndGenerateQuests = async (user: User): Promise<User> => {
             claimedMilestones: [false, false, false, false, false],
             lastReset: now,
         };
-         const newQuests: Quest[] = MONTHLY_QUESTS.map((q, i) => ({
+         const newQuests: types.Quest[] = MONTHLY_QUESTS.map((q: Omit<types.Quest, 'id' | 'progress' | 'isClaimed'>, i: number) => ({
             ...q, id: `q-m-${i}-${now}`, progress: 0, isClaimed: false,
         }));
         updatedUser.quests.monthly.quests = newQuests;
@@ -116,10 +117,10 @@ export const resetAndGenerateQuests = async (user: User): Promise<User> => {
 
 export const updateQuestProgress = (user: User, type: 'win' | 'participate' | 'action_button' | 'tournament_participate' | 'enhancement_attempt' | 'craft_attempt' | 'chat_greeting' | 'tournament_complete' | 'login' | 'claim_daily_milestone_100' | 'claim_weekly_milestone_100' | 'tower_challenge_participate' | 'claim_single_player_mission' | 'tournament_match_played', mode?: GameMode, amount: number = 1) => {
     if (!user.quests) return;
-    const isStrategic = mode ? SPECIAL_GAME_MODES.some(m => m.mode === mode) : false;
-    const isPlayful = mode ? PLAYFUL_GAME_MODES.some(m => m.mode === mode) : false;
+    const isStrategic = mode ? SPECIAL_GAME_MODES.some((m: {mode: GameMode}) => m.mode === mode) : false;
+    const isPlayful = mode ? PLAYFUL_GAME_MODES.some((m: { mode: GameMode; }) => m.mode === mode) : false;
 
-    const questsToUpdate: Quest[] = [
+    const questsToUpdate: types.Quest[] = [
         ...(user.quests.daily?.quests || []),
         ...(user.quests.weekly?.quests || []),
         ...(user.quests.monthly?.quests || [])
@@ -168,9 +169,9 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
         if (!game) return { error: 'Game not found.' };
         
         let result: HandleActionResult | null | undefined = null;
-        if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
+        if (SPECIAL_GAME_MODES.some((m: {mode: GameMode}) => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
             result = await handleStrategicGameAction(volatileState, game, action, user);
-        } else if (PLAYFUL_GAME_MODES.some(m => m.mode === game.mode)) {
+        } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === game.mode)) {
             result = await handlePlayfulGameAction(volatileState, game, action, user);
         }
 
@@ -182,53 +183,6 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
 
     // Non-Game actions
     if (type.startsWith('ADMIN_')) return handleAdminAction(volatileState, action, user);
-
-    if (type === 'START_SINGLE_PLAYER_MISSION') {
-        const { missionId } = payload;
-        const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
-        if (!missionInfo) return { error: 'Mission not found.' };
-
-        const requiredProgress = SINGLE_PLAYER_STAGES.findIndex(s => s.id === missionInfo.unlockStageId) + 1;
-        if ((user.singlePlayerProgress || 0) < requiredProgress) return { error: 'Mission not unlocked.' };
-
-        if (!user.singlePlayerMissions) user.singlePlayerMissions = {};
-        if (user.singlePlayerMissions[missionId]?.isStarted) return { error: 'Mission already started.' };
-
-        user.singlePlayerMissions[missionId] = {
-            id: missionId,
-            isStarted: true,
-            lastCollectionTime: Date.now(),
-            accumulatedAmount: 0,
-        };
-
-        await db.updateUser(user);
-        return { clientResponse: { updatedUser: user } };
-    }
-    if (type === 'CLAIM_SINGLE_PLAYER_MISSION_REWARD') {
-        const { missionId } = payload;
-        const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
-        if (!missionInfo) return { error: 'Mission not found.' };
-        if (!user.singlePlayerMissions || !user.singlePlayerMissions[missionId] || !user.singlePlayerMissions[missionId].isStarted) {
-            return { error: 'Mission not started.' };
-        }
-        
-        const missionState = user.singlePlayerMissions[missionId];
-        const amountToClaim = missionState.accumulatedAmount;
-        if (amountToClaim < 1) return { error: 'No rewards to claim.' };
-
-        if (missionInfo.rewardType === 'gold') {
-            user.gold += amountToClaim;
-        } else if (missionInfo.rewardType === 'diamonds') {
-            user.diamonds += amountToClaim;
-        }
-
-        missionState.accumulatedAmount = 0;
-        missionState.lastCollectionTime = Date.now();
-
-        await db.updateUser(user);
-        return { clientResponse: { updatedUser: user } };
-    }
-
     if (type.includes('SINGLE_PLAYER') || type.includes('TOWER_CHALLENGE')) return handleAiGameAction(volatileState, action, user);
     if (type.includes('NEGOTIATION') || type === 'START_AI_GAME' || type === 'REQUEST_REMATCH' || type === 'CHALLENGE_USER' || type === 'SEND_CHALLENGE') return handleNegotiationAction(volatileState, action, user);
     if (type.startsWith('CLAIM_') || type.startsWith('DELETE_MAIL')) return handleRewardAction(volatileState, action, user);

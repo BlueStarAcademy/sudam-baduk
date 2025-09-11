@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction } from '../../types/index.js';
+import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction } from '../../types.js';
 import GameArena from '../GameArena.js';
 import PlayerPanel from '../game/PlayerPanel.js';
 import GameModals from '../game/GameModals.js';

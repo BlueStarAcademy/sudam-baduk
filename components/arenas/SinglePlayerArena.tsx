@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-// FIX: Changed LivePlayerSession to LiveGameSession.
-import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel } from '../../types/index.js';
+import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel } from '../../types.js';
 import GameArena from '../GameArena.js';
 import PlayerPanel from '../game/PlayerPanel.js';
 import GameModals from '../game/GameModals.js';

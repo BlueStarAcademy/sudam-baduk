@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-// FIX: Import missing types from the centralized types file.
-import { ServerAction, AdminProps, InventoryItemType, User } from '../../types/index.js';
+import { ServerAction, AdminProps, InventoryItemType, User } from '../../types.js';
 import DraggableWindow from '../DraggableWindow.js';
 import Button from '../Button.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants.js';
@@ -67,12 +66,7 @@ const ItemSelectionModal: React.FC<ItemSelectionModalProps> = ({ onAddItem, onCl
 };
 
 
-// FIX: Add missing props to the interface as they are used in the component.
-interface MailSystemPanelProps extends AdminProps {
-    allUsers: User[];
-    onAction: (action: ServerAction) => void;
-    onBack: () => void;
-}
+interface MailSystemPanelProps extends AdminProps {}
 
 const MailSystemPanel: React.FC<MailSystemPanelProps> = ({ allUsers, onAction, onBack }) => {
     const [targetType, setTargetType] = useState<'all' | 'specific'>('all');

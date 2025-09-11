@@ -1,7 +1,7 @@
 
 
 // FIX: Import missing types from the centralized types file.
-import { User, CoreStat, InventoryItem, SpecialStat, MythicStat } from '../types/index.js';
+import { User, CoreStat, InventoryItem, SpecialStat, MythicStat, ItemOptionType } from '../types/index.js';
 import { calculateUserEffects } from './effectService.js';
 
 // This function is moved from the client to the server.

@@ -1,3 +1,4 @@
+
 import * as types from '../../types.js';
 import * as db from '../db.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul } from './shared.js';
@@ -107,6 +108,7 @@ export const updatePlayfulGameState = async (game: types.LiveGameSession, now: n
                 if (now - lastCheck >= 60000) {
                     game.lastPlayfulGoldCheck[player.id] = now;
 
+                    // FIX: Initialize mythicBonuses property if it doesn't exist to prevent crash.
                     if (!game.mythicBonuses) game.mythicBonuses = {};
                     if (!game.mythicBonuses[player.id]) {
                         game.mythicBonuses[player.id] = { strategicGoldTriggers: 0, playfulGoldTriggers: 0 };

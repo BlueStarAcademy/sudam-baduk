@@ -2,7 +2,6 @@
 
 import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
 import * as types from '../../types/index.js';
-// FIX: Import DEFAULT_GAME_SETTINGS to provide a default value when parsing game data.
 import { DEFAULT_GAME_SETTINGS } from '../../constants.js';
 
 const safeParse = (jsonString: string | null | undefined, defaultValue: any, contextId: string, fieldName: string) => {

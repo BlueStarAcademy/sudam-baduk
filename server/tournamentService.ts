@@ -1,3 +1,5 @@
+
+
 import { TournamentState, PlayerForTournament, CoreStat, CommentaryLine, Match, User, Round, TournamentType, LeagueTier } from '../types.js';
 import { calculateTotalStats } from './statService.js';
 import { randomUUID } from 'crypto';
@@ -247,11 +249,11 @@ const processMatchCompletion = (state: TournamentState, user: User, completedMat
             }
         });
 
-        state.status = 'round_complete';
-
         const allMatchesInTournamentFinished = state.rounds[0].matches.every(m => m.isFinished);
         if (allMatchesInTournamentFinished) {
             state.status = 'complete';
+        } else {
+            state.status = 'round_complete';
         }
     } else { // Knockout tournament logic
         const userWon = completedMatch.winner?.id === user.id;
@@ -401,10 +403,6 @@ export const startNextRound = (state: TournamentState, user: User) => {
             state.status = 'round_complete'; 
         }
         
-        const allMatchesInTournamentFinished = state.rounds[0].matches.every(m => m.isFinished);
-        if (allMatchesInTournamentFinished) {
-            state.status = 'complete';
-        }
         return;
     }
     

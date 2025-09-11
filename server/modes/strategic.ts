@@ -1,3 +1,4 @@
+
 import * as summaryService from '../summaryService.js';
 import * as types from '../../types/index.js';
 import * as db from '../db.js';
@@ -429,6 +430,11 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             game.lastMove = { x: -1, y: -1 };
             game.lastTurnStones = null;
             game.moveHistory.push({ player: myPlayerEnum, x: -1, y: -1 });
+
+            if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
+                getGameResult(game);
+                return {};
+            }
 
             if (game.passCount >= 2) {
                 const isHiddenMode = game.mode === types.GameMode.Hidden || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Hidden));

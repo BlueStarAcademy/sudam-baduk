@@ -1,7 +1,8 @@
+
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade } from '../../types/index.js';
-import * as types from '../../types/index.js';
+// FIX: Merged imports from two different type definition entry points into one to resolve duplicate identifiers.
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult } from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
 import { SHOP_ITEMS, createItemFromTemplate } from '../shop.js';
 import { 
@@ -29,15 +30,11 @@ import {
     EQUIPMENT_POOL
 } from '../../constants.js';
 import { calculateRanks } from '../tournamentService.js';
-import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
+// FIX: Import createItemInstancesFromReward
+import { addItemsToInventory as addItemsToInventoryUtil, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
 import { getKSTDate } from '.././timeUtils.js';
 import { createDefaultQuests } from '../initialData.js';
 import * as effectService from '../effectService.js';
-
-type HandleActionResult = {
-    clientResponse?: any;
-    error?: string;
-};
 
 type SubOptionDefinition = { type: CoreStat, isPercentage: boolean, range: [number, number] };
 
@@ -553,10 +550,10 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const upgradeChance = SYNTHESIS_UPGRADE_CHANCES[firstItemGrade];
             const roll = Math.random() * 100;
             let wasUpgraded = roll < upgradeChance;
-            let newGrade: types.ItemGrade;
+            let newGrade: ItemGrade;
             let isDoubleMythic = false;
         
-            const gradeOrder: types.ItemGrade[] = ['normal', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+            const gradeOrder: ItemGrade[] = ['normal', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
             const currentGradeIndex = gradeOrder.indexOf(firstItemGrade);
         
             if (firstItemGrade === 'mythic') {

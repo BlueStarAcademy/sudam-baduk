@@ -1,6 +1,8 @@
+
+
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward } from '../../types/index.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, HandleActionResult } from '../../types/index.js';
 import * as types from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
 import { SHOP_ITEMS, createItemFromTemplate } from '../shop.js';
@@ -18,15 +20,11 @@ import {
     SINGLE_PLAYER_MISSIONS
 } from '../../constants.js';
 import { calculateRanks } from '../tournamentService.js';
-import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
+// FIX: Import createItemInstancesFromReward
+import { addItemsToInventory as addItemsToInventoryUtil, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
 import { getKSTDate } from '.././timeUtils.js';
 import { createDefaultQuests } from '../initialData.js';
 import * as effectService from '../effectService.js';
-
-type HandleActionResult = {
-    clientResponse?: any;
-    error?: string;
-};
 
 export const handleRewardAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
@@ -87,7 +85,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                  itemsToCreate.push(...createdItems);
             }
         
-            const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
+            const { success } = addItemsToInventoryUtil([...user.inventory], user.inventorySlots, itemsToCreate);
             if (!success) return { error: '인벤토리 공간이 부족합니다.' };
         
             const reward: QuestReward = {
@@ -102,7 +100,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 user.actionPoints.current += reward.actionPoints;
             }
         
-            addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
+            addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsToCreate);
         
             mail.attachmentsClaimed = true;
             await db.updateUser(user);
@@ -137,7 +135,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 }
             }
 
-            const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, allItemsToCreate);
+            const { success } = addItemsToInventoryUtil([...user.inventory], user.inventorySlots, allItemsToCreate);
             if (!success) {
                 return { error: '모든 아이템을 받기에 가방 공간이 부족합니다.' };
             }
@@ -145,7 +143,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             user.gold += totalGold;
             user.diamonds += totalDiamonds;
             user.actionPoints.current += totalActionPoints;
-            addItemsToInventory(user.inventory, user.inventorySlots, allItemsToCreate);
+            addItemsToInventoryUtil(user.inventory, user.inventorySlots, allItemsToCreate);
 
             for (const mail of mailsToClaim) mail.attachmentsClaimed = true;
 
@@ -210,7 +208,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 itemsToCreate.push(...createdItems);
             }
 
-            const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
+            const { success } = addItemsToInventoryUtil([...user.inventory], user.inventorySlots, itemsToCreate);
             if (!success) {
                 return { error: '보상을 받기에 인벤토리 공간이 부족합니다.' };
             }
@@ -220,7 +218,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             if (reward.gold) user.gold += reward.gold;
             if (reward.diamonds) user.diamonds += reward.diamonds;
             if (reward.actionPoints) user.actionPoints.current += reward.actionPoints;
-            addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
+            addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsToCreate);
             
             if (activityPoints > 0 && user.quests[questType!]) {
                 user.quests[questType!]!.activityProgress += activityPoints;
@@ -266,7 +264,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                  itemsToCreate.push(...createdItems);
             }
 
-            const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
+            const { success } = addItemsToInventoryUtil([...user.inventory], user.inventorySlots, itemsToCreate);
             if (!success) {
                 return { error: '보상을 받기에 인벤토리 공간이 부족합니다.' };
             }
@@ -274,7 +272,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             user.gold += reward.gold || 0;
             user.diamonds += reward.diamonds || 0;
             user.actionPoints.current += reward.actionPoints || 0;
-            addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
+            addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsToCreate);
             
             data.claimedMilestones[milestoneIndex] = true;
 

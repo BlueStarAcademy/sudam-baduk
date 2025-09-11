@@ -1,17 +1,12 @@
 
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem } from '../../types.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, HandleActionResult } from '../../types/index.js';
 import * as shop from '../shop.js';
 import { SHOP_ITEMS } from '../shop.js';
 import { isSameDayKST, isDifferentWeekKST } from '../../utils/timeUtils.js';
 import { CONSUMABLE_ITEMS, MATERIAL_ITEMS, ACTION_POINT_PURCHASE_COSTS_DIAMONDS, MAX_ACTION_POINT_PURCHASES_PER_DAY, ACTION_POINT_PURCHASE_REFILL_AMOUNT, SHOP_BORDER_ITEMS } from '../../constants.js';
 import { addItemsToInventory } from '../../utils/inventoryUtils.js';
-
-type HandleActionResult = { 
-    clientResponse?: any;
-    error?: string;
-};
 
 export const handleShopAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;

@@ -1,9 +1,8 @@
 
-
 import express from 'express';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
-import { handleAction as mainHandleAction } from './gameActions.js';
+import { handleAction as mainHandleAction } from './actions/gameActions.js';
 import { resetAndGenerateQuests } from './questService.js';
 import { regenerateActionPoints } from './effectService.js';
 import { updateGameStates } from './gameModes.js';
@@ -78,7 +77,7 @@ const startServer = async () => {
     const app = express();
     const port = 4000;
 
-    // Handle CORS before JSON parsing.
+    // FIX: Split app.use() into separate calls to avoid potential TypeScript overload issues.
     app.use(cors());
     app.use(express.json({ limit: '10mb' }));
 

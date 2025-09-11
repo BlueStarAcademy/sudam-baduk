@@ -1,14 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
-// FIX: Import missing types from the centralized types file.
-import { User, ServerAction, AdminProps, GameMode, Quest, DailyQuestData, WeeklyQuestData, MonthlyQuestData } from '../../types/index.js';
+import { User, ServerAction, AdminProps, GameMode, Quest, DailyQuestData, WeeklyQuestData, MonthlyQuestData, UserWithStatus } from '../../types.js';
 import DraggableWindow from '../DraggableWindow.js';
 import Button from '../Button.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
 
 interface UserManagementModalProps {
     user: User;
-    currentUser: User;
+    currentUser: UserWithStatus;
     onClose: () => void;
     onAction: (action: ServerAction) => void;
 }
@@ -259,14 +258,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, current
     );
 };
 
-// FIX: The component uses `allUsers`, `onAction`, `onBack`, and `currentUser` props which were not defined in the interface.
-// The extended `AdminProps` type is likely incomplete. Defining the props directly fixes the type error.
-interface UserManagementPanelProps {
-    allUsers: User[];
-    onAction: (action: ServerAction) => void;
-    onBack: () => void;
-    currentUser: User;
-}
+interface UserManagementPanelProps extends AdminProps {}
 
 const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ allUsers, onAction, onBack, currentUser }) => {
     const [searchQuery, setSearchQuery] = useState('');

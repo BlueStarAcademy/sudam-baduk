@@ -115,7 +115,10 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
 
             if (isOpponentAlreadyInNegotiation) {
                 delete volatileState.negotiations[negotiationId];
-                volatileState.userStatuses[user.id].status = 'waiting';
+                const challengerStatus = volatileState.userStatuses[user.id];
+                if (challengerStatus && challengerStatus.status === 'negotiating') {
+                    challengerStatus.status = 'waiting';
+                }
                 return { error: '상대방이 다른 대국 신청을 먼저 받았습니다. 잠시 후 다시 시도해주세요.' };
             }
 

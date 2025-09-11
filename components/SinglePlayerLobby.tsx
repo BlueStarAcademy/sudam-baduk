@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
 import Button from './Button.js';
-import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType } from '../types/index.js';
+import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType } from '../types.js';
 import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../constants.js';
 
 const LEVEL_DATA: { id: SinglePlayerLevel; name: string; unlockRequirement: number; image: string; }[] = [
