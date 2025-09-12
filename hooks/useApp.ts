@@ -1,6 +1,5 @@
-
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { User, LiveGameSession, UserWithStatus, ServerAction, GameMode, Negotiation, ChatMessage, UserStatus, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank } from '../types/index.js';
+import { User, LiveGameSession, UserWithStatus, ServerAction, GameMode, Negotiation, ChatMessage, UserStatus, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank } from '../types.js';
 import { audioService } from '../services/audioService.js';
 import { stableStringify, parseHash } from '../utils/appUtils.js';
 import { 
@@ -364,7 +363,9 @@ export const useApp = () => {
                     setter(currentData => stableStringify(currentData) !== stableStringify(newData) ? newData : currentData);
                 };
     
-                updateStateIfChanged<User | null>(setCurrentUser, data.users[currentUser.id] || null);
+                if (currentUser?.id) {
+                    updateStateIfChanged<User | null>(setCurrentUser, data.users[currentUser.id] || null);
+                }
                 updateStateIfChanged(setUsersMap, data.users);
                 updateStateIfChanged(setLiveGames, data.liveGames);
                 updateStateIfChanged(setNegotiations, data.negotiations);
@@ -377,8 +378,15 @@ export const useApp = () => {
                 updateStateIfChanged(setAnnouncementInterval, data.announcementInterval);
                 updateStateIfChanged(setTowerRankings, data.towerRankings);
     
-                const onlineStatuses = Object.entries(data.userStatuses).map(([id, statusInfo]) => ({ ...data.users[id], ...statusInfo }));
-                updateStateIfChanged(setOnlineUsers, onlineStatuses as UserWithStatus[]);
+                // FIX: Filter out users who are not in the main user map to prevent spreading undefined.
+                const onlineStatuses = Object.entries(data.userStatuses)
+                    .map(([id, statusInfo]) => {
+                        const user = data.users[id];
+                        if (!user) return null;
+                        return { ...user, ...statusInfo };
+                    })
+                    .filter((u): u is UserWithStatus => u !== null);
+                updateStateIfChanged(setOnlineUsers, onlineStatuses);
             } catch (err) { console.error("Polling error:", err); }
         };
     
@@ -495,7 +503,14 @@ export const useApp = () => {
         const userToView = onlineUsers.find(u => u.id === userId) || allUsers.find(u => u.id === userId);
         if (userToView) {
             const statusInfo = onlineUsers.find(u => u.id === userId);
-            setViewingUser({ ...userToView, ...(statusInfo || { status: 'online'}) });
+            const finalUser: UserWithStatus = {
+                ...userToView,
+                status: statusInfo?.status || 'online',
+                mode: statusInfo?.mode,
+                gameId: statusInfo?.gameId,
+                spectatingGameId: statusInfo?.spectatingGameId,
+            };
+            setViewingUser(finalUser);
         }
     }, [onlineUsers, allUsers]);
 
@@ -503,7 +518,14 @@ export const useApp = () => {
         const userToView = onlineUsers.find(u => u.id === userId) || allUsers.find(u => u.id === userId);
         if (userToView) {
             const statusInfo = onlineUsers.find(u => u.id === userId);
-            setModeratingUser({ ...userToView, ...(statusInfo || { status: 'online'}) });
+            const finalUser: UserWithStatus = {
+                ...userToView,
+                status: statusInfo?.status || 'online',
+                mode: statusInfo?.mode,
+                gameId: statusInfo?.gameId,
+                spectatingGameId: statusInfo?.spectatingGameId,
+            };
+            setModeratingUser(finalUser);
         }
     }, [onlineUsers, allUsers]);
 

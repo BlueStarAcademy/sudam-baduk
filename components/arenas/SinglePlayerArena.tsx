@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel } from '../../types.js';
 import GameArena from '../GameArena.js';
@@ -12,7 +11,7 @@ import { useClientTimer } from '../../hooks/useClientTimer.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import TimeoutFoulModal from '../TimeoutFoulModal.js';
 import TurnCounterPanel from '../game/TurnCounterPanel.js';
-import { SINGLE_PLAYER_STAGES } from '../../constants.js';
+import { SINGLE_PLAYER_STAGES } from '../../constants/singlePlayerConstants.js';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -128,8 +127,6 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         }
     }, [stageInfo]);
     
-    const isTurnLimitedGame = !!session.autoEndTurnCount && session.autoEndTurnCount > 0;
-    
     return (
         <div className={`w-full h-dvh flex flex-col p-2 lg:p-4 ${backgroundClass} text-stone-200`}>
             {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={() => setShowTimeoutFoulModal(false)} />}
@@ -139,19 +136,21 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                     <div className="w-full flex-shrink-0">
                         <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isSinglePlayer={true} />
                     </div>
-                    <div className="flex-1 w-full flex flex-row items-stretch gap-4 min-h-0">
-                        <div className="flex-1 relative">
-                             <GameArena 
-                                {...gameProps}
-                                isMyTurn={isMyTurn} 
-                                myPlayerEnum={myPlayerEnum} 
-                                handleBoardClick={handleBoardClick} 
-                                isItemModeActive={isItemModeActive} 
-                                showTerritoryOverlay={showFinalTerritory} 
-                                isMobile={isMobile}
-                                myRevealedMoves={[]}
-                                showLastMoveMarker={settings.features.lastMoveMarker}
-                            />
+                    <div className="flex-1 w-full flex items-center justify-center min-h-0">
+                        <div className="relative w-full h-full max-w-full max-h-full aspect-square">
+                            <div className="absolute inset-0">
+                                <GameArena 
+                                    {...gameProps}
+                                    isMyTurn={isMyTurn} 
+                                    myPlayerEnum={myPlayerEnum} 
+                                    handleBoardClick={handleBoardClick} 
+                                    isItemModeActive={isItemModeActive} 
+                                    showTerritoryOverlay={showFinalTerritory} 
+                                    isMobile={isMobile}
+                                    myRevealedMoves={[]}
+                                    showLastMoveMarker={settings.features.lastMoveMarker}
+                                />
+                            </div>
                         </div>
                     </div>
                     <div className="w-full flex-shrink-0 flex flex-col lg:flex-row gap-2">
@@ -159,15 +158,8 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                            <SinglePlayerInfoPanel session={session} onOpenSettings={handlers.openSettingsModal} />
                         </div>
                         <div className="lg:w-1/3 flex flex-col gap-2">
-                             <div className="flex gap-2">
-                                <div className="flex-1">
-                                    <TurnDisplay session={session} />
-                                </div>
-                                {isTurnLimitedGame && (
-                                    <div className="w-24 flex-shrink-0">
-                                        <TurnCounterPanel session={session} />
-                                    </div>
-                                )}
+                            <div className="flex-1">
+                                <TurnDisplay session={session} />
                             </div>
                             <SinglePlayerControls {...gameProps} currentUser={currentUserWithStatus} />
                         </div>

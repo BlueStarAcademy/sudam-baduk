@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { GameMode } from '../types.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
@@ -17,7 +16,7 @@ const GameCard: React.FC<{ mode: GameMode, description: string, image: string, a
             className={`bg-panel text-on-panel rounded-lg p-5 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${hoverColorClass} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={available ? onSelect : undefined}
         >
-            <div className="w-[200px] h-[150px] mx-auto bg-tertiary rounded-md mb-4 flex items-center justify-center text-tertiary overflow-hidden shadow-inner">
+            <div className="w-full aspect-[4/3] bg-tertiary rounded-md mb-4 overflow-hidden shadow-inner">
                 {!imgError ? (
                     <img 
                         src={image} 
@@ -26,7 +25,9 @@ const GameCard: React.FC<{ mode: GameMode, description: string, image: string, a
                         onError={() => setImgError(true)} 
                     />
                 ) : (
-                    <span className="text-xs">{mode}</span>
+                    <div className="w-full h-full flex items-center justify-center text-tertiary">
+                        <span className="text-xs">{mode}</span>
+                    </div>
                 )}
             </div>
             <div className="flex-grow flex flex-col">
@@ -41,9 +42,9 @@ const Lobby: React.FC<LobbyProps> = ({ lobbyType }) => {
   const { gameModeAvailability, handlers } = useAppContext();
 
   const isStrategic = lobbyType === 'strategic';
-  const title = isStrategic ? '전략 게임' : '놀이 게임';
+  const title = isStrategic ? '전략 바둑' : '놀이 바둑';
   const modes = isStrategic ? SPECIAL_GAME_MODES : PLAYFUL_GAME_MODES;
-  const sectionTitle = isStrategic ? '전략 게임' : '놀이 게임';
+  const sectionTitle = isStrategic ? '전략 바둑' : '놀이 바둑';
   const sectionBorderColor = isStrategic ? 'border-blue-400' : 'border-yellow-400';
   const hoverColorClass = isStrategic ? 'hover:shadow-blue-500/20' : 'hover:shadow-yellow-500/20';
 

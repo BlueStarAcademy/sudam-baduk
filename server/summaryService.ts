@@ -1,3 +1,4 @@
+
 import { LiveGameSession, Player, User, GameSummary, StatChange, GameMode, InventoryItem, SpecialStat, WinReason, SinglePlayerStageInfo, QuestReward, AnalysisResult } from '../types.js';
 import * as db from './db.js';
 import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, TOWER_STAGES, NO_CONTEST_MOVE_THRESHOLD, DEFAULT_KOMI } from '../constants.js';
@@ -9,7 +10,7 @@ import { randomUUID } from 'crypto';
 import { aiUserId, getAiUser } from './aiPlayer.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inventoryUtils.js';
 import { getGoLogic } from './goLogic.js';
-import * as types from '../types/index.js';
+import * as types from '../types.js';
 import { analyzeGame } from './kataGoService.js';
 import { finalizeAnalysisResult } from './gameModes.js';
 

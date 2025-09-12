@@ -1,22 +1,11 @@
-
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-// FIX: Merged imports from two different type definition entry points into one to resolve duplicate identifiers.
-import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult } from '../../types/index.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult } from '../../types.js';
 import { updateQuestProgress } from '../questService.js';
-import { SHOP_ITEMS, createItemFromTemplate } from '../shop.js';
+import { SHOP_ITEMS, createItemFromTemplate, pickRandom } from '../shop.js';
 import { 
     CONSUMABLE_ITEMS, 
     MATERIAL_ITEMS, 
-    DAILY_MILESTONE_REWARDS, 
-    DAILY_MILESTONE_THRESHOLDS,
-    WEEKLY_MILESTONE_REWARDS,
-    WEEKLY_MILESTONE_THRESHOLDS,
-    MONTHLY_MILESTONE_REWARDS,
-    MONTHLY_MILESTONE_THRESHOLDS,
-    BASE_TOURNAMENT_REWARDS,
-    TOURNAMENT_SCORE_REWARDS,
-    SINGLE_PLAYER_MISSIONS,
     GRADE_LEVEL_REQUIREMENTS,
     ITEM_SELL_PRICES,
     MATERIAL_SELL_PRICES,
@@ -29,14 +18,8 @@ import {
     SYNTHESIS_UPGRADE_CHANCES,
     EQUIPMENT_POOL
 } from '../../constants.js';
-import { calculateRanks } from '../tournamentService.js';
-// FIX: Import createItemInstancesFromReward
-import { addItemsToInventory as addItemsToInventoryUtil, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
-import { getKSTDate } from '.././timeUtils.js';
-import { createDefaultQuests } from '../initialData.js';
+import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
 import * as effectService from '../effectService.js';
-
-type SubOptionDefinition = { type: CoreStat, isPercentage: boolean, range: [number, number] };
 
 
 const currencyBundles: Record<string, { type: 'gold' | 'diamonds', min: number, max: number }> = {
@@ -174,20 +157,24 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             return { clientResponse: { obtainedItemsBulk: itemsArray, updatedUser: user } };
         }
         
-        case 'USE_ALL_ITEMS_OF_TYPE': {
-            const { itemName } = payload;
+        case 'USE_ITEM_BULK': {
+            const { itemName, quantity } = payload;
+            if (quantity <= 0) return { error: "수량은 1 이상이어야 합니다." };
+
             const itemsToUse = user.inventory.filter(i => i.name === itemName && i.type === 'consumable');
             if (itemsToUse.length === 0) return { error: '사용할 아이템이 없습니다.' };
 
-            const totalQuantity = itemsToUse.reduce((sum, i) => sum + (i.quantity || 1), 0);
+            const totalAvailable = itemsToUse.reduce((sum, i) => sum + (i.quantity || 1), 0);
+            if (quantity > totalAvailable) return { error: '보유한 수량보다 많이 사용할 수 없습니다.' };
+
             const allObtainedItems: InventoryItem[] = [];
             let totalGoldGained = 0;
             let totalDiamondsGained = 0;
 
             const shopItemKey = Object.keys(SHOP_ITEMS).find(key => SHOP_ITEMS[key as keyof typeof SHOP_ITEMS].name === itemName);
             const bundleInfo = currencyBundles[itemName];
-            
-            for (let i = 0; i < totalQuantity; i++) {
+
+            for (let i = 0; i < quantity; i++) {
                 if (bundleInfo) {
                     const amount = getRandomInt(bundleInfo.min, bundleInfo.max);
                     if (bundleInfo.type === 'gold') totalGoldGained += amount;
@@ -195,19 +182,29 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 } else if (shopItemKey) {
                     const shopItem = SHOP_ITEMS[shopItemKey as keyof typeof SHOP_ITEMS];
                     const openedItems = shopItem.onPurchase();
-                    if (Array.isArray(openedItems)) {
-                        allObtainedItems.push(...openedItems);
-                    } else {
-                        allObtainedItems.push(openedItems);
-                    }
+                    if (Array.isArray(openedItems)) allObtainedItems.push(...openedItems);
+                    else allObtainedItems.push(openedItems);
                 }
             }
 
-            const inventoryAfterRemoval = user.inventory.filter(i => i.name !== itemName);
+            let quantityToRemove = quantity;
+            const inventoryAfterRemoval = user.inventory.map(invItem => {
+                if (invItem.name === itemName && invItem.type === 'consumable' && quantityToRemove > 0) {
+                    const amountInStack = invItem.quantity || 1;
+                    if (amountInStack > quantityToRemove) {
+                        const newQuantity = amountInStack - quantityToRemove;
+                        quantityToRemove = 0;
+                        return { ...invItem, quantity: newQuantity };
+                    } else {
+                        quantityToRemove -= amountInStack;
+                        return null;
+                    }
+                }
+                return invItem;
+            }).filter((i): i is InventoryItem => i !== null);
+
             const { success: hasSpace } = addItemsToInventoryUtil([...inventoryAfterRemoval], user.inventorySlots, allObtainedItems);
-            if (!hasSpace) {
-                return { error: '모든 아이템을 받기에 가방 공간이 부족합니다.' };
-            }
+            if (!hasSpace) return { error: '모든 아이템을 받기에 가방 공간이 부족합니다.' };
 
             user.inventory = inventoryAfterRemoval;
             user.gold += totalGoldGained;
@@ -215,11 +212,11 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             addItemsToInventoryUtil(user.inventory, user.inventorySlots, allObtainedItems);
 
             await db.updateUser(user);
-            
+
             const clientResponseItems = [...allObtainedItems];
             if (totalGoldGained > 0) clientResponseItems.push({ name: '골드', quantity: totalGoldGained, image: '/images/Gold.png', type: 'material', grade: 'uncommon' } as any);
             if (totalDiamondsGained > 0) clientResponseItems.push({ name: '다이아', quantity: totalDiamondsGained, image: '/images/Zem.png', type: 'material', grade: 'rare' } as any);
-
+            
             return { clientResponse: { obtainedItemsBulk: clientResponseItems, updatedUser: user } };
         }
 
@@ -251,7 +248,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 itemToToggle.isEquipped = true;
                 user.equipment[itemToToggle.slot] = itemToToggle.id;
             }
-
+            
             const effects = effectService.calculateUserEffects(user);
             user.actionPoints.max = effects.maxActionPoints;
             user.actionPoints.current = Math.min(user.actionPoints.current, user.actionPoints.max);
@@ -350,7 +347,9 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                     const combatTier = rules.combatTier;
                     const combatPool = SUB_OPTION_POOLS[item.slot!][combatTier].filter(opt => !existingSubTypes.has(opt.type));
                     if(combatPool.length > 0) {
-                        const newSubDef = combatPool[Math.floor(Math.random() * combatPool.length)];
+                        const newSubDef = pickRandom(combatPool);
+                        combatPool.splice(combatPool.indexOf(newSubDef), 1);
+                        
                         const value = getRandomInt(newSubDef.range[0], newSubDef.range[1]);
                         const newSub: ItemOption = {
                             type: newSubDef.type,

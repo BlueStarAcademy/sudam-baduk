@@ -237,7 +237,7 @@ export const processMonthlyTowerReset = async (): Promise<void> => {
 };
 
 
-export async function processWeeklyLeagueUpdates(user: types.User): Promise<types.User> {
+export async function processWeeklyLeagueUpdates(user: types.User, allUsers: types.User[]): Promise<types.User> {
     if (!isDifferentWeekKST(user.lastLeagueUpdate, Date.now())) {
         return user; // Not a new week, no update needed
     }
@@ -250,7 +250,6 @@ export async function processWeeklyLeagueUpdates(user: types.User): Promise<type
         return user;
     }
     
-    const allUsers = await db.getAllUsers();
     const competitorMap = new Map(allUsers.map(u => [u.id, u]));
 
     const finalRankings = user.weeklyCompetitors.map(c => {

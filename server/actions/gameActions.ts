@@ -1,22 +1,7 @@
-import { randomUUID } from 'crypto';
+import * as types from '../../types.js';
 import * as db from '../db.js';
-// FIX: Added TournamentType to the import list.
-import { type ServerAction, type User, type VolatileState, Player, LiveGameSession, GameMode, GameStatus, Move, Point, WinReason, RPSChoice, DiceGoVariant, KomiBid, AlkkagiPlacementType, AlkkagiLayoutType, UserWithStatus, TournamentType } from '../../types/index.js';
-import * as types from '../../types/index.js';
-import { isDifferentDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../../utils/timeUtils.js';
-import * as effectService from '../effectService.js';
-import { regenerateActionPoints } from '../effectService.js';
-import { updateGameStates } from '../gameModes.js';
-// FIX: Added DAILY_QUESTS, WEEKLY_QUESTS, and MONTHLY_QUESTS to the import list.
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ACTION_POINT_REGEN_INTERVAL_MS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SINGLE_PLAYER_MISSIONS, SINGLE_PLAYER_STAGES, DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS } from '../../constants.js';
-import { initializeGame } from '../gameModes.js';
-import { handleStrategicGameAction } from '../modes/strategic.js';
-import { handlePlayfulGameAction } from '../modes/playful.js';
-import { createDefaultUser, createDefaultQuests } from '../initialData.js';
-import { containsProfanity } from '../../profanity.js';
-import * as mannerService from '../mannerService.js';
 
-// Import new action handlers
+// Import all the handlers
 import { handleAdminAction } from './adminActions.js';
 import { handleInventoryAction } from './inventoryActions.js';
 import { handleNegotiationAction } from './negotiationActions.js';
@@ -26,152 +11,36 @@ import { handleSocialAction } from './socialActions.js';
 import { handleTournamentAction } from './tournamentActions.js';
 import { handleUserAction } from './userActions.js';
 import { handleAiGameAction } from './singlePlayerActions.js';
+import { handleStrategicGameAction } from '../modes/strategic.js';
+import { handlePlayfulGameAction } from '../modes/playful.js';
+// Corrected import path
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
 
-
-export type HandleActionResult = { 
-    clientResponse?: any;
-    error?: string;
-};
-
-// --- Helper Functions (moved from the old gameActions) ---
-
-export const resetAndGenerateQuests = async (user: User): Promise<User> => {
-    const now = Date.now();
-    const updatedUser = JSON.parse(JSON.stringify(user));
-    let modified = false;
-
-    // Ensure the quests object and its properties exist for older users.
-    if (!updatedUser.quests || typeof updatedUser.quests.daily === 'undefined' || typeof updatedUser.quests.weekly === 'undefined' || typeof updatedUser.quests.monthly === 'undefined') {
-        const existingQuests = updatedUser.quests || {};
-        updatedUser.quests = {
-            daily: existingQuests.daily || createDefaultQuests().daily,
-            weekly: existingQuests.weekly || createDefaultQuests().weekly,
-            monthly: existingQuests.monthly || createDefaultQuests().monthly,
-        };
-        modified = true;
-    }
-
-    // Daily Quests
-    if (isDifferentDayKST(user.quests.daily?.lastReset, now)) {
-        updatedUser.quests.daily = {
-            quests: [],
-            activityProgress: 0,
-            claimedMilestones: [false, false, false, false, false],
-            lastReset: now,
-        };
-        const newQuests: types.Quest[] = DAILY_QUESTS.map((q: Omit<types.Quest, 'id' | 'progress' | 'isClaimed'>, i: number) => ({
-            ...q, id: `q-d-${i}-${now}`, progress: 0, isClaimed: false,
-        }));
-        updatedUser.quests.daily.quests = newQuests;
-        // Daily login quest progress
-        updateQuestProgress(updatedUser, 'login', undefined, 1);
-        modified = true;
-    }
-
-    // Weekly Quests
-    if (isDifferentWeekKST(user.quests.weekly?.lastReset, now)) {
-        updatedUser.quests.weekly = {
-            quests: [],
-            activityProgress: 0,
-            claimedMilestones: [false, false, false, false, false],
-            lastReset: now,
-        };
-        const newQuests: types.Quest[] = WEEKLY_QUESTS.map((q: Omit<types.Quest, 'id' | 'progress' | 'isClaimed'>, i: number) => ({
-            ...q, id: `q-w-${i}-${now}`, progress: 0, isClaimed: false,
-        }));
-        updatedUser.quests.weekly.quests = newQuests;
-        modified = true;
-    }
-    
-    // Monthly Quests
-    if (isDifferentMonthKST(user.quests.monthly?.lastReset, now)) {
-        updatedUser.quests.monthly = {
-            quests: [],
-            activityProgress: 0,
-            claimedMilestones: [false, false, false, false, false],
-            lastReset: now,
-        };
-         const newQuests: types.Quest[] = MONTHLY_QUESTS.map((q: Omit<types.Quest, 'id' | 'progress' | 'isClaimed'>, i: number) => ({
-            ...q, id: `q-m-${i}-${now}`, progress: 0, isClaimed: false,
-        }));
-        updatedUser.quests.monthly.quests = newQuests;
-        modified = true;
-    }
-
-    const tournamentTypes: TournamentType[] = ['neighborhood', 'national', 'world'];
-    for (const type of tournamentTypes) {
-        const playedDateKey = `last${type.charAt(0).toUpperCase() + type.slice(1)}PlayedDate` as keyof User;
-        const rewardClaimedKey = `${type}RewardClaimed` as keyof User;
-        const tournamentKey = `last${type.charAt(0).toUpperCase() + type.slice(1)}Tournament` as keyof User;
-
-        if (isDifferentDayKST((user as any)[playedDateKey], now)) {
-            (updatedUser as any)[playedDateKey] = undefined;
-            (updatedUser as any)[rewardClaimedKey] = undefined;
-            (updatedUser as any)[tournamentKey] = null;
-            modified = true;
-        }
-    }
-
-    return modified ? updatedUser : user;
-};
-
-export const updateQuestProgress = (user: User, type: 'win' | 'participate' | 'action_button' | 'tournament_participate' | 'enhancement_attempt' | 'craft_attempt' | 'chat_greeting' | 'tournament_complete' | 'login' | 'claim_daily_milestone_100' | 'claim_weekly_milestone_100' | 'tower_challenge_participate' | 'claim_single_player_mission' | 'tournament_match_played', mode?: GameMode, amount: number = 1) => {
-    if (!user.quests) return;
-    const isStrategic = mode ? SPECIAL_GAME_MODES.some((m: {mode: GameMode}) => m.mode === mode) : false;
-    const isPlayful = mode ? PLAYFUL_GAME_MODES.some((m: { mode: GameMode; }) => m.mode === mode) : false;
-
-    const questsToUpdate: types.Quest[] = [
-        ...(user.quests.daily?.quests || []),
-        ...(user.quests.weekly?.quests || []),
-        ...(user.quests.monthly?.quests || [])
-    ];
-
-    for (const quest of questsToUpdate) {
-        if (quest.isClaimed) continue;
-
-        let shouldUpdate = false;
-        switch (quest.title) {
-            case '출석하기': if (type === 'login') shouldUpdate = true; break;
-            case '채팅창에 인사하기': if (type === 'chat_greeting') shouldUpdate = true; break;
-            case '전략바둑 플레이하기': if (type === 'participate' && isStrategic) shouldUpdate = true; break;
-            case '놀이바둑 플레이하기': if (type === 'participate' && isPlayful) shouldUpdate = true; break;
-            case '전략바둑 승리하기': if (type === 'win' && isStrategic) shouldUpdate = true; break;
-            case '놀이바둑 승리하기': if (type === 'win' && isPlayful) shouldUpdate = true; break;
-            case '액션버튼 사용하기': if (type === 'action_button') shouldUpdate = true; break;
-            case '자동대국 토너먼트 완료하기': if (type === 'tournament_complete') shouldUpdate = true; break;
-            case '자동대국 토너먼트 참여하기': if (type === 'tournament_participate') shouldUpdate = true; break;
-            case '장비 강화시도': if (type === 'enhancement_attempt') shouldUpdate = true; break;
-            case '재료 합성시도': if (type === 'craft_attempt') shouldUpdate = true; break;
-            case '일일 퀘스트 활약도100 보상받기': if (type === 'claim_daily_milestone_100') shouldUpdate = true; break;
-            case '주간 퀘스트 활약도100 보상받기': if (type === 'claim_weekly_milestone_100') shouldUpdate = true; break;
-            case '도전의탑 도전하기': if (type === 'tower_challenge_participate') shouldUpdate = true; break;
-            case '싱글플레이 수련과제 수령하기': if (type === 'claim_single_player_mission') shouldUpdate = true; break;
-            case '자동대국 토너먼트 경기하기': if (type === 'tournament_match_played') shouldUpdate = true; break;
-        }
-
-        if (shouldUpdate) {
-            quest.progress = Math.min(quest.target, quest.progress + amount);
-        }
-    }
-};
-
-export const handleAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }): Promise<HandleActionResult> => {
-    const user = await db.getUser(action.userId);
-    if (!user) {
-        return { error: 'User not found.' };
-    }
-    const { type, payload } = action;
+export const handleAction = async (volatileState: types.VolatileState, action: types.ServerAction & { userId: string, user: types.User }): Promise<types.HandleActionResult> => {
+    const { type, payload, user } = action;
     const gameId = payload?.gameId;
 
-    // Game Actions (require gameId)
+    // Route to handlers based on action type prefix or category
+    if (type.startsWith('ADMIN_')) return handleAdminAction(volatileState, action, user);
+    if (type.startsWith('START_SINGLE_PLAYER') || type.startsWith('TOWER_CHALLENGE') || type.includes('REFRESH_PLACEMENT') || type.startsWith('START_SINGLE_PLAYER_MISSION')) return handleAiGameAction(volatileState, action, user);
+    if (type.startsWith('NEGOTIATION') || ['START_AI_GAME', 'REQUEST_REMATCH', 'CHALLENGE_USER', 'SEND_CHALLENGE', 'UPDATE_NEGOTIATION', 'ACCEPT_NEGOTIATION', 'DECLINE_NEGOTIATION'].includes(type)) return handleNegotiationAction(volatileState, action, user);
+    if (type.startsWith('CLAIM_') || type.startsWith('DELETE_MAIL') || type === 'MARK_MAIL_AS_READ') return handleRewardAction(volatileState, action, user);
+    if (type.startsWith('BUY_') || ['PURCHASE_ACTION_POINTS', 'EXPAND_INVENTORY'].includes(type)) return handleShopAction(volatileState, action, user);
+    if (type.startsWith('TOURNAMENT') || ['START_TOURNAMENT_SESSION', 'FORFEIT_TOURNAMENT', 'SKIP_TOURNAMENT_END', 'USE_CONDITION_POTION', 'CLEAR_TOURNAMENT_SESSION', 'SAVE_TOURNAMENT_PROGRESS', 'START_TOURNAMENT_ROUND'].includes(type)) return handleTournamentAction(volatileState, action, user);
+    if (['TOGGLE_EQUIP_ITEM', 'SELL_ITEM', 'ENHANCE_ITEM', 'DISASSEMBLE_ITEM', 'USE_ITEM', 'USE_ITEM_BULK', 'CRAFT_MATERIAL', 'SYNTHESIZE_EQUIPMENT'].includes(type)) return handleInventoryAction(volatileState, action, user);
+    if (['UPDATE_AVATAR', 'UPDATE_BORDER', 'CHANGE_NICKNAME', 'UPDATE_MBTI', 'RESET_STAT_POINTS', 'CONFIRM_STAT_ALLOCATION', 'CHANGE_PASSWORD', 'DELETE_ACCOUNT', 'RESET_SINGLE_STAT', 'RESET_STATS_CATEGORY'].includes(type)) return handleUserAction(volatileState, action, user);
+
+    // Game-specific actions need to fetch the game first
     if (gameId) {
         const game = await db.getLiveGame(gameId);
         if (!game) return { error: 'Game not found.' };
         
-        let result: HandleActionResult | null | undefined = null;
-        if (SPECIAL_GAME_MODES.some((m: {mode: GameMode}) => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
+        let result: types.HandleActionResult | null | undefined = null;
+        
+        // Added explicit types for 'm'
+        if (SPECIAL_GAME_MODES.some((m: {mode: types.GameMode}) => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
             result = await handleStrategicGameAction(volatileState, game, action, user);
-        } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === game.mode)) {
+        } else if (PLAYFUL_GAME_MODES.some((m: {mode: types.GameMode}) => m.mode === game.mode)) {
             result = await handlePlayfulGameAction(volatileState, game, action, user);
         }
 
@@ -180,18 +49,8 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
             return result;
         }
     }
-
-    // Non-Game actions
-    if (type.startsWith('ADMIN_')) return handleAdminAction(volatileState, action, user);
-    if (type.includes('SINGLE_PLAYER') || type.includes('TOWER_CHALLENGE')) return handleAiGameAction(volatileState, action, user);
-    if (type.includes('NEGOTIATION') || type === 'START_AI_GAME' || type === 'REQUEST_REMATCH' || type === 'CHALLENGE_USER' || type === 'SEND_CHALLENGE') return handleNegotiationAction(volatileState, action, user);
-    if (type.startsWith('CLAIM_') || type.startsWith('DELETE_MAIL')) return handleRewardAction(volatileState, action, user);
-    if (type.startsWith('BUY_') || type === 'PURCHASE_ACTION_POINTS' || type === 'EXPAND_INVENTORY') return handleShopAction(volatileState, action, user);
-    if (type.startsWith('TOURNAMENT') || type.startsWith('START_TOURNAMENT') || type.startsWith('SKIP_TOURNAMENT') || type.startsWith('FORFEIT_TOURNAMENT') || type.startsWith('SAVE_TOURNAMENT') || type.startsWith('CLEAR_TOURNAMENT')) return handleTournamentAction(volatileState, action, user);
-    if (['TOGGLE_EQUIP_ITEM', 'SELL_ITEM', 'ENHANCE_ITEM', 'DISASSEMBLE_ITEM', 'USE_ITEM', 'USE_ALL_ITEMS_OF_TYPE', 'CRAFT_MATERIAL', 'SYNTHESIZE_EQUIPMENT'].includes(type)) return handleInventoryAction(volatileState, action, user);
-    if (['UPDATE_AVATAR', 'UPDATE_BORDER', 'CHANGE_NICKNAME', 'RESET_STAT_POINTS', 'CONFIRM_STAT_ALLOCATION', 'UPDATE_MBTI'].includes(type)) return handleUserAction(volatileState, action, user);
     
-    // Social actions can be game-related (chat in game) or not (logout)
+    // Social actions are often game-independent or have their own game fetching logic
     const socialResult = await handleSocialAction(volatileState, action, user);
     if (socialResult) return socialResult;
 

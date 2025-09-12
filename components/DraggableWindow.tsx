@@ -1,5 +1,4 @@
-
-import React, { useState, useRef, useEffect, useCallback, ReactNode } from 'react';
+import React, { useState, useRef, useEffect, useCallback, ReactNode, useMemo } from 'react';
 
 interface DraggableWindowProps {
     title: string;
@@ -196,7 +195,12 @@ const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, windowId, onCl
         }
     };
 
-
+    const responsiveWidth = useMemo(() => {
+        if (isMobile) return '90vw';
+        const preferredVw = (initialWidth / 1440) * 100;
+        return `clamp(400px, ${preferredVw.toFixed(2)}vw, ${initialWidth * 1.4}px)`;
+    }, [isMobile, initialWidth]);
+    
     const transformStyle = `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${isDragging ? 1.02 : 1})`;
 
     if (!isInitialized) return null;
@@ -212,7 +216,7 @@ const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, windowId, onCl
                 ref={windowRef}
                 className={`fixed top-1/2 left-1/2 bg-primary rounded-xl shadow-2xl border border-color flex flex-col z-50 text-on-panel`}
                 style={{
-                    width: isMobile ? '90vw' : `${initialWidth}px`,
+                    width: responsiveWidth,
                     transform: transformStyle,
                     boxShadow: isDragging ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
                     maxHeight: '90vh',

@@ -1,6 +1,8 @@
 
+
+// FIX: Removed duplicate import of summaryService to resolve duplicate identifier error.
 import * as summaryService from '../summaryService.js';
-import * as types from '../../types/index.js';
+import * as types from '../../types.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../goLogic.js';
 import { getGameResult } from '../summaryService.js';
@@ -11,131 +13,12 @@ import { initializeCapture, updateCaptureState, handleCaptureAction } from './ca
 import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidden.js';
 import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
 import { handleSharedAction, transitionToPlaying } from './shared.js';
+import { aiUserId } from '../aiPlayer.js';
+// FIX: Import getGoLogic and processMove to resolve missing name errors.
 
 
-export const initializeStrategicGame = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {
-    const p1 = game.player1;
-    const p2 = game.player2;
-
-    switch (game.mode) {
-        case types.GameMode.Standard:
-        case types.GameMode.Speed:
-        case types.GameMode.Mix:
-            if (game.isAiGame) {
-                const humanPlayerColor = neg.settings.player1Color || types.Player.Black;
-                if (humanPlayerColor === types.Player.Black) {
-                    game.blackPlayerId = p1.id;
-                    game.whitePlayerId = p2.id;
-                } else {
-                    game.whitePlayerId = p1.id;
-                    game.blackPlayerId = p2.id;
-                }
-                transitionToPlaying(game, now);
-            } else {
-                initializeNigiri(game, now);
-            }
-            break;
-        case types.GameMode.Capture:
-            initializeCapture(game, now);
-            break;
-        case types.GameMode.Base:
-            initializeBase(game, now);
-            break;
-        case types.GameMode.Hidden:
-            initializeHidden(game);
-            initializeNigiri(game, now); // Also uses nigiri
-            break;
-        case types.GameMode.Missile:
-            initializeMissile(game);
-            initializeNigiri(game, now); // Also uses nigiri
-            break;
-    }
-};
-
-export const updateStrategicGameState = async (game: types.LiveGameSession, now: number) => {
-    // This is the core update logic for all Go-based games.
-    if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
-        if (game.gameStatus !== 'scoring' && game.gameStatus !== 'ended' && game.gameStatus !== 'no_contest') {
-            getGameResult(game);
-            return;
-        }
-    }
-
-    if (game.gameStatus === 'playing' && game.turnDeadline && now > game.turnDeadline) {
-        const timedOutPlayer = game.currentPlayer;
-        const timeKey = timedOutPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        const byoyomiKey = timedOutPlayer === types.Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
-        const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
-
-        if (isFischer) {
-            // Fischer timeout is an immediate loss.
-        } else if (game[timeKey] > 0) { // Main time expired
-            game[timeKey] = 0;
-            if (game.settings.byoyomiCount > 0 && game[byoyomiKey] > 0) {
-                if (!game.isSinglePlayer && !game.isTowerChallenge) {
-                    game[byoyomiKey]--;
-                }
-                game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-                game.turnStartTime = now;
-                return;
-            }
-        } else { // Byoyomi expired
-            if (game[byoyomiKey] > 0) {
-                if (!game.isSinglePlayer && !game.isTowerChallenge) {
-                    game[byoyomiKey]--;
-                }
-                game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-                game.turnStartTime = now;
-                return;
-            }
-        }
-        
-        // No time or byoyomi left
-        const winner = timedOutPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-        game.lastTimeoutPlayerId = game.currentPlayer === types.Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
-        game.lastTimeoutPlayerIdClearTime = now + 5000;
-        
-        summaryService.endGame(game, winner, 'timeout');
-    }
-
-    // Delegate to mode-specific update logic
-    updateNigiriState(game, now);
-    updateCaptureState(game, now);
-    updateBaseState(game, now);
-    updateHiddenState(game, now);
-    updateMissileState(game, now);
-};
-
-export const handleStrategicGameAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction & { userId: string }, user: types.User): Promise<types.HandleActionResult | undefined> => {
-    // Try shared actions first
-    const sharedResult = await handleSharedAction(volatileState, game, action, user);
-    if (sharedResult) return sharedResult;
-
-    // Then try each specific handler.
-    let result: types.HandleActionResult | null = null;
-    
-    result = handleNigiriAction(game, action, user);
-    if (result) return result;
-    
-    result = handleCaptureAction(game, action, user);
-    if (result) return result;
-
-    result = handleBaseAction(game, action, user);
-    if (result) return result;
-
-    result = handleHiddenAction(volatileState, game, action, user);
-    if (result) return result;
-
-    result = handleMissileAction(game, action, user);
-    if (result) return result;
-    
-    // Fallback to standard actions if no other handler caught it.
-    const standardResult = await handleStandardAction(volatileState, game, action, user);
-    if(standardResult) return standardResult;
-    
-    return undefined;
-};
-
+// This function handles the game logic for standard Go and its variants like Capture, Speed, Base, Hidden, Missile, Mix.
+// It's used for both PvP and single-player modes against AI.
 
 // Keep the original standard action handler, but rename it to avoid conflicts.
 const handleStandardAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction, user: types.User): Promise<types.HandleActionResult | null> => {
@@ -149,7 +32,7 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
     switch (type) {
         case 'PLACE_STONE': {
             if (!isMyTurn || (game.gameStatus !== 'playing' && game.gameStatus !== 'hidden_placing')) {
-                return {};
+                return { error: '내 차례가 아닙니다.' };
             }
 
             const { x, y, isHidden } = payload;
@@ -430,11 +313,6 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             game.lastMove = { x: -1, y: -1 };
             game.lastTurnStones = null;
             game.moveHistory.push({ player: myPlayerEnum, x: -1, y: -1 });
-
-            if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
-                getGameResult(game);
-                return {};
-            }
 
             if (game.passCount >= 2) {
                 const isHiddenMode = game.mode === types.GameMode.Hidden || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Hidden));

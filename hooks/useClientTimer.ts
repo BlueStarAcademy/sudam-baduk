@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Player, GameStatus, LiveGameSession } from '../types/index.js';
+import { Player, GameStatus, LiveGameSession } from '../types.js';
 import { audioService } from '../services/audioService.js';
 
 export const useClientTimer = (session: LiveGameSession) => {

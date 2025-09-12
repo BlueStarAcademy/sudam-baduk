@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
+// FIX: Import missing types from the barrel file.
 import { ServerAction, AdminProps, InventoryItemType, User } from '../../types.js';
 import DraggableWindow from '../DraggableWindow.js';
 import Button from '../Button.js';
@@ -66,6 +67,7 @@ const ItemSelectionModal: React.FC<ItemSelectionModalProps> = ({ onAddItem, onCl
 };
 
 
+// FIX: Correctly extend AdminProps to inherit all necessary props.
 interface MailSystemPanelProps extends AdminProps {}
 
 const MailSystemPanel: React.FC<MailSystemPanelProps> = ({ allUsers, onAction, onBack }) => {

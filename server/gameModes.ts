@@ -1,13 +1,15 @@
+
 import { getGoLogic } from './goLogic.js';
 import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS, TOWER_STAGES, SINGLE_PLAYER_STAGES } from '../constants.js';
-import * as types from '../types/index.js';
+import * as types from '../types.js';
 import type { LiveGameSession, AppState, Negotiation, ActionButton, GameMode } from '../types.js';
 import { aiUserId, makeAiMove, getAiUser } from './aiPlayer.js';
-import { initializeStrategicGame, updateStrategicGameState } from './strategic.js';
-import { initializePlayfulGame, updatePlayfulGameState } from './playful.js';
+// FIX: Corrected import paths to point to the actual module files inside `modes`.
+import { initializeStrategicGame, updateStrategicGameState } from './modes/strategic.js';
+import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.js';
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
-import * as effectService from './effectService.js';
+import * as effectService from '../services/effectService.js';
 import { endGame, getGameResult } from './summaryService.js';
 
 export const finalizeAnalysisResult = (baseAnalysis: types.AnalysisResult, session: types.LiveGameSession): types.AnalysisResult => {
@@ -165,7 +167,7 @@ export const initializeGame = async (neg: Negotiation): Promise<LiveGameSession>
         gameStatus: 'pending', blackPlayerId: null, whitePlayerId: null, currentPlayer: types.Player.None,
     };
 
-    if (SPECIAL_GAME_MODES.some(m => m.mode === mode)) {
+    if (SPECIAL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === mode)) {
         initializeStrategicGame(game, neg, now);
     } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode; }) => m.mode === mode)) {
         await initializePlayfulGame(game, neg, now);
@@ -209,7 +211,7 @@ export const resetGameForRematch = (game: LiveGameSession, negotiation: types.Ne
 
     Object.assign(newGame, baseFields);
 
-    if (SPECIAL_GAME_MODES.some(m => m.mode === newGame.mode)) {
+    if (SPECIAL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === newGame.mode)) {
         initializeStrategicGame(newGame, negotiation, now);
     } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === newGame.mode)) {
         initializePlayfulGame(newGame, negotiation, now);
@@ -243,7 +245,7 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
         let p2;
         if (game.player2.id === aiUserId) {
             const stageList = game.isTowerChallenge ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
-            const stage = stageList.find(s => s.id === game.stageId);
+            const stage = stageList.find((s: { id: string; }) => s.id === game.stageId);
             p2 = getAiUser(game.mode, 1, stage?.level);
             if (stage) {
                 p2.strategyLevel = stage.katagoLevel;
@@ -300,7 +302,7 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
             }
         }
         
-        if (SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
+        if (SPECIAL_GAME_MODES.some((m: { mode: GameMode; }) => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
             await updateStrategicGameState(game, now);
         } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === game.mode)) {
             await updatePlayfulGameState(game, now);
@@ -308,4 +310,4 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
         updatedGames.push(game);
     }
     return updatedGames;
-}
+};

@@ -32,27 +32,6 @@ const STAT_WEIGHTS: Record<'early' | 'mid' | 'end', Partial<Record<CoreStat, num
 
 const COMMENTARY_POOLS = {
     start: "{p1}님과 {p2}님의 대국이 시작되었습니다.",
-    early: [
-        "양측 모두 신중하게 첫 수를 던지며 긴 대국의 막을 올립니다!",
-        "기선 제압을 노리며 빠른 속도로 초반 포석이 전개되고 있습니다.",
-        "서로의 의도를 파악하려는 탐색전이 이어지고 있습니다.",
-        "중앙을 선점하며 주도권을 가져가려는 모습이 보입니다.",
-        "조심스러운 수읽기로 서로의 진영을 가늠하고 있습니다."
-    ],
-    mid: [
-        "격렬한 전투가 좌변에서 벌어지고 있습니다!",
-        "돌들이 얽히며 복잡한 형세가 만들어지고 있습니다.",
-        "상대의 허점을 노리며 강하게 파고듭니다.",
-        "집중력이 흔들리면 단번에 무너질 수 있는 상황입니다.",
-        "치열한 실랑이 끝에 국면의 균형이 살짝 기울고 있습니다."
-    ],
-    end: [
-        "마지막 승부수를 던지며 역전을 노리고 있습니다!",
-        "큰 집 계산에 들어가며 승패가 서서히 가려지고 있습니다.",
-        "남은 수읽기에 모든 집중력을 쏟아붓고 있습니다.",
-        "한 수 한 수가 경기 결과에 직결되는 종반입니다.",
-        "치열한 승부 끝에 승자의 그림자가 드러나고 있습니다."
-    ],
     win: [
         "마침내 승부가 갈렸습니다! {winner} 선수가 이번 라운드를 제압합니다!",
         "냉정한 판단으로 끝까지 우세를 유지하며 승리를 거머쥡니다.",
@@ -64,7 +43,7 @@ const COMMENTARY_POOLS = {
 
 const getPhase = (time: number): 'early' | 'mid' | 'end' => {
     if (time <= EARLY_GAME_DURATION) return 'early';
-    if (time <= EARLY_GAME_DURATION + MID_GAME_DURATION) return 'end';
+    if (time <= EARLY_GAME_DURATION + MID_GAME_DURATION) return 'mid';
     return 'end';
 };
 
@@ -124,6 +103,76 @@ const finishMatch = (
         winner,
     };
 };
+
+const triggerRandomEvent = (state: TournamentState, p1: PlayerForTournament, p2: PlayerForTournament) => {
+    const events: { type: 'mistake' | 'pressure' | 'aggressive' | 'defense'; stat: CoreStat; message: string; isNegative: boolean }[] = [
+        { type: 'mistake', stat: CoreStat.Concentration, message: "{player}님, 조급한 마음에 실수가 나왔습니다.", isNegative: true },
+        { type: 'pressure', stat: CoreStat.ThinkingSpeed, message: "{player}님, 시간 압박에서도 좋은 수를 둡니다!", isNegative: false },
+        { type: 'aggressive', stat: CoreStat.CombatPower, message: "{player}님, 공격적인 수로 판세를 흔듭니다!", isNegative: false },
+        { type: 'defense', stat: CoreStat.Stability, message: "{player}님, 차분하게 받아치며 불리한 싸움을 버팁니다!", isNegative: false },
+    ];
+
+    const potentialEvents: (typeof events[0] & { player: PlayerForTournament, p1_stat: number, p2_stat: number })[] = [];
+
+    for (const event of events) {
+        const stat = event.stat;
+        const p1Stat = p1.stats[stat] || 100;
+        const p2Stat = p2.stats[stat] || 100;
+
+        let p1Prob = 0.20;
+        let p2Prob = 0.20;
+
+        const p1IsHigher = p1Stat > p2Stat;
+        const p2IsHigher = p2Stat > p1Stat;
+
+        if (p1IsHigher) {
+            const diffPercent = (p1Stat - p2Stat) / p2Stat;
+            if (event.isNegative) p2Prob += diffPercent; else p1Prob += diffPercent;
+        } else if (p2IsHigher) {
+            const diffPercent = (p2Stat - p1Stat) / p1Stat;
+            if (event.isNegative) p1Prob += diffPercent; else p2Prob += diffPercent;
+        }
+
+        if (Math.random() < p1Prob) {
+            potentialEvents.push({ player: p1, ...event, p1_stat: p1Stat, p2_stat: p2Stat });
+        }
+        if (Math.random() < p2Prob) {
+            potentialEvents.push({ player: p2, ...event, p1_stat: p1Stat, p2_stat: p2Stat });
+        }
+    }
+
+    if (potentialEvents.length > 0) {
+        const chosenEvent = potentialEvents[Math.floor(Math.random() * potentialEvents.length)];
+        
+        const randomPercent = Math.random() * (10 - 2) + 2;
+        const scoreChange = Math.round(randomPercent / 2);
+        const finalScoreChange = chosenEvent.isNegative ? -scoreChange : scoreChange;
+
+        if (chosenEvent.player.id === p1.id) {
+            state.currentMatchScores!.player1 += finalScoreChange;
+        } else {
+            state.currentMatchScores!.player2 += finalScoreChange;
+        }
+        
+        const commentaryText = chosenEvent.message.replace('{player}', chosenEvent.player.nickname) + ` (${finalScoreChange > 0 ? '+' : ''}${finalScoreChange}집)`;
+        
+        state.currentMatchCommentary.push({
+            text: commentaryText,
+            phase: getPhase(state.timeElapsed),
+            isRandomEvent: true,
+            randomEventDetails: {
+                type: chosenEvent.type,
+                stat: chosenEvent.stat,
+                p1_id: p1.id,
+                p2_id: p2.id,
+                p1_stat: chosenEvent.p1_stat,
+                p2_stat: chosenEvent.p2_stat,
+                score_change: finalScoreChange,
+                player_id: chosenEvent.player.id
+            }
+        });
+    }
+}
 
 
 const simulateAndFinishMatch = (match: Match, players: PlayerForTournament[]) => {
@@ -260,7 +309,6 @@ const processMatchCompletion = (state: TournamentState, user: User, completedMat
 
         if (!userWon) {
             state.status = 'eliminated';
-            // FIX: Define 'currentRound' before use to resolve 'Cannot find name' error.
             const currentRound = state.rounds[roundIndex];
             currentRound.matches.forEach(match => {
                 if (!match.isFinished) {
@@ -476,6 +524,8 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
 
     if (state.timeElapsed === 1) {
         state.currentMatchCommentary.push({ text: COMMENTARY_POOLS.start.replace('{p1}', p1.nickname).replace('{p2}', p2.nickname), phase, isRandomEvent: false });
+    } else if (state.timeElapsed > 1 && state.timeElapsed < TOTAL_GAME_DURATION && state.timeElapsed % 5 === 0) {
+        triggerRandomEvent(state, p1, p2);
     } else if (state.timeElapsed % 20 === 0 && state.timeElapsed > 0 && state.timeElapsed < TOTAL_GAME_DURATION) {
         const leadPercent = Math.abs(p1ScorePercent - 50) * 2;
         const scoreDiff = (leadPercent / 2);
@@ -485,28 +535,6 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
         if (finalDiff > 0.5) {
             state.currentMatchCommentary.push({ text: `[중간 스코어] ${leader} 선수 ${finalDiff.toFixed(1)}집 우세.`, phase, isRandomEvent: false });
         }
-    } else if (state.timeElapsed % 3 === 0 && state.timeElapsed < TOTAL_GAME_DURATION) {
-        const pool = COMMENTARY_POOLS[phase];
-        const recentComments = state.currentMatchCommentary.slice(-3).map(c => c.text);
-        let newCommentText;
-        if (pool.length > 1) {
-            let attempts = 0;
-            do {
-                newCommentText = pool[Math.floor(Math.random() * pool.length)].replace('{p1}', p1.nickname).replace('{p2}', p2.nickname);
-                attempts++;
-            } while (recentComments.includes(newCommentText) && attempts < 10);
-        } else {
-            newCommentText = pool[0].replace('{p1}', p1.nickname).replace('{p2}', p2.nickname);
-        }
-
-        state.currentMatchCommentary.push({ text: newCommentText, phase, isRandomEvent: false });
-    }
-
-    if (state.timeElapsed > 1 && state.timeElapsed < TOTAL_GAME_DURATION && state.timeElapsed % 5 === 0 && Math.random() < 0.20) {
-        const eventPlayer = Math.random() < 0.5 ? p1 : p2;
-        eventPlayer.condition = Math.max(0, Math.min(120, eventPlayer.condition + (Math.random() > 0.5 ? 10 : -10)));
-        const eventText = `${eventPlayer.nickname}님이 ${eventPlayer.condition > 100 ? '컨디션 최상!' : '컨디션 난조.'}`;
-        state.currentMatchCommentary.push({ text: eventText, phase, isRandomEvent: true });
     }
     
     if (state.timeElapsed >= TOTAL_GAME_DURATION) {

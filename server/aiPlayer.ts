@@ -1,6 +1,8 @@
 
-import * as types from '../types/index.js';
-import { Point } from '../types/index.js';
+
+
+import * as types from '../types.js';
+import { Point } from '../types.js';
 import { aiUserId, BOT_NAMES, AVATAR_POOL, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
 import { createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultInventory, defaultStats, createDefaultQuests } from './initialData.js';
 import { getGoLogic, processMove } from './goLogic.js';
@@ -8,7 +10,7 @@ import { getOmokLogic } from './omokLogic.js';
 import { endGame, getGameResult } from './summaryService.js';
 import { finishPlacingTurn as finishDiceGoPlacingTurn } from './modes/diceGo.js';
 import { finishThiefPlacingTurn } from './modes/thief.js';
-import { SinglePlayerLevel } from '../types/index.js';
+import { SinglePlayerLevel } from '../types.js';
 
 export { aiUserId }; // Re-export for other modules
 
@@ -88,22 +90,27 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
     const humanPlayer = aiPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
     const aiLevel = game.settings.aiDifficulty || 1;
 
-    const allEmptyPoints: Point[] = [];
-    for (let y = 0; y < boardSize; y++) {
-        for (let x = 0; x < boardSize; x++) {
-            if (board[y][x] === types.Player.None) {
-                allEmptyPoints.push({ x, y });
+    const setHumanPlayerTurn = () => {
+        const now = Date.now();
+        game.currentPlayer = humanPlayer;
+        game.turnStartTime = now;
+        if (game.settings.timeLimit > 0 || game.isSinglePlayer || game.isTowerChallenge) {
+            const humanTimeKey = humanPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+            const isFischer = game.mode === types.GameMode.Speed;
+            
+            const isInByoyomi = game[humanTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
+            if (isInByoyomi) {
+                game.turnDeadline = now + game.settings.byoyomiTime * 1000;
+            } else {
+                if (isFischer) {
+                    game[humanTimeKey] += game.settings.timeIncrement || 0;
+                }
+                game.turnDeadline = now + game[humanTimeKey] * 1000;
             }
         }
-    }
+    };
 
-    const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
-    if (validMoves.length === 0) {
-        await endGame(game, humanPlayer, 'resign');
-        return;
-    }
-
-    const handleSurvivalPostAiMove = async () => {
+    const handleSurvivalPostAiMove = async (): Promise<boolean> => {
         if (game.gameType !== 'survival') return false; // Not a survival game
         
         game.whiteStonesPlaced = (game.whiteStonesPlaced ?? 0) + 1;
@@ -120,30 +127,6 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         }
         
         return false; // Game continues
-    }
-
-    const setHumanPlayerTurn = () => {
-        const now = Date.now();
-        game.currentPlayer = humanPlayer;
-        game.turnStartTime = now;
-        if (game.settings.timeLimit > 0 || game.isSinglePlayer || game.isTowerChallenge) { // SP also needs timer reset.
-            const humanTimeKey = humanPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-            const byoyomiKey = humanPlayer === types.Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
-            // FIX: The `timeControl` property does not exist on `LiveGameSession`.
-            // For single-player AI games, the mode is set directly, so we can check `game.mode`.
-            const isFischer = game.mode === types.GameMode.Speed;
-            
-            const isInByoyomi = game[humanTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
-            if (isInByoyomi) {
-                game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-            } else {
-                if (isFischer) {
-                    // FIX: The time increment is stored in `game.settings`, not on a `timeControl` object.
-                    game[humanTimeKey] += game.settings.timeIncrement || 0;
-                }
-                game.turnDeadline = now + game[humanTimeKey] * 1000;
-            }
-        }
     };
 
     const makeMove = async (move: Point, isHidden: boolean = false) => {
@@ -161,11 +144,8 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
             }
             game.passCount = 0;
 
-            // FIX: The `timeControl` property does not exist on `LiveGameSession`.
-            // For single-player AI games, the mode is set directly, so we can check `game.mode`.
             if (game.mode === types.GameMode.Speed) {
                 const aiTimeKey = aiPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                // FIX: The time increment is stored in `game.settings`, not on a `timeControl` object.
                 game[aiTimeKey] += game.settings.timeIncrement || 0;
             }
 
@@ -219,6 +199,15 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         setHumanPlayerTurn();
     };
     
+    const allEmptyPoints: Point[] = [];
+    for (let y = 0; y < boardSize; y++) {
+        for (let x = 0; x < boardSize; x++) {
+            if (board[y][x] === types.Player.None) {
+                allEmptyPoints.push({ x, y });
+            }
+        }
+    }
+
     // AI Hidden stone logic
     if (game.isSinglePlayer && game.gameType === 'hidden' && aiPlayer === types.Player.White) {
         const hiddenStonesLeft = (game.settings.hiddenStoneCount || 0) - (game.hidden_stones_used_p2 || 0);
@@ -235,137 +224,90 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
             if ((game.settings.hiddenStoneCount || 0) >= 2 && (game.hidden_stones_used_p2 || 0) === 1 && turnNumber >= 25 && turnNumber <= 30) {
                 shouldPlaceHidden = true;
             }
-
-            if (shouldPlaceHidden) {
-                if (validMoves.length > 0) {
-                    const chosenMove = validMoves[Math.floor(Math.random() * validMoves.length)];
-                    await makeMove(chosenMove, true);
-                    return; // Move made, exit function
-                }
-            }
-        }
-    }
-
-    const avoidSelfAtariProb = 0.5 + (aiLevel - 1) * 0.05;
-    const shouldAvoidSelfAtari = Math.random() < avoidSelfAtariProb;
-
-    const isSelfAtari = (move: Point, currentBoard: types.BoardState): boolean => {
-        const captureResult = processMove(currentBoard, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
-        if (captureResult.capturedStones.length > 0) {
-            return false;
-        }
-
-        const tempBoard = JSON.parse(JSON.stringify(currentBoard));
-        tempBoard[move.y][move.x] = aiPlayer;
-        const group = logic.findGroup(move.x, move.y, aiPlayer, tempBoard);
-        return group !== null && group.liberties === 1;
-    };
-
-    // --- 1. Immediate Capture (100% rule) ---
-    const capturingMoves: { move: Point; captures: number }[] = [];
-    for (const p of allEmptyPoints) {
-        const result = processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length);
-        if (result.isValid && result.capturedStones.length > 0) {
-            capturingMoves.push({ move: p, captures: result.capturedStones.length });
-        }
-    }
-
-    let validCapturingMoves = capturingMoves;
-    if (shouldAvoidSelfAtari) {
-        validCapturingMoves = capturingMoves.filter(m => !isSelfAtari(m.move, board));
-    }
-
-    if (validCapturingMoves.length > 0) {
-        validCapturingMoves.sort((a, b) => b.captures - a.captures);
-        const bestCaptureCount = validCapturingMoves[0].captures;
-        const bestMoves = validCapturingMoves.filter(m => m.captures === bestCaptureCount);
-        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
-        await makeMove(chosenMove);
-        return;
-    }
-
-    // --- 2. Put opponent groups in atari (100% rule) ---
-    const atariMoves: { move: Point; groupSize: number }[] = [];
-    const opponentGroups = logic.getAllGroups(humanPlayer, board);
-    for (const p of allEmptyPoints) {
-        const result = processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length);
-        if (result.isValid) {
-            for (const group of opponentGroups) {
-                if (group.libertyPoints.has(`${p.x},${p.y}`)) {
-                    const groupAfterMove = logic.findGroup(group.stones[0].x, group.stones[0].y, humanPlayer, result.newBoardState);
-                    if (groupAfterMove && groupAfterMove.liberties === 1) {
-                        atariMoves.push({ move: p, groupSize: group.stones.length });
-                        break; 
-                    }
-                }
-            }
-        }
-    }
-
-    let validAtariMoves = atariMoves;
-    if (shouldAvoidSelfAtari) {
-        validAtariMoves = atariMoves.filter(m => !isSelfAtari(m.move, board));
-    }
-
-    if (validAtariMoves.length > 0) {
-        validAtariMoves.sort((a, b) => b.groupSize - a.groupSize);
-        const bestGroupSize = validAtariMoves[0].groupSize;
-        const bestMoves = validAtariMoves.filter(m => m.groupSize === bestGroupSize);
-        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
-        await makeMove(chosenMove);
-        return;
-    }
-
-    // --- 3. Save own groups from atari (Probabilistic rule) ---
-    let saveProb = 0.5 + (aiLevel - 1) * 0.05;
-    if (aiLevel >= 10) saveProb = 1;
-
-    if (Math.random() < saveProb) {
-        const myGroups = logic.getAllGroups(aiPlayer, board);
-        const atariGroups = myGroups.filter(g => g.liberties === 1);
-        if (atariGroups.length > 0) {
-            const savingMoves: { move: Point; groupSize: number }[] = [];
-            for (const group of atariGroups) {
-                const libertyPointKey = group.libertyPoints.values().next().value;
-                if (libertyPointKey) {
-                    const [x, y] = libertyPointKey.split(',').map(Number);
-                    const move = { x, y };
-                    // Ensure the saving move isn't suicide
-                    const result = processMove(board, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
-                    if (result.isValid) {
-                        savingMoves.push({ move, groupSize: group.stones.length });
-                    }
-                }
-            }
-
-            if (savingMoves.length > 0) {
-                savingMoves.sort((a, b) => b.groupSize - a.groupSize); // Prioritize saving larger groups
-                const chosenMove = savingMoves[0].move;
-                await makeMove(chosenMove);
+            
+            const validMovesForHidden = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
+            if (shouldPlaceHidden && validMovesForHidden.length > 0) {
+                const chosenMove = validMovesForHidden[Math.floor(Math.random() * validMovesForHidden.length)];
+                await makeMove(chosenMove, true);
                 return;
             }
         }
     }
-    
-    // --- 4. Center-oriented positional play (100% rule) ---
-    let validPositionalMoves = validMoves;
-    if (shouldAvoidSelfAtari) {
-        validPositionalMoves = validMoves.filter(p => !isSelfAtari(p, board));
-        if (validPositionalMoves.length === 0) {
-            validPositionalMoves = validMoves;
+
+    const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
+    if (validMoves.length === 0) {
+        await passTurn();
+        return;
+    }
+
+    const scoredMoves: { move: Point; score: number }[] = [];
+    const myAtariGroups = logic.getAllGroups(aiPlayer, board).filter(g => g.liberties === 1);
+    const savingMoves = new Set<string>();
+    if (myAtariGroups.length > 0) {
+        for (const group of myAtariGroups) {
+            // FIX: The `p` in forEach is a string "x,y", not an object.
+            group.libertyPoints.forEach(p => savingMoves.add(p));
         }
     }
 
-    const centerPoints = validPositionalMoves.filter(p => p.x >= 2 && p.x < boardSize - 2 && p.y >= 2 && p.y < boardSize - 2);
-    if (centerPoints.length > 0) {
-        const chosenMove = centerPoints[Math.floor(Math.random() * centerPoints.length)];
-        await makeMove(chosenMove);
-        return;
-    } else {
-        const chosenMove = validPositionalMoves[Math.floor(Math.random() * validPositionalMoves.length)];
-        await makeMove(chosenMove);
+    for (const move of validMoves) {
+        let score = 0;
+        
+        const tempResult = processMove(board, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
+        const newBoard = tempResult.newBoardState;
+        
+        const capturedStoneCount = tempResult.capturedStones.length;
+        if (capturedStoneCount > 0) {
+            score += 1000 * capturedStoneCount;
+        }
+
+        if (savingMoves.has(`${move.x},${move.y}`)) {
+            const savedGroup = myAtariGroups.find(g => g.libertyPoints.has(`${move.x},${move.y}`));
+            score += 800 * (savedGroup?.stones.length || 1);
+        }
+
+        const opponentGroupsAfterMove = logic.getAllGroups(humanPlayer, newBoard);
+        for (const group of opponentGroupsAfterMove) {
+            if (group.liberties === 1) {
+                score += 50 * group.stones.length;
+            }
+        }
+
+        const myGroupsAfterMove = logic.getAllGroups(aiPlayer, newBoard);
+        const totalLiberties = myGroupsAfterMove.reduce((sum, group) => sum + group.liberties, 0);
+        score += totalLiberties;
+
+        const neighbors = logic.getNeighbors(move.x, move.y);
+        const friendlyNeighbors = neighbors.filter(n => board[n.y][n.x] === aiPlayer).length;
+        if (friendlyNeighbors === 3) score -= 20;
+        if (friendlyNeighbors === 4) score -= 50;
+        score -= friendlyNeighbors * 5;
+
+        const isThirdLine = move.y === 2 || move.y === boardSize - 3 || move.x === 2 || move.x === boardSize - 3;
+        const isFourthLine = move.y === 3 || move.y === boardSize - 4 || move.x === 3 || move.x === boardSize - 4;
+        if (isFourthLine) score += 5;
+        if (isThirdLine) score += 3;
+
+        const isCorner = (move.x === 0 && move.y === 0) || (move.x === 0 && move.y === boardSize - 1) || (move.x === boardSize - 1 && move.y === 0) || (move.x === boardSize - 1 && move.y === boardSize - 1);
+        if (isCorner && capturedStoneCount === 0) {
+            score -= 50;
+        }
+
+        scoredMoves.push({ move, score });
+    }
+
+    if (scoredMoves.length === 0) {
+        await passTurn();
         return;
     }
+
+    scoredMoves.sort((a, b) => b.score - a.score);
+    const topN = Math.min(3, scoredMoves.length);
+    const bestScore = scoredMoves[0].score;
+    const bestMoves = scoredMoves.filter(m => m.score >= bestScore * 0.9).slice(0, topN);
+    const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+
+    await makeMove(chosenMove);
 };
 
 const makePlayfulAiMove = async (game: types.LiveGameSession) => {
@@ -452,6 +394,7 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                 }
 
                 if(game.mode === types.GameMode.Ttamok) {
+                    // FIX: `x` and `y` were not defined. Use `bestMove.x` and `bestMove.y`.
                     const { capturedCount } = logic.performTtamokCapture(bestMove.x, bestMove.y);
                     game.captures[game.currentPlayer] += capturedCount;
                     if (game.captures[game.currentPlayer] >= (game.settings.captureTarget || 10)) {

@@ -3,6 +3,7 @@ import { UserWithStatus, InventoryItem, ServerAction, InventoryItemType, Equipme
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { emptySlotImages, ENHANCEMENT_COSTS, MATERIAL_ITEMS, GRADE_LEVEL_REQUIREMENTS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SYNTHESIS_COSTS, slotNames } from '../constants.js';
+import Slider from './ui/Slider.js';
 
 interface InventoryModalProps {
     currentUser: UserWithStatus;
@@ -342,7 +343,7 @@ const DisassemblyPreviewPanel: React.FC<{
                 ) : (
                     <p className="text-sm text-tertiary pt-4">획득할 재료가 없습니다.</p>
                 )}
-                 <p className="text-xs text-cyan-300 text-center pt-4">분해 시 30% 확률로 '대박'이 발생하여 모든 재료 획득량이 2배가 됩니다!</p>
+                 <p className="text-xs text-cyan-300 text-center pt-4">분해 시 일정 확률로 '대박'이 발생하여 모든 재료 획득량이 2배가 됩니다!</p>
             </div>
             <div className="mt-4 text-sm text-tertiary">
                 <p>선택 아이템 판매 시: <span className="font-bold text-yellow-300">{totalSellPrice.toLocaleString()} 골드</span></p>
@@ -639,14 +640,87 @@ const SynthesisPanel: React.FC<{
 
             <div className="mt-4 flex-shrink-0 w-full">
                 {firstItemGrade && <p className={`text-sm text-tertiary ${currentUser.gold < synthesisCost ? 'text-red-400' : ''}`}>비용: <span className="font-bold text-yellow-300">{synthesisCost.toLocaleString()} 골드</span></p>}
-                 <div className="flex items-center gap-4 mt-2">
-                    <Button onClick={onCancel} colorScheme="gray" className="flex-1">취소</Button>
-                    <Button onClick={onSynthesize} colorScheme="green" disabled={!canSynthesize} className="flex-1">합성하기</Button>
+                 <div className="flex items-center justify-center gap-4 mt-2">
+                    <Button onClick={onCancel} colorScheme="gray">취소</Button>
+                    <Button onClick={onSynthesize} colorScheme="green" disabled={!canSynthesize}>합성하기</Button>
                 </div>
             </div>
         </div>
     );
 };
+
+const BulkUseModal: React.FC<{
+    item: InventoryItem;
+    currentUser: UserWithStatus;
+    onClose: () => void;
+    onAction: (action: ServerAction) => void;
+}> = ({ item, currentUser, onClose, onAction }) => {
+    const maxQuantity = useMemo(() => {
+        return currentUser.inventory
+            .filter(i => i.name === item.name && i.type === 'consumable')
+            .reduce((sum, i) => sum + (i.quantity || 1), 0);
+    }, [currentUser.inventory, item.name]);
+
+    const [quantity, setQuantity] = useState(1);
+
+    const handleQuantityChange = (newQuantity: number) => {
+        setQuantity(Math.max(1, Math.min(maxQuantity, newQuantity)));
+    };
+
+    const handleUse = () => {
+        if (quantity > 0) {
+            onAction({ type: 'USE_ITEM_BULK', payload: { itemName: item.name, quantity } });
+        }
+        onClose();
+    };
+
+    return (
+        <DraggableWindow title={`'${item.name}' 일괄 사용`} onClose={onClose} windowId={`bulk-use-${item.id}`} initialWidth={450}>
+            <div className="text-center">
+                <div className="flex flex-col items-center gap-2 mb-4">
+                    <div className="relative w-24 h-24">
+                        <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-lg" />
+                        <img src={item.image!} alt={item.name} className="relative w-full h-full object-contain p-2" />
+                    </div>
+                    <h3 className="text-xl font-bold">{item.name}</h3>
+                    <p className="text-sm text-tertiary">보유 수량: {maxQuantity.toLocaleString()}개</p>
+                </div>
+
+                <div className="space-y-3 bg-tertiary/50 p-4 rounded-lg">
+                    <div className="flex items-center gap-4">
+                        <input
+                            type="number"
+                            value={quantity}
+                            onChange={(e) => handleQuantityChange(parseInt(e.target.value, 10) || 1)}
+                            className="w-full bg-secondary border border-color rounded-md p-2 text-center font-bold text-lg"
+                            min="1"
+                            max={maxQuantity}
+                        />
+                    </div>
+                    <Slider 
+                        value={quantity}
+                        min={1}
+                        max={maxQuantity}
+                        onChange={handleQuantityChange}
+                    />
+                    <div className="grid grid-cols-5 gap-2">
+                        <Button onClick={() => handleQuantityChange(quantity - 10)} className="!py-1">-10</Button>
+                        <Button onClick={() => handleQuantityChange(quantity - 1)} className="!py-1">-1</Button>
+                        <Button onClick={() => handleQuantityChange(maxQuantity)} colorScheme="blue" className="!py-1">MAX</Button>
+                        <Button onClick={() => handleQuantityChange(quantity + 1)} className="!py-1">+1</Button>
+                        <Button onClick={() => handleQuantityChange(quantity + 10)} className="!py-1">+10</Button>
+                    </div>
+                </div>
+                
+                <div className="flex justify-center gap-4 mt-6">
+                    <Button onClick={onClose} colorScheme="gray" className="w-32">취소</Button>
+                    <Button onClick={handleUse} colorScheme="green" className="w-32">사용</Button>
+                </div>
+            </div>
+        </DraggableWindow>
+    );
+};
+
 
 const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, onAction, onStartEnhance, enhancementAnimationTarget, onAnimationComplete, isTopmost }) => {
     const { inventory, inventorySlots } = currentUser;
@@ -658,6 +732,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
     const [selectedForDisassembly, setSelectedForDisassembly] = useState<Set<string>>(new Set());
     const [craftingDetails, setCraftingDetails] = useState<{ materialName: string, craftType: 'upgrade' | 'downgrade' } | null>(null);
     const [isAutoSelectOpen, setIsAutoSelectOpen] = useState(false);
+    const [itemForBulkUse, setItemForBulkUse] = useState<InventoryItem | null>(null);
     
     // --- NEW: Equipment Synthesis State ---
     const [synthesisMode, setSynthesisMode] = useState(false);
@@ -849,6 +924,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
             <div className="flex flex-col h-[calc(var(--vh,1vh)*75)]">
                 {craftingDetails && <CraftingDetailModal details={craftingDetails} inventory={inventory} onClose={() => setCraftingDetails(null)} onAction={onAction} />}
                 {isAutoSelectOpen && <AutoSelectModal onClose={() => setIsAutoSelectOpen(false)} onConfirm={handleAutoSelectConfirm} />}
+                {itemForBulkUse && <BulkUseModal item={itemForBulkUse} currentUser={currentUser} onClose={() => setItemForBulkUse(null)} onAction={onAction} />}
                 
                 <div className="flex-shrink-0 border-b border-color pb-2 mb-2 flex justify-between items-center">
                      <div className="flex items-center gap-2">
@@ -907,7 +983,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                         {selectedItem.type === 'consumable' && (
                             <>
                                 <Button onClick={() => onAction({ type: 'USE_ITEM', payload: { itemId: selectedItem.id } })} colorScheme="green">사용</Button>
-                                <Button onClick={() => { if (window.confirm(`[${selectedItem.name}] 아이템을 모두 사용하시겠습니까?`)) { onAction({ type: 'USE_ALL_ITEMS_OF_TYPE', payload: { itemName: selectedItem.name } }); } }} colorScheme="blue">일괄 사용</Button>
+                                <Button onClick={() => setItemForBulkUse(selectedItem)} colorScheme="blue">일괄 사용</Button>
                             </>
                         )}
                         <Button onClick={handleSell} colorScheme="orange" disabled={selectedItem.type === 'consumable' || selectedItem.isEquipped}>판매</Button>

@@ -1,14 +1,22 @@
-
-
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, HandleActionResult } from '../../types/index.js';
-import * as types from '../../types/index.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult } from '../../types.js';
 import { updateQuestProgress } from '../questService.js';
 import { SHOP_ITEMS, createItemFromTemplate } from '../shop.js';
 import { 
     CONSUMABLE_ITEMS, 
     MATERIAL_ITEMS, 
+    GRADE_LEVEL_REQUIREMENTS,
+    ITEM_SELL_PRICES,
+    MATERIAL_SELL_PRICES,
+    ENHANCEMENT_COSTS,
+    ENHANCEMENT_SUCCESS_RATES,
+    ENHANCEMENT_FAIL_BONUS_RATES,
+    GRADE_SUB_OPTION_RULES,
+    SUB_OPTION_POOLS,
+    SYNTHESIS_COSTS,
+    SYNTHESIS_UPGRADE_CHANCES,
+    EQUIPMENT_POOL,
     DAILY_MILESTONE_REWARDS, 
     DAILY_MILESTONE_THRESHOLDS,
     WEEKLY_MILESTONE_REWARDS,
@@ -20,9 +28,8 @@ import {
     SINGLE_PLAYER_MISSIONS
 } from '../../constants.js';
 import { calculateRanks } from '../tournamentService.js';
-// FIX: Import createItemInstancesFromReward
 import { addItemsToInventory as addItemsToInventoryUtil, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
-import { getKSTDate } from '.././timeUtils.js';
+import { getKSTDate } from '../timeUtils.js';
 import { createDefaultQuests } from '../initialData.js';
 import * as effectService from '../effectService.js';
 
@@ -40,9 +47,9 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             
             const missionState = user.singlePlayerMissions[missionId];
             const amountToClaim = missionState.accumulatedAmount;
-            if (amountToClaim < 1) return { error: 'No rewards to claim.' };
+            if (amountToClaim < 1) return { error: '수령할 보상이 없습니다.' };
     
-            const reward: types.QuestReward = {
+            const reward: QuestReward = {
                 gold: missionInfo.rewardType === 'gold' ? amountToClaim : 0,
                 diamonds: missionInfo.rewardType === 'diamonds' ? amountToClaim : 0,
             };
@@ -56,7 +63,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             missionState.accumulatedAmount = 0;
             missionState.lastCollectionTime = Date.now();
     
-            updateQuestProgress(user, 'claim_single_player_mission', undefined, amountToClaim);
+            updateQuestProgress(user, 'claim_single_player_mission', undefined, 1);
     
             await db.updateUser(user);
             
@@ -123,17 +130,55 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             let totalGold = 0;
             let totalDiamonds = 0;
             let totalActionPoints = 0;
-            const allItemsToCreate: InventoryItem[] = [];
+            const aggregatedItems: Record<string, { quantity: number; template: any }> = {};
 
             for (const mail of mailsToClaim) {
                 totalGold += mail.attachments!.gold || 0;
                 totalDiamonds += mail.attachments!.diamonds || 0;
                 totalActionPoints += mail.attachments!.actionPoints || 0;
+                
                 if (mail.attachments!.items) {
-                    const createdItems = createItemInstancesFromReward(mail.attachments!.items as { itemId: string; quantity: number }[]);
-                    allItemsToCreate.push(...createdItems);
+                    for (const itemRef of mail.attachments!.items) {
+                        const isFullItem = 'id' in itemRef;
+                        const itemName = isFullItem ? itemRef.name : itemRef.itemId;
+                        const quantity = itemRef.quantity || 1;
+
+                        if (isFullItem && itemRef.type === 'equipment') {
+                            const uniqueKey = `equipment-${itemRef.id}`;
+                            if (!aggregatedItems[uniqueKey]) {
+                                aggregatedItems[uniqueKey] = { quantity: 1, template: itemRef };
+                            }
+                        } else {
+                            if (!aggregatedItems[itemName]) {
+                                const template = [...CONSUMABLE_ITEMS, ...Object.values(MATERIAL_ITEMS)].find(t => t.name === itemName);
+                                if (template) {
+                                    aggregatedItems[itemName] = { quantity: 0, template };
+                                }
+                            }
+                            if (aggregatedItems[itemName]) {
+                                aggregatedItems[itemName].quantity += quantity;
+                            }
+                        }
+                    }
                 }
             }
+            
+            const allItemsToCreate: InventoryItem[] = Object.entries(aggregatedItems).map(([key, data]) => {
+                if (key.startsWith('equipment-')) {
+                    return data.template;
+                }
+                return {
+                    ...data.template,
+                    id: `item-${randomUUID()}`,
+                    createdAt: Date.now(),
+                    quantity: data.quantity,
+                    isEquipped: false,
+                    level: 1,
+                    stars: 0,
+                    options: undefined,
+                };
+            });
+
 
             const { success } = addItemsToInventoryUtil([...user.inventory], user.inventorySlots, allItemsToCreate);
             if (!success) {
@@ -155,7 +200,6 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 actionPoints: totalActionPoints,
             };
 
-            // If only currency is being awarded, send a simpler response for the dedicated modal.
             if (allItemsToCreate.length === 0 && (totalGold > 0 || totalDiamonds > 0 || totalActionPoints > 0)) {
                 return {
                     clientResponse: {

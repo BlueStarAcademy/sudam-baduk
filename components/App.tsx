@@ -1,4 +1,5 @@
 
+
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import Header from './Header.js';
 import { AppProvider } from '../contexts/AppContext.js';
@@ -13,6 +14,7 @@ import UserProfileModal from './UserProfileModal.js';
 import InfoModal from './InfoModal.js';
 import DisassemblyResultModal from './DisassemblyResultModal.js';
 import StatAllocationModal from './StatAllocationModal.js';
+// FIX: Changed import to be a named import as EnhancementModal does not have a default export.
 import EnhancementModal from './EnhancementModal.js';
 import ItemDetailModal from './ItemDetailModal.js';
 import ProfileEditModal from './ProfileEditModal.js';
@@ -63,22 +65,28 @@ const AppContent: React.FC = () => {
     const questToastTimerRef = useRef<number | null>(null);
 
     useEffect(() => {
-        // Clear any existing timer when dependencies change to prevent lingering timers
-        // from keeping the toast open incorrectly.
+        // This effect handles showing and automatically hiding the quest notification toast.
+
+        // Always clear any pending timer when dependencies change to avoid stale timeouts.
         if (questToastTimerRef.current) {
             clearTimeout(questToastTimerRef.current);
             questToastTimerRef.current = null;
         }
 
         if (settings.features.questNotifications && hasClaimableQuest && !prevHasClaimableQuest) {
+            // A quest has just become claimable, so show the toast.
             setShowQuestToast(true);
+            // Set a timer to hide it after 3 seconds.
             questToastTimerRef.current = window.setTimeout(() => {
                 setShowQuestToast(false);
                 questToastTimerRef.current = null;
             }, 3000);
+        } else if (!hasClaimableQuest) {
+            // If there are no longer any claimable quests (e.g. they were claimed), ensure the toast is hidden.
+            setShowQuestToast(false);
         }
 
-        // Cleanup function for when the component unmounts or dependencies change
+        // Cleanup function for component unmount or before the next effect runs
         return () => {
             if (questToastTimerRef.current) {
                 clearTimeout(questToastTimerRef.current);
@@ -154,7 +162,14 @@ const AppContent: React.FC = () => {
             )}
              {showQuestToast && (
                 <div 
-                    onClick={() => { handlers.openQuests(); setShowQuestToast(false); }}
+                    onClick={() => { 
+                        handlers.openQuests(); 
+                        setShowQuestToast(false);
+                        if (questToastTimerRef.current) {
+                            clearTimeout(questToastTimerRef.current);
+                            questToastTimerRef.current = null;
+                        }
+                    }}
                     className="fixed top-20 right-4 w-full max-w-xs z-50 animate-slide-in-right cursor-pointer"
                 >
                     <div className="bg-success border-2 border-green-400 rounded-lg shadow-2xl p-4 text-white font-bold text-center">

@@ -1,10 +1,17 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ServerAction, GameMode, Announcement, OverrideAnnouncement, AdminProps } from '../../types.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
+// FIX: Import missing types from the barrel file.
+import { ServerAction, GameMode, Announcement, OverrideAnnouncement } from '../../types.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/gameModes.js';
 import Button from '../Button.js';
 
-interface ServerSettingsPanelProps extends AdminProps {}
+interface ServerSettingsPanelProps {
+    gameModeAvailability: Partial<Record<GameMode, boolean>>;
+    announcements: Announcement[];
+    globalOverrideAnnouncement: OverrideAnnouncement | null;
+    announcementInterval: number;
+    onAction: (action: ServerAction) => void;
+    onBack: () => void;
+}
 
 const ServerSettingsPanel: React.FC<ServerSettingsPanelProps> = (props) => {
     const { gameModeAvailability, announcements, globalOverrideAnnouncement, announcementInterval, onAction, onBack } = props;

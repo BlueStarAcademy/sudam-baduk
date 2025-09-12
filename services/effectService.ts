@@ -1,5 +1,5 @@
 
-
+// FIX: Import missing types from the centralized types file.
 import { User, CoreStat, InventoryItem, SpecialStat, MythicStat, ItemOptionType } from '../types.js';
 import { ACTION_POINT_REGEN_INTERVAL_MS } from '../constants.js';
 
@@ -76,7 +76,8 @@ export const calculateUserEffects = (user: User): CalculatedEffects => {
     };
 
     // Initialize bonus records
-    for (const key of Object.values(CoreStat)) {
+    // FIX: Cast Object.values to CoreStat[] to ensure type safety when indexing.
+    for (const key of Object.values(CoreStat) as CoreStat[]) {
         calculatedEffects.coreStatBonuses[key] = { flat: 0, percent: 0 };
     }
     for (const key of Object.values(SpecialStat)) {

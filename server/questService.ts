@@ -1,3 +1,4 @@
+
 import { randomUUID } from 'crypto';
 import * as types from '../types.js';
 import { DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';

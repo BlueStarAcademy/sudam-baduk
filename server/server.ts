@@ -1,5 +1,7 @@
 
-import express from 'express';
+
+
+import express, { json } from 'express';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
 import { handleAction as mainHandleAction } from './actions/gameActions.js';
@@ -8,8 +10,8 @@ import { regenerateActionPoints } from './effectService.js';
 import { updateGameStates } from './gameModes.js';
 import * as db from './db.js';
 import { analyzeGame } from './kataGoService.js';
-import * as types from '../types/index.js';
-import { LiveGameSession, User, UserCredentials, AppState, VolatileState, TowerRank } from '../types/index.js';
+import * as types from '../types.js';
+import { LiveGameSession, User, UserCredentials, AppState, VolatileState, TowerRank, Negotiation, TournamentState } from '../types.js';
 import { processGameSummary, endGame } from './summaryService.js';
 import { aiUserId, getAiUser } from './aiPlayer.js';
 import { processRankingRewards, processWeeklyLeagueUpdates, updateWeeklyCompetitorsIfNeeded, processMonthlyTowerReset } from './scheduledTasks.js';
@@ -77,9 +79,9 @@ const startServer = async () => {
     const app = express();
     const port = 4000;
 
-    // FIX: Split app.use() into separate calls to avoid potential TypeScript overload issues.
     app.use(cors());
-    app.use(express.json({ limit: '10mb' }));
+    // FIX: Using named import `json` to prevent potential type overload errors with `express.json`.
+    app.use(json({ limit: '10mb' }));
 
     const volatileState: VolatileState = {
         userConnections: {},
@@ -106,7 +108,8 @@ const startServer = async () => {
                 let statsNeedUpdate = false;
                 if (!updatedUser.baseStats || 
                     Object.keys(updatedUser.baseStats).length !== Object.keys(defaultBaseStats).length ||
-                    Object.values(types.CoreStat).some(stat => updatedUser.baseStats![stat] !== 100)
+                    // @ts-ignore
+                    Object.values(types.CoreStat).some(stat => updatedUser.baseStats![stat as types.CoreStat] !== 100)
                 ) {
                     statsNeedUpdate = true;
                 }
@@ -262,7 +265,7 @@ const startServer = async () => {
 
                 if (!isAnyoneInRoom) {
                     const isRematchBeingNegotiated = Object.values(volatileState.negotiations).some(
-                        neg => neg.rematchOfGameId === game.id
+                        (neg: Negotiation) => neg.rematchOfGameId === game.id
                     );
 
                     if (!isRematchBeingNegotiated) {
@@ -344,7 +347,7 @@ const startServer = async () => {
             const userBeforeUpdate = JSON.stringify(user);
             const allUsersForCompetitors = await db.getAllUsers();
             let updatedUser = await resetAndGenerateQuests(user);
-            updatedUser = await processWeeklyLeagueUpdates(updatedUser);
+            updatedUser = await processWeeklyLeagueUpdates(updatedUser, allUsersForCompetitors);
             updatedUser = await regenerateActionPoints(updatedUser);
             updatedUser = await updateWeeklyCompetitorsIfNeeded(updatedUser, allUsersForCompetitors);
             updatedUser = processSinglePlayerMissions(updatedUser);
@@ -422,7 +425,7 @@ const startServer = async () => {
             const userBeforeUpdate = JSON.stringify(user);
             const allUsersForCompetitors = await db.getAllUsers();
             let updatedUser = await resetAndGenerateQuests(user);
-            updatedUser = await processWeeklyLeagueUpdates(updatedUser);
+            updatedUser = await processWeeklyLeagueUpdates(updatedUser, allUsersForCompetitors);
             updatedUser = await regenerateActionPoints(updatedUser);
             updatedUser = await updateWeeklyCompetitorsIfNeeded(updatedUser, allUsersForCompetitors);
             updatedUser = processSinglePlayerMissions(updatedUser);
@@ -461,16 +464,16 @@ const startServer = async () => {
             const towerRankings = allUsersForRanking
                 .filter(u => u.towerProgress && u.towerProgress.highestFloor > 0)
                 .sort((a, b) => {
-                    if (b.towerProgress.highestFloor !== a.towerProgress.highestFloor) {
-                        return b.towerProgress.highestFloor - a.towerProgress.highestFloor;
+                    if (b.towerProgress!.highestFloor !== a.towerProgress!.highestFloor) {
+                        return b.towerProgress!.highestFloor - a.towerProgress!.highestFloor;
                     }
-                    return a.towerProgress.lastClearTimestamp - b.towerProgress.lastClearTimestamp;
+                    return a.towerProgress!.lastClearTimestamp - b.towerProgress!.lastClearTimestamp;
                 })
                 .slice(0, 100)
                 .map((u, index): TowerRank => ({
                     rank: index + 1,
                     user: { id: u.id, nickname: u.nickname, avatarId: u.avatarId, borderId: u.borderId },
-                    floor: u.towerProgress.highestFloor,
+                    floor: u.towerProgress!.highestFloor,
                 }));
 
             const fullState: Omit<AppState, 'userCredentials'> = {
@@ -505,7 +508,7 @@ const startServer = async () => {
                 return res.status(401).json({ message: '인증 정보가 없습니다.' });
             }
 
-            const user = await db.getUser(userId);
+            let user = await db.getUser(userId);
             if (!user) {
                 delete volatileState.userConnections[userId];
                 return res.status(401).json({ message: '유효하지 않은 사용자입니다.' });
@@ -521,9 +524,23 @@ const startServer = async () => {
             
             volatileState.userConnections[userId] = Date.now();
 
-            let result: types.HandleActionResult;
-            
-            result = await mainHandleAction(volatileState, req.body);
+            // Perform all user state updates that also happen on polling, BEFORE handling the action.
+            // This ensures the action is based on the most up-to-date calculated state.
+            const userBeforeReference = user;
+            const allUsers = await db.getAllUsers();
+            let userForAction = await resetAndGenerateQuests(user);
+            userForAction = await processWeeklyLeagueUpdates(userForAction, allUsers);
+            userForAction = await regenerateActionPoints(userForAction);
+            userForAction = await updateWeeklyCompetitorsIfNeeded(userForAction, allUsers);
+            userForAction = processSinglePlayerMissions(userForAction);
+
+            // The functions return a new object if modified. We use the final object for the action.
+            // A direct reference check is sufficient.
+            if (userForAction !== userBeforeReference) {
+                user = userForAction;
+            }
+
+            const result = await mainHandleAction(volatileState, { ...req.body, user });
             
             if (result.error) {
                 return res.status(400).json({ message: result.error });

@@ -281,13 +281,15 @@ const Profile: React.FC<ProfileProps> = () => {
         return aggregated;
     }, [equippedItems]);
 
-    const levelPoints = (currentUserWithStatus.strategyLevel - 1) * 2 + (currentUserWithStatus.playfulLevel - 1) * 2;
+    // FIX: Explicitly cast level properties to Number to satisfy TypeScript's strict arithmetic operation rules.
+    const levelPoints = (Number(currentUserWithStatus.strategyLevel) - 1) * 2 + (Number(currentUserWithStatus.playfulLevel) - 1) * 2;
     const masteryBonus = currentUserWithStatus.mannerMasteryApplied ? 20 : 0;
     const bonusPoints = currentUserWithStatus.bonusStatPoints || 0;
     const totalPoints = levelPoints + masteryBonus + bonusPoints;
 
+    // FIX: Cast `sum` to number within the reduce function to resolve the `unknown` type issue.
     const spentPoints = useMemo(() => {
-        return Object.values(currentUserWithStatus.spentStatPoints || {}).reduce((sum, points) => sum + points, 0);
+        return Object.values(currentUserWithStatus.spentStatPoints || {}).reduce((sum, points) => Number(sum) + Number(points), 0);
     }, [currentUserWithStatus.spentStatPoints]);
     const availablePoints = totalPoints - spentPoints;
     
@@ -534,18 +536,18 @@ const Profile: React.FC<ProfileProps> = () => {
     ), [currentUserWithStatus, handlers, mainOptionBonuses, combatSubOptionBonuses, specialStatBonuses, aggregatedMythicStats]);
 
     const LobbyCards = (
-        <div className="grid grid-cols-10 grid-rows-2 lg:grid-rows-7 gap-4 h-full">
-            <div className="col-span-5 row-span-1 lg:col-span-5 lg:row-span-3">
+        <div className="grid grid-cols-10 grid-rows-2 lg:grid-cols-12 lg:grid-rows-7 gap-4 h-full">
+            <div className="col-span-5 row-span-1 lg:col-span-6 lg:row-span-3">
                 <LobbyCard type="strategic" stats={aggregatedStats.strategic} onEnter={() => window.location.hash = '#/lobby/strategic'} onViewStats={() => setDetailedStatsType('strategic')} level={currentUserWithStatus.strategyLevel} title="전략 바둑" imageUrl={STRATEGIC_GO_LOBBY_IMG} tier={overallTiers.strategicTier} />
             </div>
     
-            <div className="col-span-5 row-span-1 lg:col-span-5 lg:row-span-3">
+            <div className="col-span-5 row-span-1 lg:col-span-6 lg:row-span-3">
                 <LobbyCard type="playful" stats={aggregatedStats.playful} onEnter={() => window.location.hash = '#/lobby/playful'} onViewStats={() => setDetailedStatsType('playful')} level={currentUserWithStatus.playfulLevel} title="놀이 바둑" imageUrl={PLAYFUL_GO_LOBBY_IMG} tier={overallTiers.playfulTier} />
             </div>
     
             <div 
                 onClick={() => window.location.hash = '#/tournament'} 
-                className="col-span-6 row-span-1 lg:col-span-6 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-purple-500/30 cursor-pointer h-full text-on-panel"
+                className="col-span-6 row-span-1 lg:col-span-7 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-purple-500/30 cursor-pointer h-full text-on-panel"
             >
                 <h2 className="text-base font-bold h-6 mb-1">자동대국 챔피언십</h2>
                 <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
@@ -558,7 +560,7 @@ const Profile: React.FC<ProfileProps> = () => {
             
             <div 
                 onClick={() => window.location.hash = '#/singleplayer'}
-                className="col-span-2 row-span-1 lg:col-span-2 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-green-500/30 cursor-pointer h-full text-on-panel"
+                className="col-span-2 row-span-1 lg:col-span-3 lg:row-span-4 bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-green-500/30 cursor-pointer h-full text-on-panel"
             >
                 <h2 className="text-base font-bold h-6 mb-1">싱글플레이</h2>
                 <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
@@ -575,7 +577,7 @@ const Profile: React.FC<ProfileProps> = () => {
             >
                 <h2 className="text-base font-bold h-6 mb-1 text-red-300">도전의 탑</h2>
                 <div className="w-full flex-1 bg-tertiary rounded-md flex items-center justify-center text-tertiary overflow-hidden">
-                    <img src={TOWER_CHALLENGE_LOBBY_IMG} alt="도전의 탑" className="w-full h-full object-contain p-2" />
+                    <img src={TOWER_CHALLENGE_LOBBY_IMG} alt="도전의 탑" className="w-full h-full object-cover" />
                 </div>
                  <div className="w-full bg-tertiary/50 rounded-md p-1 text-xs mt-2 flex flex-col items-center">
                     <span>현재 층: {currentUserWithStatus.towerProgress?.highestFloor ?? 0}층</span>
@@ -728,7 +730,7 @@ const Profile: React.FC<ProfileProps> = () => {
                     <div className={`fixed top-0 right-0 h-full w-[280px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMobilePanelOpen ? 'translate-x-0' : 'translate-x-full'} flex flex-col`}>
                         <div className="flex justify-between items-center p-2 border-b border-color flex-shrink-0">
                             <h3 className="text-lg font-bold">채팅 / 메뉴</h3>
-                            <button onClick={() => setIsMobilePanelOpen(false)} className="text-2xl font-bold text-tertiary hover:text-primary">×</button>
+                            <button onClick={() => setIsMobilePanelOpen(false)} className="text-2xl font-bold text-tertiary hover:text-primary">&times;</button>
                         </div>
                         <div className="flex flex-col gap-2 p-2 flex-grow min-h-0">
                             <div className="flex-shrink-0 p-1 bg-panel rounded-lg border border-color">

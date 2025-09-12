@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { GameProps, Player } from '../../types.js';
 import Button from '../Button.js';
-import { TOWER_STAGES } from '../../constants.js';
+import { TOWER_STAGES } from '../../constants/towerChallengeConstants.js';
 
 interface TowerChallengeControlsProps extends Pick<GameProps, 'session' | 'onAction' | 'currentUser'> {}
 
@@ -13,7 +13,7 @@ const TowerChallengeControls: React.FC<TowerChallengeControlsProps> = ({ session
         const nextStage = TOWER_STAGES[currentStageIndex + 1];
         const isWinner = session.winner === Player.Black;
 
-        const canTryNext = useMemo(() => {
+        const canTryNext = React.useMemo(() => {
             if (!isWinner || !nextStage || !currentStage) return false;
             return (currentUser.towerProgress?.highestFloor ?? 0) >= currentStage.floor!;
         }, [isWinner, nextStage, currentStage, currentUser.towerProgress]);

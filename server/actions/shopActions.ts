@@ -1,8 +1,6 @@
-
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, HandleActionResult } from '../../types/index.js';
-import * as shop from '../shop.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, HandleActionResult, BorderInfo } from '../../types.js';
 import { SHOP_ITEMS } from '../shop.js';
 import { isSameDayKST, isDifferentWeekKST } from '../../utils/timeUtils.js';
 import { CONSUMABLE_ITEMS, MATERIAL_ITEMS, ACTION_POINT_PURCHASE_COSTS_DIAMONDS, MAX_ACTION_POINT_PURCHASES_PER_DAY, ACTION_POINT_PURCHASE_REFILL_AMOUNT, SHOP_BORDER_ITEMS } from '../../constants.js';
@@ -20,28 +18,25 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
             }
 
             const cost = shopItem.cost;
-            // FIX: Safely check for gold/diamond cost properties on the union type.
             if (!user.isAdmin) {
-                if (cost.gold !== undefined && user.gold < cost.gold) {
+                if (cost.gold && user.gold < cost.gold) {
                     return { error: '재화가 부족합니다.' };
                 }
-                if (cost.diamonds !== undefined && user.diamonds < cost.diamonds) {
+                if (cost.diamonds && user.diamonds < cost.diamonds) {
                     return { error: '재화가 부족합니다.' };
                 }
             }
 
             const obtained = shopItem.onPurchase();
-            // FIX: Ensure obtained items are always handled as an array for consistency.
             const obtainedItems = Array.isArray(obtained) ? obtained : [obtained];
 
             if (user.inventory.length + obtainedItems.length > user.inventorySlots) {
                 return { error: '인벤토리 공간이 부족합니다.' };
             }
             
-            // FIX: Safely deduct cost based on the property that exists.
             if (!user.isAdmin) {
-                if (cost.gold !== undefined) user.gold -= cost.gold;
-                if (cost.diamonds !== undefined) user.diamonds -= cost.diamonds;
+                if (cost.gold) user.gold -= cost.gold;
+                if (cost.diamonds) user.diamonds -= cost.diamonds;
             }
 
             user.inventory.push(...obtainedItems);
@@ -59,9 +54,8 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
             }
 
             const cost = shopItem.cost;
-            // FIX: Safely calculate total cost from the union type.
-            const totalGoldCost = cost.gold !== undefined ? cost.gold * quantity : 0;
-            const totalDiamondCost = cost.diamonds !== undefined ? cost.diamonds * quantity : 0;
+            const totalGoldCost = cost.gold ? cost.gold * quantity : 0;
+            const totalDiamondCost = cost.diamonds ? cost.diamonds * quantity : 0;
             
             if (!user.isAdmin) {
                 if (user.gold < totalGoldCost || user.diamonds < totalDiamondCost) {
@@ -74,7 +68,6 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
                 return { error: '인벤토리 공간이 부족합니다.' };
             }
 
-            // FIX: Safely deduct total cost.
             if (!user.isAdmin) {
                 user.gold -= totalGoldCost;
                 user.diamonds -= totalDiamondCost;
@@ -82,7 +75,6 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
 
             const obtainedItems: InventoryItem[] = [];
             for (let i = 0; i < itemsToReceive; i++) {
-                // FIX: Correctly handle single item or array returns from onPurchase.
                 const result = shopItem.onPurchase();
                 if (Array.isArray(result)) {
                     obtainedItems.push(...result);
@@ -97,7 +89,7 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
         }
         case 'BUY_MATERIAL_BOX': {
             const { itemId, quantity } = payload;
-            const shopItem = SHOP_ITEMS[itemId as keyof typeof SHOP_ITEMS] as any;
+            const shopItem = SHOP_ITEMS[itemId as keyof typeof SHOP_ITEMS] || Object.values(SHOP_ITEMS).find(item => item.name === itemId);
 
             if (!shopItem || (shopItem.type !== 'material' && shopItem.type !== 'consumable')) {
                 return { error: '유효하지 않은 구매 제한 아이템입니다.' };
@@ -114,7 +106,6 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
         
             if (shopItem.weeklyLimit) {
                 limit = shopItem.weeklyLimit;
-                // FIX: Corrected typo from `limitType` to `limitText`.
                 limitText = '이번 주';
                 if (purchaseRecord && !isDifferentWeekKST(purchaseRecord.date, now)) {
                     purchasesThisPeriod = purchaseRecord.quantity;
@@ -123,7 +114,6 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
                 }
             } else if (shopItem.dailyLimit) {
                 limit = shopItem.dailyLimit;
-                // FIX: Corrected typo from `limitType` to `limitText`.
                 limitText = '오늘';
                 if (purchaseRecord && isSameDayKST(purchaseRecord.date, now)) {
                     purchasesThisPeriod = purchaseRecord.quantity;
@@ -134,13 +124,14 @@ export const handleShopAction = async (volatileState: VolatileState, action: Ser
             
             if (!user.isAdmin) {
                 if (purchasesThisPeriod + quantity > limit) {
-                    // FIX: Corrected typo from `limitType` to `limitText`.
                     return { error: `${limitText} 구매 한도를 초과했습니다.` };
                 }
             }
             
             const allObtainedItems: InventoryItem[] = [];
             for (let i = 0; i < quantity; i++) {
+                // This assumes `onPurchase` logic exists for these items
+                // For consumables, we just create the item instance.
                 const itemsFromBox = shopItem.onPurchase();
                 allObtainedItems.push(...itemsFromBox);
             }

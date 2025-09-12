@@ -44,6 +44,11 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+    const isItemModeActive = useMemo(() => 
+        ['hidden_placing', 'scanning', 'missile_selecting'].includes(session.gameStatus), 
+        [session.gameStatus]
+    );
+
     useEffect(() => {
         const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
         window.addEventListener('resize', checkIsMobile);
@@ -100,7 +105,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
         session, onAction: handlers.handleAction, currentUser: currentUserWithStatus, waitingRoomChat: waitingRoomChats['global'] || [],
         gameChat: gameChats[session.id] || [], isSpectator: false, onlineUsers, activeNegotiation, negotiations: Object.values(negotiations), onViewUser: handlers.openViewingUser
     };
-    
+
     const backgroundClass = useMemo(() => {
         return session.floor === 100 ? 'bg-tower-100' : 'bg-tower-default';
     }, [session.floor]);
@@ -114,19 +119,21 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
                     <div className="w-full flex-shrink-0">
                         <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isTowerChallenge={true} />
                     </div>
-                    <div className="flex-1 w-full relative">
-                        <div className="absolute inset-0">
-                             <GameArena 
-                                {...gameProps}
-                                isMyTurn={isMyTurn} 
-                                myPlayerEnum={myPlayerEnum} 
-                                handleBoardClick={handleBoardClick} 
-                                isItemModeActive={false}
-                                showTerritoryOverlay={showFinalTerritory} 
-                                isMobile={isMobile}
-                                myRevealedMoves={[]}
-                                showLastMoveMarker={settings.features.lastMoveMarker}
-                            />
+                    <div className="flex-1 w-full flex items-center justify-center min-h-0">
+                        <div className="relative w-full h-full max-w-full max-h-full aspect-square">
+                            <div className="absolute inset-0">
+                                <GameArena 
+                                    {...gameProps}
+                                    isMyTurn={isMyTurn} 
+                                    myPlayerEnum={myPlayerEnum} 
+                                    handleBoardClick={handleBoardClick} 
+                                    isItemModeActive={isItemModeActive} 
+                                    showTerritoryOverlay={showFinalTerritory} 
+                                    isMobile={isMobile}
+                                    myRevealedMoves={[]}
+                                    showLastMoveMarker={settings.features.lastMoveMarker}
+                                />
+                            </div>
                         </div>
                     </div>
                     <div className="w-full flex-shrink-0">

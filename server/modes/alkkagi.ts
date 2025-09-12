@@ -5,7 +5,7 @@ import { handleSharedAction, updateSharedGameState, handleTimeoutFoul } from './
 import { aiUserId } from '../aiPlayer.js';
 import { ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
 import { endGame } from '../summaryService.js';
-import * as effectService from '../effectService.js';
+import * as effectService from '../../services/effectService.js';
 
 // --- Simulation & Scoring Logic ---
 const runServerSimulation = (game: types.LiveGameSession) => {
@@ -545,7 +545,6 @@ export const handleAlkkagiAction = async (volatileState: types.VolatileState, ga
             }
             game.alkkagiItemUses[user.id][itemType]--;
             if (!game.activeAlkkagiItems) game.activeAlkkagiItems = {};
-            // FIX: Add a check to ensure the value is an array, protecting against data corruption.
             if (!Array.isArray(game.activeAlkkagiItems[user.id])) {
                 game.activeAlkkagiItems[user.id] = [];
             }

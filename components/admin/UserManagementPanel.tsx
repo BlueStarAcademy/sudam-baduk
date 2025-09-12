@@ -1,13 +1,13 @@
-
 import React, { useState, useMemo } from 'react';
-import { User, ServerAction, AdminProps, GameMode, Quest, DailyQuestData, WeeklyQuestData, MonthlyQuestData, UserWithStatus } from '../../types.js';
+// FIX: Import missing types from the barrel file.
+import { User, ServerAction, AdminProps, GameMode, Quest, DailyQuestData, WeeklyQuestData, MonthlyQuestData } from '../../types.js';
 import DraggableWindow from '../DraggableWindow.js';
 import Button from '../Button.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/gameModes.js';
 
 interface UserManagementModalProps {
     user: User;
-    currentUser: UserWithStatus;
+    currentUser: User;
     onClose: () => void;
     onAction: (action: ServerAction) => void;
 }
@@ -258,7 +258,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, current
     );
 };
 
-interface UserManagementPanelProps extends AdminProps {}
+interface UserManagementPanelProps extends Pick<AdminProps, 'allUsers' | 'onAction' | 'onBack' | 'currentUser'> {}
 
 const UserManagementPanel: React.FC<UserManagementPanelProps> = ({ allUsers, onAction, onBack, currentUser }) => {
     const [searchQuery, setSearchQuery] = useState('');

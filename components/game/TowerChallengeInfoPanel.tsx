@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LiveGameSession, GameMode, SinglePlayerLevel } from '../../types.js';
-import { TOWER_STAGES, TOWER_PROVERBS } from '../../constants.js';
+import { LiveGameSession, SinglePlayerLevel } from '../../types.js';
+import { TOWER_STAGES, TOWER_PROVERBS } from '../../constants/towerChallengeConstants.js';
 
 interface GameInfoPanelProps {
     session: LiveGameSession;

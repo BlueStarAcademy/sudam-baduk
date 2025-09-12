@@ -1,5 +1,6 @@
 
 import React from 'react';
+// FIX: Import AdminProps and LiveGameSession from the correct types barrel file.
 import { AdminProps, LiveGameSession } from '../../types.js';
 import Button from '../Button.js';
 

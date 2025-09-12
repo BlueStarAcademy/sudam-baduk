@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, ChatMessage, UserStatus, type Negotiation, TournamentType } from '../../types.js';
-import * as types from '../../types/index.js';
-import { updateQuestProgress } from './../questService.js';
+import * as types from '../../types.js';
+import { updateQuestProgress } from '../questService.js';
 import { containsProfanity } from '../../profanity.js';
 import * as tournamentService from '../tournamentService.js';
 import * as summaryService from '../summaryService.js';
@@ -168,7 +168,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 delete userStatus.mode;
             }
 
-            const negotiationsToCancel = Object.values(volatileState.negotiations).filter(neg =>
+            const negotiationsToCancel = Object.values(volatileState.negotiations).filter((neg: Negotiation) =>
                 neg.challenger.id === user.id || neg.opponent.id === user.id
             );
 
@@ -208,7 +208,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             }
 
             const ongoingRematchNegotiation = Object.values(volatileState.negotiations).find(
-                neg => neg.rematchOfGameId === gameId
+                (neg: Negotiation) => neg.rematchOfGameId === gameId
             );
 
             if (ongoingRematchNegotiation) {
@@ -236,7 +236,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             const game = await db.getLiveGame(gameId);
             if (!game) return { error: 'Game not found.' };
 
-            // FIX: AI games should return to 'online' status, not a waiting room.
+            // FIX: AI games should return to 'online' status, not a waiting room, and clear game-related properties.
             if (volatileState.userStatuses[user.id]) {
                 volatileState.userStatuses[user.id] = { status: 'online' };
                 delete volatileState.userStatuses[user.id].mode;

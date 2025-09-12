@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, TournamentType, PlayerForTournament, InventoryItem, InventoryItemType, TournamentState, LeagueTier, CoreStat } from '../../types/index.js';
-import * as types from '../../types/index.js';
-import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, MATERIAL_ITEMS, TOURNAMENT_SCORE_REWARDS, BOT_NAMES, AVATAR_POOL } from '../../constants.js';
+// FIX: Add missing imports for types and constants.
+import { TournamentState, PlayerForTournament, CoreStat, CommentaryLine, Match, User, Round, TournamentType, LeagueTier, VolatileState, ServerAction, HandleActionResult } from '../../types.js';
+import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, BOT_NAMES, AVATAR_POOL, TOURNAMENT_SCORE_REWARDS } from '../../constants.js';
 import { updateQuestProgress } from '../questService.js';
 import { createItemFromTemplate, SHOP_ITEMS } from '../shop.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
@@ -11,11 +11,6 @@ import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/
 import { calculateTotalStats } from '../statService.js';
 
 const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-type HandleActionResult = { 
-    clientResponse?: any;
-    error?: string;
-};
 
 const LEAGUE_BOT_STATS: Record<LeagueTier, number> = {
     [LeagueTier.Sprout]: 100,
@@ -45,7 +40,6 @@ const createBotStats = (league: LeagueTier, tournamentType: TournamentType): Rec
     }
     return stats as Record<CoreStat, number>;
 };
-
 
 export const handleTournamentAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
@@ -161,31 +155,25 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
                 default: return { error: 'Invalid tournament type.' };
             }
             
-            // Get the most up-to-date user data from DB, which includes the latest tournament state.
             const freshUser = await db.getUser(user.id);
             if (!freshUser) return { error: 'User not found in DB.' };
 
-            const tournamentState = (freshUser as any)[stateKey] as types.TournamentState | null;
+            const tournamentState = (freshUser as any)[stateKey] as TournamentState | null;
             if (!tournamentState) return { error: '토너먼트 정보를 찾을 수 없습니다.' };
             
-            // Find the user's player object in the tournament and update their stats.
             const userInTournament = tournamentState.players.find(p => p.id === freshUser.id);
             if (userInTournament) {
                 const newStats = calculateTotalStats(freshUser);
-                // Update both the current stats for the upcoming match and the original stats for future matches in this session.
                 userInTournament.stats = JSON.parse(JSON.stringify(newStats));
                 userInTournament.originalStats = JSON.parse(JSON.stringify(newStats));
                 userInTournament.avatarId = freshUser.avatarId;
                 userInTournament.borderId = freshUser.borderId;
             }
 
-            // Now that we have the fresh state, start the next round. This will mutate tournamentState.
             tournamentService.startNextRound(tournamentState, freshUser);
             
-            // The state object on the user is already mutated, so just save the user.
             await db.updateUser(freshUser);
             
-            // Update volatile state as well for immediate consistency
             if (!volatileState.activeTournaments) volatileState.activeTournaments = {};
             volatileState.activeTournaments[user.id] = tournamentState;
 
@@ -231,10 +219,10 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
                 case 'world': stateKey = 'lastWorldTournament'; break;
                 default: return { error: 'Invalid tournament type.' };
             }
-            let tournamentState: types.TournamentState | null | undefined = volatileState.activeTournaments?.[user.id];
+            let tournamentState: TournamentState | null | undefined = volatileState.activeTournaments?.[user.id];
 
             if (!tournamentState) {
-                tournamentState = (user as any)[stateKey] as types.TournamentState | null;
+                tournamentState = (user as any)[stateKey] as TournamentState | null;
                  if (!tournamentState) return { error: '토너먼트 정보를 찾을 수 없습니다.' };
             }
             
@@ -316,7 +304,7 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             const playerInTournament = tournamentState.players.find(p => p.id === user.id);
             if (!playerInTournament) return { error: '토너먼트에서 플레이어를 찾을 수 없습니다.' };
             
-            let match: types.Match | undefined;
+            let match: Match | undefined;
             for(const round of tournamentState.rounds) {
                 match = round.matches.find(m => m.id === matchId);
                 if(match) break;
@@ -418,7 +406,7 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             }
 
             const itemsToCreate = createItemInstancesFromReward(reward.items || []);
-            const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
+            const { success } = addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
 
             if (!success) {
                 return { error: '보상을 받기에 인벤토리 공간이 부족합니다.' };
