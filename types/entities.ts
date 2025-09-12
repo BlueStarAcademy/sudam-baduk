@@ -1,3 +1,4 @@
+
 import { Player, GameMode, LeagueTier, UserStatus, WinReason, RPSChoice, DiceGoVariant, AlkkagiPlacementType, AlkkagiLayoutType, Point, Move, BoardState, EquipmentSlot, InventoryItemType, ItemGrade, CoreStat, SpecialStat, MythicStat, ItemOptionType, TournamentType, TournamentSimulationStatus, GameStatus, SinglePlayerLevel } from './enums.js';
 import type { UserStatusInfo, ChatMessage } from './api.js';
 
@@ -50,6 +51,7 @@ export type Mail = {
     diamonds?: number;
     actionPoints?: number;
     items?: (InventoryItem | { itemId: string; quantity: number })[];
+    strategyXp?: number;
   };
   receivedAt: number;
   expiresAt?: number;
@@ -208,6 +210,7 @@ export interface LeagueRewardTier {
     diamonds: number;
     outcome: LeagueOutcome;
     items?: { itemId: string; quantity: number }[];
+    strategyXp?: number;
 }
 
 export type UserCredentials = {
@@ -298,6 +301,7 @@ export type User = {
   bonusStatPoints?: number;
   singlePlayerMissions?: Record<string, SinglePlayerMissionState>;
   towerProgress: TowerProgress;
+  claimedFirstClearRewards?: string[];
 };
 
 export type UserWithStatus = User & UserStatusInfo;

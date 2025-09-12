@@ -101,18 +101,23 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
         handlers.handleAction({ type: 'PLACE_STONE', payload: { gameId, x, y } } as ServerAction);
     }, [isMyTurn, gameId, handlers.handleAction]);
 
+    const handleCloseTimeoutFoulModal = useCallback(() => {
+        setShowTimeoutFoulModal(false);
+    }, []);
+
     const gameProps: GameProps = {
         session, onAction: handlers.handleAction, currentUser: currentUserWithStatus, waitingRoomChat: waitingRoomChats['global'] || [],
         gameChat: gameChats[session.id] || [], isSpectator: false, onlineUsers, activeNegotiation, negotiations: Object.values(negotiations), onViewUser: handlers.openViewingUser
     };
 
     const backgroundClass = useMemo(() => {
+        if (!session.floor) return 'bg-tower-default';
         return session.floor === 100 ? 'bg-tower-100' : 'bg-tower-default';
     }, [session.floor]);
     
     return (
         <div className={`w-full h-dvh flex flex-col p-2 lg:p-4 ${backgroundClass} text-stone-200`}>
-            {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={() => setShowTimeoutFoulModal(false)} />}
+            {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={handleCloseTimeoutFoulModal} />}
             
             <div className="flex-1 flex flex-col gap-2 min-h-0 max-w-7xl w-full mx-auto">
                  <main className="flex-1 flex flex-col items-center justify-center min-w-0 min-h-0 gap-2">

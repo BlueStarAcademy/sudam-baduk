@@ -1,15 +1,15 @@
-
-
-import { TournamentState, PlayerForTournament, CoreStat, CommentaryLine, Match, User, Round, TournamentType, LeagueTier } from '../types.js';
+import { TournamentState, PlayerForTournament, CoreStat, CommentaryLine, Match, User, Round, TournamentType, LeagueTier, VolatileState, ServerAction, HandleActionResult } from '../types.js';
 import { calculateTotalStats } from './statService.js';
 import { randomUUID } from 'crypto';
-import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS } from '../constants.js';
+import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, BOT_NAMES, AVATAR_POOL, BORDER_POOL, CORE_STATS_DATA, LEAGUE_DATA } from '../constants.js';
 import { updateQuestProgress } from './questService.js';
 
 const EARLY_GAME_DURATION = 40;
 const MID_GAME_DURATION = 60;
 const END_GAME_DURATION = 40;
 const TOTAL_GAME_DURATION = EARLY_GAME_DURATION + MID_GAME_DURATION + END_GAME_DURATION;
+
+type RandomEventDetails = NonNullable<CommentaryLine['randomEventDetails']>;
 
 const STAT_WEIGHTS: Record<'early' | 'mid' | 'end', Partial<Record<CoreStat, number>>> = {
     early: {
@@ -32,8 +32,29 @@ const STAT_WEIGHTS: Record<'early' | 'mid' | 'end', Partial<Record<CoreStat, num
 
 const COMMENTARY_POOLS = {
     start: "{p1}님과 {p2}님의 대국이 시작되었습니다.",
+    general: [
+        "{player} 선수, 초반부터 강하게 밀어붙입니다!",
+        "차분한 시작, 서로의 의도를 탐색하고 있습니다.",
+        "초반 포석 싸움이 치열합니다. 누가 기선을 제압할까요?",
+        "예상치 못한 착점! {player} 선수의 노림수는 무엇일까요?",
+        "견실한 행마로 안정적인 형태를 갖추는 {player} 선수.",
+        "중앙에서 격렬한 전투가 벌어집니다!",
+        "두 선수의 수읽기 대결이 손에 땀을 쥐게 합니다.",
+        "{player} 선수, 날카로운 수로 상대의 약점을 파고듭니다.",
+        "불리했던 형세, {player} 선수가 끈질기게 따라붙습니다.",
+        "대마의 생사가 걸린 중요한 순간입니다!",
+        "이제 끝내기 승부입니다. 작은 차이가 승패를 가릅니다.",
+        "{player} 선수, 정확한 계산으로 집 차이를 벌려나갑니다.",
+        "마지막까지 방심할 수 없는 접전이 이어집니다.",
+        "패싸움이 승부의 분수령이 될 것 같습니다.",
+        "{player} 선수, 냉정하게 마무리에 들어갑니다.",
+    ],
+    score: [
+        "[중간 스코어] {leader} 선수 {scoreDiff}집 우세.",
+        "[중간 스코어] 팽팽한 형세, 계가가 필요합니다.",
+        "[중간 스코어] {leader} 쪽으로 미세하게 기웁니다.",
+    ],
     win: [
-        "마침내 승부가 갈렸습니다! {winner} 선수가 이번 라운드를 제압합니다!",
         "냉정한 판단으로 끝까지 우세를 유지하며 승리를 거머쥡니다.",
         "혼신의 집중력으로 극적인 역전을 만들어냅니다!",
         "안정적인 운영으로 상대를 압도하며 대국을 마무리합니다.",
@@ -48,9 +69,22 @@ const getPhase = (time: number): 'early' | 'mid' | 'end' => {
 };
 
 const getMaxStatValueForLeague = (league: LeagueTier): number => {
-    if ([LeagueTier.Sprout, LeagueTier.Rookie, LeagueTier.Rising].includes(league)) return 250;
-    if ([LeagueTier.Ace, LeagueTier.Diamond, LeagueTier.Master].includes(league)) return 500;
-    return 9999; // No cap for Grandmaster/Challenger
+    switch (league) {
+        case LeagueTier.Sprout:
+        case LeagueTier.Rookie:
+        case LeagueTier.Rising:
+            return 250;
+        case LeagueTier.Ace:
+        case LeagueTier.Diamond:
+            return 300;
+        case LeagueTier.Master:
+            return 500;
+        case LeagueTier.Grandmaster:
+        case LeagueTier.Challenger:
+            return 9999;
+        default:
+            return 250;
+    }
 };
 
 const calculatePower = (player: PlayerForTournament, phase: 'early' | 'mid' | 'end') => {
@@ -65,6 +99,45 @@ const calculatePower = (player: PlayerForTournament, phase: 'early' | 'mid' | 'e
     }
     const conditionModifier = (player.condition || 100) / 100;
     return (power) * conditionModifier;
+};
+
+const getRandomEvent = (p1: PlayerForTournament, p2: PlayerForTournament): { winner: PlayerForTournament; loser: PlayerForTournament; house: number; commentary: string; details: Omit<RandomEventDetails, 'score_change'> } | null => {
+    const events: { stat: CoreStat; type: RandomEventDetails['type']; commentary: string; }[] = [
+        { stat: CoreStat.Concentration, type: 'aggressive', commentary: "{player} 선수, 놀라운 집중력으로 묘수를 찾아냅니다!" },
+        { stat: CoreStat.ThinkingSpeed, type: 'aggressive', commentary: "{player} 선수, 빠른 판단으로 상대의 허를 찌릅니다!" },
+        { stat: CoreStat.Judgment, type: 'pressure', commentary: "{player} 선수, 정확한 형세 판단으로 우위를 점합니다!" },
+        { stat: CoreStat.Calculation, type: 'aggressive', commentary: "{player} 선수, 날카로운 계산으로 끝내기에서 이득을 봅니다!" },
+        { stat: CoreStat.CombatPower, type: 'aggressive', commentary: "{player} 선수, 강력한 전투력으로 상대를 압박합니다!" },
+        { stat: CoreStat.Stability, type: 'defense', commentary: "{player} 선수, 안정적인 수비로 상대의 공격을 무력화시킵니다!" },
+    ];
+
+    const event = events[Math.floor(Math.random() * events.length)];
+    const p1Stat = p1.stats[event.stat] || 100;
+    const p2Stat = p2.stats[event.stat] || 100;
+    const totalStat = p1Stat + p2Stat;
+    
+    let winner: PlayerForTournament, loser: PlayerForTournament;
+    if (Math.random() * totalStat < p1Stat) {
+        winner = p1;
+        loser = p2;
+    } else {
+        winner = p2;
+        loser = p1;
+    }
+
+    const house = Math.floor(Math.random() * 5) + 1;
+    
+    const details: Omit<RandomEventDetails, 'score_change'> = {
+        type: event.type,
+        stat: event.stat,
+        p1_id: p1.id,
+        p2_id: p2.id,
+        p1_stat: p1Stat,
+        p2_stat: p2Stat,
+        player_id: winner.id,
+    };
+
+    return { winner, loser, house, commentary: event.commentary, details };
 };
 
 const finishMatch = (
@@ -103,77 +176,6 @@ const finishMatch = (
         winner,
     };
 };
-
-const triggerRandomEvent = (state: TournamentState, p1: PlayerForTournament, p2: PlayerForTournament) => {
-    const events: { type: 'mistake' | 'pressure' | 'aggressive' | 'defense'; stat: CoreStat; message: string; isNegative: boolean }[] = [
-        { type: 'mistake', stat: CoreStat.Concentration, message: "{player}님, 조급한 마음에 실수가 나왔습니다.", isNegative: true },
-        { type: 'pressure', stat: CoreStat.ThinkingSpeed, message: "{player}님, 시간 압박에서도 좋은 수를 둡니다!", isNegative: false },
-        { type: 'aggressive', stat: CoreStat.CombatPower, message: "{player}님, 공격적인 수로 판세를 흔듭니다!", isNegative: false },
-        { type: 'defense', stat: CoreStat.Stability, message: "{player}님, 차분하게 받아치며 불리한 싸움을 버팁니다!", isNegative: false },
-    ];
-
-    const potentialEvents: (typeof events[0] & { player: PlayerForTournament, p1_stat: number, p2_stat: number })[] = [];
-
-    for (const event of events) {
-        const stat = event.stat;
-        const p1Stat = p1.stats[stat] || 100;
-        const p2Stat = p2.stats[stat] || 100;
-
-        let p1Prob = 0.20;
-        let p2Prob = 0.20;
-
-        const p1IsHigher = p1Stat > p2Stat;
-        const p2IsHigher = p2Stat > p1Stat;
-
-        if (p1IsHigher) {
-            const diffPercent = (p1Stat - p2Stat) / p2Stat;
-            if (event.isNegative) p2Prob += diffPercent; else p1Prob += diffPercent;
-        } else if (p2IsHigher) {
-            const diffPercent = (p2Stat - p1Stat) / p1Stat;
-            if (event.isNegative) p1Prob += diffPercent; else p2Prob += diffPercent;
-        }
-
-        if (Math.random() < p1Prob) {
-            potentialEvents.push({ player: p1, ...event, p1_stat: p1Stat, p2_stat: p2Stat });
-        }
-        if (Math.random() < p2Prob) {
-            potentialEvents.push({ player: p2, ...event, p1_stat: p1Stat, p2_stat: p2Stat });
-        }
-    }
-
-    if (potentialEvents.length > 0) {
-        const chosenEvent = potentialEvents[Math.floor(Math.random() * potentialEvents.length)];
-        
-        const randomPercent = Math.random() * (10 - 2) + 2;
-        const scoreChange = Math.round(randomPercent / 2);
-        const finalScoreChange = chosenEvent.isNegative ? -scoreChange : scoreChange;
-
-        if (chosenEvent.player.id === p1.id) {
-            state.currentMatchScores!.player1 += finalScoreChange;
-        } else {
-            state.currentMatchScores!.player2 += finalScoreChange;
-        }
-        
-        const commentaryText = chosenEvent.message.replace('{player}', chosenEvent.player.nickname) + ` (${finalScoreChange > 0 ? '+' : ''}${finalScoreChange}집)`;
-        
-        state.currentMatchCommentary.push({
-            text: commentaryText,
-            phase: getPhase(state.timeElapsed),
-            isRandomEvent: true,
-            randomEventDetails: {
-                type: chosenEvent.type,
-                stat: chosenEvent.stat,
-                p1_id: p1.id,
-                p2_id: p2.id,
-                p1_stat: chosenEvent.p1_stat,
-                p2_stat: chosenEvent.p2_stat,
-                score_change: finalScoreChange,
-                player_id: chosenEvent.player.id
-            }
-        });
-    }
-}
-
 
 const simulateAndFinishMatch = (match: Match, players: PlayerForTournament[]) => {
     if (match.isFinished) return;
@@ -221,6 +223,14 @@ const prepareNextRound = (state: TournamentState, user: User) => {
     const lastRound = state.rounds[state.rounds.length - 1];
     if (lastRound.matches.every(m => m.isFinished)) {
         const winners = lastRound.matches.map(m => m.winner).filter(Boolean) as PlayerForTournament[];
+        
+        // Set condition for winners advancing to the next round
+        winners.forEach(winner => {
+            const playerInState = state.players.find(p => p.id === winner.id);
+            if (playerInState) {
+                playerInState.condition = Math.floor(Math.random() * 61) + 40; // 40-100
+            }
+        });
 
         if (winners.length > 1) {
             if (winners.length === 2 && (state.type === 'national' || state.type === 'world') && lastRound.matches.length === 2) {
@@ -268,7 +278,6 @@ const processMatchCompletion = (state: TournamentState, user: User, completedMat
         if (p) {
             const playerInState = state.players.find(player => player.id === p.id);
             if (playerInState) {
-                playerInState.condition = 1000;
                 if (playerInState.originalStats) {
                     playerInState.stats = JSON.parse(JSON.stringify(playerInState.originalStats));
                 }
@@ -277,32 +286,23 @@ const processMatchCompletion = (state: TournamentState, user: User, completedMat
     });
 
     if (state.type === 'neighborhood') {
-        const currentRoundNum = state.currentRoundRobinRound || 1;
-        const schedule = [
-            [[0, 5], [1, 4], [2, 3]], [[0, 4], [5, 3], [1, 2]], [[0, 3], [4, 2], [5, 1]],
-            [[0, 2], [3, 1], [4, 5]], [[0, 1], [2, 5], [3, 4]],
-        ];
-        const roundPairings = schedule[currentRoundNum - 1];
-        const matchesForThisRound = roundPairings.map(pair => {
-            const p1Id = state.players[pair[0]].id;
-            const p2Id = state.players[pair[1]].id;
-            return state.rounds[0].matches.find(m =>
-                (m.players[0]?.id === p1Id && m.players[1]?.id === p2Id) ||
-                (m.players[0]?.id === p2Id && m.players[1]?.id === p1Id)
-            );
-        }).filter((m): m is Match => !!m);
-
-        matchesForThisRound.forEach(match => {
-            if (!match.isFinished) {
-                simulateAndFinishMatch(match, state.players);
-            }
-        });
-
         const allMatchesInTournamentFinished = state.rounds[0].matches.every(m => m.isFinished);
         if (allMatchesInTournamentFinished) {
             state.status = 'complete';
         } else {
             state.status = 'round_complete';
+             // Set condition for the user's NEXT match
+            const nextUserMatch = state.rounds[0].matches.find(m => m.isUserMatch && !m.isFinished);
+            if (nextUserMatch) {
+                nextUserMatch.players.forEach(p => {
+                    if (p) {
+                        const playerInState = state.players.find(player => player.id === p.id);
+                        if (playerInState) {
+                            playerInState.condition = Math.floor(Math.random() * 61) + 40; // 40-100
+                        }
+                    }
+                });
+            }
         }
     } else { // Knockout tournament logic
         const userWon = completedMatch.winner?.id === user.id;
@@ -318,7 +318,9 @@ const processMatchCompletion = (state: TournamentState, user: User, completedMat
             for (let safety = 0; safety < 10; safety++) {
                 const lastRound = state.rounds[state.rounds.length - 1];
                 if (lastRound.matches.every(m => m.isFinished)) {
-                     const isFinalOver = state.rounds.some(r => r.name === '결승') && state.rounds.find(r => r.name === '결승')!.matches.every(m => m.isFinished);
+                    // FIX: Refactored complex chained expression to be safer and more readable.
+                    const finalRound = state.rounds.find(r => r.name === '결승');
+                    const isFinalOver = finalRound ? finalRound.matches.every(m => m.isFinished) : false;
                      if(isFinalOver) {
                          state.status = 'complete';
                          break;
@@ -341,7 +343,7 @@ export const createTournament = (type: TournamentType, user: User, players: Play
     const definition = TOURNAMENT_DEFINITIONS[type];
     const rounds: Round[] = [];
     
-    players.forEach(p => p.condition = 1000);
+    players.forEach(p => p.condition = 1000); // Initialize with "not set"
 
     if (definition.format === 'tournament') {
         const matches: Match[] = [];
@@ -385,6 +387,19 @@ export const createTournament = (type: TournamentType, user: User, players: Play
         });
         
         rounds.push({ id: 1, name: '풀리그', matches: roundMatches });
+    }
+
+    // Set initial condition for the user's first match
+    const firstUserMatch = rounds.flatMap(r => r.matches).find(m => m.isUserMatch);
+    if (firstUserMatch) {
+        firstUserMatch.players.forEach(p => {
+            if (p) {
+                const playerInState = players.find(player => player.id === p.id);
+                if (playerInState) {
+                    playerInState.condition = Math.floor(Math.random() * 61) + 40; // 40-100
+                }
+            }
+        });
     }
 
     return {
@@ -436,7 +451,7 @@ export const startNextRound = (state: TournamentState, user: User) => {
     
         if (userMatchInRound) {
             const matchIndex = state.rounds[0].matches.findIndex(m => m.id === userMatchInRound.id);
-            
+
             state.status = 'round_in_progress';
             state.currentSimulatingMatch = { roundIndex: 0, matchIndex };
             state.currentMatchCommentary = [];
@@ -497,20 +512,24 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
     if (state.timeElapsed === 1) {
         if (p1.originalStats) p1.stats = JSON.parse(JSON.stringify(p1.originalStats));
         if (p2.originalStats) p2.stats = JSON.parse(JSON.stringify(p2.originalStats));
-
-        p1.condition = Math.floor(Math.random() * 61) + 40;
-        p2.condition = Math.floor(Math.random() * 61) + 40;
     }
     
-    const playersToUpdate = [p1, p2];
-    for (const player of playersToUpdate) {
-        if (!player) continue;
-        const allStats = Object.values(CoreStat);
-        const statToFluctuate = allStats[Math.floor(Math.random() * allStats.length)];
-        const fluctuation = Math.random() < 0.5 ? 1 : -1;
-        player.stats[statToFluctuate] = (player.stats[statToFluctuate] || 0) + fluctuation;
-    }
+    const allStats = Object.values(CoreStat);
+    const statToChange = allStats[Math.floor(Math.random() * allStats.length)];
 
+    const applyStatFluctuation = (player: PlayerForTournament) => {
+        if (!player) return;
+        const probPositive = 45 + (player.condition / 2);
+        const isPositive = Math.random() * 100 < probPositive;
+        const changeAmount = Math.floor(Math.random() * 3) + 1;
+        const finalChange = isPositive ? changeAmount : -changeAmount;
+        
+        player.stats[statToChange] = Math.max(0, (player.stats[statToChange] || 0) + finalChange);
+    };
+    
+    applyStatFluctuation(p1);
+    applyStatFluctuation(p2);
+    
     const phase = getPhase(state.timeElapsed);
     const p1Power = calculatePower(p1, phase);
     const p2Power = calculatePower(p2, phase);
@@ -524,16 +543,53 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
 
     if (state.timeElapsed === 1) {
         state.currentMatchCommentary.push({ text: COMMENTARY_POOLS.start.replace('{p1}', p1.nickname).replace('{p2}', p2.nickname), phase, isRandomEvent: false });
-    } else if (state.timeElapsed > 1 && state.timeElapsed < TOTAL_GAME_DURATION && state.timeElapsed % 5 === 0) {
-        triggerRandomEvent(state, p1, p2);
-    } else if (state.timeElapsed % 20 === 0 && state.timeElapsed > 0 && state.timeElapsed < TOTAL_GAME_DURATION) {
-        const leadPercent = Math.abs(p1ScorePercent - 50) * 2;
-        const scoreDiff = (leadPercent / 2);
-        const roundedDiff = Math.round(scoreDiff);
-        const finalDiff = roundedDiff + 0.5;
-        const leader = p1ScorePercent > 50 ? p1.nickname : p2.nickname;
-        if (finalDiff > 0.5) {
-            state.currentMatchCommentary.push({ text: `[중간 스코어] ${leader} 선수 ${finalDiff.toFixed(1)}집 우세.`, phase, isRandomEvent: false });
+    } else if (state.timeElapsed < TOTAL_GAME_DURATION) {
+        if (state.timeElapsed % 20 === 0) {
+            const leadPercent = Math.abs(p1ScorePercent - 50) * 2;
+            const scoreDiff = (leadPercent / 2);
+            const roundedDiff = Math.round(scoreDiff);
+            const finalDiff = roundedDiff + 0.5;
+            const leader = p1ScorePercent > 50 ? p1.nickname : p2.nickname;
+            
+            let commentaryText;
+            if (finalDiff > 0.5) {
+                commentaryText = COMMENTARY_POOLS.score[0].replace('{leader}', leader).replace('{scoreDiff}', finalDiff.toFixed(1));
+            } else {
+                commentaryText = COMMENTARY_POOLS.score[1];
+            }
+            state.currentMatchCommentary.push({ text: commentaryText, phase, isRandomEvent: false });
+        } else if (state.timeElapsed % 5 === 0) {
+            const event = getRandomEvent(p1, p2);
+            if (event) {
+                const totalScore = state.currentMatchScores!.player1 + state.currentMatchScores!.player2;
+                const scoreChange = totalScore > 0 
+                    ? Math.round(totalScore * (event.house * 0.02))
+                    : event.house * 10;
+
+                if (event.winner.id === p1.id) {
+                    state.currentMatchScores!.player1 += scoreChange;
+                } else {
+                    state.currentMatchScores!.player2 += scoreChange;
+                }
+                
+                const commentaryText = event.commentary.replace('{player}', event.winner.nickname) + ` (${event.house}집 이득!)`;
+                
+                const details: RandomEventDetails = {
+                    ...event.details,
+                    score_change: scoreChange
+                };
+
+                state.currentMatchCommentary.push({
+                    text: commentaryText,
+                    phase: phase,
+                    isRandomEvent: true,
+                    randomEventDetails: details
+                });
+            }
+        } else {
+            const comment = COMMENTARY_POOLS.general[Math.floor(Math.random() * COMMENTARY_POOLS.general.length)];
+            const playerForComment = Math.random() < 0.5 ? p1.nickname : p2.nickname;
+            state.currentMatchCommentary.push({ text: comment.replace('{player}', playerForComment), phase, isRandomEvent: false });
         }
     }
     
@@ -552,12 +608,10 @@ export const advanceSimulation = (state: TournamentState, user: User) => {
 };
 
 export const skipToResults = (state: TournamentState, userId: string) => {
-    // Simulate any ongoing user match first
     if (state.status === 'round_in_progress' && state.currentSimulatingMatch) {
         const { roundIndex, matchIndex } = state.currentSimulatingMatch;
         const match = state.rounds[roundIndex].matches[matchIndex];
         if (!match.isFinished) {
-            // Fast-forward simulation
             let p1Cumulative = state.currentMatchScores?.player1 || 0;
             let p2Cumulative = state.currentMatchScores?.player2 || 0;
             const p1 = state.players.find(p => p.id === match.players[0]!.id)!;
@@ -573,7 +627,6 @@ export const skipToResults = (state: TournamentState, userId: string) => {
         }
     }
 
-    // Now, simulate all other matches until the end
     let safety = 0;
     while (state.status !== 'complete' && safety < 10) {
         safety++;

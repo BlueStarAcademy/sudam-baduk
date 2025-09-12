@@ -74,7 +74,9 @@ const migrations: { [version: number]: string } = {
     32: 'ALTER TABLE live_games ADD COLUMN blackStonesPlaced INTEGER; ALTER TABLE live_games ADD COLUMN blackStoneLimit INTEGER;',
     33: 'ALTER TABLE users ADD COLUMN towerProgress TEXT;',
     34: 'ALTER TABLE live_games ADD COLUMN isTowerChallenge BOOLEAN; ALTER TABLE live_games ADD COLUMN floor INTEGER;',
-    35: 'ALTER TABLE live_games ADD COLUMN gameType TEXT; ALTER TABLE live_games ADD COLUMN whiteStonesPlaced INTEGER; ALTER TABLE live_games ADD COLUMN whiteStoneLimit INTEGER;'
+    35: 'ALTER TABLE live_games ADD COLUMN gameType TEXT; ALTER TABLE live_games ADD COLUMN whiteStonesPlaced INTEGER; ALTER TABLE live_games ADD COLUMN whiteStoneLimit INTEGER;',
+    36: 'ALTER TABLE live_games ADD COLUMN autoEndTurnCount INTEGER;',
+    37: 'ALTER TABLE users ADD COLUMN claimedFirstClearRewards TEXT;',
 };
 
 export const initializeAndGetDb = async (): Promise<Database> => {

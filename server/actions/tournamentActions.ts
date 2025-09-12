@@ -1,45 +1,13 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-// FIX: Add missing imports for types and constants.
 import { TournamentState, PlayerForTournament, CoreStat, CommentaryLine, Match, User, Round, TournamentType, LeagueTier, VolatileState, ServerAction, HandleActionResult } from '../../types.js';
-import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, BOT_NAMES, AVATAR_POOL, TOURNAMENT_SCORE_REWARDS } from '../../constants.js';
+import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, BOT_NAMES, AVATAR_POOL, BORDER_POOL, CORE_STATS_DATA, LEAGUE_DATA } from '../../constants.js';
 import { updateQuestProgress } from '../questService.js';
 import { createItemFromTemplate, SHOP_ITEMS } from '../shop.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
 import * as tournamentService from '../tournamentService.js';
 import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
 import { calculateTotalStats } from '../statService.js';
-
-const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
-
-const LEAGUE_BOT_STATS: Record<LeagueTier, number> = {
-    [LeagueTier.Sprout]: 100,
-    [LeagueTier.Rookie]: 120,
-    [LeagueTier.Rising]: 140,
-    [LeagueTier.Ace]: 160,
-    [LeagueTier.Diamond]: 200,
-    [LeagueTier.Master]: 240,
-    [LeagueTier.Grandmaster]: 275,
-    [LeagueTier.Challenger]: 300,
-};
-
-const TOURNAMENT_BOT_STAT_MULTIPLIER: Record<TournamentType, number> = {
-    neighborhood: 0.8,
-    national: 1.0,
-    world: 1.2,
-};
-
-const createBotStats = (league: LeagueTier, tournamentType: TournamentType): Record<CoreStat, number> => {
-    const baseStatValue = LEAGUE_BOT_STATS[league] || 100;
-    const multiplier = TOURNAMENT_BOT_STAT_MULTIPLIER[tournamentType] || 1.0;
-    const finalStatValue = Math.round(baseStatValue * multiplier);
-
-    const stats: Partial<Record<CoreStat, number>> = {};
-    for (const key of Object.values(CoreStat)) {
-        stats[key] = finalStatValue;
-    }
-    return stats as Record<CoreStat, number>;
-};
 
 export const handleTournamentAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
@@ -350,92 +318,38 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
 
             return { clientResponse: { updatedUser: user } };
         }
-        case 'CLAIM_TOURNAMENT_REWARD': {
-            const { tournamentType } = payload as { tournamentType: TournamentType };
-            let stateKey: keyof User;
-            let rewardClaimedKey: keyof User;
-
-            switch (tournamentType) {
-                case 'neighborhood':
-                    stateKey = 'lastNeighborhoodTournament';
-                    rewardClaimedKey = 'neighborhoodRewardClaimed';
-                    break;
-                case 'national':
-                    stateKey = 'lastNationalTournament';
-                    rewardClaimedKey = 'nationalRewardClaimed';
-                    break;
-                case 'world':
-                    stateKey = 'lastWorldTournament';
-                    rewardClaimedKey = 'worldRewardClaimed';
-                    break;
-                default:
-                    return { error: 'Invalid tournament type for reward claim.' };
-            }
-
-            const tournamentState = (user as any)[stateKey] as TournamentState | null;
-            if (!tournamentState || tournamentState.status !== 'complete') {
-                return { error: 'Cannot claim rewards for an incomplete tournament.' };
-            }
-
-            if ((user as any)[rewardClaimedKey]) {
-                return { error: 'Reward already claimed.' };
-            }
-
-            const ranks = tournamentService.calculateRanks(tournamentState);
-            const myRankInfo = ranks.find(r => r.id === user.id);
-            if (!myRankInfo) {
-                return { error: 'Could not determine your rank.' };
-            }
-
-            const rewardInfo = BASE_TOURNAMENT_REWARDS[tournamentType];
-            let rewardKey: number;
-            
-            if (tournamentType === 'neighborhood') rewardKey = myRankInfo.rank <= 3 ? myRankInfo.rank : 4;
-            else if (tournamentType === 'national') rewardKey = myRankInfo.rank <= 4 ? myRankInfo.rank : 5;
-            else { // world
-                if (myRankInfo.rank <= 4) rewardKey = myRankInfo.rank;
-                else if (myRankInfo.rank <= 8) rewardKey = 5;
-                else rewardKey = 9;
-            }
-            
-            const reward = rewardInfo?.rewards[rewardKey];
-            if (!reward) {
-                (user as any)[rewardClaimedKey] = true;
-                await db.updateUser(user);
-                return { clientResponse: { updatedUser: user } };
-            }
-
-            const itemsToCreate = createItemInstancesFromReward(reward.items || []);
-            const { success } = addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
-
-            if (!success) {
-                return { error: '보상을 받기에 인벤토리 공간이 부족합니다.' };
-            }
-
-            addItemsToInventory(user.inventory, user.inventorySlots, itemsToCreate);
-            (user as any)[rewardClaimedKey] = true;
-            
-            const scoreRewardKey = myRankInfo.rank;
-            const scoreReward = TOURNAMENT_SCORE_REWARDS[tournamentType]?.[scoreRewardKey];
-            if (scoreReward) {
-                user.tournamentScore = (user.tournamentScore || 0) + scoreReward;
-            }
-            
-            await db.updateUser(user);
-            
-            return {
-                clientResponse: {
-                    rewardSummary: {
-                        reward: { items: itemsToCreate },
-                        items: itemsToCreate,
-                        title: `${tournamentState.title} 보상`
-                    },
-                    updatedUser: user
-                }
-            };
-        }
-
         default:
-            return { error: `Action ${type} is not handled by tournamentActions.` };
+            return { error: 'Unknown tournament action.' };
     }
+};
+
+const getRandomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+const LEAGUE_BOT_STATS: Record<LeagueTier, number> = {
+    [LeagueTier.Sprout]: 120,
+    [LeagueTier.Rookie]: 200,
+    [LeagueTier.Rising]: 300,
+    [LeagueTier.Ace]: 350,
+    [LeagueTier.Diamond]: 450,
+    [LeagueTier.Master]: 600,
+    [LeagueTier.Grandmaster]: 700,
+    [LeagueTier.Challenger]: 900,
+};
+
+const TOURNAMENT_BOT_STAT_MULTIPLIER: Record<TournamentType, number> = {
+    neighborhood: 0.8,
+    national: 1.0,
+    world: 1.2,
+};
+
+const createBotStats = (league: LeagueTier, tournamentType: TournamentType): Record<CoreStat, number> => {
+    const baseStatValue = LEAGUE_BOT_STATS[league] || 100;
+    const multiplier = TOURNAMENT_BOT_STAT_MULTIPLIER[tournamentType] || 1.0;
+    const finalStatValue = Math.round(baseStatValue * multiplier);
+
+    const stats: Partial<Record<CoreStat, number>> = {};
+    for (const key of Object.values(CoreStat)) {
+        stats[key] = finalStatValue;
+    }
+    return stats as Record<CoreStat, number>;
 };

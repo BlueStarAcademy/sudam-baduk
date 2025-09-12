@@ -203,7 +203,11 @@ export const processMonthlyTowerReset = async (): Promise<void> => {
                 from: 'System',
                 title: `도전의 탑 월간 보상 (${rank}위)`,
                 message: mailMessage,
-                attachments: { diamonds: rewardTier.diamonds, items: rewardTier.items },
+                attachments: { 
+                    diamonds: rewardTier.diamonds, 
+                    items: rewardTier.items,
+                    strategyXp: rewardTier.strategyXp
+                },
                 receivedAt: now,
                 expiresAt: now + 30 * 24 * 60 * 60 * 1000, // 30 days
                 isRead: false,

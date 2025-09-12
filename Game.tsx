@@ -17,9 +17,7 @@ const Game: React.FC<GameComponentProps> = ({ session }) => {
     }
     
     // --- Arena Routing ---
-    const isTower = session.isTowerChallenge || (session.stageId && session.stageId.startsWith('tower-'));
-
-    if (isTower) {
+    if (session.isTowerChallenge) {
         return <TowerChallengeArena session={session} />;
     }
     if (session.isSinglePlayer) {

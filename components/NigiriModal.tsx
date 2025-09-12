@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LiveGameSession, User, ServerAction } from '../types.js';
 import Button from './Button.js';
@@ -148,7 +146,7 @@ const NigiriModal: React.FC<NigiriModalProps> = ({ session, currentUser, onActio
             }
              return (
                 <div className="text-center">
-                    <h2 className="text-2xl font-bold mb-2">상대방이 맞추는 중</h2>
+                    <h2 className="text-2xl font-bold mb-4">상대방이 맞추는 중</h2>
                     <p className="text-gray-300 mb-6 animate-pulse">{guesser.nickname}님이 돌 개수를 맞추고 있습니다...</p>
                      <div className="flex justify-center items-center h-20">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-100"></div>

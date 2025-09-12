@@ -107,6 +107,7 @@ export const rowToUser = (row: any): types.User | null => {
             bonusStatPoints: row.bonusStatPoints ?? 0,
             singlePlayerMissions: safeParse(row.singlePlayerMissions, {}, row.id, 'singlePlayerMissions'),
             towerProgress: safeParse(row.towerProgress, { highestFloor: 0, lastClearTimestamp: 0 }, row.id, 'towerProgress'),
+            claimedFirstClearRewards: safeParse(row.claimedFirstClearRewards, [], row.id, 'claimedFirstClearRewards'),
         };
         return user;
     } catch (e) {
@@ -239,7 +240,7 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             curlingRoundSummary: safeParse(row.curlingRoundSummary, null, row.id, 'curlingRoundSummary'),
             curlingItemUses: safeParse(row.curlingItemUses, {}, row.id, 'curlingItemUses'),
             activeCurlingItems: safeParse(row.activeCurlingItems, {}, row.id, 'activeCurlingItems'),
-            hammerPlayerId: row.hammerPlayerId ?? undefined, // Player with last stone advantage
+            hammerPlayerId: row.hammerPlayerId ?? undefined,
             isTiebreaker: !!row.isTiebreaker,
             tiebreakerStonesThrown: row.tiebreakerStonesThrown ?? undefined,
             stonesThrownThisRound: safeParse(row.stonesThrownThisRound, {}, row.id, 'stonesThrownThisRound'),
@@ -265,7 +266,6 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             mythicBonuses: safeParse(row.mythicBonuses, {}, row.id, 'mythicBonuses'),
             lastPlayfulGoldCheck: safeParse(row.lastPlayfulGoldCheck, {}, row.id, 'lastPlayfulGoldCheck'),
             pendingSystemMessages: safeParse(row.pendingSystemMessages, null, row.id, 'pendingSystemMessages'),
-// FIX: Remove duplicate property initializations to resolve TypeScript error.
             isSinglePlayer: !!row.isSinglePlayer,
             stageId: row.stageId ?? undefined,
             blackPatternStones: safeParse(row.blackPatternStones, null, row.id, 'blackPatternStones'),

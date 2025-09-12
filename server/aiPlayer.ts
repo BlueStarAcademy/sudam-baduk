@@ -1,6 +1,3 @@
-
-
-
 import * as types from '../types.js';
 import { Point } from '../types.js';
 import { aiUserId, BOT_NAMES, AVATAR_POOL, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
@@ -90,6 +87,10 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
     const humanPlayer = aiPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
     const aiLevel = game.settings.aiDifficulty || 1;
 
+    if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
+        return;
+    }
+
     const setHumanPlayerTurn = () => {
         const now = Date.now();
         game.currentPlayer = humanPlayer;
@@ -111,29 +112,50 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
     };
 
     const handleSurvivalPostAiMove = async (): Promise<boolean> => {
-        if (game.gameType !== 'survival') return false; // Not a survival game
+        if (game.gameType !== 'survival') return false;
         
         game.whiteStonesPlaced = (game.whiteStonesPlaced ?? 0) + 1;
 
         const aiTarget = game.effectiveCaptureTargets![aiPlayer];
         if (game.captures[aiPlayer] >= aiTarget) {
             await endGame(game, aiPlayer, 'capture_limit');
-            return true; // Game ended
+            return true;
         }
 
         if (game.whiteStonesPlaced! >= game.whiteStoneLimit!) {
             await endGame(game, humanPlayer, 'stone_limit_exceeded');
-            return true; // Game ended
+            return true;
         }
         
-        return false; // Game continues
+        return false;
     };
 
     const makeMove = async (move: Point, isHidden: boolean = false) => {
         const result = processMove(game.boardState, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
         if (result.isValid) {
             game.boardState = result.newBoardState;
-            game.captures[aiPlayer] += result.capturedStones.length;
+            if (result.capturedStones.length > 0) {
+                if (!game.justCaptured) game.justCaptured = [];
+                for (const stone of result.capturedStones) {
+                    const capturedPlayer = humanPlayer;
+                    
+                    let points = 1;
+    
+                    if (game.isSinglePlayer || game.isTowerChallenge) {
+                        const patternStones = capturedPlayer === types.Player.Black ? game.blackPatternStones : game.whitePatternStones;
+                        if (patternStones) {
+                            const patternIndex = patternStones.findIndex(p => p.x === stone.x && p.y === stone.y);
+                            if (patternIndex !== -1) {
+                                points = 2;
+                                patternStones.splice(patternIndex, 1);
+                            }
+                        }
+                    }
+    
+                    game.captures[aiPlayer] += points;
+                    game.justCaptured.push({ point: stone, player: capturedPlayer, wasHidden: false });
+                }
+            }
             game.koInfo = result.newKoInfo;
             game.lastMove = move;
             game.moveHistory.push({ player: aiPlayer, ...move });
@@ -208,6 +230,20 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
         }
     }
 
+    const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
+    
+    // AI Level-based probability check (Levels 1-5)
+    const levelProbabilities: { [key: number]: number } = { 1: 0.5, 2: 0.6, 3: 0.7, 4: 0.8, 5: 0.9 };
+    if (aiLevel <= 5 && Math.random() > levelProbabilities[aiLevel]) {
+        if (validMoves.length > 0) {
+            const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+            await makeMove(randomMove);
+        } else {
+            await passTurn();
+        }
+        return;
+    }
+
     // AI Hidden stone logic
     if (game.isSinglePlayer && game.gameType === 'hidden' && aiPlayer === types.Player.White) {
         const hiddenStonesLeft = (game.settings.hiddenStoneCount || 0) - (game.hidden_stones_used_p2 || 0);
@@ -216,98 +252,139 @@ const makeStrategicAiMove = async (game: types.LiveGameSession) => {
             const turnNumber = Math.ceil(moveNumber / 2);
 
             let shouldPlaceHidden = false;
-            // First hidden stone
-            if ((game.hidden_stones_used_p2 || 0) === 0 && turnNumber >= 1 && turnNumber <= 10) {
-                shouldPlaceHidden = true;
-            }
-            // Second hidden stone (if applicable)
-            if ((game.settings.hiddenStoneCount || 0) >= 2 && (game.hidden_stones_used_p2 || 0) === 1 && turnNumber >= 25 && turnNumber <= 30) {
-                shouldPlaceHidden = true;
-            }
+            if ((game.hidden_stones_used_p2 || 0) === 0 && turnNumber >= 1 && turnNumber <= 10) shouldPlaceHidden = true;
+            if ((game.settings.hiddenStoneCount || 0) >= 2 && (game.hidden_stones_used_p2 || 0) === 1 && turnNumber >= 25 && turnNumber <= 30) shouldPlaceHidden = true;
             
-            const validMovesForHidden = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
-            if (shouldPlaceHidden && validMovesForHidden.length > 0) {
-                const chosenMove = validMovesForHidden[Math.floor(Math.random() * validMovesForHidden.length)];
+            if (shouldPlaceHidden && validMoves.length > 0) {
+                const chosenMove = validMoves[Math.floor(Math.random() * validMoves.length)];
                 await makeMove(chosenMove, true);
                 return;
             }
         }
     }
 
-    const validMoves = allEmptyPoints.filter(p => processMove(board, { ...p, player: aiPlayer }, game.koInfo, game.moveHistory.length).isValid);
     if (validMoves.length === 0) {
-        await passTurn();
+        if (game.isSinglePlayer || game.isTowerChallenge) {
+            await endGame(game, humanPlayer, 'resign');
+        } else {
+            await passTurn();
+        }
         return;
     }
 
-    const scoredMoves: { move: Point; score: number }[] = [];
+    const scoredMoves: { move: Point; score: number; principlesMet: number }[] = [];
     const myAtariGroups = logic.getAllGroups(aiPlayer, board).filter(g => g.liberties === 1);
     const savingMoves = new Set<string>();
-    if (myAtariGroups.length > 0) {
-        for (const group of myAtariGroups) {
-            // FIX: The `p` in forEach is a string "x,y", not an object.
-            group.libertyPoints.forEach(p => savingMoves.add(p));
-        }
+    myAtariGroups.forEach(group => group.libertyPoints.forEach(p => savingMoves.add(p)));
+
+    const myStonesCenter = logic.getAllGroups(aiPlayer, board).reduce((acc, group) => {
+        group.stones.forEach(s => { acc.x += s.x; acc.y += s.y; acc.count++; });
+        return acc;
+    }, { x: 0, y: 0, count: 0 });
+    if (myStonesCenter.count > 0) {
+        myStonesCenter.x /= myStonesCenter.count;
+        myStonesCenter.y /= myStonesCenter.count;
     }
 
     for (const move of validMoves) {
         let score = 0;
-        
+        let principlesMet = 0;
         const tempResult = processMove(board, { ...move, player: aiPlayer }, game.koInfo, game.moveHistory.length);
         const newBoard = tempResult.newBoardState;
         
-        const capturedStoneCount = tempResult.capturedStones.length;
-        if (capturedStoneCount > 0) {
-            score += 1000 * capturedStoneCount;
-        }
-
+        // 1. Defend Atari
         if (savingMoves.has(`${move.x},${move.y}`)) {
             const savedGroup = myAtariGroups.find(g => g.libertyPoints.has(`${move.x},${move.y}`));
-            score += 800 * (savedGroup?.stones.length || 1);
+            score += 1000 * (savedGroup?.stones.length || 1);
+            principlesMet++;
         }
-
+        // 2. Attack Atari
         const opponentGroupsAfterMove = logic.getAllGroups(humanPlayer, newBoard);
-        for (const group of opponentGroupsAfterMove) {
-            if (group.liberties === 1) {
-                score += 50 * group.stones.length;
+        const atariOpponentGroups = opponentGroupsAfterMove.filter(g => g.liberties === 1);
+        if (atariOpponentGroups.length > 0) {
+            const largestAtariGroupSize = Math.max(...atariOpponentGroups.map(g => g.stones.length));
+            score += 500 * largestAtariGroupSize;
+            principlesMet++;
+        }
+        // 3. Pressure Large Groups
+        const opponentGroupsBeforeMove = logic.getAllGroups(humanPlayer, board);
+        opponentGroupsBeforeMove.forEach(group => {
+            const groupAfter = logic.findGroup(group.stones[0].x, group.stones[0].y, humanPlayer, newBoard);
+            if (groupAfter && groupAfter.liberties < group.liberties) {
+                score += 10 * group.stones.length;
+                principlesMet++;
+            }
+        });
+        // 4. Increase Liberties
+        const myOriginalGroups = logic.getNeighbors(move.x, move.y).map(n => logic.findGroup(n.x, n.y, aiPlayer, board)).filter(g => g);
+        const originalTotalLiberties = [...new Set(myOriginalGroups.flatMap(g => [...g!.libertyPoints]))].length;
+        const myNewGroup = logic.findGroup(move.x, move.y, aiPlayer, newBoard);
+        if (myNewGroup && myNewGroup.liberties > originalTotalLiberties) {
+            score += 20 * (myNewGroup.liberties - originalTotalLiberties);
+            principlesMet++;
+        }
+        // 5. Central Influence
+        const centerStart = Math.floor(boardSize / 4);
+        const centerEnd = boardSize - 1 - centerStart;
+        if (move.x >= centerStart && move.x <= centerEnd && move.y >= centerStart && move.y <= centerEnd) {
+            score += 15;
+            principlesMet++;
+        }
+        // 6. Avoid Low-Value Moves
+        const isFirstLine = move.x === 0 || move.x === boardSize - 1 || move.y === 0 || move.y === boardSize - 1;
+        if (isFirstLine) score -= 50; else principlesMet++;
+        // 8. Avoid Self-Atari
+        if (myNewGroup && myNewGroup.liberties === 1 && tempResult.capturedStones.length === 0) {
+            score -= 5000;
+        } else {
+            principlesMet++;
+        }
+        // 9. Prioritize Pattern Stones
+        const capturesPatternStone = tempResult.capturedStones.some(s => game.whitePatternStones?.some(p => p.x === s.x && p.y === s.y));
+        if (capturesPatternStone) {
+            score *= 1.5;
+            principlesMet++;
+        }
+        // 10. Block from Own Stones
+        if (myStonesCenter.count > 0) {
+            const distToMyCenter = Math.hypot(move.x - myStonesCenter.x, move.y - myStonesCenter.y);
+            if (distToMyCenter < boardSize / 4) {
+                score += 10;
+                principlesMet++;
             }
         }
-
-        const myGroupsAfterMove = logic.getAllGroups(aiPlayer, newBoard);
-        const totalLiberties = myGroupsAfterMove.reduce((sum, group) => sum + group.liberties, 0);
-        score += totalLiberties;
-
-        const neighbors = logic.getNeighbors(move.x, move.y);
-        const friendlyNeighbors = neighbors.filter(n => board[n.y][n.x] === aiPlayer).length;
-        if (friendlyNeighbors === 3) score -= 20;
-        if (friendlyNeighbors === 4) score -= 50;
-        score -= friendlyNeighbors * 5;
-
-        const isThirdLine = move.y === 2 || move.y === boardSize - 3 || move.x === 2 || move.x === boardSize - 3;
-        const isFourthLine = move.y === 3 || move.y === boardSize - 4 || move.x === 3 || move.x === boardSize - 4;
-        if (isFourthLine) score += 5;
-        if (isThirdLine) score += 3;
-
-        const isCorner = (move.x === 0 && move.y === 0) || (move.x === 0 && move.y === boardSize - 1) || (move.x === boardSize - 1 && move.y === 0) || (move.x === boardSize - 1 && move.y === boardSize - 1);
-        if (isCorner && capturedStoneCount === 0) {
-            score -= 50;
-        }
-
-        scoredMoves.push({ move, score });
+        scoredMoves.push({ move, score, principlesMet });
     }
 
     if (scoredMoves.length === 0) {
         await passTurn();
         return;
     }
+    
+    let finalMove: Point;
+    if (aiLevel <= 6) { // Principle 7: Randomness for lower levels
+        scoredMoves.sort((a, b) => b.score - a.score);
+        const bestScore = scoredMoves[0].score;
+        const topMoves = scoredMoves.filter(m => m.score >= bestScore * 0.9).slice(0, 3);
+        finalMove = topMoves[Math.floor(Math.random() * topMoves.length)].move;
+    } else { // Levels 7-10: Prioritize principle count, then score
+        const requiredPrinciples: { [key: number]: number } = { 7: 2, 8: 3, 9: 4 };
+        const minPrinciples = requiredPrinciples[aiLevel] || 0;
+        let filteredMoves: typeof scoredMoves;
 
-    scoredMoves.sort((a, b) => b.score - a.score);
-    const topN = Math.min(3, scoredMoves.length);
-    const bestScore = scoredMoves[0].score;
-    const bestMoves = scoredMoves.filter(m => m.score >= bestScore * 0.9).slice(0, topN);
-    const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
-
-    await makeMove(chosenMove);
+        if (aiLevel === 10) {
+            const maxPrinciples = Math.max(...scoredMoves.map(m => m.principlesMet), 0);
+            filteredMoves = scoredMoves.filter(m => m.principlesMet === maxPrinciples);
+        } else {
+            filteredMoves = scoredMoves.filter(m => m.principlesMet >= minPrinciples);
+        }
+        if (filteredMoves.length === 0) {
+            filteredMoves = scoredMoves;
+        }
+        filteredMoves.sort((a, b) => b.score - a.score);
+        finalMove = filteredMoves[0].move;
+    }
+    await makeMove(finalMove);
 };
 
 const makePlayfulAiMove = async (game: types.LiveGameSession) => {
@@ -394,7 +471,6 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                 }
 
                 if(game.mode === types.GameMode.Ttamok) {
-                    // FIX: `x` and `y` were not defined. Use `bestMove.x` and `bestMove.y`.
                     const { capturedCount } = logic.performTtamokCapture(bestMove.x, bestMove.y);
                     game.captures[game.currentPlayer] += capturedCount;
                     if (game.captures[game.currentPlayer] >= (game.settings.captureTarget || 10)) {
@@ -447,24 +523,20 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                     let bestMoves: types.Point[] = [];
 
                     for (const liberty of liberties) {
-                        // Simulate placing a stone at the liberty to see the outcome
                         const tempResult = processMove(game.boardState, { ...liberty, player: types.Player.Black }, game.koInfo, game.moveHistory.length, { ignoreSuicide: true });
                         
                         if (tempResult.isValid) {
                             const captures = tempResult.capturedStones.length;
                             if (captures > maxCaptures) {
                                 maxCaptures = captures;
-                                bestMoves = [liberty]; // New best move found, start a new list
+                                bestMoves = [liberty];
                             } else if (captures === maxCaptures) {
-                                bestMoves.push(liberty); // Another move with the same capture count
+                                bestMoves.push(liberty);
                             }
                         }
                     }
                     
                     if (bestMoves.length === 0) {
-                        // This should technically not be reached if liberties.length > 0
-                        // because maxCaptures starts at -1 and any valid move has captures >= 0.
-                        // But as a safeguard:
                         console.warn("[AI Dice Go] No valid moves found among liberties. Breaking.");
                         break;
                     }
@@ -480,7 +552,6 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                         }
                     } else {
                         console.error(`AI Dice Go placement failed for a chosen 'best move'. Liberty was: ${JSON.stringify(move)}`);
-                        // If somehow the best move is invalid, break to avoid issues.
                         break;
                     }
                     game.stonesToPlace = (game.stonesToPlace ?? 1) - 1;
@@ -546,7 +617,6 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                             move = liberties[Math.floor(Math.random() * liberties.length)];
                         }
                     } else {
-                        // Police logic remains random
                         move = liberties[Math.floor(Math.random() * liberties.length)];
                     }
                     
@@ -571,7 +641,7 @@ const makePlayfulAiMove = async (game: types.LiveGameSession) => {
                 const myStones = (game.alkkagiStones || []).filter(s => s.player === game.currentPlayer && s.onBoard);
                 if (myStones.length > 0) {
                     const stoneToFlick = myStones[Math.floor(Math.random() * myStones.length)];
-                    const vx = (Math.random() - 0.5) * 25; // Random velocity
+                    const vx = (Math.random() - 0.5) * 25;
                     const vy = (Math.random() - 0.5) * 25;
                     
                     game.animation = { type: 'alkkagi_flick', stoneId: stoneToFlick.id, vx, vy, startTime: Date.now(), duration: 5000 };

@@ -105,14 +105,14 @@ export const CONSUMABLE_ITEMS: (Omit<InventoryItem, 'id'|'createdAt'|'isEquipped
     { name: '컨디션 물약(소)', description: '토너먼트 경기 시작 전 선수의 피로도를 1~5만큼 회복시킵니다.', type: 'consumable', slot: null, image: '/images/use/con1.png', grade: 'uncommon' },
     { name: '컨디션 물약(중)', description: '토너먼트 경기 시작 전 선수의 피로도를 5~10만큼 회복시킵니다.', type: 'consumable', slot: null, image: '/images/use/con2.png', grade: 'rare' },
     { name: '컨디션 물약(대)', description: '토너먼트 경기 시작 전 선수의 피로도를 10~20만큼 회복시킵니다.', type: 'consumable', slot: null, image: '/images/use/con3.png', grade: 'epic' },
-    { name: '싱글플레이 초기화권', description: '싱글플레이 모든 스테이지 클리어 기록과 수련 과제를 초기화합니다.', type: 'consumable', slot: null, image: '/images/use/reset.png', grade: 'rare' },
+    { name: '싱글플레이 최초보상 초기화권', description: '이미 클리어한 모든 싱글플레이 스테이지의 최초 클리어 보상 기록을 초기화하여, 보상을 다시 획득할 수 있게 합니다. (진행도는 유지됩니다.)', type: 'consumable', slot: null, image: '/images/use/reset.png', grade: 'rare' },
 ];
 
 export const SHOP_CONSUMABLE_ITEMS: { name: string; description: string; cost: { gold?: number, diamonds?: number }; image: string; weeklyLimit: number; type: 'consumable' }[] = [
     { name: '컨디션 물약(소)', description: '피로도 1~5 회복', cost: { gold: 100 }, image: '/images/use/con1.png', weeklyLimit: 10, type: 'consumable' },
     { name: '컨디션 물약(중)', description: '피로도 5~10 회복', cost: { gold: 250 }, image: '/images/use/con2.png', weeklyLimit: 5, type: 'consumable' },
     { name: '컨디션 물약(대)', description: '피로도 10~20 회복', cost: { gold: 500 }, image: '/images/use/con3.png', weeklyLimit: 3, type: 'consumable' },
-    { name: '싱글플레이 초기화권', description: '싱글플레이 진행도 초기화', cost: { diamonds: 200 }, image: '/images/use/reset.png', weeklyLimit: 1, type: 'consumable' },
+    { name: '싱글플레이 최초보상 초기화권', description: '싱글플레이 진행도는 유지하고, 최초 클리어 보상 기록만 초기화합니다.', cost: { diamonds: 200 }, image: '/images/use/reset.png', weeklyLimit: 1, type: 'consumable' },
 ];
 
 export const MATERIAL_ITEMS: Record<string, Omit<InventoryItem, 'id'|'createdAt'|'isEquipped'|'level'|'stars'|'options'|'enhancementFails'>> = {

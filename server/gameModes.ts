@@ -1,15 +1,14 @@
-
 import { getGoLogic } from './goLogic.js';
 import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS, TOWER_STAGES, SINGLE_PLAYER_STAGES } from '../constants.js';
 import * as types from '../types.js';
 import type { LiveGameSession, AppState, Negotiation, ActionButton, GameMode } from '../types.js';
 import { aiUserId, makeAiMove, getAiUser } from './aiPlayer.js';
 // FIX: Corrected import paths to point to the actual module files inside `modes`.
-import { initializeStrategicGame, updateStrategicGameState } from './modes/strategic.js';
-import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.js';
+import { initializeStrategicGame, updateStrategicGameState } from './strategic.js';
+import { initializePlayfulGame, updatePlayfulGameState } from './playful.js';
 import { randomUUID } from 'crypto';
 import * as db from './db.js';
-import * as effectService from '../services/effectService.js';
+import * as effectService from './effectService.js';
 import { endGame, getGameResult } from './summaryService.js';
 
 export const finalizeAnalysisResult = (baseAnalysis: types.AnalysisResult, session: types.LiveGameSession): types.AnalysisResult => {
@@ -50,9 +49,27 @@ export const finalizeAnalysisResult = (baseAnalysis: types.AnalysisResult, sessi
     finalAnalysis.scoreDetails.black.itemBonus = 0;
     finalAnalysis.scoreDetails.white.itemBonus = 0;
 
-    // Recalculate totals
-    finalAnalysis.scoreDetails.black.total = finalAnalysis.scoreDetails.black.territory + finalAnalysis.scoreDetails.black.captures + (finalAnalysis.scoreDetails.black.deadStones ?? 0) + finalAnalysis.scoreDetails.black.baseStoneBonus + finalAnalysis.scoreDetails.black.hiddenStoneBonus + finalAnalysis.scoreDetails.black.timeBonus + finalAnalysis.scoreDetails.black.itemBonus;
-    finalAnalysis.scoreDetails.white.total = finalAnalysis.scoreDetails.white.territory + finalAnalysis.scoreDetails.white.captures + finalAnalysis.scoreDetails.white.komi + (finalAnalysis.scoreDetails.white.deadStones ?? 0) + finalAnalysis.scoreDetails.white.baseStoneBonus + finalAnalysis.scoreDetails.white.hiddenStoneBonus + finalAnalysis.scoreDetails.white.timeBonus + finalAnalysis.scoreDetails.white.itemBonus;
+    // Recalculate totals. A dead stone is worth 2 points: 1 for the capture, 1 for the territory.
+    // 'territory' is empty points. 'captures' is live captures. 'deadStones' is end-of-game captures.
+    // So we multiply deadStones by 2 to account for both territory and capture points.
+    finalAnalysis.scoreDetails.black.total = 
+        finalAnalysis.scoreDetails.black.territory + 
+        finalAnalysis.scoreDetails.black.captures + 
+        ((finalAnalysis.scoreDetails.black.deadStones ?? 0) * 2) + 
+        finalAnalysis.scoreDetails.black.baseStoneBonus + 
+        finalAnalysis.scoreDetails.black.hiddenStoneBonus + 
+        finalAnalysis.scoreDetails.black.timeBonus + 
+        finalAnalysis.scoreDetails.black.itemBonus;
+    
+    finalAnalysis.scoreDetails.white.total = 
+        finalAnalysis.scoreDetails.white.territory + 
+        finalAnalysis.scoreDetails.white.captures + 
+        finalAnalysis.scoreDetails.white.komi + 
+        ((finalAnalysis.scoreDetails.white.deadStones ?? 0) * 2) + 
+        finalAnalysis.scoreDetails.white.baseStoneBonus + 
+        finalAnalysis.scoreDetails.white.hiddenStoneBonus + 
+        finalAnalysis.scoreDetails.white.timeBonus + 
+        finalAnalysis.scoreDetails.white.itemBonus;
     
     finalAnalysis.areaScore.black = finalAnalysis.scoreDetails.black.total;
     finalAnalysis.areaScore.white = finalAnalysis.scoreDetails.white.total;

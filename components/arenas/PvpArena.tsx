@@ -268,15 +268,18 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
 
     const handleLeaveOrResignClick = useCallback(() => {
         if (isSpectator) {
+            sessionStorage.setItem('postGameRedirect', `#/waiting/${encodeURIComponent(session.mode)}`);
             handlers.handleAction({ type: 'LEAVE_SPECTATING' });
             return;
         }
         if (['ended', 'no_contest', 'rematch_pending'].includes(gameStatus)) {
+            sessionStorage.setItem('postGameRedirect', `#/waiting/${encodeURIComponent(session.mode)}`);
             handlers.handleAction({ type: 'LEAVE_GAME_ROOM', payload: { gameId } });
             return;
         }
         if (isNoContestLeaveAvailable) {
             if (window.confirm("상대방의 장고로 인해 페널티 없이 무효 처리하고 나가시겠습니까?")) {
+                sessionStorage.setItem('postGameRedirect', `#/waiting/${encodeURIComponent(session.mode)}`);
                 handlers.handleAction({ type: 'REQUEST_NO_CONTEST_LEAVE', payload: { gameId } });
             }
         } else {

@@ -3,6 +3,20 @@ import { BoardState, Point, Player, GameStatus, Move, AnalysisResult, LiveGameSe
 import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG } from '../assets.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
 
+// FIX: Define the missing findMoveIndexAt helper function.
+const findMoveIndexAt = (session: Pick<LiveGameSession, 'moveHistory'>, x: number, y: number): number => {
+    if (!session.moveHistory) return -1;
+    // Search backwards to find the most recent move at this position,
+    // as stones can be captured and re-placed.
+    for (let i = session.moveHistory.length - 1; i >= 0; i--) {
+        const move = session.moveHistory[i];
+        if (move.x === x && move.y === y) {
+            return i;
+        }
+    }
+    return -1;
+};
+
 const AnimatedBonusText: React.FC<{
     animation: Extract<AnimationData, { type: 'bonus_text' }>;
     toSvgCoords: (p: Point) => { cx: number; cy: number };
@@ -34,12 +48,24 @@ const AnimatedBonusText: React.FC<{
 
 const OwnershipOverlay: React.FC<{
     ownershipMap: number[][];
+    boardState: BoardState;
+    deadStones: Point[];
     toSvgCoords: (p: Point) => { cx: number; cy: number };
     cellSize: number;
-}> = ({ ownershipMap, toSvgCoords, cellSize }) => {
+}> = ({ ownershipMap, boardState, deadStones, toSvgCoords, cellSize }) => {
+    const deadStoneSet = useMemo(() => new Set(deadStones.map(p => `${p.x},${p.y}`)), [deadStones]);
+
     return (
         <g style={{ pointerEvents: 'none' }} className="animate-fade-in">
             {ownershipMap.map((row, y) => row.map((value, x) => {
+                const player = boardState[y]?.[x];
+                const isDead = deadStoneSet.has(`${x},${y}`);
+
+                // 살아있는 돌 위에는 마커를 표시하지 않음
+                if (player !== Player.None && !isDead) {
+                    return null;
+                }
+
                 // value is from -10 to 10. Corresponds to -1.0 to 1.0 probability.
                 const { cx, cy } = toSvgCoords({ x, y });
                 const absValue = Math.abs(value);
@@ -522,38 +548,6 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
         isOpponentHiddenStoneAtPos(hoverPos)
     );
     
-    const renderDeadStoneMarkers = () => {
-        if (!showTerritoryOverlay || !analysisResult || !analysisResult.deadStones) return null;
-
-        return (
-            <g style={{ pointerEvents: 'none' }} className="animate-fade-in">
-                {analysisResult.deadStones.map((p, i) => {
-                    const { cx, cy } = toSvgCoords(p);
-                    const crossSize = stone_radius * 0.7;
-                    return (
-                        <g key={`ds-${i}`}>
-                            <line x1={cx - crossSize} y1={cy - crossSize} x2={cx + crossSize} y2={cy + crossSize} stroke="red" strokeWidth="3" strokeLinecap="round" />
-                            <line x1={cx - crossSize} y1={cy + crossSize} x2={cx + crossSize} y2={cy - crossSize} stroke="red" strokeWidth="3" strokeLinecap="round" />
-                        </g>
-                    );
-                })}
-            </g>
-        );
-    };
-
-    const findMoveIndexAt = (game: Pick<LiveGameSession, 'moveHistory'>, x: number, y: number): number => {
-        const moveHistory = game.moveHistory || [];
-        if (!Array.isArray(moveHistory)) {
-            return -1;
-        }
-        for (let i = moveHistory.length - 1; i >= 0; i--) {
-            if (moveHistory[i].x === x && moveHistory[i].y === y) {
-                return i;
-            }
-        }
-        return -1;
-    };
-    
     const renderMissileLaunchPreview = () => {
         if (gameStatus !== 'missile_selecting' || !selectedMissileStone || !onMissileLaunch) return null;
 
@@ -676,8 +670,14 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
                 ))}
                 {starPoints.map((p, i) => <circle key={i} {...toSvgCoords(p)} r={safeBoardSize > 9 ? 6 : 4} fill="#54432a" />)}
                 
-                {showTerritoryOverlay && analysisResult?.ownershipMap && (
-                     <OwnershipOverlay ownershipMap={analysisResult.ownershipMap} toSvgCoords={toSvgCoords} cellSize={cell_size} />
+                {showTerritoryOverlay && analysisResult?.ownershipMap && analysisResult?.deadStones && (
+                     <OwnershipOverlay 
+                        ownershipMap={analysisResult.ownershipMap} 
+                        boardState={boardState}
+                        deadStones={analysisResult.deadStones}
+                        toSvgCoords={toSvgCoords} 
+                        cellSize={cell_size} 
+                     />
                 )}
 
                 {boardState.map((row, y) => row.map((player, x) => {
@@ -770,7 +770,6 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
                         {animation.type === 'bonus_text' && <AnimatedBonusText animation={animation} toSvgCoords={toSvgCoords} cellSize={cell_size} />}
                     </>
                 )}
-                {renderDeadStoneMarkers()}
                 {showHintOverlay && !isBoardDisabled && analysisResult?.recommendedMoves?.map(move => ( <RecommendedMoveMarker key={`rec-${move.order}`} move={move} toSvgCoords={toSvgCoords} cellSize={cell_size} onClick={onBoardClick} /> ))}
             </svg>
         </div>

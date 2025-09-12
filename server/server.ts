@@ -1,6 +1,4 @@
 
-
-
 import express, { json } from 'express';
 import cors from 'cors';
 import { randomUUID } from 'crypto';
@@ -80,8 +78,8 @@ const startServer = async () => {
     const port = 4000;
 
     app.use(cors());
-    // FIX: Using named import `json` to prevent potential type overload errors with `express.json`.
-    app.use(json({ limit: '10mb' }));
+    // FIX: Explicitly provide the root path '/' to satisfy the app.use overload when type inference fails.
+    app.use('/', json({ limit: '10mb' }));
 
     const volatileState: VolatileState = {
         userConnections: {},
@@ -419,7 +417,7 @@ const startServer = async () => {
                     volatileState.userStatuses[userId] = { status: 'online' };
                 }
             }
-
+            
             volatileState.userConnections[userId] = Date.now();
             
             const userBeforeUpdate = JSON.stringify(user);

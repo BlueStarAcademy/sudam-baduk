@@ -79,7 +79,8 @@ const WeeklyCompetitorsPanel: React.FC<{ setHasRankChanged: (changed: boolean) =
                     const seedStr = `${competitor.id}-${dateForSeed.toISOString().slice(0, 10)}`;
                     const seed = stringToSeed(seedStr);
                     const randomVal = seededRandom(seed);
-                    const dailyGain = MIN_DAILY_SCORE_GAIN + Math.floor(randomVal * (MAX_DAILY_SCORE_GAIN - MIN_DAILY_SCORE_GAIN + 1));
+                    const scoreRange = MAX_DAILY_SCORE_GAIN - MIN_DAILY_SCORE_GAIN;
+                    const dailyGain = MIN_DAILY_SCORE_GAIN + Math.floor(randomVal * (scoreRange * 0.75));
                     totalGain += dailyGain;
                 }
                 const liveScore = competitor.initialScore + totalGain;
@@ -513,7 +514,7 @@ const TournamentLobby: React.FC = () => {
                         <div className="flex-1 min-w-0">
                             <WeeklyCompetitorsPanel setHasRankChanged={setHasRankChanged}/>
                         </div>
-                        <div className="w-32 flex-shrink-0">
+                        <div className="w-24 flex-shrink-0">
                             <QuickAccessSidebar fillHeight={true} />
                         </div>
                     </div>

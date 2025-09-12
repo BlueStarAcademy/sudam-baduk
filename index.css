@@ -1,4 +1,5 @@
 
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -586,7 +587,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .bg-tower-100 {
-    background-image: url('/images/tower/Tower4.png');
+    background-image: url('/images/tower/Tower100.png');
     background-size: cover;
     background-position: center;
     background-color: rgb(var(--bg-tertiary)); /* Fallback color */

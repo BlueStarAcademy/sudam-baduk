@@ -28,12 +28,12 @@ const StoneDisplay: React.FC<{
 }> = ({ baseSrc, patternSrc, count, title }) => {
     if (count === 0) return null;
     return (
-        <div className="flex items-center gap-1.5" title={title}>
-            <div className="relative w-6 h-6">
+        <div className="flex items-center gap-1" title={title}>
+            <div className="relative w-4 h-4">
                 <img src={baseSrc} alt={title} className="w-full h-full object-contain" />
                 {patternSrc && <img src={patternSrc} alt="" className="w-full h-full absolute top-0 left-0 object-contain" />}
             </div>
-            <span className="text-sm font-semibold">x{count}</span>
+            <span className="text-xs font-semibold">x{count}</span>
         </div>
     );
 };
@@ -63,85 +63,93 @@ const StageListItem: React.FC<{
     const hasTargetScore = !!stage.targetScore;
     
     const gameTypeDisplay = stage.gameType ? gameTypeKorean[stage.gameType] : '클래식';
+    
+    const renderRewardItem = (reward: { itemId: string, quantity: number }, index: number) => {
+        const itemTemplate = CONSUMABLE_ITEMS.find(ci => ci.name === reward.itemId);
+        if (!itemTemplate) return null;
+        return (
+            <div key={index} className="flex items-center" title={`${reward.itemId} x${reward.quantity}`}>
+                <img src={itemTemplate.image!} alt={reward.itemId} className="w-5 h-5 object-contain" />
+            </div>
+        );
+    };
 
     return (
-        <div className={`flex items-center gap-3 p-2 rounded-lg border-2 transition-all duration-200 ${
+        <div className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-all duration-200 ${
             isLocked ? 'bg-secondary/30 opacity-60' : `bg-secondary/60 ${borderClass} hover:bg-tertiary/60`
         }`}>
-            <div className="flex-shrink-0 w-16 h-16 flex flex-col items-center justify-center bg-tertiary rounded-lg border-2 border-color shadow-inner">
+            {/* Stage Icon */}
+            <div className="flex-shrink-0 w-12 h-12 flex flex-col items-center justify-center bg-tertiary rounded-lg border-2 border-color shadow-inner">
                 {isCleared ? (
-                    <span className="text-4xl" title="클리어">✅</span>
+                    <span className="text-2xl" title="클리어">✅</span>
                 ) : (
                     <>
-                        <span className="text-xs text-tertiary">스테이지</span>
-                        <span className="font-bold text-[clamp(1.125rem,0.9rem+1.5vw,1.5rem)] text-primary">{stage.name.replace('스테이지 ', '')}</span>
-                        <span className="text-xs text-highlight -mt-1 font-semibold">{gameTypeDisplay}</span>
+                        <span className="text-[10px] text-tertiary">스테이지</span>
+                        <span className="font-bold text-lg text-primary -my-1">{stage.name.replace('스테이지 ', '')}</span>
+                        <span className="text-[10px] text-highlight font-semibold">{gameTypeDisplay}</span>
                     </>
                 )}
             </div>
-            
-            <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-secondary">
-                <div className="flex items-center gap-2" title={`AI 레벨 ${stage.katagoLevel}`}>
-                    <span className="text-xl">🤖</span>
-                    <span className="font-semibold">Lv.{stage.katagoLevel}</span>
-                </div>
-                {hasTargetScore ? (
-                    <div className="flex items-center gap-2 text-[clamp(0.875rem,0.75rem+1vw,1.125rem)]" title={`목표 점수 흑 ${stage.targetScore!.black} / 백 ${stage.targetScore!.white}`}>
-                        <span className="font-bold text-tertiary">목표:</span>
-                        <span className="font-bold text-highlight">{`흑${stage.targetScore!.black}/백${stage.targetScore!.white}`}</span>
+
+            {/* Main Info */}
+            <div className="flex-1 flex flex-col justify-center gap-1 text-xs text-secondary min-w-0">
+                <div className="flex items-center justify-between whitespace-nowrap gap-2">
+                    <div className="flex items-center gap-1" title={`AI 레벨 ${stage.katagoLevel}`}>
+                        <span className="text-base">🤖</span>
+                        <span className="font-semibold">Lv.{stage.katagoLevel}</span>
                     </div>
-                ) : stage.autoEndTurnCount ? (
-                    <div className="flex items-center gap-2 text-[clamp(0.875rem,0.75rem+1vw,1.125rem)]" title="자동 계가">
-                        <span className="font-bold text-tertiary">종료:</span>
-                        <span className="font-bold text-highlight">{stage.autoEndTurnCount}수</span>
-                    </div>
-                ) : null}
-                <div className="flex items-center gap-3">
-                    <StoneDisplay baseSrc="/images/single/Black.png" count={stage.placements.black} title={`흑돌 ${stage.placements.black}개`} />
-                    <StoneDisplay baseSrc="/images/single/Black.png" patternSrc="/images/single/BlackDouble.png" count={stage.placements.blackPattern} title={`흑 문양돌 ${stage.placements.blackPattern}개`} />
+                    {hasTargetScore ? (
+                        <div className="flex items-center gap-1" title={`목표 점수 흑 ${stage.targetScore!.black} / 백 ${stage.targetScore!.white}`}>
+                            <span className="font-bold text-tertiary">목표:</span>
+                            <span className="font-bold text-highlight">{`흑${stage.targetScore!.black}/백${stage.targetScore!.white}`}</span>
+                        </div>
+                    ) : stage.autoEndTurnCount ? (
+                        <div className="flex items-center gap-1" title="자동 계가">
+                            <span className="font-bold text-tertiary">종료:</span>
+                            <span className="font-bold text-highlight">{stage.autoEndTurnCount}수</span>
+                        </div>
+                    ) : null}
                 </div>
-                <div className="flex items-center gap-3">
-                    <StoneDisplay baseSrc="/images/single/White.png" count={stage.placements.white} title={`백돌 ${stage.placements.white}개`} />
-                    <StoneDisplay baseSrc="/images/single/White.png" patternSrc="/images/single/WhiteDouble.png" count={stage.placements.whitePattern} title={`백 문양돌 ${stage.placements.whitePattern}개`} />
+                <div className="flex items-center justify-between whitespace-nowrap gap-2">
+                    <div className="flex items-center gap-2">
+                        <StoneDisplay baseSrc="/images/single/Black.png" count={stage.placements.black} title={`흑돌 ${stage.placements.black}개`} />
+                        <StoneDisplay baseSrc="/images/single/Black.png" patternSrc="/images/single/BlackDouble.png" count={stage.placements.blackPattern} title={`흑 문양돌 ${stage.placements.blackPattern}개`} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <StoneDisplay baseSrc="/images/single/White.png" count={stage.placements.white} title={`백돌 ${stage.placements.white}개`} />
+                        <StoneDisplay baseSrc="/images/single/White.png" patternSrc="/images/single/WhiteDouble.png" count={stage.placements.whitePattern} title={`백 문양돌 ${stage.placements.whitePattern}개`} />
+                    </div>
                 </div>
             </div>
-            
-             <div className="w-32 flex-shrink-0 text-left">
-                <div className="flex flex-col items-start gap-1" title={rewardTitle}>
-                    <p className="text-xs text-yellow-400 font-semibold">{rewardTitle}</p>
-                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+
+            {/* Rewards & Button */}
+            <div className="w-24 flex-shrink-0 flex flex-col items-center justify-center gap-1">
+                 <div className="flex flex-col items-center h-10" title={rewardTitle}>
+                    <p className="text-[10px] text-yellow-400 font-semibold whitespace-nowrap">{rewardTitle}</p>
+                    <div className="flex items-center flex-wrap justify-center gap-x-1.5">
                         {(rewards.gold ?? 0) > 0 &&
-                            <span className="flex items-center gap-1 text-xs" title={`골드 ${rewards.gold}`}>
-                                <img src="/images/Gold.png" alt="골드" className="w-5 h-5" />
+                            <span className="flex items-center gap-0.5 text-xs" title={`골드 ${rewards.gold}`}>
+                                <img src="/images/Gold.png" alt="골드" className="w-3 h-3" />
                                 {rewards.gold}
                             </span>
                         }
                         {rewards.exp > 0 &&
-                             <span className="flex items-center gap-1 text-xs" title={`경험치 ${rewards.exp}`}>
-                                <span className="text-lg">⭐</span> {rewards.exp}
+                             <span className="flex items-center gap-0.5 text-xs" title={`경험치 ${rewards.exp}`}>
+                                <span className="text-sm">⭐</span> {rewards.exp}
                             </span>
                         }
-                        {rewards.items?.map((itemRef, idx) => {
-                            const itemTemplate = CONSUMABLE_ITEMS.find(ci => ci.name === itemRef.itemId);
-                            if (!itemTemplate?.image) return null;
-                            return (
-                                <div key={idx} className="flex items-center gap-1 text-xs" title={`${itemRef.itemId} x${itemRef.quantity}`}>
-                                    <img src={itemTemplate.image} alt={itemRef.itemId} className="w-6 h-6 object-contain" />
-                                    <span>x{itemRef.quantity}</span>
-                                </div>
-                            );
-                        })}
+                        {rewards.items?.map(renderRewardItem)}
                     </div>
                 </div>
+                <Button 
+                    onClick={() => handleStageClick(stage.id)} 
+                    disabled={isLocked || !canAfford}
+                    className="!py-1.5 !px-2 w-full !text-xs mt-1"
+                    title={!canAfford ? '행동력이 부족합니다.' : `행동력 ${stage.actionPointCost} 소모`}
+                >
+                    {isLocked ? '🔒 잠김' : `입장 (⚡${stage.actionPointCost})`}
+                </Button>
             </div>
-             <Button 
-                onClick={() => handleStageClick(stage.id)} 
-                disabled={isLocked || !canAfford}
-                className="!py-4 w-28"
-                title={!canAfford ? '행동력이 부족합니다.' : `행동력 ${stage.actionPointCost} 소모`}
-            >
-                {isLocked ? '🔒' : `입장 (⚡${stage.actionPointCost})`}
-             </Button>
         </div>
     );
 };

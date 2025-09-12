@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+// FIX: Import missing types from the barrel file.
 import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel } from '../../types.js';
 import GameArena from '../GameArena.js';
 import PlayerPanel from '../game/PlayerPanel.js';
@@ -12,6 +13,7 @@ import { useAppContext } from '../../hooks/useAppContext.js';
 import TimeoutFoulModal from '../TimeoutFoulModal.js';
 import TurnCounterPanel from '../game/TurnCounterPanel.js';
 import { SINGLE_PLAYER_STAGES } from '../../constants/singlePlayerConstants.js';
+import TowerStatusPanel from '../game/TowerStatusPanel.js';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -49,6 +51,8 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         ['hidden_placing', 'scanning', 'missile_selecting'].includes(session.gameStatus), 
         [session.gameStatus]
     );
+
+    const isTurnLimitedGame = useMemo(() => !!session.autoEndTurnCount && session.autoEndTurnCount > 0, [session.autoEndTurnCount]);
 
     useEffect(() => {
         const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -102,6 +106,10 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         handlers.handleAction({ type: 'PLACE_STONE', payload: { gameId, x, y } } as ServerAction);
     }, [isMyTurn, gameId, handlers.handleAction]);
 
+    const handleCloseTimeoutFoulModal = useCallback(() => {
+        setShowTimeoutFoulModal(false);
+    }, []);
+
     const gameProps: GameProps = {
         session, onAction: handlers.handleAction, currentUser: currentUserWithStatus, waitingRoomChat: waitingRoomChats['global'] || [],
         gameChat: gameChats[session.id] || [], isSpectator: false, onlineUsers, activeNegotiation, negotiations: Object.values(negotiations), onViewUser: handlers.openViewingUser
@@ -126,15 +134,40 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                 return 'bg-academy-bg';
         }
     }, [stageInfo]);
+
+    const isSurvival = useMemo(() => {
+        if (session.gameType === 'survival') return true;
+        // Fallback for safety, directly checking the stage IDs mentioned by the user
+        if (session.stageId && session.stageId.startsWith('입문-')) {
+            const stageNum = parseInt(session.stageId.split('-')[1], 10);
+            return stageNum >= 11 && stageNum <= 20;
+        }
+        return false;
+    }, [session.gameType, session.stageId]);
+
+    const middlePanelComponent = useMemo(() => {
+        if (isTurnLimitedGame) {
+            return <TurnCounterPanel session={session} />;
+        }
+        if (isSurvival) {
+            return <TowerStatusPanel session={session} />;
+        }
+        return undefined;
+    }, [isTurnLimitedGame, isSurvival, session]);
     
     return (
         <div className={`w-full h-dvh flex flex-col p-2 lg:p-4 ${backgroundClass} text-stone-200`}>
-            {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={() => setShowTimeoutFoulModal(false)} />}
+            {showTimeoutFoulModal && <TimeoutFoulModal gameMode={session.mode} gameStatus={session.gameStatus} onClose={handleCloseTimeoutFoulModal} />}
             
             <div className="flex-1 flex flex-col gap-2 min-h-0 max-w-7xl w-full mx-auto">
                  <main className="flex-1 flex flex-col items-center justify-center min-w-0 min-h-0 gap-2">
                     <div className="w-full flex-shrink-0">
-                        <PlayerPanel {...gameProps} clientTimes={clientTimes.clientTimes} isSinglePlayer={true} />
+                        <PlayerPanel 
+                            {...gameProps} 
+                            clientTimes={clientTimes.clientTimes} 
+                            isSinglePlayer={true}
+                            middleComponent={middlePanelComponent}
+                        />
                     </div>
                     <div className="flex-1 w-full flex items-center justify-center min-h-0">
                         <div className="relative w-full h-full max-w-full max-h-full aspect-square">

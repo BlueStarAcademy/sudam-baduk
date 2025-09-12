@@ -32,19 +32,7 @@ const getGameStatusText = (session: LiveGameSession): string => {
     
     if (session.gameType === 'survival' && gameStatus === 'playing' && player) {
         const stonesLeft = (whiteStoneLimit ?? 0) - (whiteStonesPlaced ?? 0);
-        return `AI의 남은 돌: ${stonesLeft} - ${player.nickname}님 차례`;
-    }
-
-    if (session.mode === GameMode.Dice && session.lastWhiteGroupInfo && session.lastWhiteGroupInfo.liberties <= 6) {
-        const totalRounds = session.settings.diceGoRounds ?? 1;
-        let message = `마지막 승부! 유효자리 ${session.lastWhiteGroupInfo.liberties}개`;
-        if (session.round === totalRounds && totalRounds > 0) {
-            const bonus = DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS[totalRounds - 1];
-            if (bonus) {
-                message += ` (마지막 포획 보너스 +${bonus}점)`;
-            }
-        }
-        return message;
+        return `${player.nickname}님 차례`;
     }
 
     const lastMoveInHistory = moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : null;

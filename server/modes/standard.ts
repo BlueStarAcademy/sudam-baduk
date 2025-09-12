@@ -2,29 +2,22 @@
 import * as types from '../../types.js';
 import * as db from '../db.js';
 import { getGameResult } from '../summaryService.js';
-import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
-import { initializeBase, updateBaseState, handleBaseAction } from './base.js';
-import { initializeCapture, updateCaptureState, handleCaptureAction } from './capture.js';
-import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidden.js';
-import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
-import { handleSharedAction, transitionToPlaying } from './shared.js';
+import { handleSharedAction } from './shared.js';
 import * as summaryService from '../summaryService.js';
-import { aiUserId } from '../aiPlayer.js';
-// FIX: Import getGoLogic and processMove to resolve missing name errors.
 import { getGoLogic, processMove } from '../goLogic.js';
 
 
 // This function handles the game logic for standard Go and its variants like Capture, Speed, Base, Hidden, Missile, Mix.
 // It's used for both PvP and single-player modes against AI.
-
-// Keep the original standard action handler, but rename it to avoid conflicts.
-const handleStandardAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction, user: types.User): Promise<types.HandleActionResult | null> => {
+export const handleStandardAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction, user: types.User): Promise<types.HandleActionResult | null> => {
     const { type, payload } = action as any;
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? types.Player.Black : (user.id === game.whitePlayerId ? types.Player.White : types.Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     const opponentPlayerEnum = myPlayerEnum === types.Player.Black ? types.Player.White : (myPlayerEnum === types.Player.White ? types.Player.Black : types.Player.None);
 
+    const sharedResult = await handleSharedAction(volatileState, game, action, user);
+    if(sharedResult) return sharedResult;
 
     switch (type) {
         case 'PLACE_STONE': {
@@ -42,10 +35,8 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
                 game.hiddenMoves?.[moveIndexAtTarget] &&
                 !game.permanentlyRevealedStones?.some(p => p.x === x && p.y === y);
             
-            if (game.isSinglePlayer && game.gameType === 'survival' && stoneAtTarget === types.Player.None) {
-                return { error: 'You can only capture white stones in survival mode.' };
-            }
-
+            // Bug fix for Survival Go: The following check was incorrectly preventing players from placing stones on empty points. It has been removed.
+            
             if (game.isTowerChallenge && !isTargetHiddenOpponentStone) {
                 if ((game.blackStonesPlaced || 0) >= game.blackStoneLimit!) {
                     return { error: 'You have no stones left to place.' };
@@ -81,11 +72,11 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             
             if (isHidden) {
                 const hiddenKey = user.id === game.player1.id ? 'hidden_stones_used_p1' : 'hidden_stones_used_p2';
-                const usedCount = game[hiddenKey] || 0;
+                const usedCount = (game as any)[hiddenKey] || 0;
                 if (usedCount >= game.settings.hiddenStoneCount!) {
                     return { error: "No hidden stones left." };
                 }
-                game[hiddenKey] = usedCount + 1;
+                (game as any)[hiddenKey] = usedCount + 1;
             }
 
             const result = processMove(game.boardState, move, game.koInfo, game.moveHistory.length);
@@ -266,15 +257,20 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             const playerWhoMoved = myPlayerEnum;
             if (game.settings.timeLimit > 0) {
                 const timeKey = playerWhoMoved === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                const fischerIncrement = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed)) ? (game.settings.timeIncrement || 0) : 0;
-                
-                if (game.turnDeadline) {
-                    const timeRemaining = Math.max(0, (game.turnDeadline - now) / 1000);
-                    game[timeKey] = timeRemaining + fischerIncrement;
-                } else if(game.pausedTurnTimeLeft) {
-                    game[timeKey] = game.pausedTurnTimeLeft + fischerIncrement;
-                } else {
-                    game[timeKey] += fischerIncrement;
+                const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
+                const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
+            
+                // Only update the main time if the player was NOT in byoyomi.
+                if (!wasInByoyomi) {
+                    const fischerIncrement = isFischer ? (game.settings.timeIncrement || 0) : 0;
+                    if (game.turnDeadline) {
+                        const timeRemaining = Math.max(0, (game.turnDeadline - now) / 1000);
+                        (game as any)[timeKey] = timeRemaining + fischerIncrement;
+                    } else if (game.pausedTurnTimeLeft) {
+                        (game as any)[timeKey] = game.pausedTurnTimeLeft + fischerIncrement;
+                    } else if (isFischer) {
+                        (game as any)[timeKey] += fischerIncrement;
+                    }
                 }
             }
 
@@ -290,11 +286,11 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
                 const nextPlayer = game.currentPlayer;
                 const nextTimeKey = nextPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
                  const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
-                const isNextInByoyomi = game[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
+                const isNextInByoyomi = (game as any)[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
                 if (isNextInByoyomi) {
                     game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                 } else {
-                    game.turnDeadline = now + game[nextTimeKey] * 1000;
+                    game.turnDeadline = now + (game as any)[nextTimeKey] * 1000;
                 }
                 game.turnStartTime = now;
             } else {
@@ -355,7 +351,7 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
                     
                     if (game.turnDeadline) {
                         const timeRemaining = Math.max(0, (game.turnDeadline - now) / 1000);
-                        game[timeKey] = timeRemaining;
+                        (game as any)[timeKey] = timeRemaining;
                     }
                 }
                 game.currentPlayer = myPlayerEnum === types.Player.Black ? types.Player.White : types.Player.Black;
@@ -363,11 +359,11 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
                     const nextPlayer = game.currentPlayer;
                     const nextTimeKey = nextPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
                      const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
-                    const isNextInByoyomi = game[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
+                    const isNextInByoyomi = (game as any)[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
                     if (isNextInByoyomi) {
                         game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                     } else {
-                        game.turnDeadline = now + game[nextTimeKey] * 1000;
+                        game.turnDeadline = now + (game as any)[nextTimeKey] * 1000;
                     }
                     game.turnStartTime = now;
                 }

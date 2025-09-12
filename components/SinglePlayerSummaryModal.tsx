@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { LiveGameSession, User, Player, ServerAction, UserWithStatus } from '../types.js';
+import { LiveGameSession, User, Player, ServerAction, UserWithStatus, GameMode, AnalysisResult, InventoryItem } from '../types.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
 import { SINGLE_PLAYER_STAGES } from '../constants.js';
@@ -140,6 +140,49 @@ const XpBar: React.FC<{
     );
 });
 
+const ScoreDetailsComponent: React.FC<{ analysis: AnalysisResult, session: LiveGameSession }> = ({ analysis, session }) => {
+    const { scoreDetails } = analysis;
+    const { mode, settings } = session;
+
+    if (!scoreDetails) return <p className="text-center text-gray-400">점수 정보가 없습니다.</p>;
+    
+    const isSpeedMode = mode === GameMode.Speed || (mode === GameMode.Mix && settings.mixedModes?.includes(GameMode.Speed));
+    const isBaseMode = mode === GameMode.Base || (mode === GameMode.Mix && settings.mixedModes?.includes(GameMode.Base));
+    const isHiddenMode = mode === GameMode.Hidden || (mode === GameMode.Mix && settings.mixedModes?.includes(GameMode.Hidden));
+
+    return (
+        <div className="space-y-3 text-xs md:text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Black Column */}
+                <div className="space-y-1 bg-gray-800/50 p-2 rounded-md">
+                    <h3 className="font-bold text-center mb-1">흑 (플레이어)</h3>
+                    <div className="flex justify-between"><span>영토:</span> <span className="font-mono">{scoreDetails.black.territory.toFixed(0)}</span></div>
+                    <div className="flex justify-between"><span>따낸 돌:</span> <span className="font-mono">{scoreDetails.black.liveCaptures ?? 0}</span></div>
+                    <div className="flex justify-between"><span>사석:</span> <span className="font-mono">{scoreDetails.black.deadStones ?? 0}</span></div>
+                    {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span className="font-mono">{scoreDetails.black.baseStoneBonus}</span></div>}
+                    {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span className="font-mono">{scoreDetails.black.hiddenStoneBonus}</span></div>}
+                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span className="font-mono">{scoreDetails.black.timeBonus.toFixed(1)}</span></div>}
+                    {scoreDetails.black.itemBonus > 0 && <div className="flex justify-between"><span>아이템:</span> <span className="font-mono">{scoreDetails.black.itemBonus}</span></div>}
+                    <div className="flex justify-between border-t border-gray-600 pt-1 mt-1 font-bold text-base"><span>총점:</span> <span className="text-yellow-300">{scoreDetails.black.total.toFixed(1)}</span></div>
+                </div>
+                {/* White Column */}
+                <div className="space-y-1 bg-gray-800/50 p-2 rounded-md">
+                    <h3 className="font-bold text-center mb-1">백 (AI)</h3>
+                    <div className="flex justify-between"><span>영토:</span> <span className="font-mono">{scoreDetails.white.territory.toFixed(0)}</span></div>
+                    <div className="flex justify-between"><span>따낸 돌:</span> <span className="font-mono">{scoreDetails.white.liveCaptures ?? 0}</span></div>
+                    <div className="flex justify-between"><span>사석:</span> <span className="font-mono">{scoreDetails.white.deadStones ?? 0}</span></div>
+                    <div className="flex justify-between"><span>덤:</span> <span className="font-mono">{scoreDetails.white.komi}</span></div>
+                    {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span className="font-mono">{scoreDetails.white.baseStoneBonus}</span></div>}
+                    {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span className="font-mono">{scoreDetails.white.hiddenStoneBonus}</span></div>}
+                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span className="font-mono">{scoreDetails.white.timeBonus.toFixed(1)}</span></div>}
+                    {scoreDetails.white.itemBonus > 0 && <div className="flex justify-between"><span>아이템:</span> <span className="font-mono">{scoreDetails.white.itemBonus}</span></div>}
+                    <div className="flex justify-between border-t border-gray-600 pt-1 mt-1 font-bold text-base"><span>총점:</span> <span className="text-yellow-300">{scoreDetails.white.total.toFixed(1)}</span></div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ session, currentUser, onAction, onClose, isTopmost }) => {
     const isWinner = session.winner === Player.Black;
@@ -148,6 +191,7 @@ const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ ses
     const mySummary = session.summary?.[currentUser.id];
     const stage = SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId);
     const hasLeveledUp = useMemo(() => mySummary?.level?.initial !== mySummary?.level?.final, [mySummary]);
+    const analysisResult = useMemo(() => session.analysisResult?.['system'], [session.analysisResult]);
 
     useEffect(() => {
         if (soundPlayed.current) return;
@@ -182,7 +226,7 @@ const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ ses
     };
 
     const handleNextStage = () => {
-        if (canTryNext && currentUser.actionPoints.current >= nextStage.actionPointCost) {
+        if (canTryNext && nextStage && currentUser.actionPoints.current >= nextStage.actionPointCost) {
             onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: nextStage.id } });
             onClose();
         }
@@ -198,11 +242,18 @@ const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ ses
     const rewardItemTemplate = rewardItem ? CONSUMABLE_ITEMS.find(item => item.name === rewardItem.name) : null;
 
     return (
-        <DraggableWindow title="대국 결과" onClose={onClose} windowId="singleplayer-summary" initialWidth={500} isTopmost={isTopmost}>
+        <DraggableWindow title="대국 결과" onClose={onClose} windowId="singleplayer-summary" initialWidth={550} isTopmost={isTopmost}>
             <div className="text-white text-center">
                 <h1 className={`text-5xl font-black mb-4 ${color}`}>{title}</h1>
                 <p className="text-gray-300 mb-6">{isWinner ? `축하합니다! ${stage?.name}을(를) 클리어했습니다.` : `아쉽지만 다음 기회에 다시 도전해보세요.`}</p>
 
+                {session.winReason === 'score' && analysisResult && (
+                    <div className="w-full bg-gray-900/50 p-2 sm:p-4 rounded-lg mb-4">
+                        <h2 className="text-lg font-bold text-center text-gray-200 mb-3 border-b border-gray-700 pb-2">계가 정보</h2>
+                        <ScoreDetailsComponent analysis={analysisResult} session={session} />
+                    </div>
+                )}
+                
                 {mySummary && (
                     <div className="bg-gray-900/50 p-4 rounded-lg space-y-4">
                         <XpBar summary={session.summary} currentUser={currentUser} />
@@ -247,7 +298,7 @@ const SinglePlayerSummaryModal: React.FC<SinglePlayerSummaryModalProps> = ({ ses
                     <Button 
                         onClick={handleNextStage} 
                         colorScheme="accent" 
-                        disabled={!canTryNext || currentUser.actionPoints.current < (nextStageCost || 0)}
+                        disabled={!canTryNext || !nextStage || currentUser.actionPoints.current < (nextStageCost || 0)}
                     >
                         {nextStage ? `다음 (⚡${nextStageCost})` : '다음 단계'}
                     </Button>

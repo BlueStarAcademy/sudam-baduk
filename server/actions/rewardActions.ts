@@ -37,6 +37,85 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
     const { type, payload } = action;
 
     switch (type) {
+        case 'CLAIM_TOURNAMENT_REWARD': {
+            const { tournamentType } = payload as { tournamentType: TournamentType };
+            let stateKey: keyof User;
+            let rewardClaimedKey: keyof User;
+
+            switch (tournamentType) {
+                case 'neighborhood':
+                    stateKey = 'lastNeighborhoodTournament';
+                    rewardClaimedKey = 'neighborhoodRewardClaimed';
+                    break;
+                case 'national':
+                    stateKey = 'lastNationalTournament';
+                    rewardClaimedKey = 'nationalRewardClaimed';
+                    break;
+                case 'world':
+                    stateKey = 'lastWorldTournament';
+                    rewardClaimedKey = 'worldRewardClaimed';
+                    break;
+                default:
+                    return { error: 'Invalid tournament type for reward claim.' };
+            }
+
+            const tournamentState = (user as any)[stateKey] as TournamentState | null;
+            if (!tournamentState || (tournamentState.status !== 'complete' && tournamentState.status !== 'eliminated')) {
+                return { error: '토너먼트가 아직 진행 중이거나 결과가 없어 보상을 수령할 수 없습니다.' };
+            }
+
+            if ((user as any)[rewardClaimedKey]) {
+                return { error: 'Reward already claimed.' };
+            }
+
+            const ranks = calculateRanks(tournamentState);
+            const myRankInfo = ranks.find(r => r.id === user.id);
+            if (!myRankInfo) {
+                return { error: 'Could not determine your rank.' };
+            }
+
+            const rewardInfo = BASE_TOURNAMENT_REWARDS[tournamentType];
+            let rewardKey: number;
+            
+            if (tournamentType === 'neighborhood') {
+                rewardKey = myRankInfo.rank <= 3 ? myRankInfo.rank : 4;
+            } else if (tournamentType === 'national') {
+                rewardKey = myRankInfo.rank <= 4 ? myRankInfo.rank : 5;
+            } else { // world
+                if (myRankInfo.rank <= 4) rewardKey = myRankInfo.rank;
+                else if (myRankInfo.rank <= 8) rewardKey = 5;
+                else rewardKey = 9;
+            }
+            const reward = rewardInfo.rewards[rewardKey];
+            
+            if (!reward) return { error: 'No reward found for your rank.' };
+            
+            const scoreReward = TOURNAMENT_SCORE_REWARDS[tournamentType][rewardKey] || 0;
+            const itemsToAdd = createItemInstancesFromReward(reward.items || []);
+            
+            const inventoryForCheck = [...user.inventory];
+            const { success, addedItems } = addItemsToInventoryUtil(inventoryForCheck, user.inventorySlots, itemsToAdd);
+
+            if (!success) return { error: '인벤토리 공간이 부족하여 보상을 수령할 수 없습니다.' };
+            
+            // Apply changes now that checks have passed
+            user.tournamentScore += scoreReward;
+            user.inventory = inventoryForCheck; // Use the checked inventory
+            (user as any)[rewardClaimedKey] = true;
+
+            await db.updateUser(user);
+            
+            return {
+                clientResponse: {
+                    rewardSummary: {
+                        reward,
+                        items: addedItems,
+                        title: `${tournamentState.title} 보상`
+                    },
+                    updatedUser: user
+                }
+            };
+        }
         case 'CLAIM_SINGLE_PLAYER_MISSION_REWARD': {
             const { missionId } = payload;
             const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
@@ -107,6 +186,26 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 user.actionPoints.current += reward.actionPoints;
             }
         
+            if (mail.attachments.strategyXp) {
+                const xpGain = mail.attachments.strategyXp;
+                user.strategyXp += xpGain;
+                
+                let currentLevel = user.strategyLevel;
+                let currentXp = user.strategyXp;
+                let requiredXp = 1000 + (currentLevel - 1) * 200;
+        
+                while (currentXp >= requiredXp) {
+                    currentXp -= requiredXp;
+                    currentLevel++;
+                    requiredXp = 1000 + (currentLevel - 1) * 200;
+                }
+                
+                user.strategyLevel = currentLevel;
+                user.strategyXp = currentXp;
+
+                reward.xp = { type: 'strategy', amount: xpGain };
+            }
+
             addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsToCreate);
         
             mail.attachmentsClaimed = true;
@@ -130,12 +229,14 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             let totalGold = 0;
             let totalDiamonds = 0;
             let totalActionPoints = 0;
+            let totalStrategyXp = 0;
             const aggregatedItems: Record<string, { quantity: number; template: any }> = {};
 
             for (const mail of mailsToClaim) {
                 totalGold += mail.attachments!.gold || 0;
                 totalDiamonds += mail.attachments!.diamonds || 0;
                 totalActionPoints += mail.attachments!.actionPoints || 0;
+                totalStrategyXp += mail.attachments!.strategyXp || 0;
                 
                 if (mail.attachments!.items) {
                     for (const itemRef of mail.attachments!.items) {
@@ -188,6 +289,21 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             user.gold += totalGold;
             user.diamonds += totalDiamonds;
             user.actionPoints.current += totalActionPoints;
+            
+            if (totalStrategyXp > 0) {
+                user.strategyXp += totalStrategyXp;
+                let currentLevel = user.strategyLevel;
+                let currentXp = user.strategyXp;
+                let requiredXp = 1000 + (currentLevel - 1) * 200;
+                while(currentXp >= requiredXp) {
+                    currentXp -= requiredXp;
+                    currentLevel++;
+                    requiredXp = 1000 + (currentLevel - 1) * 200;
+                }
+                user.strategyLevel = currentLevel;
+                user.strategyXp = currentXp;
+            }
+
             addItemsToInventoryUtil(user.inventory, user.inventorySlots, allItemsToCreate);
 
             for (const mail of mailsToClaim) mail.attachmentsClaimed = true;
@@ -199,8 +315,11 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 diamonds: totalDiamonds,
                 actionPoints: totalActionPoints,
             };
+            if (totalStrategyXp > 0) {
+                reward.xp = { type: 'strategy', amount: totalStrategyXp };
+            }
 
-            if (allItemsToCreate.length === 0 && (totalGold > 0 || totalDiamonds > 0 || totalActionPoints > 0)) {
+            if (allItemsToCreate.length === 0 && (totalGold > 0 || totalDiamonds > 0 || totalActionPoints > 0 || totalStrategyXp > 0)) {
                 return {
                     clientResponse: {
                         claimAllSummary: {
@@ -347,26 +466,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 } 
             };
         }
-        case 'DELETE_MAIL': {
-            const { mailId } = payload;
-            const mailIndex = user.mail.findIndex(m => m.id === mailId);
-            if (mailIndex === -1) return { error: 'Mail not found.' };
-
-            const mail = user.mail[mailIndex];
-            if (mail.attachments && !mail.attachmentsClaimed) {
-                return { error: '수령하지 않은 아이템이 있는 메일은 삭제할 수 없습니다.' };
-            }
-
-            user.mail.splice(mailIndex, 1);
-            await db.updateUser(user);
-            return {};
-        }
-        case 'DELETE_ALL_CLAIMED_MAIL': {
-            user.mail = user.mail.filter(m => !(m.attachments && m.attachmentsClaimed));
-            await db.updateUser(user);
-            return {};
-        }
-        default:
-            return { error: 'Unknown reward action.' };
     }
+
+    return { error: `Unknown reward action: ${type}` };
 };

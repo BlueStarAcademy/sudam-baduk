@@ -1,4 +1,3 @@
-
 import { LiveGameSession, Player, User, GameSummary, StatChange, GameMode, InventoryItem, SpecialStat, WinReason, SinglePlayerStageInfo, QuestReward, AnalysisResult } from '../types.js';
 import * as db from './db.js';
 import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, TOWER_STAGES, NO_CONTEST_MOVE_THRESHOLD, DEFAULT_KOMI } from '../constants.js';
@@ -140,7 +139,8 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
     };
     
     if (isWinner) {
-        let isFirstClear = false;
+        let isFirstClearForReward = false;
+        
         if (game.isTowerChallenge) {
             if (!user.towerProgress) {
                 user.towerProgress = { highestFloor: 0, lastClearTimestamp: 0 };
@@ -150,20 +150,26 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
                 const newHighest = Math.max(currentHighest, game.floor);
                 user.towerProgress.highestFloor = newHighest; // Always update to the max
                 if (newHighest > currentHighest) {
-                    isFirstClear = true;
+                    isFirstClearForReward = true; // For tower, advancing floor is always "first clear"
                 }
                 user.towerProgress.lastClearTimestamp = Date.now();
             }
         } else { // Regular single player
+            if (!user.claimedFirstClearRewards) {
+                user.claimedFirstClearRewards = [];
+            }
             const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
-            const currentProgress = user.singlePlayerProgress ?? 0;
-            isFirstClear = currentProgress === stageIndex;
-            if (isFirstClear) {
-                user.singlePlayerProgress = currentProgress + 1;
+            
+            // It's a "first clear" for reward purposes if it hasn't been claimed yet.
+            isFirstClearForReward = !user.claimedFirstClearRewards.includes(stage.id);
+            
+            // Progress is only advanced if this is the first time they are *actually* clearing this stage sequentially.
+            if ((user.singlePlayerProgress ?? 0) === stageIndex) {
+                user.singlePlayerProgress = (user.singlePlayerProgress ?? 0) + 1;
             }
         }
 
-        const rewards = isFirstClear ? stage.rewards.firstClear : stage.rewards.repeatClear;
+        const rewards = isFirstClearForReward ? stage.rewards.firstClear : stage.rewards.repeatClear;
         
         const itemsToCreate = rewards.items ? createItemInstancesFromReward(rewards.items) : [];
         const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
@@ -196,6 +202,11 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
                         quantity: points
                     } as any);
                 }
+            }
+            
+            // After granting rewards, if it was a first clear reward, mark it as claimed.
+            if (!game.isTowerChallenge && isFirstClearForReward) {
+                user.claimedFirstClearRewards!.push(stage.id);
             }
         }
     }

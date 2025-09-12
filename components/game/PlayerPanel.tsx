@@ -229,6 +229,7 @@ interface PlayerPanelProps extends GameProps {
   clientTimes: { black: number; white: number; };
   isSinglePlayer?: boolean;
   isTowerChallenge?: boolean;
+  middleComponent?: React.ReactNode;
 }
 
 const getTurnDuration = (mode: GameMode, gameStatus: GameStatus, settings: GameSettings): number => {
@@ -263,10 +264,9 @@ const getTurnDuration = (mode: GameMode, gameStatus: GameStatus, settings: GameS
 
 
 const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
-    const { session, clientTimes, isSinglePlayer, isTowerChallenge } = props;
+    const { session, clientTimes, isSinglePlayer, isTowerChallenge, middleComponent } = props;
     const { player1, player2, blackPlayerId, whitePlayerId, captures, mode, settings, effectiveCaptureTargets, scores, currentPlayer } = session;
-
-    const isTurnLimitedGame = !!session.autoEndTurnCount && session.autoEndTurnCount > 0;
+    
     const isScoreMode = [GameMode.Dice, GameMode.Thief, GameMode.Curling].includes(mode);
 
     const leftPlayerUser = player1;
@@ -340,11 +340,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
                 isSinglePlayer={isSinglePlayer}
                 isTowerChallenge={isTowerChallenge}
             />
-            {(isSinglePlayer || isTowerChallenge) && isTurnLimitedGame && (
-                 <div className="flex-shrink-0 w-24">
-                     <TurnCounterPanel session={session} />
-                 </div>
-            )}
+            {middleComponent}
              <SinglePlayerPanel
                 user={rightPlayerUser}
                 playerEnum={rightPlayerEnum}

@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
@@ -39,6 +37,12 @@ const RewardSummaryModal: React.FC<RewardSummaryModalProps> = ({ summary, onClos
                         <div className="flex justify-between items-center">
                             <span>⚡ 행동력:</span>
                             <span className="font-bold text-green-300">+{reward.actionPoints!.toLocaleString()}</span>
+                        </div>
+                    )}
+                    {reward.xp && reward.xp.amount > 0 && (
+                        <div className="flex justify-between items-center">
+                            <span>⭐ {reward.xp.type === 'strategy' ? '전략' : '놀이'} 경험치:</span>
+                            <span className="font-bold text-green-300">+{reward.xp.amount.toLocaleString()}</span>
                         </div>
                     )}
                 </div>

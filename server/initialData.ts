@@ -114,6 +114,7 @@ export const createDefaultUser = (id: string, username: string, nickname: string
         bonusStatPoints: 0,
         singlePlayerMissions: {},
         towerProgress: { highestFloor: 0, lastClearTimestamp: 0 },
+        claimedFirstClearRewards: [],
     };
     
     const botCompetitors = createInitialBotCompetitors(user);

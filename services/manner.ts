@@ -1,5 +1,4 @@
-
-import { User } from '../types/index.js';
+import { User } from '../types.js';
 
 export const MANNER_RANKS = [
     { name: '최악', min: 0, max: 0 },

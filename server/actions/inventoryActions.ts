@@ -16,7 +16,9 @@ import {
     SUB_OPTION_POOLS,
     SYNTHESIS_COSTS,
     SYNTHESIS_UPGRADE_CHANCES,
-    EQUIPMENT_POOL
+    EQUIPMENT_POOL,
+    // FIX: Import the missing 'ENHANCEMENT_LEVEL_REQUIREMENTS' constant.
+    ENHANCEMENT_LEVEL_REQUIREMENTS
 } from '../../constants.js';
 import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
 import * as effectService from '../effectService.js';
@@ -81,9 +83,8 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const itemToConsume = user.inventory[itemIndex];
             if (itemToConsume.type !== 'consumable') return { error: '사용할 수 없는 아이템입니다.' };
 
-            if (itemToConsume.name === '싱글플레이 초기화권') {
-                user.singlePlayerProgress = 0;
-                user.singlePlayerMissions = {}; // Reset all missions
+            if (itemToConsume.name === '싱글플레이 최초보상 초기화권') {
+                user.claimedFirstClearRewards = [];
                  if (itemToConsume.quantity && itemToConsume.quantity > 1) {
                     itemToConsume.quantity--;
                 } else {
@@ -294,14 +295,11 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
 
             const targetStars = item.stars + 1;
             const userLevelSum = user.strategyLevel + user.playfulLevel;
-            const enhancementLevelRequirements: Record<number, number> = {
-                4: 3,
-                7: 8,
-                10: 15,
-            };
+            const levelRequirement = ENHANCEMENT_LEVEL_REQUIREMENTS[item.grade]?.[targetStars as 4 | 7 | 10];
 
-            if (enhancementLevelRequirements[targetStars] && userLevelSum < enhancementLevelRequirements[targetStars]) {
-                return { error: `+${targetStars}강화 시도에는 유저 레벨 합 ${enhancementLevelRequirements[targetStars]}이(가) 필요합니다.` };
+
+            if (levelRequirement && userLevelSum < levelRequirement) {
+                return { error: `+${targetStars}강화 시도에는 유저 레벨 합 ${levelRequirement}이(가) 필요합니다.` };
             }
             
             const originalItemState = JSON.parse(JSON.stringify(item));
@@ -442,7 +440,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             }
             
             const itemsToAdd: InventoryItem[] = Object.entries(gainedMaterials).map(([name, quantity]) => ({
-                ...MATERIAL_ITEMS[name], id: '', quantity, createdAt: 0, isEquipped: false, level: 1, stars: 0
+                ...MATERIAL_ITEMS[name as keyof typeof MATERIAL_ITEMS], id: '', quantity, createdAt: 0, isEquipped: false, level: 1, stars: 0
             }));
             
             user.inventory = user.inventory.filter(item => !itemsToRemove.includes(item.id));
@@ -455,6 +453,12 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
         }
         case 'CRAFT_MATERIAL': {
             const { materialName, craftType, quantity } = payload as { materialName: string, craftType: 'upgrade' | 'downgrade', quantity: number };
+            if (!materialName || !craftType || !quantity || quantity <= 0) {
+                return { error: '잘못된 요청입니다.' };
+            }
+
+            const tempUser = JSON.parse(JSON.stringify(user));
+            
             const materialTiers = ['하급 강화석', '중급 강화석', '상급 강화석', '최상급 강화석', '신비의 강화석'];
             const tierIndex = materialTiers.indexOf(materialName);
             if (tierIndex === -1) return { error: '잘못된 재료입니다.' };
@@ -474,37 +478,37 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 fromCost = 1 * quantity;
                 toYield = 5 * quantity;
             }
-        
-            const tempUser = JSON.parse(JSON.stringify(user));
-        
+
             if (!user.isAdmin) {
-                if (!removeUserItems(tempUser, [{ name: fromMaterialName, amount: fromCost }])) {
-                    return { error: '재료가 부족합니다.' };
-                }
+                const hasEnough = removeUserItems(tempUser, [{ name: fromMaterialName, amount: fromCost }]);
+                if (!hasEnough) return { error: '재료가 부족합니다.' };
             }
         
-            const toAddTemplate = MATERIAL_ITEMS[toMaterialName];
+            const toAddTemplate = MATERIAL_ITEMS[toMaterialName as keyof typeof MATERIAL_ITEMS];
             const itemsToAdd: InventoryItem[] = [{
-                ...toAddTemplate, id: `item-${randomUUID()}`, quantity: toYield, createdAt: 0, isEquipped: false, level: 1, stars: 0
+                ...toAddTemplate, id: `item-${randomUUID()}`, quantity: toYield, createdAt: Date.now(), isEquipped: false, level: 1, stars: 0
             }];
-        
-            const { success } = addItemsToInventoryUtil(tempUser.inventory, tempUser.inventorySlots, itemsToAdd);
-            if (!success) {
+
+            const { success: hasSpace } = addItemsToInventoryUtil(tempUser.inventory, tempUser.inventorySlots, itemsToAdd);
+
+            if (!hasSpace) {
                 return { error: '인벤토리에 공간이 부족합니다.' };
             }
-        
+
+            // All checks passed, apply changes to the real user object
             user.inventory = tempUser.inventory;
             
             updateQuestProgress(user, 'craft_attempt');
             await db.updateUser(user);
-        
+            
             return {
                 clientResponse: {
                     craftResult: {
                         gained: [{ name: toMaterialName, amount: toYield }],
                         used: [{ name: fromMaterialName, amount: fromCost }],
                         craftType
-                    }
+                    },
+                    updatedUser: user
                 }
             };
         }

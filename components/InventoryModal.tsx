@@ -728,7 +728,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
     const [activeTab, setActiveTab] = useState<Tab>('all');
     const [sortKey, setSortKey] = useState<SortKey>('createdAt');
     const [disassembleMode, setDisassembleMode] = useState(false);
-    const [showSynthesis, setShowSynthesis] = useState(false); // This is for MATERIAL crafting
+    const [showSynthesis, setShowSynthesis] = useState(false);
     const [selectedForDisassembly, setSelectedForDisassembly] = useState<Set<string>>(new Set());
     const [craftingDetails, setCraftingDetails] = useState<{ materialName: string, craftType: 'upgrade' | 'downgrade' } | null>(null);
     const [isAutoSelectOpen, setIsAutoSelectOpen] = useState(false);
@@ -742,6 +742,12 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
         if (!selectedItemId) return null;
         return inventory.find(item => item.id === selectedItemId) || null;
     }, [selectedItemId, inventory]);
+
+    useEffect(() => {
+        if (synthesisMode) {
+            setActiveTab('equipment');
+        }
+    }, [synthesisMode]);
 
     useEffect(() => {
         if (enhancementAnimationTarget) {
@@ -1003,11 +1009,19 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                         <div className="flex items-center gap-4">
                             <h3 className="text-lg font-bold text-on-panel">인벤토리 ({inventory.length} / {inventorySlots})</h3>
                              <div className="flex bg-tertiary/70 p-1 rounded-lg">
-                                {(['all', 'equipment', 'consumable', 'material'] as Tab[]).map(tab => (
-                                    <button key={tab} onClick={() => { setActiveTab(tab); setSynthesisMode(false); setDisassembleMode(false); }} className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === tab ? 'bg-accent' : 'text-tertiary hover:bg-secondary/50'}`}>
-                                        {tab === 'all' ? '전체' : tab === 'equipment' ? '장비' : tab === 'consumable' ? '소모품' : '재료'}
-                                    </button>
-                                ))}
+                                {(['all', 'equipment', 'consumable', 'material'] as Tab[]).map(tab => {
+                                    const isDisabled = (synthesisMode && tab !== 'equipment') || showSynthesis;
+                                    return (
+                                        <button
+                                            key={tab}
+                                            onClick={() => { if (!isDisabled) { setActiveTab(tab); setSynthesisMode(false); setDisassembleMode(false); setShowSynthesis(false); } }}
+                                            disabled={isDisabled}
+                                            className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === tab ? 'bg-accent' : 'text-tertiary hover:bg-secondary/50'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            {tab === 'all' ? '전체' : tab === 'equipment' ? '장비' : tab === 'consumable' ? '소모품' : '재료'}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                          <div className="flex items-center gap-2">
@@ -1028,7 +1042,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                                 const isSelectedForDisassembly = disassembleMode && item && selectedForDisassembly.has(item.id);
                                 const isInSynthesisSlot = synthesisMode && item && synthesisSlots.some(slot => slot?.id === item.id);
                                 
-                                const isClickable = (synthesisMode && isSynthesizable) || (disassembleMode && isDisassemblable) || (!synthesisMode && !disassembleMode && item);
+                                const isClickable = !showSynthesis && ((synthesisMode && isSynthesizable) || (disassembleMode && isDisassemblable) || (!synthesisMode && !disassembleMode && item));
 
                                 // Logic to dim items during synthesis mode
                                 let isDisabledInSynthesis = false;
@@ -1051,7 +1065,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                                     >
                                         {item && (
                                             <>
-                                                <div className={`absolute inset-0 rounded-md border-2 ${selectedItemId === item.id && !disassembleMode && !synthesisMode ? 'border-accent ring-2 ring-accent' : 'border-black/20'}`} />
+                                                <div className={`absolute inset-0 rounded-md border-2 ${selectedItemId === item.id && !disassembleMode && !synthesisMode && !showSynthesis ? 'border-accent ring-2 ring-accent' : 'border-black/20'}`} />
                                                 <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-sm" />
                                                 {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-1" />}
                                                 

@@ -1,11 +1,13 @@
+
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
 import * as types from '../../types.js';
-import { SINGLE_PLAYER_STAGES } from '../../constants.js';
 import { initializeGame } from '../gameModes.js';
 import { getAiUser } from '../aiPlayer.js';
 import * as effectService from '../effectService.js';
 import { getGoLogic } from '../goLogic.js';
+import { SINGLE_PLAYER_STAGES, TOWER_STAGES, SINGLE_PLAYER_MISSIONS } from '../../constants.js';
+import { updateQuestProgress } from '../questService.js';
 
 const areAnyStonesCaptured = (boardState: types.BoardState, boardSize: number): boolean => {
     const logic = getGoLogic({ boardState, settings: { boardSize } } as types.LiveGameSession);
@@ -118,7 +120,6 @@ export const handleSinglePlayerGameStart = async (volatileState: types.VolatileS
         round: 1,
         turnInRound: 1,
         scores: { [user.id]: 0, [aiOpponent.id]: 0 },
-        // FIX: Added missing 'currentActionButtons' property required by LiveGameSession type.
         currentActionButtons: { [user.id]: [], [aiOpponent.id]: [] },
     };
 
@@ -138,7 +139,7 @@ export const handleSinglePlayerGameStart = async (volatileState: types.VolatileS
                 if (allPoints.length === 0) break;
                 const p = allPoints.pop()!;
                 game.boardState[p.y][p.x] = player;
-                if (isPattern) game[key]!.push(p);
+                if (isPattern) ((game as any)[key]! as types.Point[]).push(p);
             }
         };
         
@@ -193,7 +194,7 @@ export const handleSinglePlayerRefresh = async (game: types.LiveGameSession, use
                 if (allPoints.length === 0) break;
                 const p = allPoints.pop()!;
                 game.boardState[p.y][p.x] = player;
-                if (isPattern) game[key]!.push(p);
+                if (isPattern) (game[key]! as types.Point[]).push(p);
             }
         };
         

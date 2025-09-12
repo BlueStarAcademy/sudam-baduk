@@ -110,8 +110,8 @@ const SgfViewer: React.FC<SgfViewerProps> = ({ timeElapsed = 0, fileIndex, showL
 
     const currentMoveIndex = useMemo(() => {
         if (!sgfData) return 0;
+        if (timeElapsed === 0) return 0; // Fix: If simulation hasn't started, show empty board
         if (showLastMoveOnly) return sgfData.moves.length;
-        if (timeElapsed === 0) return 0;
         const progress = timeElapsed / totalDuration;
         const moveCount = Math.floor(progress * sgfData.moves.length);
         return Math.min(moveCount, sgfData.moves.length);

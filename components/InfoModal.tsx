@@ -1,5 +1,3 @@
-
-
 import React, { useState } from 'react';
 import DraggableWindow from './DraggableWindow.js';
 import { GAME_RULES } from '../gameRules.js';

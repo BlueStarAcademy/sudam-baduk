@@ -1,9 +1,7 @@
-
-
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
 import * as types from '../../types.js';
-import { TOWER_STAGES } from '../../constants.js';
+import { TOWER_STAGES } from '../../constants/towerChallengeConstants.js';
 import { initializeGame } from '../gameModes.js';
 import { getAiUser } from '../aiPlayer.js';
 import * as effectService from '../effectService.js';
@@ -95,7 +93,7 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
                 if (allPoints.length === 0) break;
                 const p = allPoints.pop()!;
                 game.boardState[p.y][p.x] = player;
-                if (isPattern) (game[key]! as types.Point[]).push(p);
+                if (isPattern) ((game as any)[key]! as types.Point[]).push(p);
             }
         };
 
@@ -109,7 +107,6 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
     } while (areAnyStonesCaptured(game.boardState, stage.boardSize));
 
 
-    // FIX: Add the missing 'Player.None' property to satisfy the type definition.
     game.effectiveCaptureTargets = {
         [types.Player.Black]: stage.targetScore?.black ?? 0,
         [types.Player.White]: stage.targetScore?.white ?? 0,
@@ -172,6 +169,27 @@ export const handleTowerChallengeRefresh = async (game: types.LiveGameSession, u
             break;
         }
     } while (areAnyStonesCaptured(game.boardState, stage.boardSize));
+    
+    await db.saveGame(game);
+    await db.updateUser(user);
+    return { clientResponse: { updatedUser: user } };
+};
+
+export const handleTowerAddStones = async (game: types.LiveGameSession, user: types.User): Promise<types.HandleActionResult> => {
+    if (game.addedStonesItemUsed) {
+        return { error: '이미 돌 추가 아이템을 사용했습니다.' };
+    }
+    const cost = 300;
+    if (user.gold < cost && !user.isAdmin) {
+        return { error: '골드가 부족합니다.' };
+    }
+
+    if (!user.isAdmin) {
+        user.gold -= cost;
+    }
+
+    game.blackStoneLimit = (game.blackStoneLimit || 0) + 3;
+    game.addedStonesItemUsed = true;
     
     await db.saveGame(game);
     await db.updateUser(user);

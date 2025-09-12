@@ -11,7 +11,7 @@ const TimeoutFoulModal: React.FC<TimeoutFoulModalProps> = ({ gameMode, gameStatu
     useEffect(() => {
         const timer = setTimeout(() => {
             onClose();
-        }, 4000); // Close after 4 seconds
+        }, 2000); // Close after 2 seconds
 
         return () => clearTimeout(timer);
     }, [onClose]);
@@ -46,7 +46,7 @@ const TimeoutFoulModal: React.FC<TimeoutFoulModalProps> = ({ gameMode, gameStatu
                     to { width: 0%; }
                 }
                 .animate-shrink-x {
-                    animation: shrink-x 4s linear forwards;
+                    animation: shrink-x 2s linear forwards;
                 }
              `}</style>
         </div>
