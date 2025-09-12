@@ -1,6 +1,7 @@
 
 
-import * as types from '../../types/index.js';
+// FIX: Corrected import path from non-existent barrel file.
+import * as types from '../../types.js';
 import { transitionToPlaying } from './shared.js';
 import { endGame } from '../summaryService.js';
 

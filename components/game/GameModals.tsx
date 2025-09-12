@@ -1,9 +1,5 @@
-
-
 import React from 'react';
-// FIX: Corrected import path for types. The path was './../types.js' which pointed to 'components/types.js', but the file is in the root directory.
-import { GameProps, GameStatus, Negotiation } from '../../types/index.js';
-// FIX: Corrected import path for GameSummaryModal.
+import { GameProps, GameStatus, Negotiation } from '../../types.js';
 import GameSummaryModal from '../GameSummaryModal.js';
 import NigiriModal from '../NigiriModal.js';
 import CaptureBidModal from '../CaptureBidModal.js';
@@ -27,7 +23,6 @@ import AlkkagiRoundSummary from '../AlkkagiRoundSummary.js';
 import DiceGoStartConfirmationModal from '../DiceGoStartConfirmationModal.js';
 import CurlingStartConfirmationModal from '../CurlingStartConfirmationModal.js';
 import AlkkagiStartConfirmationModal from '../AlkkagiStartConfirmationModal.js';
-// FIX: Corrected import path for SinglePlayerSummaryModal.
 import SinglePlayerSummaryModal from '../SinglePlayerSummaryModal.js';
 import TowerChallengeSummaryModal from '../TowerChallengeSummaryModal.js';
 

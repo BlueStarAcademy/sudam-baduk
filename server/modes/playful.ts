@@ -1,3 +1,4 @@
+
 import * as types from '../../types.js';
 import * as db from '../db.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul } from './shared.js';
@@ -7,7 +8,7 @@ import { initializeDiceGo, updateDiceGoState, handleDiceGoAction } from './diceG
 import { initializeOmok, updateOmokState, handleOmokAction } from './omok.js';
 import { initializeThief, updateThiefState, handleThiefAction } from './thief.js';
 import { ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, CURLING_TURN_TIME_LIMIT, DICE_GO_MAIN_ROLL_TIME } from '../../constants.js';
-import * as effectService from '../effectService.js';
+import * as effectService from '../../services/effectService.js';
 import { aiUserId, getAiUser } from '../aiPlayer.js';
 import { randomUUID } from 'crypto';
 
@@ -107,6 +108,7 @@ export const updatePlayfulGameState = async (game: types.LiveGameSession, now: n
                 if (now - lastCheck >= 60000) {
                     game.lastPlayfulGoldCheck[player.id] = now;
 
+                    // FIX: Initialize mythicBonuses property if it doesn't exist to prevent crash.
                     if (!game.mythicBonuses) game.mythicBonuses = {};
                     if (!game.mythicBonuses[player.id]) {
                         game.mythicBonuses[player.id] = { strategicGoldTriggers: 0, playfulGoldTriggers: 0 };

@@ -1,8 +1,6 @@
-
-
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import * as types from '../../types/index.js';
+import * as types from '../../types.js';
 import { SINGLE_PLAYER_STAGES } from '../../constants.js';
 import { initializeGame } from '../gameModes.js';
 import { getAiUser } from '../aiPlayer.js';

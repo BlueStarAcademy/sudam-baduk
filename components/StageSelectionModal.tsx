@@ -33,6 +33,7 @@ const StageSelectionModal: React.FC<StageSelectionModalProps> = ({ currentUser, 
                         const stageIndex = (SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id));
                         const isLocked = userProgress < stageIndex;
                         const isCleared = userProgress > stageIndex;
+                        const isCurrent = userProgress === stageIndex;
 
                         return (
                             <div

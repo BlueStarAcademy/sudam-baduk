@@ -9,8 +9,15 @@
     "jsx": "react-jsx"
   },
   "include": [
-    "./**/*.ts",
-    "./**/*.tsx"
+    "*.ts",
+    "*.tsx",
+    "components",
+    "constants",
+    "contexts",
+    "hooks",
+    "services",
+    "types",
+    "utils"
   ],
   "exclude": [
     "server"

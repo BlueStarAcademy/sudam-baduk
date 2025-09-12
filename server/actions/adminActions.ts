@@ -1,11 +1,12 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, AdminLog, Announcement, OverrideAnnouncement, GameMode, LiveGameSession, UserStatusInfo, InventoryItem, InventoryItemType } from '../../types/index.js';
-import * as types from '../../types/index.js';
+import { type ServerAction, type User, type VolatileState, AdminLog, Announcement, OverrideAnnouncement, GameMode, LiveGameSession, UserStatusInfo, InventoryItem, InventoryItemType } from '../../types.js';
+import * as types from '../../types.js';
 import { defaultStats, createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultInventory, createDefaultQuests, createDefaultUser } from '../initialData.js';
 import * as summaryService from '../summaryService.js';
 import { createItemFromTemplate } from '../shop.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants.js';
+// FIX: Corrected import path from client-side service to server-side service.
 import * as mannerService from '../mannerService.js';
 import { containsProfanity } from '../../profanity.js';
 import * as effectService from '../effectService.js';
@@ -202,7 +203,8 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
                 const newMail: types.Mail = {
                     id: `mail-${randomUUID()}`,
                     from: user.nickname,
-                    title, message,
+                    title,
+                    message,
                     attachments: userAttachments,
                     receivedAt: Date.now(),
                     expiresAt: expiresInDays > 0 ? Date.now() + expiresInDays * 24 * 60 * 60 * 1000 : undefined,

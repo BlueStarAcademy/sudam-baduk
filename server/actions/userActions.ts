@@ -1,7 +1,10 @@
-import * as db from '../db.js';
-import * as types from '../../types/index.js';
-import { AVATAR_POOL, BORDER_POOL } from '../../constants.js';
+
+import * as db from '.././db.js';
+import * as types from '../../types.js';
+import { AVATAR_POOL, BORDER_POOL, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
 import { containsProfanity } from '../../profanity.js';
+import { createDefaultSpentStatPoints } from '../initialData.js';
+import * as mannerService from '../mannerService.js';
 
 type HandleActionResult = { 
     clientResponse?: any;
@@ -14,23 +17,28 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
     switch (type) {
         case 'UPDATE_AVATAR': {
             const { avatarId } = payload;
-            if (AVATAR_POOL.some(a => a.id === avatarId)) {
-                user.avatarId = avatarId;
-                await db.updateUser(user);
-            } else {
-                return { error: 'Invalid avatar ID.' };
-            }
-            return {};
+            const avatar = AVATAR_POOL.find((a: types.AvatarInfo) => a.id === avatarId);
+            if (!avatar) return { error: 'Invalid avatar ID.' };
+
+            const isUnlocked = avatar.type === 'any' || 
+                (avatar.type === 'strategy' && user.strategyLevel >= avatar.requiredLevel) ||
+                (avatar.type === 'playful' && user.playfulLevel >= avatar.requiredLevel);
+            
+            if (!isUnlocked) return { error: 'Avatar not unlocked.' };
+            
+            user.avatarId = avatarId;
+            await db.updateUser(user);
+            return { clientResponse: { updatedUser: user } };
         }
         case 'UPDATE_BORDER': {
             const { borderId } = payload;
-            if (BORDER_POOL.some(b => b.id === borderId)) {
+            if (BORDER_POOL.some((b: types.BorderInfo) => b.id === borderId)) {
                 user.borderId = borderId;
                 await db.updateUser(user);
             } else {
                 return { error: 'Invalid border ID.' };
             }
-            return {};
+            return { clientResponse: { updatedUser: user } };
         }
         case 'CHANGE_NICKNAME': {
             const { newNickname } = payload;
@@ -49,7 +57,7 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
             }
             user.nickname = newNickname;
             await db.updateUser(user);
-            return {};
+            return { clientResponse: { updatedUser: user } };
         }
         case 'UPDATE_MBTI': {
             const { mbti, isMbtiPublic } = payload;
@@ -59,7 +67,7 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
             user.mbti = mbti || null;
             user.isMbtiPublic = !!isMbtiPublic;
             await db.updateUser(user);
-            return {};
+            return { clientResponse: { updatedUser: user } };
         }
         case 'RESET_STAT_POINTS': {
             const cost = 500;
@@ -68,11 +76,9 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
             if (!user.isAdmin) {
                 user.diamonds -= cost;
             }
-            for (const key of Object.values(types.CoreStat)) {
-                user.spentStatPoints[key] = 0;
-            }
+            user.spentStatPoints = createDefaultSpentStatPoints();
             await db.updateUser(user);
-            return {};
+            return { clientResponse: { updatedUser: user } };
         }
         case 'CONFIRM_STAT_ALLOCATION': {
             const { newStatPoints } = payload as { newStatPoints: Record<types.CoreStat, number> };
@@ -90,7 +96,7 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
 
             user.spentStatPoints = newStatPoints;
             await db.updateUser(user);
-            return {};
+            return { clientResponse: { updatedUser: user } };
         }
         case 'CHANGE_PASSWORD': {
             const { currentPassword, newPassword } = payload;
@@ -116,6 +122,34 @@ export const handleUserAction = async (volatileState: types.VolatileState, actio
             delete volatileState.userStatuses[user.id];
             
             return { clientResponse: { success: true } };
+        }
+        case 'RESET_SINGLE_STAT': {
+            const { mode } = payload as { mode: types.GameMode };
+            const cost = 300;
+            if (user.diamonds < cost) return { error: '다이아가 부족합니다.' };
+
+            if (user.stats?.[mode]) {
+                user.diamonds -= cost;
+                user.stats[mode] = { wins: 0, losses: 0, rankingScore: 1200 };
+                await db.updateUser(user);
+                return { clientResponse: { updatedUser: user } };
+            }
+            return { error: '초기화할 전적이 없습니다.' };
+        }
+        case 'RESET_STATS_CATEGORY': {
+            const { category } = payload as { category: 'strategic' | 'playful' };
+            const cost = 500;
+            if (user.diamonds < cost) return { error: '다이아가 부족합니다.' };
+            
+            const modesToReset = category === 'strategic' ? SPECIAL_GAME_MODES : PLAYFUL_GAME_MODES;
+            user.diamonds -= cost;
+            for (const modeInfo of modesToReset) {
+                if (user.stats?.[modeInfo.mode]) {
+                    user.stats[modeInfo.mode] = { wins: 0, losses: 0, rankingScore: 1200 };
+                }
+            }
+            await db.updateUser(user);
+            return { clientResponse: { updatedUser: user } };
         }
         default:
             return { error: 'Unknown user action.' };

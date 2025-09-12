@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Player, GameProps, GameMode, User, AlkkagiPlacementType, GameSettings, GameStatus, UserWithStatus } from '../../types/index.js';
+import { Player, GameProps, GameMode, User, AlkkagiPlacementType, GameSettings, GameStatus, UserWithStatus } from '../../types.js';
 import Avatar from '../Avatar.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ALKKAGI_TURN_TIME_LIMIT, CURLING_TURN_TIME_LIMIT, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, aiUserId, AVATAR_POOL, BORDER_POOL, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
 import TurnCounterPanel from './TurnCounterPanel.js';
@@ -266,6 +266,7 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
     const { session, clientTimes, isSinglePlayer, isTowerChallenge } = props;
     const { player1, player2, blackPlayerId, whitePlayerId, captures, mode, settings, effectiveCaptureTargets, scores, currentPlayer } = session;
 
+    const isTurnLimitedGame = !!session.autoEndTurnCount && session.autoEndTurnCount > 0;
     const isScoreMode = [GameMode.Dice, GameMode.Thief, GameMode.Curling].includes(mode);
 
     const leftPlayerUser = player1;
@@ -339,6 +340,11 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
                 isSinglePlayer={isSinglePlayer}
                 isTowerChallenge={isTowerChallenge}
             />
+            {(isSinglePlayer || isTowerChallenge) && isTurnLimitedGame && (
+                 <div className="flex-shrink-0 w-24">
+                     <TurnCounterPanel session={session} />
+                 </div>
+            )}
              <SinglePlayerPanel
                 user={rightPlayerUser}
                 playerEnum={rightPlayerEnum}

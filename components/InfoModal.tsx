@@ -1,3 +1,5 @@
+
+
 import React, { useState } from 'react';
 import DraggableWindow from './DraggableWindow.js';
 import { GAME_RULES } from '../gameRules.js';
@@ -80,7 +82,8 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
                         </div>
                         <div>
                             <h3 className="font-bold text-lg text-cyan-300">강화</h3>
-                            <p className="text-sm">재료를 사용하여 장비의 별 등급(★)을 최대 5성까지 높일 수 있습니다. 강화에 성공하면 장비의 주옵션이 크게 상승하고, 부옵션이 추가되거나 기존 부옵션 중 하나가 랜덤하게 강화됩니다.</p>
+                            {/* FIX: Updated maximum enhancement level from 5 stars to 10 to match game constants. */}
+                            <p className="text-sm">재료를 사용하여 장비의 별 등급(★)을 최대 10성까지 높일 수 있습니다. 강화에 성공하면 장비의 주옵션이 크게 상승하고, 부옵션이 추가되거나 기존 부옵션 중 하나가 랜덤하게 강화됩니다.</p>
                         </div>
                         <div>
                             <h3 className="font-bold text-lg text-orange-300">분해</h3>

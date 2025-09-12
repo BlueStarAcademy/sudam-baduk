@@ -147,7 +147,7 @@ export type ServerAction =
     | { type: 'DELETE_ACCOUNT', payload: {} }
     // Inventory & Item Actions
     | { type: 'USE_ITEM', payload: { itemId: string } }
-    | { type: 'USE_ALL_ITEMS_OF_TYPE', payload: { itemName: string } }
+    | { type: 'USE_ITEM_BULK', payload: { itemName: string, quantity: number } }
     | { type: 'TOGGLE_EQUIP_ITEM', payload: { itemId: string } }
     | { type: 'SELL_ITEM', payload: { itemId: string } }
     | { type: 'ENHANCE_ITEM', payload: { itemId: string } }

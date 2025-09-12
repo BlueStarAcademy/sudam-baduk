@@ -22,9 +22,18 @@ export const GRADE_LEVEL_REQUIREMENTS: Record<ItemGrade, number> = {
     normal: 1,
     uncommon: 1,
     rare: 5,
-    epic: 12,
-    legendary: 20,
-    mythic: 30,
+    epic: 8,
+    legendary: 10,
+    mythic: 12,
+};
+
+export const ENHANCEMENT_LEVEL_REQUIREMENTS: Record<ItemGrade, { 4: number; 7: number; 10: number; }> = {
+    normal:   { 4: 3,  7: 6,  10: 10 },
+    uncommon: { 4: 5,  7: 8,  10: 12 },
+    rare:     { 4: 7,  7: 10, 10: 14 },
+    epic:     { 4: 9,  7: 12, 10: 16 },
+    legendary:{ 4: 11, 7: 14, 10: 18 },
+    mythic:   { 4: 13, 7: 16, 10: 20 },
 };
 
 export const EQUIPMENT_POOL: (Omit<InventoryItem, 'id' | 'createdAt' | 'isEquipped' | 'level' | 'options' | 'quantity' | 'stars' | 'enhancementFails'> & { stars: 0 })[] = [

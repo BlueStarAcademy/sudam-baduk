@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { LiveGameSession, GameMode, SinglePlayerLevel } from '../../types/index.js';
+import { LiveGameSession, GameMode, SinglePlayerLevel } from '../../types.js';
 import { SINGLE_PLAYER_STAGES } from '../../constants.js';
 
 const GO_TERMS_BY_LEVEL: Record<SinglePlayerLevel, { term: string; meaning: string }[]> = {

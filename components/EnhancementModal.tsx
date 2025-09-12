@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { UserWithStatus, InventoryItem, ServerAction, ItemGrade, ItemOption } from '../types.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
-import { ENHANCEMENT_SUCCESS_RATES, ENHANCEMENT_COSTS, MATERIAL_ITEMS, ENHANCEMENT_FAIL_BONUS_RATES } from '../constants.js';
+import { ENHANCEMENT_SUCCESS_RATES, ENHANCEMENT_COSTS, MATERIAL_ITEMS, ENHANCEMENT_FAIL_BONUS_RATES, ENHANCEMENT_LEVEL_REQUIREMENTS } from '../constants.js';
 
 interface EnhancementModalProps {
     item: InventoryItem;
@@ -118,12 +118,16 @@ const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, 
 
     const userLevelSum = currentUser.strategyLevel + currentUser.playfulLevel;
     const nextStars = item.stars + 1;
+
     const levelRequirement = useMemo(() => {
-        if (nextStars === 4) return 3;
-        if (nextStars === 7) return 8;
-        if (nextStars === 10) return 15;
+        if (nextStars === 4 || nextStars === 7 || nextStars === 10) {
+            const reqs = ENHANCEMENT_LEVEL_REQUIREMENTS[item.grade];
+            if (reqs) {
+                return reqs[nextStars as 4 | 7 | 10];
+            }
+        }
         return 0;
-    }, [nextStars]);
+    }, [nextStars, item.grade]);
     const meetsLevelRequirement = userLevelSum >= levelRequirement;
 
     const userMaterials = useMemo(() => {

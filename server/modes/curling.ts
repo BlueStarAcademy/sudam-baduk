@@ -1,12 +1,11 @@
 
-
-import * as types from '../../types/index.js';
+import * as types from '../../types.js';
 import * as db from '../db.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul } from './shared.js';
 import { aiUserId } from '../aiPlayer.js';
 import { CURLING_TURN_TIME_LIMIT, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
 import { endGame } from '../summaryService.js';
-import * as effectService from '../effectService.js';
+import * as effectService from '../../services/effectService.js';
 
 // --- Simulation & Scoring Logic ---
 const runServerSimulation = (initialStones: types.AlkkagiStone[], flickedStone: types.AlkkagiStone, velocity: types.Point): { finalStones: types.AlkkagiStone[], stonesFallen: types.AlkkagiStone[] } => {

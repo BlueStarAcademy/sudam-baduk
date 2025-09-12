@@ -1,7 +1,6 @@
 
-import * as types from '../../types/index.js';
+import * as types from '../../types.js';
 import * as db from '../db.js';
-import { getGoLogic, processMove } from '../goLogic.js';
 import { getGameResult } from '../summaryService.js';
 import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
 import { initializeBase, updateBaseState, handleBaseAction } from './base.js';
@@ -11,6 +10,8 @@ import { initializeMissile, updateMissileState, handleMissileAction } from './mi
 import { handleSharedAction, transitionToPlaying } from './shared.js';
 import * as summaryService from '../summaryService.js';
 import { aiUserId } from '../aiPlayer.js';
+// FIX: Import getGoLogic and processMove to resolve missing name errors.
+import { getGoLogic, processMove } from '../goLogic.js';
 
 
 // This function handles the game logic for standard Go and its variants like Capture, Speed, Base, Hidden, Missile, Mix.
@@ -310,11 +311,6 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
             game.lastTurnStones = null;
             game.moveHistory.push({ player: myPlayerEnum, x: -1, y: -1 });
 
-            if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
-                getGameResult(game);
-                return {};
-            }
-
             if (game.passCount >= 2) {
                 const isHiddenMode = game.mode === types.GameMode.Hidden || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Hidden));
 
@@ -396,7 +392,7 @@ const handleStandardAction = async (volatileState: types.VolatileState, game: ty
 
             return {};
         }
-        default:
-            return null;
     }
+
+    return null;
 };

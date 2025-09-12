@@ -211,73 +211,52 @@ const FinalRewardPanel: React.FC<{ tournamentState: TournamentState; currentUser
         );
     }
 
-    const { type, rounds } = tournamentState;
+    const { type } = tournamentState;
     const definition = TOURNAMENT_DEFINITIONS[type];
     const rewardInfo = BASE_TOURNAMENT_REWARDS[type];
     
-    let userRank = -1;
-
-    if (type === 'neighborhood') {
-        const wins: Record<string, number> = {};
-        tournamentState.players.forEach(p => { wins[p.id] = 0; });
-
-        rounds[0].matches.forEach(m => {
-            if (m.winner) {
-                wins[m.winner.id] = (wins[m.winner.id] || 0) + 1;
+    const userRank = useMemo(() => {
+        if (!definition) return -1;
+    
+        const { rounds } = tournamentState;
+        if (type === 'neighborhood') {
+            const wins: Record<string, number> = {};
+            tournamentState.players.forEach(p => { wins[p.id] = 0; });
+            rounds[0].matches.forEach(m => {
+                if (m.winner) { wins[m.winner.id] = (wins[m.winner.id] || 0) + 1; }
+            });
+            const sortedPlayers = [...tournamentState.players].sort((a, b) => wins[b.id] - wins[a.id]);
+            let currentRank = -1;
+            for (let i = 0; i < sortedPlayers.length; i++) {
+                if (i === 0) { currentRank = 1; } 
+                else { if (wins[sortedPlayers[i].id] < wins[sortedPlayers[i-1].id]) { currentRank = i + 1; } }
+                if (sortedPlayers[i].id === currentUser.id) { return currentRank; }
             }
-        });
-
-        const sortedPlayers = [...tournamentState.players].sort((a, b) => wins[b.id] - wins[a.id]);
-        
-        let currentRank = -1;
-        for (let i = 0; i < sortedPlayers.length; i++) {
-            if (i === 0) {
-                currentRank = 1;
-            } else {
-                if (wins[sortedPlayers[i].id] < wins[sortedPlayers[i-1].id]) {
-                    currentRank = i + 1;
+            return -1;
+        } else { // tournament format ('national', 'world')
+            const finalMatch = rounds.find(r => r.name === '결승')?.matches[0];
+            const thirdPlaceMatch = rounds.find(r => r.name === '3,4위전')?.matches[0];
+            
+            if (finalMatch?.winner?.id === currentUser.id) return 1;
+            if (finalMatch?.players.some(p => p?.id === currentUser.id) && finalMatch.winner?.id !== currentUser.id) return 2;
+            if (thirdPlaceMatch?.winner?.id === currentUser.id) return 3;
+            if (thirdPlaceMatch?.players.some(p => p?.id === currentUser.id) && thirdPlaceMatch.winner?.id !== currentUser.id) return 4;
+            
+            for (let i = rounds.length - 1; i >= 0; i--) {
+                const round = rounds[i];
+                for (const match of round.matches) {
+                    if (match.isUserMatch && match.winner?.id !== currentUser.id) {
+                        const roundName = round.name;
+                        const roundSize = parseInt(roundName.replace(/[^0-9]/g, ''), 10);
+                        if (!isNaN(roundSize)) {
+                            return roundSize;
+                        }
+                    }
                 }
             }
-            if (sortedPlayers[i].id === currentUser.id) {
-                userRank = currentRank;
-                break;
-            }
         }
-    } else {
-        const totalRounds = rounds.length;
-        let lostInRound = -1;
-        
-        for (let i = 0; i < totalRounds; i++) {
-            const round = rounds[i];
-            const userMatch = round.matches.find(m => m.isUserMatch);
-            if (userMatch && userMatch.winner?.id !== currentUser.id) {
-                lostInRound = i;
-                break;
-            }
-        }
-
-        if (lostInRound === -1) {
-            userRank = 1; // Winner
-        } else {
-            const playersInLostRound = definition.players / Math.pow(2, lostInRound);
-            if (totalRounds === 3 && lostInRound === 1) { // 8-player, lost in semis
-                 const thirdPlaceMatch = rounds.find(r => r.name === "3,4위전");
-                 if (thirdPlaceMatch) {
-                     const userWasIn3rdPlaceMatch = thirdPlaceMatch.matches.some(m => m.isUserMatch);
-                     if (userWasIn3rdPlaceMatch) {
-                         const won3rdPlace = thirdPlaceMatch.matches.some(m => m.isUserMatch && m.winner?.id === currentUser.id);
-                         userRank = won3rdPlace ? 3 : 4;
-                     } else {
-                         userRank = 4;
-                     }
-                 } else {
-                     userRank = 4;
-                 }
-            } else {
-                 userRank = playersInLostRound;
-            }
-        }
-    }
+        return -1; // Fallback
+    }, [tournamentState, currentUser.id, type]);
 
     let rewardKey: number;
     if (type === 'neighborhood') rewardKey = userRank <= 3 ? userRank : 4;
@@ -568,11 +547,12 @@ const TournamentRoundViewer: React.FC<{ rounds: Round[]; currentUser: UserWithSt
     );
 };
 
-export const TournamentBracket: React.FC<TournamentBracketProps> = (props) => {
+export const TournamentBracket = (props: TournamentBracketProps) => {
     const { tournamentState, currentUser, onBack, allUsersForRanking, onViewUser, onAction, onStartNextRound, onReset, onSkip, isMobile } = props;
     const [lastUserMatchSgfIndex, setLastUserMatchSgfIndex] = useState<number | null>(null);
     const [initialMatchPlayers, setInitialMatchPlayers] = useState<{ p1: PlayerForTournament | null, p2: PlayerForTournament | null }>({ p1: null, p2: null });
     const prevStatusRef = useRef(tournamentState.status);
+    const [isTransitioning, setIsTransitioning] = useState(false);
     
     const safeRounds = useMemo(() => 
         Array.isArray(tournamentState.rounds) ? tournamentState.rounds : [], 
@@ -766,6 +746,13 @@ export const TournamentBracket: React.FC<TournamentBracketProps> = (props) => {
     const totalCumulative = p1Cumulative + p2Cumulative;
     const p1Percent = totalCumulative > 0 ? (p1Cumulative / totalCumulative) * 100 : 50;
     const p2Percent = totalCumulative > 0 ? (p2Cumulative / totalCumulative) * 100 : 50;
+    
+    const handleStartNextRoundWithLock = useCallback(() => {
+        if (isTransitioning) return;
+        setIsTransitioning(true);
+        onStartNextRound();
+        setTimeout(() => setIsTransitioning(false), 2000);
+    }, [isTransitioning, onStartNextRound]);
 
     const renderFooterButton = () => {
         const { status } = tournamentState;
@@ -799,7 +786,7 @@ export const TournamentBracket: React.FC<TournamentBracketProps> = (props) => {
         if ((status === 'round_complete' || status === 'bracket_ready') && hasUnfinishedUserMatch) {
             return (
                 <div className="flex items-center justify-center gap-4">
-                    <Button onClick={onStartNextRound} colorScheme="green" className="animate-pulse">경기 시작</Button>
+                    <Button onClick={handleStartNextRoundWithLock} disabled={isTransitioning} colorScheme="green" className="animate-pulse">경기 시작</Button>
                     <Button onClick={handleForfeitClick} colorScheme="red">포기</Button>
                 </div>
             );
@@ -839,8 +826,8 @@ export const TournamentBracket: React.FC<TournamentBracketProps> = (props) => {
                     <div className="flex-shrink-0 w-44 sm:w-52 flex flex-col items-center justify-center min-w-0">
                         <RadarChart datasets={radarDatasets} maxStatValue={maxStatValue} size={isMobile ? 140 : undefined} />
                         <div className="flex justify-center gap-2 sm:gap-4 text-[10px] sm:text-xs mt-1">
-                            <span className="flex items-center gap-1"><div className="w-2 h-2 sm:w-3 sm:h-3 rounded-sm" style={{backgroundColor: 'rgba(59, 130, 246, 0.6)'}}></div>{p1?.nickname || '선수 1'}</span>
-                            <span className="flex items-center gap-1"><div className="w-2 h-2 sm:w-3 sm:h-3 rounded-sm" style={{backgroundColor: 'rgba(239, 68, 68, 0.6)'}}></div>{p2?.nickname || '선수 2'}</span>
+                            <span className="flex items-center gap-1"><div className="w-2 h-2 sm:w-3 sm:h-3 rounded-sm" style={{backgroundColor: 'rgba(59, 130, 246, 0.6)'}}></div>{p1?.nickname || '...'}</span>
+                            <span className="flex items-center gap-1"><div className="w-2 h-2 sm:w-3 sm:h-3 rounded-sm" style={{backgroundColor: 'rgba(239, 68, 68, 0.6)'}}></div>{p2?.nickname || '...'}</span>
                         </div>
                     </div>
                     <div className="flex-1 min-w-0">
@@ -848,68 +835,67 @@ export const TournamentBracket: React.FC<TournamentBracketProps> = (props) => {
                     </div>
                 </section>
                 
-                <div className="flex-1 flex flex-col lg:flex-row gap-2 min-h-0">
-                    <div className="w-full h-80 lg:h-full lg:w-2/5 bg-gray-800/50 rounded-lg p-2 flex items-center justify-center">
-                        <SgfViewer 
-                            timeElapsed={isSimulating ? tournamentState.timeElapsed : 0} 
-                            fileIndex={isSimulating ? currentSimMatch?.sgfFileIndex : lastUserMatchSgfIndex}
-                            showLastMoveOnly={!isSimulating}
-                        />
+                <section className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 min-h-0">
+                    <div className="bg-gray-800/50 rounded-lg min-h-0">
+                        <CommentaryPanel commentary={tournamentState.currentMatchCommentary} isSimulating={isSimulating} />
                     </div>
-                    
-                    <div className="w-full lg:w-3/5 flex-1 flex flex-col gap-2 min-h-0">
-                        <section className="flex-shrink-0 bg-gray-800/50 rounded-lg p-3">
-                            <ScoreGraph p1Percent={p1Percent} p2Percent={p2Percent} p1Nickname={p1?.nickname} p2Nickname={p2?.nickname}/>
-                            <div className="mt-2"><SimulationProgressBar timeElapsed={tournamentState.timeElapsed} totalDuration={140} /></div>
-                        </section>
-                        <div className="h-64 lg:h-auto lg:flex-1 min-h-0 bg-gray-800/50 rounded-lg p-2 flex flex-col">
-                            <CommentaryPanel commentary={tournamentState.currentMatchCommentary} isSimulating={tournamentState.status === 'round_in_progress'} />
+                    <div className="bg-gray-800/50 rounded-lg flex flex-col p-2 gap-2">
+                        <div className="flex-shrink-0">
+                            <ScoreGraph p1Percent={p1Percent} p2Percent={p2Percent} p1Nickname={p1?.nickname} p2Nickname={p2?.nickname} />
+                             <div className="mt-2">
+                                <SimulationProgressBar timeElapsed={tournamentState.timeElapsed} totalDuration={140} />
+                            </div>
+                        </div>
+                        <div className="flex-grow relative">
+                            <SgfViewer 
+                                timeElapsed={tournamentState.timeElapsed}
+                                fileIndex={matchForDisplay?.sgfFileIndex ?? lastUserMatchSgfIndex}
+                                showLastMoveOnly={tournamentState.status !== 'round_in_progress'}
+                            />
                         </div>
                     </div>
-                </div>
+                </section>
+                
+                <section className="flex-shrink-0 h-32 md:h-24 bg-gray-800/50 rounded-lg p-2">
+                     <FinalRewardPanel tournamentState={tournamentState} currentUser={currentUser} onAction={onAction} />
+                </section>
             </div>
         </main>
     );
-    
-    const renderFooter = () => (
-        <footer className="flex-shrink-0 bg-gray-800/50 rounded-lg p-3 grid grid-cols-1 md:grid-cols-3 items-center gap-2">
-            <div className="flex items-center gap-2">
-                 <Avatar userId={currentUser.id} userName={currentUser.nickname} size={40} />
-                 <div className="text-left">
-                    <h4 className="font-bold">{currentUser.nickname}</h4>
-                    <p className="text-xs text-yellow-300">{myResultText}</p>
-                 </div>
+
+    if (isMobile) {
+        return (
+             <div className="flex flex-col h-full bg-gray-800 p-2 gap-2">
+                <header className="flex justify-between items-center flex-shrink-0">
+                    <Button onClick={handleBackClick} colorScheme="gray" className="!px-3 !py-1">&larr;</Button>
+                    <div className="text-center">
+                        <h3 className="text-xl font-bold">{tournamentState.title}</h3>
+                        <p className="text-sm font-bold text-yellow-300">{myResultText}</p>
+                    </div>
+                    <div className="w-16"></div>
+                </header>
+                {mainContent}
+                <footer className="flex-shrink-0 py-2 border-t border-gray-700">
+                    {renderFooterButton()}
+                </footer>
             </div>
-            <div className="text-center order-first md:order-none">
-                {renderFooterButton()}
-            </div>
-             <div className="text-right">
-                <FinalRewardPanel tournamentState={tournamentState} currentUser={currentUser} onAction={onAction} />
-            </div>
-        </footer>
-    );
+        );
+    }
 
     return (
-        <div className="w-full p-2 flex flex-col gap-2 bg-gray-900 text-white min-h-full">
-            <header className="flex items-center justify-between flex-shrink-0">
-                <Button onClick={handleBackClick}>&larr; 경기장 선택</Button>
-                <h1 className="text-xl md:text-2xl font-bold">{tournamentState.title}</h1>
-                <div className="w-28" />
-            </header>
-
-            {isMobile ? (
-                <div className="flex-1 flex flex-col gap-4 min-h-0">
-                    <div className="flex-1 min-h-0 overflow-y-auto">
-                        {mainContent}
-                    </div>
-                    {renderFooter()}
+        <div className="p-4 flex flex-col h-full bg-gray-800 rounded-lg shadow-lg">
+            <header className="flex justify-between items-center mb-4 flex-shrink-0">
+                <Button onClick={handleBackClick} colorScheme="gray">&larr; 로비로</Button>
+                <div className="text-center">
+                    <h3 className="text-3xl font-bold">{tournamentState.title}</h3>
+                    <p className="text-lg font-bold text-yellow-300">{myResultText}</p>
                 </div>
-            ) : (
-                <>
-                    {mainContent}
-                    {renderFooter()}
-                </>
-            )}
+                <div className="w-24"></div>
+            </header>
+            {mainContent}
+             <footer className="flex-shrink-0 pt-4 mt-4 border-t border-gray-700">
+                {renderFooterButton()}
+            </footer>
         </div>
     );
 };

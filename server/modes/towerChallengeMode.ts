@@ -1,6 +1,8 @@
+
+
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import * as types from '../../types/index.js';
+import * as types from '../../types.js';
 import { TOWER_STAGES } from '../../constants.js';
 import { initializeGame } from '../gameModes.js';
 import { getAiUser } from '../aiPlayer.js';
@@ -37,7 +39,7 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
         if (user.actionPoints.current < stage.actionPointCost) {
             return { error: '행동력이 부족합니다.' };
         }
-
+    
         user.actionPoints.current -= stage.actionPointCost;
         if (wasAtMax) {
             user.lastActionPointUpdate = now;
@@ -52,7 +54,7 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
         id: `neg-tower-${randomUUID()}`,
         challenger: user,
         opponent: aiOpponent,
-        mode: types.GameMode.Standard,
+        mode: types.GameMode.Standard, // Tower uses a modified standard ruleset
         settings: {
             boardSize: stage.boardSize,
             komi: 0.5,
@@ -75,7 +77,8 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
     game.blackStoneLimit = stage.blackStoneLimit;
     game.towerChallengePlacementRefreshesUsed = 0;
     game.addedStonesItemUsed = false;
-
+    
+    // ... placement logic from handleSinglePlayerGameStart ...
     let attempts = 0;
     const MAX_PLACEMENT_ATTEMPTS = 10;
     do {
@@ -92,7 +95,7 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
                 if (allPoints.length === 0) break;
                 const p = allPoints.pop()!;
                 game.boardState[p.y][p.x] = player;
-                if (isPattern) game[key]!.push(p);
+                if (isPattern) (game[key]! as types.Point[]).push(p);
             }
         };
 
@@ -102,13 +105,11 @@ export const handleTowerChallengeGameStart = async (volatileState: types.Volatil
         placeStones(stage.placements.whitePattern, types.Player.White, true);
 
         attempts++;
-        if (attempts >= MAX_PLACEMENT_ATTEMPTS) {
-            console.warn(`[Placement] Could not generate a stable board for tower stage ${stage.id} after ${MAX_PLACEMENT_ATTEMPTS} attempts.`);
-            break;
-        }
+        if (attempts >= MAX_PLACEMENT_ATTEMPTS) break;
     } while (areAnyStonesCaptured(game.boardState, stage.boardSize));
 
 
+    // FIX: Add the missing 'Player.None' property to satisfy the type definition.
     game.effectiveCaptureTargets = {
         [types.Player.Black]: stage.targetScore?.black ?? 0,
         [types.Player.White]: stage.targetScore?.white ?? 0,
@@ -156,7 +157,7 @@ export const handleTowerChallengeRefresh = async (game: types.LiveGameSession, u
                 if (allPoints.length === 0) break;
                 const p = allPoints.pop()!;
                 game.boardState[p.y][p.x] = player;
-                if (isPattern) game[key]!.push(p);
+                if (isPattern) (game[key]! as types.Point[]).push(p);
             }
         };
 

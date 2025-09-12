@@ -149,6 +149,16 @@ export type CommentaryLine = {
     phase: 'early' | 'mid' | 'end';
     scores?: { player1: number; player2: number };
     isRandomEvent?: boolean;
+    randomEventDetails?: {
+        type: 'mistake' | 'pressure' | 'aggressive' | 'defense';
+        stat: CoreStat;
+        p1_id: string;
+        p2_id: string;
+        p1_stat: number;
+        p2_stat: number;
+        score_change: number;
+        player_id: string;
+    }
 };
 
 export type Match = {

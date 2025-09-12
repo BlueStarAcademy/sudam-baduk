@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, ChatMessage, UserStatus, type Negotiation, TournamentType } from '../../types/index.js';
-import * as types from '../../types/index.js';
-import { updateQuestProgress } from './../questService.js';
+import { type ServerAction, type User, type VolatileState, ChatMessage, UserStatus, type Negotiation, TournamentType } from '../../types.js';
+import * as types from '../../types.js';
+import { updateQuestProgress } from '../questService.js';
 import { containsProfanity } from '../../profanity.js';
 import * as tournamentService from '../tournamentService.js';
 import * as summaryService from '../summaryService.js';
@@ -167,6 +167,22 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 userStatus.status = 'online';
                 delete userStatus.mode;
             }
+
+            const negotiationsToCancel = Object.values(volatileState.negotiations).filter((neg: Negotiation) =>
+                neg.challenger.id === user.id || neg.opponent.id === user.id
+            );
+
+            for (const neg of negotiationsToCancel) {
+                const otherPlayerId = neg.challenger.id === user.id ? neg.opponent.id : neg.challenger.id;
+                const otherPlayerStatus = volatileState.userStatuses[otherPlayerId];
+
+                if (otherPlayerStatus && otherPlayerStatus.status === 'negotiating') {
+                    otherPlayerStatus.status = 'waiting';
+                    otherPlayerStatus.mode = neg.mode;
+                }
+                delete volatileState.negotiations[neg.id];
+            }
+
             return {};
         }
         case 'ENTER_TOURNAMENT_VIEW': {
@@ -192,7 +208,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             }
 
             const ongoingRematchNegotiation = Object.values(volatileState.negotiations).find(
-                neg => neg.rematchOfGameId === gameId
+                (neg: Negotiation) => neg.rematchOfGameId === gameId
             );
 
             if (ongoingRematchNegotiation) {
@@ -219,7 +235,8 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             const { gameId } = payload;
             const game = await db.getLiveGame(gameId);
             if (!game) return { error: 'Game not found.' };
-        
+
+            // FIX: AI games should return to 'online' status, not a waiting room, and clear game-related properties.
             if (volatileState.userStatuses[user.id]) {
                 volatileState.userStatuses[user.id] = { status: 'online' };
                 delete volatileState.userStatuses[user.id].mode;
@@ -227,12 +244,10 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 delete volatileState.userStatuses[user.id].spectatingGameId;
             }
             
+            // If the user leaves before the game is officially over (e.g. resigns), end the game.
             if (!['ended', 'no_contest'].includes(game.gameStatus)) {
-                await summaryService.endGame(game, types.Player.White, 'resign'); 
+                 await summaryService.endGame(game, types.Player.White, 'disconnect'); // AI is always P2/White and wins on disconnect
             }
-            
-            // Delete the game from the database as it's finished and not needed anymore
-            await db.deleteGame(game.id);
             
             return {};
         }

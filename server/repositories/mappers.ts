@@ -1,8 +1,5 @@
-
-
 import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
-import * as types from '../../types/index.js';
-// FIX: Import DEFAULT_GAME_SETTINGS to provide a default value when parsing game data.
+import * as types from '../../types.js';
 import { DEFAULT_GAME_SETTINGS } from '../../constants.js';
 
 const safeParse = (jsonString: string | null | undefined, defaultValue: any, contextId: string, fieldName: string) => {
@@ -141,6 +138,8 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             finalScores: safeParse(row.finalScores, null, row.id, 'finalScores'),
             createdAt: row.createdAt,
             lastMove: safeParse(row.lastMove, null, row.id, 'lastMove'),
+            lastTurnStones: safeParse(row.lastTurnStones, null, row.id, 'lastTurnStones'),
+            stonesPlacedThisTurn: safeParse(row.stonesPlacedThisTurn, null, row.id, 'stonesPlacedThisTurn'),
             passCount: row.passCount ?? 0,
             koInfo: safeParse(row.koInfo, null, row.id, 'koInfo'),
             winningLine: safeParse(row.winningLine, null, row.id, 'winningLine'),
@@ -266,8 +265,7 @@ export const rowToGame = (row: any): types.LiveGameSession | null => {
             mythicBonuses: safeParse(row.mythicBonuses, {}, row.id, 'mythicBonuses'),
             lastPlayfulGoldCheck: safeParse(row.lastPlayfulGoldCheck, {}, row.id, 'lastPlayfulGoldCheck'),
             pendingSystemMessages: safeParse(row.pendingSystemMessages, null, row.id, 'pendingSystemMessages'),
-            lastTurnStones: safeParse(row.lastTurnStones, null, row.id, 'lastTurnStones'),
-            stonesPlacedThisTurn: safeParse(row.stonesPlacedThisTurn, null, row.id, 'stonesPlacedThisTurn'),
+// FIX: Remove duplicate property initializations to resolve TypeScript error.
             isSinglePlayer: !!row.isSinglePlayer,
             stageId: row.stageId ?? undefined,
             blackPatternStones: safeParse(row.blackPatternStones, null, row.id, 'blackPatternStones'),

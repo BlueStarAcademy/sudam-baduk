@@ -1,12 +1,9 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-// FIX: Import missing types from the centralized types file.
-import { ServerAction, GameMode, Announcement, OverrideAnnouncement } from '../../types/index.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
+// FIX: Import missing types from the barrel file.
+import { ServerAction, GameMode, Announcement, OverrideAnnouncement } from '../../types.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/gameModes.js';
 import Button from '../Button.js';
 
-// FIX: The component uses various props which were not defined in the interface.
-// The extended `AdminProps` type is likely incomplete. Defining the props directly fixes the type error.
 interface ServerSettingsPanelProps {
     gameModeAvailability: Partial<Record<GameMode, boolean>>;
     announcements: Announcement[];

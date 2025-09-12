@@ -1,7 +1,7 @@
 
 import React from 'react';
-// FIX: Import missing types from the centralized types file.
-import { AdminProps, LiveGameSession } from '../../types/index.js';
+// FIX: Import AdminProps and LiveGameSession from the correct types barrel file.
+import { AdminProps, LiveGameSession } from '../../types.js';
 import Button from '../Button.js';
 
 type AdminView = 'dashboard' | 'userManagement' | 'mailSystem' | 'serverSettings';
