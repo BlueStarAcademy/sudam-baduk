@@ -1,15 +1,15 @@
 // Corrected import paths for constants from their specific files.
 import {
     emptySlotImages, EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS
-} from '../constants/items.js';
-import { TOURNAMENT_DEFINITIONS } from '../constants/tournaments.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/gameModes.js';
-import { LEAGUE_DATA, RANKING_TIERS } from '../constants/ranking.js';
-import { AVATAR_POOL, BORDER_POOL } from '../constants/ui.js';
-import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG, STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG } from '../assets.js';
+} from '../constants/items';
+import { TOURNAMENT_DEFINITIONS } from '../constants/tournaments';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/gameModes';
+import { LEAGUE_DATA, RANKING_TIERS } from '../constants/ranking';
+import { AVATAR_POOL, BORDER_POOL } from '../constants/ui';
+import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG, STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG } from '../assets';
 // Import ItemGrade to resolve type error.
 // FIX: Corrected import path for types.
-import { ItemGrade } from '../types/index.js';
+import { ItemGrade } from '../types/index';
 
 const gradeBackgrounds: Record<ItemGrade, string> = {
     [ItemGrade.Normal]: '/images/equipments/normalbgi.png',

@@ -1,17 +1,19 @@
 
-import { Database } from 'sqlite';
-import { getDb, initializeAndGetDb } from './db/connection.js';
+
+import { Pool } from 'pg';
+import { getDb, initializeAndGetDb } from './db/connection';
 // FIX: Corrected import path for types.
-import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank } from '../types/index.js';
-import { getInitialState } from './initialData.js';
+import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank } from '../types/index';
+import { getInitialState } from './initialData';
 
 // --- Initialization and Seeding ---
 let isInitialized = false;
 
-const seedInitialData = async (db: Database) => {
+// FIX: Update db parameter type from SQLite Database to pg Pool to match repository expectations.
+const seedInitialData = async (db: Pool) => {
     console.log('[DB] Database is empty. Seeding initial data...');
-    const userRepository = await import('./repositories/userRepository.js');
-    const credentialsRepository = await import('./repositories/credentialsRepository.js');
+    const userRepository = await import('./repositories/userRepository');
+    const credentialsRepository = await import('./repositories/credentialsRepository');
     const initialState = getInitialState();
     const usersToCreate = Object.values(initialState.users);
     const credentialsToCreate = initialState.userCredentials;
@@ -33,8 +35,10 @@ const seedInitialData = async (db: Database) => {
 export const initializeDatabase = async () => {
     if (isInitialized) return;
     const db = await initializeAndGetDb();
-    const userCount = await db.get('SELECT COUNT(*) as count FROM users');
-    if (userCount && userCount.count === 0) {
+    // FIX: Use db.query instead of db.get for PostgreSQL and parse string count.
+    const userCountResult = await db.query<{ count: string }>('SELECT COUNT(*) as count FROM users');
+    const userCount = userCountResult.rows[0] ? parseInt(userCountResult.rows[0].count, 10) : 0;
+    if (userCount === 0) {
         await seedInitialData(db);
     }
     isInitialized = true;
@@ -45,39 +49,39 @@ export const initializeDatabase = async () => {
 
 // --- Key-Value Store ---
 export const getKV = async <T>(key: string): Promise<T | null> => {
-    const kvRepository = await import('./repositories/kvRepository.js');
+    const kvRepository = await import('./repositories/kvRepository');
     return kvRepository.getKV(await getDb(), key);
 };
 export const setKV = async <T>(key: string, value: T): Promise<void> => {
-    const kvRepository = await import('./repositories/kvRepository.js');
+    const kvRepository = await import('./repositories/kvRepository');
     return kvRepository.setKV(await getDb(), key, value);
 };
 
 // --- User Functions ---
 export const getAllUsers = async (): Promise<User[]> => {
-    const userRepository = await import('./repositories/userRepository.js');
+    const userRepository = await import('./repositories/userRepository');
     return userRepository.getAllUsers(await getDb());
 };
 export const getUser = async (id: string): Promise<User | null> => {
-    const userRepository = await import('./repositories/userRepository.js');
+    const userRepository = await import('./repositories/userRepository');
     return userRepository.getUser(await getDb(), id);
 };
 export const getUserByNickname = async (nickname: string): Promise<User | null> => {
-    const userRepository = await import('./repositories/userRepository.js');
+    const userRepository = await import('./repositories/userRepository');
     return userRepository.getUserByNickname(await getDb(), nickname);
 };
 export const createUser = async (user: User): Promise<void> => {
-    const userRepository = await import('./repositories/userRepository.js');
+    const userRepository = await import('./repositories/userRepository');
     return userRepository.createUser(await getDb(), user);
 };
 export const updateUser = async (user: User): Promise<void> => {
-    const userRepository = await import('./repositories/userRepository.js');
+    const userRepository = await import('./repositories/userRepository');
     return userRepository.updateUser(await getDb(), user);
 };
 export const deleteUser = async (id: string): Promise<void> => {
     const db = await getDb();
-    const userRepository = await import('./repositories/userRepository.js');
-    const credentialsRepository = await import('./repositories/credentialsRepository.js');
+    const userRepository = await import('./repositories/userRepository');
+    const credentialsRepository = await import('./repositories/credentialsRepository');
     const user = await userRepository.getUser(db, id);
     if (user) {
         await credentialsRepository.deleteUserCredentials(db, user.username);
@@ -87,42 +91,42 @@ export const deleteUser = async (id: string): Promise<void> => {
 
 // --- User Credentials Functions ---
 export const getUserCredentials = async (username: string): Promise<UserCredentials | null> => {
-    const credentialsRepository = await import('./repositories/credentialsRepository.js');
+    const credentialsRepository = await import('./repositories/credentialsRepository');
     return credentialsRepository.getUserCredentials(await getDb(), username);
 };
 export const getUserCredentialsByUserId = async (userId: string): Promise<UserCredentials | null> => {
-    const credentialsRepository = await import('./repositories/credentialsRepository.js');
+    const credentialsRepository = await import('./repositories/credentialsRepository');
     return credentialsRepository.getUserCredentialsByUserId(await getDb(), userId);
 };
 export const createUserCredentials = async (username: string, passwordHash: string, userId: string): Promise<void> => {
-    const credentialsRepository = await import('./repositories/credentialsRepository.js');
+    const credentialsRepository = await import('./repositories/credentialsRepository');
     return credentialsRepository.createUserCredentials(await getDb(), username, passwordHash, userId);
 };
 export const updateUserPassword = async (userId: string, newPasswordHash: string): Promise<void> => {
-    const credentialsRepository = await import('./repositories/credentialsRepository.js');
+    const credentialsRepository = await import('./repositories/credentialsRepository');
     return credentialsRepository.updateUserPassword(await getDb(), userId, newPasswordHash);
 };
 
 
 // --- Game Functions ---
 export const getLiveGame = async (id: string): Promise<LiveGameSession | null> => {
-    const gameRepository = await import('./repositories/gameRepository.js');
+    const gameRepository = await import('./repositories/gameRepository');
     return gameRepository.getLiveGame(await getDb(), id);
 };
 export const getAllActiveGames = async (): Promise<LiveGameSession[]> => {
-    const gameRepository = await import('./repositories/gameRepository.js');
+    const gameRepository = await import('./repositories/gameRepository');
     return gameRepository.getAllActiveGames(await getDb());
 };
 export const getAllEndedGames = async (): Promise<LiveGameSession[]> => {
-    const gameRepository = await import('./repositories/gameRepository.js');
+    const gameRepository = await import('./repositories/gameRepository');
     return gameRepository.getAllEndedGames(await getDb());
 };
 export const saveGame = async (game: LiveGameSession): Promise<void> => {
-    const gameRepository = await import('./repositories/gameRepository.js');
+    const gameRepository = await import('./repositories/gameRepository');
     return gameRepository.saveGame(await getDb(), game);
 };
 export const deleteGame = async (id: string): Promise<void> => {
-    const gameRepository = await import('./repositories/gameRepository.js');
+    const gameRepository = await import('./repositories/gameRepository');
     return gameRepository.deleteGame(await getDb(), id);
 };
 
@@ -130,9 +134,9 @@ export const deleteGame = async (id: string): Promise<void> => {
 // --- Full State Retrieval (for client sync) ---
 export const getAllData = async (): Promise<Pick<AppState, 'users' | 'userCredentials' | 'liveGames' | 'adminLogs' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'guilds' | 'towerRankings'>> => {
     const db = await getDb();
-    const userRepository = await import('./repositories/userRepository.js');
-    const gameRepository = await import('./repositories/gameRepository.js');
-    const kvRepository = await import('./repositories/kvRepository.js');
+    const userRepository = await import('./repositories/userRepository');
+    const gameRepository = await import('./repositories/gameRepository');
+    const kvRepository = await import('./repositories/kvRepository');
     
     const users = await userRepository.getAllUsers(db);
     const liveGames = await gameRepository.getAllActiveGames(db);

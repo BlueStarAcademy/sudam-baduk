@@ -1,6 +1,6 @@
 import { useContext } from 'react';
 // Changed to relative import path
-import { AppContext } from '../contexts/AppContext.js';
+import { AppContext } from '../contexts/AppContext';
 
 export const useAppContext = () => {
     const context = useContext(AppContext);

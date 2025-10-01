@@ -1,10 +1,11 @@
+import { Pool } from 'pg';
 
-import { Database } from 'sqlite';
-
-export const getKV = async <T>(db: Database, key: string): Promise<T | null> => {
-    const row = await db.get('SELECT value FROM kv WHERE key = ?', key);
+export const getKV = async <T>(db: Pool, key: string): Promise<T | null> => {
+    const res = await db.query('SELECT value FROM kv WHERE key = $1', [key]);
+    const row = res.rows[0];
     return row && row.value ? JSON.parse(row.value) : null;
 };
-export const setKV = async <T>(db: Database, key: string, value: T): Promise<void> => {
-    await db.run('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', key, JSON.stringify(value));
+
+export const setKV = async <T>(db: Pool, key: string, value: T): Promise<void> => {
+    await db.query('INSERT INTO kv (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', [key, JSON.stringify(value)]);
 };

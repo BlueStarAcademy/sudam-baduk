@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Player, GameStatus, GameMode } from '../types/index.js';
-import type { LiveGameSession } from '../types/index.js';
-import { audioService } from '../services/audioService.js';
-import { PLAYFUL_GAME_MODES } from '../constants/gameModes.js';
+import { Player, GameStatus, GameMode } from '../types/index';
+import type { LiveGameSession } from '../types/index';
+import { audioService } from '../services/audioService';
+import { PLAYFUL_GAME_MODES } from '../constants/gameModes';
 
 export const useClientTimer = (session: LiveGameSession, myPlayerEnum: Player) => {
     const {

@@ -3,22 +3,22 @@
 
 
 import React from 'react';
-import { useAppContext } from '../hooks/useAppContext.js';
+import { useAppContext } from '../hooks/useAppContext';
 
 // Import all view components
-import Login from './Login.js';
-import Register from './Register.js';
-import Profile from './Profile.js';
-import Lobby from './Lobby.js';
-import WaitingRoom from './waiting-room/WaitingRoom.js';
-import Game from '../Game.js';
-import Admin from './Admin.js';
-import TournamentLobby from './TournamentLobby.js';
-import SinglePlayerLobby from './SinglePlayerLobby.js';
-import TowerChallengeLobby from './TowerChallengeLobby.js';
-import Guild from './Guild.js';
+import Login from './Login';
+import Register from './Register';
+import Profile from './Profile';
+import Lobby from './Lobby';
+import WaitingRoom from './waiting-room/WaitingRoom';
+import Game from '../Game';
+import Admin from './Admin';
+import TournamentLobby from './TournamentLobby';
+import SinglePlayerLobby from './SinglePlayerLobby';
+import TowerChallengeLobby from './TowerChallengeLobby';
+import Guild from './Guild';
 // FIX: Changed to default import to match named export from GuildBoss.tsx
-import GuildBoss from './guild/GuildBoss.js';
+import GuildBoss from './guild/GuildBoss';
 
 const Router: React.FC = () => {
     const { currentRoute, currentUser, activeGame } = useAppContext();

@@ -1,7 +1,7 @@
 // Import InventoryItem type.
-import { InventoryItem, InventoryItemType } from '../types/index.js';
+import { InventoryItem, InventoryItemType } from '../types/index';
 // Corrected import path for constants.
-import { CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../constants/items.js';
+import { CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../constants/items';
 
 export const addItemsToInventory = (inventory: InventoryItem[], inventorySlots: number, itemsToAdd: InventoryItem[]): { success: boolean, addedItems: InventoryItem[] } => {
     const tempInventory = JSON.parse(JSON.stringify(inventory));

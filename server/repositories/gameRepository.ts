@@ -1,4 +1,4 @@
-import { Database } from 'sqlite';
+import { Pool } from 'pg';
 import { LiveGameSession } from '../../types/index.js';
 import { rowToGame } from './mappers.js';
 
@@ -15,41 +15,41 @@ const serializeGame = (game: LiveGameSession) => {
     return serialized;
 };
 
-export const getLiveGame = async (db: Database, id: string): Promise<LiveGameSession | null> => {
-    const row = await db.get('SELECT * FROM live_games WHERE id = ?', id);
-    return rowToGame(row);
+export const getLiveGame = async (db: Pool, id: string): Promise<LiveGameSession | null> => {
+    const res = await db.query('SELECT * FROM live_games WHERE id = $1', [id]);
+    return rowToGame(res.rows[0]);
 };
 
-export const getAllActiveGames = async (db: Database): Promise<LiveGameSession[]> => {
-    const rows = await db.all("SELECT * FROM live_games WHERE gameStatus NOT IN ('ended', 'no_contest')");
-    return rows.map(rowToGame).filter((g): g is LiveGameSession => g !== null);
+export const getAllActiveGames = async (db: Pool): Promise<LiveGameSession[]> => {
+    const res = await db.query("SELECT * FROM live_games WHERE \"gameStatus\" NOT IN ('ended', 'no_contest')");
+    return res.rows.map(rowToGame).filter((g): g is LiveGameSession => g !== null);
 };
 
-export const getAllEndedGames = async (db: Database): Promise<LiveGameSession[]> => {
-    const rows = await db.all("SELECT * FROM live_games WHERE gameStatus IN ('ended', 'no_contest')");
-    return rows.map(rowToGame).filter((g): g is LiveGameSession => g !== null);
+export const getAllEndedGames = async (db: Pool): Promise<LiveGameSession[]> => {
+    const res = await db.query("SELECT * FROM live_games WHERE \"gameStatus\" IN ('ended', 'no_contest')");
+    return res.rows.map(rowToGame).filter((g): g is LiveGameSession => g !== null);
 };
 
-export const saveGame = async (db: Database, game: LiveGameSession): Promise<void> => {
-    const existing = await db.get('SELECT id FROM live_games WHERE id = ?', game.id);
+export const saveGame = async (db: Pool, game: LiveGameSession): Promise<void> => {
+    const res = await db.query('SELECT id FROM live_games WHERE id = $1', [game.id]);
+    const existing = res.rows[0];
     const serializedGame = serializeGame(game);
     
-    // Remove properties that are not columns in the table or should not be persisted
     delete serializedGame.pendingAiMove;
 
     if (existing) {
         const columns = Object.keys(serializedGame).filter(key => key !== 'id');
-        const setClause = columns.map(key => `${key} = ?`).join(', ');
+        const setClause = columns.map((key, i) => `"${key}" = $${i + 1}`).join(', ');
         const values = columns.map(key => serializedGame[key]);
-        await db.run(`UPDATE live_games SET ${setClause} WHERE id = ?`, ...values, game.id);
+        await db.query(`UPDATE live_games SET ${setClause} WHERE id = $${columns.length + 1}`, [...values, game.id]);
     } else {
         const columns = Object.keys(serializedGame);
-        const placeholders = columns.map(() => '?').join(',');
+        const placeholders = columns.map((_, i) => `$${i + 1}`).join(',');
         const values = columns.map(key => serializedGame[key]);
-        await db.run(`INSERT INTO live_games (${columns.join(',')}) VALUES (${placeholders})`, ...values);
+        await db.query(`INSERT INTO live_games (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders})`, values);
     }
 };
 
-export const deleteGame = async (db: Database, id: string): Promise<void> => {
-    await db.run('DELETE FROM live_games WHERE id = ?', id);
+export const deleteGame = async (db: Pool, id: string): Promise<void> => {
+    await db.query('DELETE FROM live_games WHERE id = $1', [id]);
 };

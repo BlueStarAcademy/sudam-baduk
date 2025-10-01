@@ -1,6 +1,13 @@
 
 
-import express, { Request, Response, NextFunction } from 'express';
+
+
+
+
+
+import 'dotenv/config';
+// FIX: Changed import to default to resolve type conflicts with global DOM types.
+import express from 'express';
 import cors from 'cors';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV } from './db.js';
 import { handleAction } from './actions/gameActions.js';
@@ -35,7 +42,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // FIX: Use explicit types from 'express' to avoid conflicts with browser globals
-const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // For login/register, no session check is needed
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register') {
         return next();
@@ -67,7 +74,7 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
 
 app.use(userMiddleware);
 
-app.post('/api/auth/register', async (req: Request, res: Response) => {
+app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
         return res.status(400).json({ message: 'Username, password, and nickname are required.' });
@@ -96,7 +103,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 });
 
-app.post('/api/auth/login', async (req: Request, res: Response) => {
+app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: 'Username and password are required.' });
@@ -123,7 +130,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 });
 
-app.post('/api/state', async (req: Request, res: Response) => {
+app.post('/api/state', async (req: express.Request, res: express.Response) => {
     const user = (req as any).user as User;
     let userStatus: UserStatusInfo | undefined;
     if (user) {
@@ -146,7 +153,7 @@ app.post('/api/state', async (req: Request, res: Response) => {
     res.json({ ...data, userStatuses: volatileState.userStatuses, negotiations: volatileState.negotiations, waitingRoomChats: volatileState.waitingRoomChats, gameChats: volatileState.gameChats });
 });
 
-app.post('/api/action', async (req: Request, res: Response) => {
+app.post('/api/action', async (req: express.Request, res: express.Response) => {
     const user = (req as any).user as User;
     if (!user) {
         return res.status(401).json({ message: 'Authentication required for this action.' });

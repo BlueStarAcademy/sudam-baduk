@@ -1,6 +1,6 @@
 
-import { User, CoreStat, Guild } from '../types/index.js';
-import { calculateUserEffects } from './effectService.js';
+import { User, CoreStat, Guild } from '../types/index';
+import { calculateUserEffects } from './effectService';
 
 export const calculateTotalStats = (user: User, guild: Guild | null): Record<CoreStat, number> => {
     const finalStats: Record<CoreStat, number> = {} as any;

@@ -1,8 +1,8 @@
 
-import type { User, Guild, MannerEffects } from '../types/index.js';
-import { CoreStat, SpecialStat, MythicStat, GuildResearchId } from '../types/index.js';
-import { GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index.js';
-import { getMannerEffects } from './manner.js';
+import type { User, Guild, MannerEffects } from '../types/index';
+import { CoreStat, SpecialStat, MythicStat, GuildResearchId } from '../types/index';
+import { GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index';
+import { getMannerEffects } from './manner';
 
 export interface CalculatedEffects extends MannerEffects {
     maxActionPoints: number;
@@ -101,8 +101,8 @@ export const calculateUserEffects = (user: User, guild: Guild | null): Calculate
         }
     }
     
-    calculatedEffects.maxActionPoints += calculatedEffects.specialStatBonuses[SpecialStat.ActionPointMax].flat;
-    const regenBonusPercent = calculatedEffects.specialStatBonuses[SpecialStat.ActionPointRegen].percent;
+    calculatedEffects.maxActionPoints += calculatedEffects.specialStatBonuses[SpecialStat.ActionPointMax]?.flat ?? 0;
+    const regenBonusPercent = calculatedEffects.specialStatBonuses[SpecialStat.ActionPointRegen]?.percent ?? 0;
     if (regenBonusPercent > 0) {
         calculatedEffects.actionPointRegenInterval = Math.floor(calculatedEffects.actionPointRegenInterval / (1 + regenBonusPercent / 100));
     }

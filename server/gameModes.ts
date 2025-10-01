@@ -1,16 +1,16 @@
-import { getGoLogic } from './goLogic.js';
+import { getGoLogic } from './goLogic';
 // FIX: Corrected import paths for constants.
-import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS } from '../constants/index.js';
-import { TOWER_STAGES } from '../constants/towerChallengeConstants.js';
-import { SINGLE_PLAYER_STAGES } from '../constants/singlePlayerConstants.js';
+import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS } from '../constants/index';
+import { TOWER_STAGES } from '../constants/towerChallengeConstants';
+import { SINGLE_PLAYER_STAGES } from '../constants/singlePlayerConstants';
 // FIX: Import types and enums to resolve errors
-import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild } from '../types/index.js';
-import { aiUserId, makeAiMove, getAiUser } from './ai/index.js';
-import { initializeStrategicGame, updateStrategicGameState } from './modes/strategic.js';
-import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.js';
-import * as db from './db.js';
-import * as effectService from '../utils/statUtils.js';
-import { endGame, getGameResult } from './summaryService.js';
+import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild } from '../types/index';
+import { aiUserId, makeAiMove, getAiUser } from './ai/index';
+import { initializeStrategicGame, updateStrategicGameState } from './modes/strategic';
+import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful';
+import * as db from './db';
+import * as effectService from '../utils/statUtils';
+import { endGame, getGameResult } from './summaryService';
 
 export const getNewActionButtons = (game: LiveGameSession): ActionButton[] => {
     const { mode, moveHistory } = game;

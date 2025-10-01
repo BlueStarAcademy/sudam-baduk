@@ -1,4 +1,4 @@
-import * as db from '../db.js';
+import * as db from '../db';
 import { 
     type ServerAction, 
     type User, 
@@ -16,16 +16,16 @@ import {
     Player,
     WinReason,
     GameStatus as GameStatusEnum // Use alias to avoid conflict
-} from '../../types/index.js';
-import { defaultStats, createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultUser } from '../initialData.js';
-import * as summaryService from '../summaryService.js';
-import { createItemFromTemplate } from '../shop.js';
-import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants/items.js';
-import * as mannerService from '../services/mannerService.js';
-import { containsProfanity } from '../../profanity.js';
-import * as effectService from '../../utils/statUtils.js';
-import * as currencyService from '../currencyService.js';
-import { isSameDayKST } from '../../utils/timeUtils.js';
+} from '../../types/index';
+import { defaultStats, createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultUser } from '../initialData';
+import * as summaryService from '../summaryService';
+import { createItemFromTemplate } from '../shop';
+import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants/items';
+import * as mannerService from '../services/mannerService';
+import { containsProfanity } from '../../profanity';
+import * as effectService from '../../utils/statUtils';
+import * as currencyService from '../currencyService';
+import { isSameDayKST } from '../../utils/timeUtils';
 
 type HandleActionResult = { 
     clientResponse?: any;

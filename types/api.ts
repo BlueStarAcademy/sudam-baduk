@@ -1,6 +1,6 @@
-// FIX: Removed AppSettings from this import. It is not directly exported from entities.js and not directly used in this file.
-import { User, UserWithStatus, LiveGameSession, Negotiation, ChatMessage, Guild, TournamentState, TowerRank } from './entities.js';
-import { UserStatus, GameMode } from './enums.js';
+// FIX: Removed AppSettings from this import. It is not directly exported from entities and not directly used in this file.
+import { User, UserWithStatus, LiveGameSession, Negotiation, ChatMessage, Guild, TournamentState, TowerRank } from './entities';
+import { UserStatus, GameMode } from './enums';
 
 export interface UserStatusInfo {
     status: UserStatus;

@@ -1,6 +1,7 @@
 
-import { GameMode, AppRoute } from "../types/index.js";
-import { GAME_MODE_BY_SLUG } from '../constants/gameModes.js';
+
+import { GameMode, AppRoute } from "../types/index";
+import { GAME_MODE_BY_SLUG } from '../constants/gameModes';
 
 const stableStringifyUtil = (data: any): string => {
     const processValue = (value: any): any => {

@@ -1,10 +1,10 @@
 // Change to more specific imports to break circular dependency
-import { Player } from '.././types/enums.js';
-import type { LiveGameSession, Point, BoardState } from '.././types/entities.js';
+import { Player } from '.././types/enums';
+import type { LiveGameSession, Point, BoardState } from '.././types/entities';
 // Corrected import path from circular dependency to the utility file.
-import { processMove as processMoveUtil } from '.././utils/goLogic.js';
+import { processMove as processMoveUtil } from '.././utils/goLogic';
 // Re-export 'processMove' to make it available to other modules that import from this file.
-export { processMove } from '.././utils/goLogic.js';
+export { processMove } from '.././utils/goLogic';
 
 // This is the new pure function for calculating move results.
 // It does not depend on the 'game' closure and does not mutate any state.

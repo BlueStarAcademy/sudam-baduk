@@ -1,17 +1,18 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 // FIX: Separate type and value imports
-import { GameMode, UserStatus, ShopTab, InventoryTab } from '../types/index.js';
-import type { User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult } from '../types/index.js';
-import { audioService } from '../services/audioService.js';
-import { stableStringify, parseHash } from '../utils/appUtils.js';
+import { GameMode, UserStatus, ShopTab, InventoryTab } from '../types/index';
+import type { User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult } from '../types/index';
+// FIX: Corrected import path for audioService.
+import { audioService } from '../services/audioService';
+import { stableStringify, parseHash } from '../utils/appUtils';
 import { 
     DAILY_MILESTONE_THRESHOLDS,
     WEEKLY_MILESTONE_THRESHOLDS,
     MONTHLY_MILESTONE_THRESHOLDS,
     SLUG_BY_GAME_MODE,
     SINGLE_PLAYER_MISSIONS
-} from '../constants/index.js';
-import { defaultSettings } from './useAppSettings.js';
+} from '../constants/index';
+import { defaultSettings } from './useAppSettings';
 
 function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T | undefined>(undefined);

@@ -1,6 +1,6 @@
 
-import { User, MannerEffects } from '../types/index.js';
-import { ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/rules.js';
+import { User, MannerEffects } from '../types/index';
+import { ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/rules';
 
 export const getMannerScore = (user: User): number => {
     return user.mannerScore ?? 200;

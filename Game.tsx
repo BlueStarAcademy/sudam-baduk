@@ -1,11 +1,10 @@
-
 import React from 'react';
 // Correctly import LiveGameSession from the types barrel file.
-import { LiveGameSession } from './types/index.js';
-import { useAppContext } from './hooks/useAppContext.js';
-import SinglePlayerArena from './components/arenas/SinglePlayerArena.js';
-import TowerChallengeArena from './components/arenas/TowerChallengeArena.js';
-import PvpArena from './components/arenas/PvpArena.js';
+import { LiveGameSession } from './types/index';
+import { useAppContext } from './hooks/useAppContext';
+import SinglePlayerArena from './components/arenas/SinglePlayerArena';
+import TowerChallengeArena from './components/arenas/TowerChallengeArena';
+import PvpArena from './components/arenas/PvpArena';
 
 interface GameComponentProps {
     session: LiveGameSession;

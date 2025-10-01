@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { useAppContext } from '../../hooks/useAppContext.js';
-import GuildLobby from './GuildLobby.js';
+import { useAppContext } from '../../hooks/useAppContext';
+import GuildLobby from './GuildLobby';
 // FIX: Changed to named import as GuildDashboard is not a default export.
-import { GuildDashboard } from './GuildDashboard.js';
+import { GuildDashboard } from './GuildDashboard';
 
 const Guild: React.FC = () => {
     // Fetched `guildDonationAnimation` from useAppContext to pass to GuildDashboard.

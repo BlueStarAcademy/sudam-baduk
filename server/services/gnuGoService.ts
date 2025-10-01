@@ -1,8 +1,6 @@
 /// <reference types="node" />
 // server/services/gnuGoService.ts
 
-// FIX: Add reference to Node.js types to provide definitions for globals like `Buffer` and `process`.
-
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
 import { Player, Point, Move } from '../../types/index.js';
 import path from 'path';

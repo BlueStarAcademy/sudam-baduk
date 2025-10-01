@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './components/App.js';
+import App from './components/App';
 import './index.css';
-import { AppProvider } from './contexts/AppContext.js';
+import { AppProvider } from './contexts/AppContext';
 
 const AppContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [scale, setScale] = useState(1);

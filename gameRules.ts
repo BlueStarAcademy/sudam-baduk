@@ -1,4 +1,4 @@
-import { GameMode } from './types/index.js';
+import { GameMode } from './types/index';
 
 type RuleSection = {
     subtitle: string;
