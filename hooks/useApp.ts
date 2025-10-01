@@ -467,7 +467,6 @@ export const useApp = () => {
     const login = useCallback((user: User, sid: string) => {
         setCurrentUser(user);
         setSessionId(sid);
-        window.location.hash = '#/profile';
     }, []);
 
     useEffect(() => {
@@ -573,7 +572,7 @@ export const useApp = () => {
         const handleHashChange = () => {
             const prevRoute = currentRouteRef.current;
             const newRoute = parseHash(window.location.hash);
-            const isExiting = (prevRoute.view === 'profile' && newRoute.view === 'login' && window.location.hash === '');
+            const isExiting = (prevRoute.view === 'profile' && newRoute.view === 'profile' && window.location.hash === '');
             
             if (isExiting && currentUser) {
                 if (showExitToast) { handleLogout(); } 

@@ -48,10 +48,10 @@ export const GO_TERMS_BY_LEVEL: Record<SinglePlayerLevel, { term: string; meanin
 
 export const SINGLE_PLAYER_MISSIONS: SinglePlayerMissionInfo[] = [
     { id: 'mission_attendance', name: '출석하기', description: '바둑학원에 등원하기', unlockStageId: '입문-1', productionRateMinutes: 5, rewardType: 'gold', rewardAmount: 5, maxCapacity: 50, image: '/images/single/Mission1.png' },
-    { id: 'mission_complete_game', name: '바둑한판 완성', description: '계가까지 바둑두기', unlockStageId: '입문-20', productionRateMinutes: 5, rewardType: 'gold', rewardAmount: 10, maxCapacity: 200, image: '/images/single/Mission2.png' },
-    { id: 'mission_rival_match', name: '맞수와 대국', description: '최선을 다해 승부하기', unlockStageId: '초급-20', productionRateMinutes: 5, rewardType: 'gold', rewardAmount: 30, maxCapacity: 300, image: '/images/single/Mission3.png' },
+    { id: 'mission_complete_game', name: '바둑한판 완성', description: '계가까지 바둑두기', unlockStageId: '입문-20', productionRateMinutes: 5, rewardType: 'gold', rewardAmount: 10, maxCapacity: 150, image: '/images/single/Mission2.png' },
+    { id: 'mission_rival_match', name: '맞수와 대국', description: '최선을 다해 승부하기', unlockStageId: '초급-20', productionRateMinutes: 5, rewardType: 'gold', rewardAmount: 20, maxCapacity: 500, image: '/images/single/Mission3.png' },
     { id: 'mission_study_joseki', name: '정석/포석 공부', description: '정석/포석 익히기', unlockStageId: '중급-20', productionRateMinutes: 60, rewardType: 'diamonds', rewardAmount: 1, maxCapacity: 2, image: '/images/single/Mission4.png' },
-    { id: 'mission_league', name: '리그전참가', description: '집중하여 연속 바둑두기', unlockStageId: '고급-20', productionRateMinutes: 5, rewardType: 'gold', rewardAmount: 50, maxCapacity: 700, image: '/images/single/Mission5.png' },
+    { id: 'mission_league', name: '리그전 참가', description: '집중하여 연속 바둑두기', unlockStageId: '고급-20', productionRateMinutes: 5, rewardType: 'gold', rewardAmount: 50, maxCapacity: 800, image: '/images/single/Mission5.png' },
     { id: 'mission_ai_match', name: '인공지능대국', description: '배울점을 끊임없이 찾기', unlockStageId: '유단자-20', productionRateMinutes: 60, rewardType: 'diamonds', rewardAmount: 1, maxCapacity: 3, image: '/images/single/Mission6.png' },
 ];
 

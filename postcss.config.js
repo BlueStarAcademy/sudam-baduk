@@ -14,6 +14,9 @@ export default {
       ],
       theme: {
         extend: {
+          boxShadow: {
+            lg: '0 10px 15px -3px rgb(0 0 0 / 0.2), 0 4px 6px -4px rgb(0 0 0 / 0.1), inset 0 1px 0 0 rgb(255 255 255 / 0.07)',
+          },
           backgroundColor: {
             primary: 'rgb(var(--bg-primary) / <alpha-value>)',
             secondary: 'rgb(var(--bg-secondary) / <alpha-value>)',

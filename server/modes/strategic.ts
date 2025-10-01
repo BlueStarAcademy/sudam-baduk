@@ -144,7 +144,8 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
 
 export const updateStrategicGameState = async (game: LiveGameSession, now: number) => {
     // Timeout logic for standard time control
-    if (game.gameStatus === GameStatus.Playing && game.turnDeadline && now > game.turnDeadline && !isFischerGame(game)) {
+    const deadline = Number(game.turnDeadline);
+    if (game.gameStatus === GameStatus.Playing && deadline && now > deadline && !isFischerGame(game)) {
         const timedOutPlayer = game.currentPlayer;
         const winner = timedOutPlayer === Player.Black ? Player.White : Player.Black;
         const timeKey = timedOutPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';

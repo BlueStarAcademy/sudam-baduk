@@ -1,10 +1,10 @@
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, QuestReward, SinglePlayerStageInfo, SinglePlayerMissionInfo, Guild, ItemGrade, Quest } from '../../types/index.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, QuestReward, SinglePlayerStageInfo, SinglePlayerMissionInfo, Guild, ItemGrade, Quest, ServerActionType } from '../../types/index.js';
 import { DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_REWARDS } from '../../constants/quests.js';
 import { CONSUMABLE_ITEMS } from '../../constants/items.js';
 import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../../constants/singlePlayerConstants.js';
 import { DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS } from '../../constants/quests.js';
-import { updateQuestProgress } from '../questService.js';
+import { updateQuestProgress, getMissionInfoWithLevel } from '../questService.js';
 import * as currencyService from '../currencyService.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
 import { calculateUserEffects } from '../services/effectService.js';
@@ -57,6 +57,12 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
     error?: string;
 }> => {
     const { type, payload } = action;
+
+    const rewardActionTypes: ServerActionType[] = [
+        'CLAIM_MAIL_ATTACHMENTS', 'CLAIM_ALL_MAIL_ATTACHMENTS', 'DELETE_MAIL', 'DELETE_ALL_CLAIMED_MAIL', 'MARK_MAIL_AS_READ',
+        'CLAIM_QUEST_REWARD', 'CLAIM_ACTIVITY_MILESTONE', 'CLAIM_SINGLE_PLAYER_MISSION_REWARD',
+        'CLAIM_ACTION_POINT_QUIZ_REWARD', 'RESET_SINGLE_PLAYER_REWARDS', 'START_SINGLE_PLAYER_MISSION', 'UPGRADE_SINGLE_PLAYER_MISSION'
+    ];
 
     switch(type) {
         case 'CLAIM_MAIL_ATTACHMENTS': {
@@ -199,18 +205,21 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
             if (!missionInfo) return { error: '미션 정보를 찾을 수 없습니다.' };
 
-            const wasAtMax = missionState.accumulatedAmount >= missionInfo.maxCapacity;
+            const level = missionState.level || 1;
+            const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
+
+            const wasAtMax = missionState.accumulatedAmount >= leveledMissionInfo.maxCapacity;
         
             const amountToClaim = Math.floor(missionState.accumulatedAmount);
             const reward: QuestReward = {};
             
-            if (missionInfo.rewardType === 'gold') {
+            if (leveledMissionInfo.rewardType === 'gold') {
                 reward.gold = amountToClaim;
             } else {
                 reward.diamonds = amountToClaim;
             }
         
-            const addedItems = grantReward(user, reward, `${missionInfo.name} 수련과제 보상`);
+            const addedItems = grantReward(user, reward, `${leveledMissionInfo.name} 수련과제 보상`);
             
             missionState.accumulatedAmount -= amountToClaim;
             if (wasAtMax) {
@@ -226,10 +235,44 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                     rewardSummary: {
                         reward,
                         items: addedItems,
-                        title: `${missionInfo.name} 수련과제 보상`
+                        title: `${leveledMissionInfo.name} 수련과제 보상`
                     }
                 } 
             };
+        }
+        case 'UPGRADE_SINGLE_PLAYER_MISSION': {
+            const { missionId } = payload;
+            if (!user.singlePlayerMissions?.[missionId]?.isStarted) {
+                return { error: '미션을 먼저 시작해야 합니다.' };
+            }
+            
+            const missionState = user.singlePlayerMissions[missionId];
+            const level = missionState.level || 1;
+        
+            if (level >= 10) {
+                return { error: '최대 레벨입니다.' };
+            }
+        
+            const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
+            if (!missionInfo) return { error: '미션 정보를 찾을 수 없습니다.' };
+        
+            const missionInfoWithLevel = getMissionInfoWithLevel(missionInfo, level);
+            let cost = 0;
+            
+            if (missionInfoWithLevel.rewardType === 'gold') {
+                cost = missionInfoWithLevel.maxCapacity * 5;
+                if (user.gold < cost) return { error: '골드가 부족합니다.' };
+                currencyService.spendGold(user, cost, `${missionInfo.name} 강화`);
+            } else { // diamond
+                cost = missionInfoWithLevel.maxCapacity * 1000;
+                if (user.gold < cost) return { error: '골드가 부족합니다.' };
+                currencyService.spendGold(user, cost, `${missionInfo.name} 강화`);
+            }
+        
+            missionState.level = level + 1;
+            await db.updateUser(user);
+        
+            return { clientResponse: { updatedUser: user } };
         }
         case 'CLAIM_ACTION_POINT_QUIZ_REWARD': {
             const { score } = payload;
@@ -294,6 +337,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 isStarted: true,
                 lastCollectionTime: Date.now(),
                 accumulatedAmount: 0,
+                level: 1,
             };
             
             await db.updateUser(user);

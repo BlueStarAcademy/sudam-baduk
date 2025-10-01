@@ -1,5 +1,3 @@
-
-
 import { GameMode, AppRoute } from "../types/index";
 import { GAME_MODE_BY_SLUG } from '../constants/gameModes';
 
@@ -45,9 +43,8 @@ export function parseHash(hash: string): AppRoute {
         case 'guild': return { view: 'guild', params: {} };
         case 'guildboss': return { view: 'guildboss', params: {} };
         case 'admin': return { view: 'admin', params: {} };
-        case 'register': return { view: 'register', params: {} };
         case 'profile': return { view: 'profile', params: {} };
-        default: return { view: 'login', params: {} };
+        default: return { view: 'profile', params: {} };
     }
 }
 

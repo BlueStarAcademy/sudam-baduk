@@ -3,7 +3,8 @@ import { Player } from '../../types/index.js';
 import { endGame } from '../summaryService.js';
 
 export const updateSpeedState = (game: LiveGameSession, now: number) => {
-    if (game.gameStatus === GameStatus.Playing && game.turnDeadline && now > game.turnDeadline) {
+    const deadline = Number(game.turnDeadline);
+    if (game.gameStatus === GameStatus.Playing && deadline && now > deadline) {
         const timedOutPlayer = game.currentPlayer;
         const winner = timedOutPlayer === Player.Black ? Player.White : Player.Black;
         

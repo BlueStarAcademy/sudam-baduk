@@ -9,8 +9,8 @@ const AppContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const [isDesktop, setIsDesktop] = useState(window.innerWidth > 1024);
 
   // Base resolution for the desktop layout, updated to 16:9
-  const BASE_WIDTH = 1920;
-  const BASE_HEIGHT = 1080; 
+  const BASE_WIDTH = 1600;
+  const BASE_HEIGHT = 900; 
 
   useEffect(() => {
     const handleResize = () => {

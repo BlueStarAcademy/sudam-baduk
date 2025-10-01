@@ -4,6 +4,37 @@ import { DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS, SPECIAL_GAME_MODES, PLAYFU
 import { isDifferentDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../utils/timeUtils.js';
 import { createDefaultQuests } from './initialData.js';
 
+export const getMissionInfoWithLevel = (missionInfo: types.SinglePlayerMissionInfo, level: number): types.SinglePlayerMissionInfo => {
+    let newInfo = { ...missionInfo };
+    if (level <= 1) return newInfo;
+
+    if (newInfo.rewardType === 'gold') {
+        let maxCapacity = newInfo.maxCapacity;
+        // Start from level 2 for upgrades
+        for (let i = 2; i <= level; i++) {
+            if (i < 10) {
+                maxCapacity *= 1.2;
+            } else { // i == 10
+                maxCapacity *= 1.4;
+            }
+        }
+        newInfo.maxCapacity = Math.floor(maxCapacity);
+    } else { // diamond
+        let maxCapacity = newInfo.maxCapacity;
+        let productionRate = newInfo.productionRateMinutes;
+        for (let i = 2; i <= level; i++) {
+            maxCapacity += 1;
+            if (i === 10) {
+                productionRate -= 20;
+            }
+        }
+        newInfo.maxCapacity = maxCapacity;
+        newInfo.productionRateMinutes = productionRate;
+    }
+    return newInfo;
+}
+
+
 const generateQuestsFromPool = (questPool: Omit<types.Quest, 'id' | 'progress' | 'isClaimed'>[]): types.Quest[] => {
     return questPool.map(q => ({
         ...q,
@@ -160,7 +191,6 @@ export const accumulateMissionRewards = (user: types.User): types.User => {
 
     const now = Date.now();
     let modified = false;
-    // Create a deep copy to avoid direct mutation of the input object
     const updatedUser = JSON.parse(JSON.stringify(user));
 
     for (const missionId in updatedUser.singlePlayerMissions) {
@@ -174,34 +204,37 @@ export const accumulateMissionRewards = (user: types.User): types.User => {
             continue;
         }
 
-        // If it's already full, just ensure the last collection time is up to date to prevent re-calculation.
-        if (missionState.accumulatedAmount >= missionInfo.maxCapacity) {
-            // No need to update time if it's already full and not being collected
+        const level = missionState.level || 1;
+        const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
+        
+        const currentAmount = missionState.accumulatedAmount || 0;
+        if (currentAmount >= leveledMissionInfo.maxCapacity) {
             continue;
         }
         
         const lastCollectionTime = missionState.lastCollectionTime || now;
         const elapsedMs = now - lastCollectionTime;
-        const productionIntervalMs = missionInfo.productionRateMinutes * 60 * 1000;
+        const productionIntervalMs = leveledMissionInfo.productionRateMinutes * 60 * 1000;
 
         if (elapsedMs > 0 && productionIntervalMs > 0) {
-            const rewardsGenerated = Math.floor(elapsedMs / productionIntervalMs);
+            const rewardsToGenerate = Math.floor(elapsedMs / productionIntervalMs);
 
-            if (rewardsGenerated > 0) {
-                const currentAmount = missionState.accumulatedAmount || 0;
-                const newAmount = Math.min(missionInfo.maxCapacity, currentAmount + rewardsGenerated);
+            if (rewardsToGenerate > 0) {
+                const amountGenerated = rewardsToGenerate * leveledMissionInfo.rewardAmount;
+                const newTotal = currentAmount + amountGenerated;
 
-                if (newAmount > currentAmount) {
-                    missionState.accumulatedAmount = newAmount;
-                    // Important: only update lastCollectionTime by the amount of time we've processed
-                    missionState.lastCollectionTime = lastCollectionTime + (rewardsGenerated * productionIntervalMs);
-                    modified = true;
+                if (newTotal >= leveledMissionInfo.maxCapacity) {
+                    const amountNeeded = leveledMissionInfo.maxCapacity - currentAmount;
+                    const ticksToFill = Math.ceil(amountNeeded / leveledMissionInfo.rewardAmount);
+                    const timeToFillMs = ticksToFill * productionIntervalMs;
+                    missionState.accumulatedAmount = leveledMissionInfo.maxCapacity;
+                    missionState.lastCollectionTime = lastCollectionTime + timeToFillMs;
+                } else {
+                    missionState.accumulatedAmount = newTotal;
+                    missionState.lastCollectionTime = lastCollectionTime + (rewardsToGenerate * productionIntervalMs);
                 }
+                modified = true;
             }
-        } else if (missionState.lastCollectionTime === 0) {
-            // First time it runs for this mission
-            missionState.lastCollectionTime = now;
-            modified = true;
         }
     }
 

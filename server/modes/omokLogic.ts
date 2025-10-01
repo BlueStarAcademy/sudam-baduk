@@ -243,7 +243,8 @@ export const initializeOmok = (game: LiveGameSession, neg: Negotiation, now: num
 export const updateOmokState = async (game: LiveGameSession, now: number) => {
     if (updateSharedGameState(game, now)) return;
 
-    if (game.gameStatus === 'playing' && game.turnDeadline && now > game.turnDeadline) {
+    const deadline = Number(game.turnDeadline);
+    if (game.gameStatus === 'playing' && deadline && now > deadline) {
         const timedOutPlayer = game.currentPlayer;
         const winner = timedOutPlayer === Player.Black ? Player.White : Player.Black;
         const timeKey = timedOutPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';

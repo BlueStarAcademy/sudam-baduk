@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
 import Button from './Button.js';
-import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType, InventoryItem, SinglePlayerStageInfo } from '../types.js';
-import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../constants.js';
+import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType, InventoryItem, SinglePlayerStageInfo, SinglePlayerMissionInfo } from '../types/index.js';
+import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../constants/index.js';
 
 const LEVEL_DATA: { id: SinglePlayerLevel; name: string; unlockRequirement: number; image: string; }[] = [
     { id: SinglePlayerLevel.입문, name: '입문반', unlockRequirement: 0, image: '/images/single/Academy.png' },
@@ -137,24 +137,24 @@ const StageListItem: React.FC<{
                  <div className="flex flex-col items-center h-10" title={rewardTitle}>
                     <p className="text-[10px] text-yellow-400 font-semibold whitespace-nowrap">{rewardTitle}</p>
                     <div className="flex items-center flex-wrap justify-center gap-x-1.5">
-                        {(rewards.gold ?? 0) > 0 &&
+                        {(rewards.gold ?? 0) > 0 && (
                             <span className="flex items-center gap-0.5 text-xs" title={`골드 ${rewards.gold}`}>
                                 <img src="/images/Gold.png" alt="골드" className="w-3 h-3" />
                                 {rewards.gold}
                             </span>
-                        }
-                        {(rewards.exp?.amount ?? 0) > 0 &&
+                        )}
+                        {(rewards.exp?.amount ?? 0) > 0 && (
                              <span className="flex items-center gap-0.5 text-xs" title={`경험치 ${rewards.exp!.amount}`}>
                                 <span className="text-sm">⭐</span> {rewards.exp!.amount}
                             </span>
-                        }
+                        )}
                         {rewards.items?.map(renderRewardItem)}
-                        {rewards.bonus && 
+                        {rewards.bonus && (
                             <span className="flex items-center gap-0.5" title={`보너스 스탯 ${rewards.bonus.replace('스탯', '')}`}>
                                 <img src="/images/icons/stat_point.png" alt="Stat Point" className="w-4 h-4" />
                                 {rewards.bonus.replace('스탯', '')}
                             </span>
-                        }
+                        )}
                     </div>
                 </div>
                 <Button 
@@ -198,6 +198,36 @@ const getRequiredProgressForStageId = (stageId: string): number => {
     return baseProgress + stageNum;
 };
 
+const getMissionInfoWithLevel = (missionInfo: SinglePlayerMissionInfo, level: number): SinglePlayerMissionInfo => {
+    let newInfo = { ...missionInfo };
+    if (level <= 1) return newInfo;
+
+    if (newInfo.rewardType === 'gold') {
+        let maxCapacity = newInfo.maxCapacity;
+        for (let i = 2; i <= level; i++) {
+            if (i < 10) {
+                maxCapacity *= 1.2;
+            } else { // i == 10
+                maxCapacity *= 1.4;
+            }
+        }
+        newInfo.maxCapacity = Math.floor(maxCapacity);
+    } else { // diamond
+        let maxCapacity = newInfo.maxCapacity;
+        let productionRate = newInfo.productionRateMinutes;
+        for (let i = 2; i <= level; i++) {
+            maxCapacity += 1;
+            if (i === 10) {
+                productionRate -= 20;
+            }
+        }
+        newInfo.maxCapacity = maxCapacity;
+        newInfo.productionRateMinutes = productionRate;
+    }
+    return newInfo;
+};
+
+
 const MissionCard: React.FC<{
     mission: typeof SINGLE_PLAYER_MISSIONS[0];
     isUnlocked: boolean;
@@ -206,37 +236,43 @@ const MissionCard: React.FC<{
     lastCollectionTime: number;
     onStart: () => void;
     onClaim: () => void;
-}> = ({ mission, isUnlocked, isStarted, accumulatedAmount, lastCollectionTime, onStart, onClaim }) => {
+    level: number;
+    onUpgrade: () => void;
+    leveledInfo: SinglePlayerMissionInfo;
+    upgradeCost: number;
+    canAffordUpgrade: boolean;
+}> = ({ mission, isUnlocked, isStarted, accumulatedAmount, lastCollectionTime, onStart, onClaim, level, onUpgrade, leveledInfo, upgradeCost, canAffordUpgrade }) => {
     const rewardIcon = mission.rewardType === 'gold' ? '/images/Gold.png' : '/images/Zem.png';
     const [tick, setTick] = useState(0);
 
+    const levelText = level >= 10 ? ' (Max)' : ` (Lv.${level})`;
+
     useEffect(() => {
-        if (!isStarted || accumulatedAmount >= mission.maxCapacity) {
+        if (!isStarted || accumulatedAmount >= leveledInfo.maxCapacity) {
             return;
         }
         const timerId = setInterval(() => setTick(t => t + 1), 1000);
         return () => clearInterval(timerId);
-    }, [isStarted, accumulatedAmount, mission.maxCapacity]);
+    }, [isStarted, accumulatedAmount, leveledInfo.maxCapacity]);
 
     const { displayAmount, timeToNextReward } = useMemo(() => {
         if (!isStarted) {
             return { displayAmount: 0, timeToNextReward: 0 };
         }
         
-        const productionIntervalMs = mission.productionRateMinutes * 60 * 1000;
+        const productionIntervalMs = leveledInfo.productionRateMinutes * 60 * 1000;
         if (productionIntervalMs <= 0) {
             return { displayAmount: accumulatedAmount, timeToNextReward: 0 };
         }
 
         let nextRewardTime = 0;
-        if (accumulatedAmount < mission.maxCapacity) {
+        if (accumulatedAmount < leveledInfo.maxCapacity) {
             const elapsedMsSinceLastTick = Date.now() - lastCollectionTime;
             nextRewardTime = productionIntervalMs - (elapsedMsSinceLastTick % productionIntervalMs);
         }
         
         return { displayAmount: accumulatedAmount, timeToNextReward: nextRewardTime };
-    }, [isStarted, lastCollectionTime, accumulatedAmount, mission.productionRateMinutes, mission.maxCapacity, tick]);
-
+    }, [isStarted, lastCollectionTime, accumulatedAmount, leveledInfo, tick]);
 
     if (!isUnlocked) {
         const unlockText = mission.unlockStageId ? `${mission.unlockStageId} 클리어 필요` : '이전 단계 클리어 필요';
@@ -254,7 +290,7 @@ const MissionCard: React.FC<{
         );
     }
     
-    const progressPercent = (displayAmount / mission.maxCapacity) * 100;
+    const progressPercent = (displayAmount / leveledInfo.maxCapacity) * 100;
 
     return (
         <div className="bg-secondary/60 p-2 rounded-lg flex flex-col h-full border-2 border-color text-on-panel">
@@ -263,7 +299,7 @@ const MissionCard: React.FC<{
                     <img src={mission.image} alt={mission.name} className="w-full h-full object-cover p-1" />
                 </div>
                 <div className="flex flex-col min-w-0">
-                    <h4 className="font-bold text-sm text-highlight" title={mission.name}>{mission.name}</h4>
+                    <h4 className="font-bold text-sm text-highlight" title={mission.name}>{mission.name}{level > 0 ? levelText : ''}</h4>
                     <p className="text-[10px] text-tertiary mt-0.5">{mission.description}</p>
                 </div>
             </div>
@@ -273,16 +309,16 @@ const MissionCard: React.FC<{
                      <div className="flex items-center justify-between text-xs text-tertiary">
                         <span className="flex items-center gap-1">
                             <img src={rewardIcon} alt={mission.rewardType} className="w-4 h-4" />
-                            <span>{mission.rewardAmount.toLocaleString()}/{mission.productionRateMinutes}분</span>
+                            <span>{leveledInfo.rewardAmount.toLocaleString()}/{leveledInfo.productionRateMinutes}분</span>
                         </span>
                         <span>
-                           {displayAmount < mission.maxCapacity ? formatTime(timeToNextReward) : 'MAX'}
+                           {displayAmount < leveledInfo.maxCapacity ? formatTime(timeToNextReward) : 'MAX'}
                         </span>
                     </div>
                     <div className="w-full bg-tertiary rounded-full h-3 relative overflow-hidden border border-black/20">
                         <div className="bg-green-500 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
                         <span className="absolute inset-0 text-[10px] font-bold text-white flex items-center justify-center" style={{ textShadow: '1px 1px 1px black' }}>
-                            {Math.floor(displayAmount).toLocaleString()}/{mission.maxCapacity.toLocaleString()}
+                            {Math.floor(displayAmount).toLocaleString()}/{leveledInfo.maxCapacity.toLocaleString()}
                         </span>
                     </div>
                     <Button
@@ -292,6 +328,15 @@ const MissionCard: React.FC<{
                         className="w-full !py-1 !text-xs"
                     >
                         수령하기 ({Math.floor(displayAmount).toLocaleString()})
+                    </Button>
+                     <Button 
+                        onClick={onUpgrade} 
+                        disabled={level >= 10 || !canAffordUpgrade}
+                        colorScheme="blue"
+                        className="w-full !py-1 !text-xs"
+                        title={!canAffordUpgrade ? '골드가 부족합니다' : `강화 비용: ${upgradeCost.toLocaleString()} 골드`}
+                    >
+                        강화 (💰{upgradeCost.toLocaleString()})
                     </Button>
                 </div>
             ) : (
@@ -330,6 +375,14 @@ const SinglePlayerMissions: React.FC<{onClose?: () => void}> = ({ onClose }) => 
 
                     const missionState = currentUserWithStatus.singlePlayerMissions?.[mission.id];
                     const isStarted = !!missionState?.isStarted;
+                    const level = missionState?.level || 1;
+                    const leveledInfo = getMissionInfoWithLevel(mission, level);
+                    
+                    const upgradeCost = leveledInfo.rewardType === 'gold' 
+                        ? leveledInfo.maxCapacity * 5 
+                        : leveledInfo.maxCapacity * 1000;
+                    
+                    const canAffordUpgrade = currentUserWithStatus.gold >= upgradeCost;
                     
                     return (
                         <MissionCard 
@@ -341,6 +394,15 @@ const SinglePlayerMissions: React.FC<{onClose?: () => void}> = ({ onClose }) => 
                             lastCollectionTime={missionState?.lastCollectionTime ?? 0}
                             onStart={() => handlers.handleAction({ type: 'START_SINGLE_PLAYER_MISSION', payload: { missionId: mission.id } })}
                             onClaim={() => handlers.handleAction({ type: 'CLAIM_SINGLE_PLAYER_MISSION_REWARD', payload: { missionId: mission.id } })}
+                            level={level}
+                            onUpgrade={() => {
+                                if (window.confirm(`${upgradeCost.toLocaleString()} 골드를 사용하여 강화하시겠습니까?`)) {
+                                    handlers.handleAction({ type: 'UPGRADE_SINGLE_PLAYER_MISSION', payload: { missionId: mission.id } })
+                                }
+                            }}
+                            leveledInfo={leveledInfo}
+                            upgradeCost={upgradeCost}
+                            canAffordUpgrade={canAffordUpgrade}
                         />
                     );
                 })}

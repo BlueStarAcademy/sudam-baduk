@@ -713,6 +713,7 @@ export interface SinglePlayerMissionState {
     isStarted: boolean;
     lastCollectionTime: number;
     accumulatedAmount: number;
+    level?: number;
 }
 
 export interface CurrencyLog {

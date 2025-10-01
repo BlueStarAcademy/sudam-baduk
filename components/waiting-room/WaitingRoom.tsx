@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
-import { GameMode, ServerAction, Announcement, OverrideAnnouncement, UserWithStatus, LiveGameSession } from '../../types.js';
+import { GameMode, ServerAction, Announcement, OverrideAnnouncement, UserWithStatus, LiveGameSession } from '../../types/index.js';
 import Avatar from '../Avatar.js';
 import HelpModal from '../HelpModal.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
@@ -10,7 +10,7 @@ import RankingList from './RankingList.js';
 import GameList from './GameList.js';
 import ChatWindow from './ChatWindow.js';
 import TierInfoModal from '../TierInfoModal.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, aiUserId } from '../../constants.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, aiUserId } from '../../constants/index.js';
 import QuickAccessSidebar from '../QuickAccessSidebar.js';
 import Button from '../Button.js';
 
@@ -146,25 +146,16 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
   const ongoingGames = (Object.values(liveGames) as LiveGameSession[]).filter(g => g.mode === mode && !g.isAiGame);
   
   const usersInThisRoom = useMemo(() => {
-        const all = onlineUsers.filter(u => {
-            if (u.mode === mode) {
-                return true;
-            }
-            if (!u.mode) {
-                const gameId = u.gameId || u.spectatingGameId;
-                if (gameId) {
-                    const game = liveGames[gameId];
-                    if (game && game.mode === mode) {
-                        return true;
-                    }
-                }
-            }
-            
-            return false;
-        });
-        const me = all.find(u => u.id === currentUserWithStatus.id);
-        return me ? [me, ...all.filter(u => u.id !== currentUserWithStatus.id)] : all;
-  }, [onlineUsers, mode, currentUserWithStatus.id, liveGames]);
+    // Filter for users whose status indicates they are associated with this game mode.
+    // This includes users waiting, in-game, or spectating games of this mode.
+    const all = onlineUsers.filter(u => u.mode === mode);
+    
+    // Find the current user in the filtered list
+    const me = all.find(u => u.id === currentUserWithStatus.id);
+    
+    // Return the list with the current user at the top, if present.
+    return me ? [me, ...all.filter(u => u.id !== currentUserWithStatus.id)] : all;
+  }, [onlineUsers, mode, currentUserWithStatus.id]);
 
   const isStrategic = useMemo(() => SPECIAL_GAME_MODES.some(m => m.mode === mode), [mode]);
   const lobbyType = isStrategic ? '전략' : '놀이';

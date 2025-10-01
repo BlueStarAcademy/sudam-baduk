@@ -2,7 +2,7 @@
 
 export type AppRoute = {
     // Add 'guildboss' to the AppRoute view types.
-    view: 'login' | 'register' | 'profile' | 'lobby' | 'waiting' | 'game' | 'admin' | 'tournament' | 'singleplayer' | 'towerchallenge' | 'guild' | 'guildboss';
+    view: 'profile' | 'lobby' | 'waiting' | 'game' | 'admin' | 'tournament' | 'singleplayer' | 'towerchallenge' | 'guild' | 'guildboss';
     params: any;
 };
 

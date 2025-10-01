@@ -24,7 +24,7 @@ export const createUser = async (db: Pool, user: User): Promise<void> => {
         const value = (user as any)[key];
         return typeof value === 'object' && value !== null ? JSON.stringify(value) : value;
     });
-    await db.query(`INSERT INTO users (${columns.join(',')}) VALUES (${placeholders})`, values);
+    await db.query(`INSERT INTO users (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders})`, values);
 };
 
 
