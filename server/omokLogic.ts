@@ -1,15 +1,15 @@
-import * as types from '../types.js';
-import type { LiveGameSession, Point, Player, BoardState } from '../types.js';
+// FIX: Corrected import path for types.
+import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason } from '../types/index.js';
 
 export const getOmokLogic = (game: LiveGameSession) => {
     const { settings: { boardSize } } = game;
     const player = game.currentPlayer;
-    const opponent = player === types.Player.Black ? types.Player.White : types.Player.Black;
+    const opponent = player === Player.Black ? Player.White : Player.Black;
 
     const getLine = (x: number, y: number, dx: number, dy: number, board: BoardState): Point[] => {
         const line: Point[] = [{x, y}];
         const p = board[y][x];
-        if (p === types.Player.None) return [];
+        if (p === Player.None) return [];
 
         for(let i = 1; i < 6; i++) {
             const nx = x + i * dx;
@@ -40,18 +40,16 @@ export const getOmokLogic = (game: LiveGameSession) => {
 
     const checkWin = (x: number, y: number, board: BoardState): { line: Point[] } | null => {
         const p = board[y][x];
-        if (p === types.Player.None) return null;
+        if (p === Player.None) return null;
 
         const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
         for (const { dx, dy } of directions) {
             const line = getLine(x, y, dx, dy, board);
             
             if (line.length >= 5) {
-                // If overline is forbidden for black and it's an overline, it's not a win.
-                if (game.settings.hasOverlineForbidden && p === types.Player.Black && line.length > 5) {
+                if (game.settings.hasOverlineForbidden && p === Player.Black && line.length > 5) {
                     continue;
                 }
-                // Otherwise, it's a win (for White with >=5, or for Black with ==5, or for Black with >5 if allowed).
                 return { line: line.slice(0, 5) };
             }
         }
@@ -60,8 +58,8 @@ export const getOmokLogic = (game: LiveGameSession) => {
     
     const checkOpenState = (line: (Player | null)[]) => {
         let openEnds = 0;
-        if (line[0] === types.Player.None) openEnds++;
-        if (line[line.length-1] === types.Player.None) openEnds++;
+        if (line[0] === Player.None) openEnds++;
+        if (line[line.length-1] === Player.None) openEnds++;
         return openEnds;
     };
 
@@ -89,8 +87,8 @@ export const getOmokLogic = (game: LiveGameSession) => {
                     game.boardState[n2y]?.[n2x] === opponent &&
                     game.boardState[n3y]?.[n3x] === player
                 ) {
-                    game.boardState[n1y][n1x] = types.Player.None;
-                    game.boardState[n2y][n2x] = types.Player.None;
+                    game.boardState[n1y][n1x] = Player.None;
+                    game.boardState[n2y][n2x] = Player.None;
                     capturedCount += 2;
                 }
             }
@@ -100,7 +98,7 @@ export const getOmokLogic = (game: LiveGameSession) => {
 
     const checkPotentialCaptures = (x: number, y: number, player: Player, board: BoardState): number => {
         let capturedCount = 0;
-        const opponent = player === types.Player.Black ? types.Player.White : types.Player.Black;
+        const opponent = player === Player.Black ? Player.White : Player.Black;
         const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
         const boardSize = board.length;
 
@@ -152,7 +150,7 @@ export const getOmokLogic = (game: LiveGameSession) => {
         const end = line[line.length - 1];
         const endNextX = end.x + dx;
         const endNextY = end.y + dy;
-        if (endNextX >= 0 && endNextX < boardSize && endNextY >= 0 && endNextY < boardSize && board[endNextY][endNextX] === types.Player.None) {
+        if (endNextX >= 0 && endNextX < boardSize && endNextY >= 0 && endNextY < boardSize && board[endNextY][endNextX] === Player.None) {
             openEnds++;
         }
 
@@ -160,20 +158,59 @@ export const getOmokLogic = (game: LiveGameSession) => {
         const start = line[0];
         const startPrevX = start.x - dx;
         const startPrevY = start.y - dy;
-        if (startPrevX >= 0 && startPrevX < boardSize && startPrevY >= 0 && startPrevY < boardSize && board[startPrevY][startPrevX] === types.Player.None) {
+        if (startPrevX >= 0 && startPrevX < boardSize && startPrevY >= 0 && startPrevY < boardSize && board[startPrevY][startPrevX] === Player.None) {
             openEnds++;
         }
 
         return { length, openEnds };
     };
 
+    const calculateMoveScore = (x: number, y: number, playerToSim: Player, board: BoardState): number => {
+        const tempBoard = JSON.parse(JSON.stringify(board));
+        tempBoard[y][x] = playerToSim;
+
+        if (checkWin(x, y, tempBoard)) {
+            const p = tempBoard[y][x];
+            if (game.settings.hasOverlineForbidden && p === Player.Black) {
+                const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
+                for (const { dx, dy } of directions) {
+                    if (getLine(x, y, dx, dy, tempBoard).length > 5) return 0; // Invalid move
+                }
+            }
+            return 100000;
+        }
+
+        let score = 0;
+        const directions = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 1, dy: -1 }];
+        
+        for (const { dx, dy } of directions) {
+            const { length, openEnds } = getLineStats(x, y, playerToSim, tempBoard, dx, dy);
+            
+            if (length === 4) {
+                if (openEnds === 2) score += 5000; // Open four
+                else if (openEnds === 1) score += 500; // Closed four
+            } else if (length === 3) {
+                if (openEnds === 2) score += 200; // Open three
+                else if (openEnds === 1) score += 50; // Closed three
+            } else if (length === 2) {
+                if (openEnds === 2) score += 10; // Open two
+            }
+        }
+        
+        if (game.mode === GameMode.Ttamok) {
+            const captures = checkPotentialCaptures(x, y, playerToSim, tempBoard);
+            score += captures * 100; // Each capture is valuable
+        }
+
+        return score;
+    };
 
     return {
         checkWin,
         is33,
-        getLineInfo,
         performTtamokCapture,
         checkPotentialCaptures,
-        getLineStats
+        getLineStats,
+        calculateMoveScore,
     };
 };

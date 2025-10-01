@@ -1,41 +1,39 @@
 
-import * as types from '../../types.js';
+import { type LiveGameSession, type AlkkagiStone, type Point, Player, type ServerAction, type User, type HandleActionResult, type Negotiation, type VolatileState, MythicStat, GameMode, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
-import { handleSharedAction, updateSharedGameState, handleTimeoutFoul } from './shared.js';
-import { aiUserId } from '../aiPlayer.js';
-import { CURLING_TURN_TIME_LIMIT, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
-import { endGame } from '../summaryService.js';
-import * as effectService from '../../services/effectService.js';
+import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';
+import { aiUserId } from '../ai/index.js';
+import { CURLING_TURN_TIME_LIMIT } from '../../constants/index.js';
+// FIX: Corrected the import path for effectService to point to the root services directory where calculateUserEffects is exported.
+import * as effectService from '../services/effectService.js';
+import { endGame, processGameSummary } from '../summaryService.js';
 
 // --- Simulation & Scoring Logic ---
-const runServerSimulation = (initialStones: types.AlkkagiStone[], flickedStone: types.AlkkagiStone, velocity: types.Point): { finalStones: types.AlkkagiStone[], stonesFallen: types.AlkkagiStone[] } => {
-    let simStones: types.AlkkagiStone[] = JSON.parse(JSON.stringify(initialStones || []));
+const runServerSimulation = (initialStones: AlkkagiStone[], flickedStone: AlkkagiStone, velocity: Point, duration: number): { finalStones: AlkkagiStone[], stonesFallen: AlkkagiStone[] } => {
+    let simStones: AlkkagiStone[] = JSON.parse(JSON.stringify(initialStones || []));
     let stoneToAnimate = { ...flickedStone, vx: velocity.x, vy: velocity.y, onBoard: true };
     simStones.push(stoneToAnimate);
 
     const boardSizePx = 840;
     const friction = 0.98;
-    const maxIterations = 1000;
-    let iterations = 0;
-    const stonesFallen: types.AlkkagiStone[] = [];
+    const timeStep = 1000 / 60; // 60fps simulation step
+    const numSteps = Math.floor(duration / timeStep);
+    const stonesFallen: AlkkagiStone[] = [];
 
-    while (iterations < maxIterations) {
+    for (let i = 0; i < numSteps; i++) {
         let stonesAreMoving = false;
         
         for (const stone of simStones) {
             if (!stone.onBoard) continue;
-            
-            // Use fixed time step logic to match server simulation
+
             stone.x += stone.vx;
             stone.y += stone.vy;
             stone.vx *= friction;
             stone.vy *= friction;
-
+            
             if (Math.abs(stone.vx) < 0.01) stone.vx = 0;
             if (Math.abs(stone.vy) < 0.01) stone.vy = 0;
-            if (stone.vx !== 0 || stone.vy !== 0) {
-                stonesAreMoving = true;
-            }
+            if (stone.vx !== 0 || stone.vy !== 0) stonesAreMoving = true;
 
             if (stone.x < 0 || stone.x > boardSizePx || stone.y < 0 || stone.y > boardSizePx) {
                 if (stone.onBoard) {
@@ -44,15 +42,17 @@ const runServerSimulation = (initialStones: types.AlkkagiStone[], flickedStone: 
                 }
             }
         }
-        for (let i = 0; i < simStones.length; i++) {
-            for (let j = i + 1; j < simStones.length; j++) {
-                const s1 = simStones[i];
+
+        for (let k = 0; k < simStones.length; k++) {
+            for (let j = k + 1; j < simStones.length; j++) {
+                const s1 = simStones[k];
                 const s2 = simStones[j];
                 if (!s1.onBoard || !s2.onBoard) continue;
                 const dx = s2.x - s1.x;
                 const dy = s2.y - s1.y;
                 const distance = Math.hypot(dx,dy);
                 const radiiSum = s1.radius + s2.radius;
+
                 if (distance < radiiSum) {
                     const nx = dx / distance;
                     const ny = dy / distance;
@@ -76,14 +76,13 @@ const runServerSimulation = (initialStones: types.AlkkagiStone[], flickedStone: 
         }
         
         if (!stonesAreMoving) break;
-        iterations++;
     }
 
     return { finalStones: simStones, stonesFallen };
 };
 
 
-const endCurlingRound = (game: types.LiveGameSession, now: number) => {
+const endCurlingRound = (game: LiveGameSession, now: number) => {
     const boardSizePx = 840;
     const center = { x: boardSizePx / 2, y: boardSizePx / 2 };
     const cellSize = boardSizePx / 19;
@@ -105,26 +104,30 @@ const endCurlingRound = (game: types.LiveGameSession, now: number) => {
         
         if (score > 0) {
             scoredStones[stone.id] = score;
-            if (stone.player === types.Player.Black) houseScoreBlack += score;
+            if (stone.player === Player.Black) houseScoreBlack += score;
             else houseScoreWhite += score;
         }
     }
 
-    const blackCumulativeBeforeRound = game.curlingRoundSummary?.cumulativeScores[types.Player.Black] || 0;
-    const whiteCumulativeBeforeRound = game.curlingRoundSummary?.cumulativeScores[types.Player.White] || 0;
+    const blackCumulativeBeforeRound = game.curlingRoundSummary?.cumulativeScores?.[Player.Black] || 0;
+    const whiteCumulativeBeforeRound = game.curlingRoundSummary?.cumulativeScores?.[Player.White] || 0;
+    
+    if (!game.curlingScores) {
+        game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 };
+    }
 
-    const blackKnockoutsThisRound = (game.curlingScores![types.Player.Black] || 0) - blackCumulativeBeforeRound;
-    const whiteKnockoutsThisRound = (game.curlingScores![types.Player.White] || 0) - whiteCumulativeBeforeRound;
+    const blackKnockoutsThisRound = (game.curlingScores[Player.Black] || 0) - blackCumulativeBeforeRound;
+    const whiteKnockoutsThisRound = (game.curlingScores[Player.White] || 0) - whiteCumulativeBeforeRound;
 
-    game.curlingScores![types.Player.Black] += houseScoreBlack;
-    game.curlingScores![types.Player.White] += houseScoreWhite;
+    game.curlingScores[Player.Black] += houseScoreBlack;
+    game.curlingScores[Player.White] += houseScoreWhite;
     
     const blackTotal = houseScoreBlack + blackKnockoutsThisRound;
     const whiteTotal = houseScoreWhite + whiteKnockoutsThisRound;
 
     game.curlingRoundSummary = {
         round: game.curlingRound!,
-        roundWinner: blackTotal > whiteTotal ? types.Player.Black : (whiteTotal > blackTotal ? types.Player.White : null),
+        roundWinner: blackTotal > whiteTotal ? Player.Black : (whiteTotal > blackTotal ? Player.White : null),
         black: { houseScore: houseScoreBlack, knockoutScore: blackKnockoutsThisRound, total: blackTotal },
         white: { houseScore: houseScoreWhite, knockoutScore: whiteKnockoutsThisRound, total: whiteTotal },
         cumulativeScores: { ...game.curlingScores! },
@@ -132,30 +135,30 @@ const endCurlingRound = (game: types.LiveGameSession, now: number) => {
         scoredStones: scoredStones
     };
     
-    game.gameStatus = 'curling_round_end';
-    game.revealEndTime = now + 20000;
+    game.gameStatus = GameStatus.CurlingRoundEnd;
+    game.revealEndTime = now + 15000;
     if (game.isAiGame) {
         if (!game.roundEndConfirmations) game.roundEndConfirmations = {};
-        game.roundEndConfirmations[aiUserId] = now;
+        (game.roundEndConfirmations as any)[aiUserId] = now;
     }
 };
 
 
 // --- Game State Management ---
 
-export const initializeCurling = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {
+export const initializeCurling = (game: LiveGameSession, neg: Negotiation, now: number, p1Guild: Guild | null, p2Guild: Guild | null) => {
     const p1 = game.player1;
     const p2 = game.player2;
     
     game.curlingStones = [];
     game.activeCurlingItems = {};
 
-    const p1Effects = effectService.calculateUserEffects(p1);
-    const p2Effects = effectService.calculateUserEffects(p2);
-    const p1SlowBonus = p1Effects.mythicStatBonuses[types.MythicStat.AlkkagiSlowBonus]?.flat || 0;
-    const p1AimBonus = p1Effects.mythicStatBonuses[types.MythicStat.AlkkagiAimingBonus]?.flat || 0;
-    const p2SlowBonus = p2Effects.mythicStatBonuses[types.MythicStat.AlkkagiSlowBonus]?.flat || 0;
-    const p2AimBonus = p2Effects.mythicStatBonuses[types.MythicStat.AlkkagiAimingBonus]?.flat || 0;
+    const p1Effects = effectService.calculateUserEffects(p1, p1Guild);
+    const p2Effects = effectService.calculateUserEffects(p2, p2Guild);
+    const p1SlowBonus = p1Effects.mythicStatBonuses[MythicStat.AlkkagiSlowBonus]?.flat || 0;
+    const p1AimBonus = p1Effects.mythicStatBonuses[MythicStat.AlkkagiAimingBonus]?.flat || 0;
+    const p2SlowBonus = p2Effects.mythicStatBonuses[MythicStat.AlkkagiSlowBonus]?.flat || 0;
+    const p2AimBonus = p2Effects.mythicStatBonuses[MythicStat.AlkkagiAimingBonus]?.flat || 0;
 
     game.curlingItemUses = {
         [p1.id]: { slow: (neg.settings.curlingSlowItemCount || 0) + p1SlowBonus, aimingLine: (neg.settings.curlingAimingLineItemCount || 0) + p1AimBonus },
@@ -163,8 +166,8 @@ export const initializeCurling = (game: types.LiveGameSession, neg: types.Negoti
     };
 
     if (game.isAiGame) {
-        const humanPlayerColor = neg.settings.player1Color || types.Player.Black;
-        if (humanPlayerColor === types.Player.Black) {
+        const humanPlayerColor = neg.settings.player1Color || Player.Black;
+        if (humanPlayerColor === Player.Black) {
             game.blackPlayerId = p1.id;
             game.whitePlayerId = p2.id;
         } else {
@@ -173,142 +176,250 @@ export const initializeCurling = (game: types.LiveGameSession, neg: types.Negoti
         }
         
         // Default: 백(후공) gets the hammer (last stone advantage)
-        game.hammerPlayerId = game.whitePlayerId ?? undefined; 
-        game.currentPlayer = types.Player.Black; // 선공 starts
-        game.gameStatus = 'curling_playing';
+        game.hammerPlayerId = game.whitePlayerId; 
+        game.currentPlayer = Player.Black; // 선공 starts
+        game.gameStatus = GameStatus.CurlingPlaying;
         game.curlingRound = 1;
-        game.curlingScores = { [types.Player.Black]: 0, [types.Player.White]: 0, [types.Player.None]: 0 };
+        game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 };
         game.stonesThrownThisRound = { [game.player1.id]: 0, [game.player2.id]: 0 };
         game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
+        game.turnDeadline = game.curlingTurnDeadline;
         game.turnStartTime = now;
 
     } else {
-        game.gameStatus = 'turn_preference_selection';
+        game.gameStatus = GameStatus.TurnPreferenceSelection;
         game.turnChoices = { [p1.id]: null, [p2.id]: null };
         game.turnChoiceDeadline = now + 30000;
         game.turnSelectionTiebreaker = 'rps';
     }
 };
 
-export const updateCurlingState = (game: types.LiveGameSession, now: number) => {
+export const updateCurlingState = async (game: LiveGameSession, now: number) => {
     if (updateSharedGameState(game, now)) return;
 
     const p1Id = game.player1.id;
     const p2Id = game.player2.id;
     
     switch (game.gameStatus) {
-        case 'curling_start_confirmation': {
+        case GameStatus.CurlingRpsReveal:
+            if (game.revealEndTime && now > game.revealEndTime) {
+                const p1Choice = game.rpsState?.[p1Id];
+                const p2Choice = game.rpsState?.[p2Id];
+
+                if (p1Choice && p2Choice) {
+                    let winnerId: string | null = null;
+                    if (p1Choice !== p2Choice) {
+                        const p1Wins = (p1Choice === RPSChoice.Rock && p2Choice === RPSChoice.Scissors) ||
+                                       (p1Choice === RPSChoice.Scissors && p2Choice === RPSChoice.Paper) ||
+                                       (p1Choice === RPSChoice.Paper && p2Choice === RPSChoice.Rock);
+                        winnerId = p1Wins ? p1Id : p2Id;
+                    } else { // Handle tie
+                        if ((game.rpsRound || 1) >= 3) {
+                            winnerId = Math.random() < 0.5 ? p1Id : p2Id;
+                        } else {
+                            return; // Let shared state handle re-roll
+                        }
+                    }
+                    
+                    if (winnerId) {
+                        const loserId = winnerId === p1Id ? p2Id : p1Id;
+                        const winnerChoice = game.turnChoices![winnerId]!;
+
+                        if (winnerChoice === 'first') {
+                            game.blackPlayerId = winnerId;
+                            game.whitePlayerId = loserId;
+                        } else {
+                            game.whitePlayerId = winnerId;
+                            game.blackPlayerId = loserId;
+                        }
+                        
+                        game.gameStatus = GameStatus.CurlingStartConfirmation; 
+                        game.revealEndTime = now + 30000;
+                        game.preGameConfirmations = { [p1Id]: false, [p2Id]: false };
+                        if (game.isAiGame) (game.preGameConfirmations as any)[aiUserId] = true;
+                    }
+                }
+            }
+            break;
+        case GameStatus.CurlingStartConfirmation: {
             const bothConfirmed = game.preGameConfirmations?.[p1Id] && game.preGameConfirmations?.[p2Id];
             const deadlinePassed = game.revealEndTime && now > game.revealEndTime;
             if (bothConfirmed || deadlinePassed) {
-                game.hammerPlayerId = game.whitePlayerId ?? undefined; // White gets hammer
-                game.currentPlayer = types.Player.Black;
-                game.gameStatus = 'curling_playing';
+                const rpsWinnerId = game.blackPlayerId === p1Id ? p1Id : p2Id;
+                const rpsWinnerChoice = game.turnChoices?.[rpsWinnerId];
+
+                if (rpsWinnerChoice === 'second') { 
+                    game.hammerPlayerId = rpsWinnerId;
+                } else {
+                    game.hammerPlayerId = rpsWinnerId === p1Id ? p2Id : p1Id;
+                }
+                
+                game.currentPlayer = game.hammerPlayerId === game.blackPlayerId ? Player.White : Player.Black;
+                
+                game.gameStatus = GameStatus.CurlingPlaying;
                 game.curlingRound = 1;
-                game.curlingScores = { [types.Player.Black]: 0, [types.Player.White]: 0, [types.Player.None]: 0 };
+                game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 };
+                game.curlingStones = [];
                 game.stonesThrownThisRound = { [p1Id]: 0, [p2Id]: 0 };
                 game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
+                game.turnDeadline = game.curlingTurnDeadline;
                 game.turnStartTime = now;
-                
+                // Clean up pre-game state
                 game.preGameConfirmations = {};
                 game.revealEndTime = undefined;
-                game.turnChoices = undefined;
                 game.rpsState = undefined;
                 game.rpsRound = undefined;
             }
             break;
         }
-        case 'curling_playing': {
+
+        case GameStatus.CurlingPlaying:
+        case GameStatus.CurlingTiebreakerPlaying:
             if (game.curlingTurnDeadline && now > game.curlingTurnDeadline) {
-                const timedOutPlayerId = game.currentPlayer === types.Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
-                const gameEnded = handleTimeoutFoul(game, timedOutPlayerId, now);
-                if (gameEnded) return;
-
-                if (!game.curlingStonesLostToFoul) game.curlingStonesLostToFoul = {};
-                game.curlingStonesLostToFoul[timedOutPlayerId] = (game.curlingStonesLostToFoul[timedOutPlayerId] || 0) + 1;
-
-                game.stonesThrownThisRound![timedOutPlayerId]++;
-                
-                const bothPlayersHaveThrownAllStones = 
-                    game.stonesThrownThisRound![p1Id] >= game.settings.curlingStoneCount! &&
-                    game.stonesThrownThisRound![p2Id] >= game.settings.curlingStoneCount!;
-
-                if (bothPlayersHaveThrownAllStones) {
-                    endCurlingRound(game, now);
-                } else {
-                    game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-                    game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
-                    game.turnStartTime = now;
+                const timedOutPlayerId = game.currentPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+                const gameEnded = handlePlayfulTimeoutFoul(game, timedOutPlayerId, now);
+                if (!gameEnded) {
+                    if (!game.curlingStonesLostToFoul) game.curlingStonesLostToFoul = {};
+                    game.curlingStonesLostToFoul[timedOutPlayerId] = (game.curlingStonesLostToFoul[timedOutPlayerId] || 0) + 1;
+                    
+                    if (!game.stonesThrownThisRound) game.stonesThrownThisRound = {};
+                    game.stonesThrownThisRound[timedOutPlayerId] = (game.stonesThrownThisRound[timedOutPlayerId] || 0) + 1;
+                    
+                    const totalStones = game.settings.curlingStoneCount || 5;
+                    const p1Thrown = game.stonesThrownThisRound[game.player1.id] || 0;
+                    const p2Thrown = game.stonesThrownThisRound[game.player2.id] || 0;
+                    
+                    if (p1Thrown >= totalStones && p2Thrown >= totalStones) {
+                        endCurlingRound(game, now);
+                    } else {
+                        game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+                        game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
+                        game.turnDeadline = game.curlingTurnDeadline;
+                        game.turnStartTime = now;
+                    }
                 }
             }
             break;
-        }
-        case 'curling_animating': {
-            if (game.animation && now > game.animation.startTime + game.animation.duration) {
-                const { stone, velocity } = game.animation as types.AnimationData & { type: 'curling_flick' };
-                const { finalStones, stonesFallen } = runServerSimulation(game.curlingStones!, stone, velocity);
-                game.curlingStones = finalStones;
-                
-                const knockoutPlayerId = stone.player === types.Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
-                const knockoutPlayerEnum = stone.player;
-                const opponentEnum = knockoutPlayerEnum === types.Player.Black ? types.Player.White : types.Player.Black;
-                const knockoutScore = stonesFallen.filter(s => s.player === opponentEnum).length;
-                if (knockoutScore > 0) {
-                    game.curlingScores![knockoutPlayerEnum] += knockoutScore;
+
+        case GameStatus.CurlingAnimating:
+            if (game.revealEndTime && now > game.revealEndTime) {
+                const animation = game.animation;
+                if (animation && animation.type === 'curling_flick') {
+                    const { stone, velocity, duration } = animation;
+                    const simResult = runServerSimulation(game.curlingStones || [], stone, velocity, duration);
+                    game.curlingStones = simResult.finalStones;
+                    
+                    for (const fallenStone of simResult.stonesFallen) {
+                        // The player who did NOT throw the stone gets the point
+                        if (fallenStone.player === Player.Black) {
+                            if (game.curlingScores) game.curlingScores[Player.White]++;
+                        } else {
+                            if (game.curlingScores) game.curlingScores[Player.Black]++;
+                        }
+                    }
                 }
                 
                 game.animation = null;
-                
-                const bothPlayersHaveThrownAllStones = 
-                    game.stonesThrownThisRound![p1Id] >= game.settings.curlingStoneCount! &&
-                    game.stonesThrownThisRound![p2Id] >= game.settings.curlingStoneCount!;
-                
-                if (bothPlayersHaveThrownAllStones) {
+                game.revealEndTime = undefined;
+
+                if (game.isTiebreaker) {
+                    game.tiebreakerStonesThrown = (game.tiebreakerStonesThrown || 0) + 1;
+                    if (game.tiebreakerStonesThrown >= 2) {
+                        endCurlingRound(game, now);
+                    } else {
+                        game.gameStatus = GameStatus.CurlingTiebreakerPlaying;
+                        game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+                        game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
+                        game.turnDeadline = game.curlingTurnDeadline;
+                        game.turnStartTime = now;
+                    }
+                    return;
+                }
+
+                const totalStones = game.settings.curlingStoneCount || 5;
+                const p1Thrown = game.stonesThrownThisRound?.[p1Id] || 0;
+                const p2Thrown = game.stonesThrownThisRound?.[p2Id] || 0;
+
+                if (p1Thrown >= totalStones && p2Thrown >= totalStones) {
                     endCurlingRound(game, now);
                 } else {
-                    game.gameStatus = 'curling_playing';
-                    game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-                    game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
-                    game.turnStartTime = now;
+                    game.gameStatus = GameStatus.CurlingPlaying;
+                    game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+                    
+                    const DELAY_AFTER_ANIMATION = 500;
+                    game.curlingTurnDeadline = now + DELAY_AFTER_ANIMATION + CURLING_TURN_TIME_LIMIT * 1000;
+                    game.turnDeadline = game.curlingTurnDeadline;
+                    game.turnStartTime = now + DELAY_AFTER_ANIMATION;
                 }
             }
             break;
-        }
-        case 'curling_round_end': {
-            const bothConfirmed = game.roundEndConfirmations?.[p1Id] && game.roundEndConfirmations?.[p2Id];
-            if ((game.revealEndTime && now > game.revealEndTime) || bothConfirmed) {
-                const totalRounds = game.settings.curlingRounds || 3;
-                if (game.curlingRound! >= totalRounds) {
-                    // Check for a tie after the final round
-                    const blackFinalScore = game.curlingScores![types.Player.Black];
-                    const whiteFinalScore = game.curlingScores![types.Player.White];
-                    
-                    if (blackFinalScore === whiteFinalScore) {
-                        // Tiebreaker logic here if needed, for now just end it
-                        const finalWinner = Math.random() < 0.5 ? types.Player.Black : types.Player.White;
-                        endGame(game, finalWinner, 'total_score');
 
-                    } else {
-                        const winner = blackFinalScore > whiteFinalScore ? types.Player.Black : types.Player.White;
-                        endGame(game, winner, 'total_score');
+        case GameStatus.CurlingRoundEnd: {
+            if (!game.curlingRoundSummary) {
+                console.error(`[Curling] Invalid state: gameStatus is 'curling_round_end' but curlingRoundSummary is missing. Game ID: ${game.id}. Forcing no_contest.`);
+                game.gameStatus = GameStatus.NoContest;
+                game.winReason = WinReason.Disconnect;
+                await processGameSummary(game);
+                return;
+            }
+            const bothConfirmedRoundEnd = game.roundEndConfirmations?.[p1Id] && game.roundEndConfirmations?.[p2Id];
+            const roundEndDeadlinePassed = game.revealEndTime && now > game.revealEndTime;
+            const totalRounds = game.settings.curlingRounds || 3;
+            const isFinalPhase = game.isTiebreaker || game.curlingRound! >= totalRounds;
+
+            // For final rounds/tiebreakers, ONLY confirmation works. For other rounds, deadline also works.
+            const shouldTransition = (isFinalPhase && bothConfirmedRoundEnd) || (!isFinalPhase && (bothConfirmedRoundEnd || roundEndDeadlinePassed));
+
+            if (shouldTransition) {
+                if (game.isTiebreaker) {
+                    if (game.curlingRoundSummary) {
+                        const { black, white } = game.curlingRoundSummary;
+                        const finalWinner = (black.total > white.total) ? Player.Black : Player.White;
+                        endGame(game, finalWinner, WinReason.CurlingWin);
+                    }
+                    return;
+                }
+
+                if (game.curlingRound! >= totalRounds) {
+                     if (!game.curlingScores) {
+                        console.error(`[Curling] Invalid state: Game ending but curlingScores is missing. Game ID: ${game.id}.`);
+                        game.gameStatus = GameStatus.NoContest;
+                        await processGameSummary(game);
+                        return;
+                     }
+                    const p1Score = game.curlingScores[game.player1.id === game.blackPlayerId ? Player.Black : Player.White];
+                    const p2Score = game.curlingScores[game.player2.id === game.blackPlayerId ? Player.Black : Player.White];
+                    
+                    if (p1Score !== p2Score) {
+                        const winnerId = p1Score > p2Score ? p1Id : p2Id;
+                        const winnerEnum = winnerId === game.blackPlayerId ? Player.Black : Player.White;
+                        endGame(game, winnerEnum, WinReason.CurlingWin);
+                    } else { // Tiebreaker
+                        game.isTiebreaker = true;
+                        game.tiebreakerStonesThrown = 0;
+                        game.gameStatus = GameStatus.CurlingTiebreakerPlaying;
+                        game.currentPlayer = game.hammerPlayerId === game.blackPlayerId ? Player.White : Player.Black; // Player without hammer starts
+                        game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
+                        game.turnDeadline = game.curlingTurnDeadline;
+                        game.turnStartTime = now;
                     }
                 } else {
                     game.curlingRound!++;
-                    game.curlingStones = [];
                     game.stonesThrownThisRound = { [p1Id]: 0, [p2Id]: 0 };
+                    game.gameStatus = GameStatus.CurlingPlaying;
                     
-                    const roundWinner = game.curlingRoundSummary?.roundWinner;
-                    if (roundWinner === types.Player.Black) {
-                        game.hammerPlayerId = game.whitePlayerId ?? undefined;
-                    } else {
-                        game.hammerPlayerId = game.blackPlayerId ?? undefined;
+                    const lastRoundWinner = game.curlingRoundSummary?.roundWinner;
+                    if (!lastRoundWinner) { // Blank end
+                        game.currentPlayer = game.hammerPlayerId === game.blackPlayerId ? Player.White : Player.Black;
+                    } else { // Winner of last round starts
+                        game.currentPlayer = lastRoundWinner;
+                        game.hammerPlayerId = lastRoundWinner === Player.Black ? game.whitePlayerId! : game.blackPlayerId!;
                     }
                     
-                    game.currentPlayer = game.hammerPlayerId === game.blackPlayerId ? types.Player.White : types.Player.Black;
-                    
-                    game.gameStatus = 'curling_playing';
                     game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
+                    game.turnDeadline = game.curlingTurnDeadline;
                     game.turnStartTime = now;
+                    game.curlingStones = [];
                 }
             }
             break;
@@ -316,78 +427,136 @@ export const updateCurlingState = (game: types.LiveGameSession, now: number) => 
     }
 };
 
-export const handleCurlingAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction & { userId: string }, user: types.User): Promise<types.HandleActionResult | undefined> => {
+export const handleCurlingAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const { type, payload } = action;
     const now = Date.now();
-    
-    const myPlayerEnum = user.id === game.blackPlayerId ? types.Player.Black : (user.id === game.whitePlayerId ? types.Player.White : types.Player.None);
+    const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
-
+    
+    // Delegate to shared handlers first
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if (sharedResult) return sharedResult;
-    
+
     switch(type) {
         case 'CONFIRM_CURLING_START': {
-            if (game.mode !== types.GameMode.Curling) return undefined;
-            if (game.gameStatus !== 'curling_start_confirmation') return { error: "Not in confirmation phase." };
+            if (game.mode !== GameMode.Curling) return null;
+            if (game.gameStatus !== GameStatus.CurlingStartConfirmation) return { error: "Not in confirmation phase." };
             if (!game.preGameConfirmations) game.preGameConfirmations = {};
-            if (game.isAiGame) game.preGameConfirmations[aiUserId] = true;
+            if (game.isAiGame) (game.preGameConfirmations as any)[aiUserId] = true;
             
             game.preGameConfirmations[user.id] = true;
+            
             return {};
         }
         case 'CURLING_FLICK_STONE': {
-            if (game.gameStatus !== 'curling_playing' || !isMyTurn) return { error: "지금은 공격할 수 없습니다."};
+            if (!isMyTurn || (game.gameStatus !== GameStatus.CurlingPlaying && game.gameStatus !== GameStatus.CurlingTiebreakerPlaying)) return { error: "Not your turn to flick."};
+            const { launchPosition, velocity } = payload as { launchPosition: Point, velocity: Point };
             
-            if (game.stonesThrownThisRound![user.id] >= game.settings.curlingStoneCount!) {
-                return { error: "모든 돌을 사용했습니다." };
-            }
-
-            const { launchPosition, velocity } = payload;
-            
-            const newStone: types.AlkkagiStone = {
-                id: Date.now(),
+            const stoneRadius = (840 / 19) * 0.47;
+            const newStoneToLaunch: AlkkagiStone = {
+                id: Date.now() + Math.random(),
                 player: myPlayerEnum,
-                x: launchPosition.x, y: launchPosition.y,
-                vx: 0, vy: 0,
-                radius: (840 / 19) * 0.47,
-                onBoard: false,
+                x: launchPosition.x,
+                y: launchPosition.y,
+                vx: 0,
+                vy: 0,
+                radius: stoneRadius,
+                onBoard: true // Will be set to true in simulation
             };
             
-            game.animation = { type: 'curling_flick', stone: newStone, velocity, startTime: now, duration: 8000 };
-            game.gameStatus = 'curling_animating';
+            const animationDuration = 8000;
+            
+            game.animation = { type: 'curling_flick', stone: newStoneToLaunch, velocity, startTime: now, duration: animationDuration };
+            
+            if (!game.isTiebreaker) {
+                if (!game.stonesThrownThisRound) game.stonesThrownThisRound = {};
+                game.stonesThrownThisRound[user.id] = (game.stonesThrownThisRound[user.id] || 0) + 1;
+            }
+
             if (game.activeCurlingItems) {
                 delete game.activeCurlingItems[user.id];
             }
-            game.stonesThrownThisRound![user.id]++;
+
+            game.gameStatus = GameStatus.CurlingAnimating;
+            game.revealEndTime = now + animationDuration;
+            
             game.curlingTurnDeadline = undefined;
+            game.turnDeadline = undefined;
             game.turnStartTime = undefined;
             return {};
         }
         case 'USE_CURLING_ITEM': {
-            if (game.gameStatus !== 'curling_playing' || !isMyTurn) return { error: "Not your turn to use an item." };
+            if (game.gameStatus !== GameStatus.CurlingPlaying || !isMyTurn) return { error: 'Not your turn to use an item.' };
             const { itemType } = payload as { itemType: 'slow' | 'aimingLine' };
+            const myActiveItems = (game.activeCurlingItems as any)?.[user.id] || [];
 
-            if (game.activeCurlingItems?.[user.id]?.includes(itemType)) return { error: '아이템이 이미 활성화되어 있습니다.' };
+            if (myActiveItems.includes(itemType)) return { error: '아이템이 이미 활성화되어 있습니다.' };
 
-            if (!game.curlingItemUses || !game.curlingItemUses[user.id] || game.curlingItemUses[user.id][itemType] <= 0) {
-                return { error: '해당 아이템이 없습니다.' };
+            if (!game.curlingItemUses || !(game.curlingItemUses as any)[user.id] || (game.curlingItemUses as any)[user.id][itemType] <= 0) {
+                return { error: 'No items of that type left.' };
             }
-            game.curlingItemUses[user.id][itemType]--;
+            (game.curlingItemUses as any)[user.id][itemType]--;
             if (!game.activeCurlingItems) game.activeCurlingItems = {};
-            if (!Array.isArray(game.activeCurlingItems[user.id])) {
-                game.activeCurlingItems[user.id] = [];
-            }
-            game.activeCurlingItems[user.id].push(itemType);
+            if (!(game.activeCurlingItems as any)[user.id]) (game.activeCurlingItems as any)[user.id] = [];
+            (game.activeCurlingItems as any)[user.id].push(itemType);
             return {};
         }
         case 'CONFIRM_ROUND_END': {
-            if (game.gameStatus !== 'curling_round_end') return { error: "라운드 종료 확인 단계가 아닙니다." };
+            if (game.gameStatus !== GameStatus.CurlingRoundEnd) return { error: "Not in round end confirmation phase." };
             if (!game.roundEndConfirmations) game.roundEndConfirmations = {};
             game.roundEndConfirmations[user.id] = now;
-                        return {};
+            return {};
         }
     }
     
-    return undefined;
+    return null;
+};
+
+export const makeCurlingAiMove = async (game: LiveGameSession): Promise<void> => {
+    const aiId = game.player2.id;
+    const myPlayerEnum = game.whitePlayerId === aiId ? Player.White : Player.Black;
+    if (game.currentPlayer !== myPlayerEnum) return;
+
+    if (game.gameStatus === GameStatus.CurlingPlaying || game.gameStatus === GameStatus.CurlingTiebreakerPlaying) {
+        const boardSizePx = 840;
+        const cellSize = boardSizePx / 19;
+        const padding = cellSize / 2;
+        const stoneRadius = (840 / 19) * 0.47;
+        
+        const launchAreas = [
+            { x: padding, y: padding, player: Player.White }, // Top-left
+            { x: boardSizePx - padding - cellSize, y: padding, player: Player.White }, // Top-right
+            { x: padding, y: boardSizePx - padding - cellSize, player: Player.Black }, // Bottom-left
+            { x: boardSizePx - padding - cellSize, y: boardSizePx - padding - cellSize, player: Player.Black }, // Bottom-right
+        ];
+        
+        const myLaunchAreas = launchAreas.filter(a => a.player === myPlayerEnum);
+        const launchArea = myLaunchAreas[Math.floor(Math.random() * myLaunchAreas.length)];
+        
+        const launchPosition = { x: launchArea.x + stoneRadius, y: launchArea.y + stoneRadius };
+
+        const newStoneToLaunch: AlkkagiStone = {
+            id: Date.now() + Math.random(), player: myPlayerEnum,
+            x: launchPosition.x, y: launchPosition.y,
+            vx: 0, vy: 0, radius: stoneRadius, onBoard: true
+        };
+        
+        const target = { x: boardSizePx / 2, y: boardSizePx / 2 };
+        const dx = target.x - launchPosition.x;
+        const dy = target.y - launchPosition.y;
+        const mag = Math.hypot(dx, dy);
+
+        const power = 40 + Math.random() * 40;
+        const launchStrength = power / 100 * 25;
+        
+        const vx = mag > 0 ? (dx / mag) * launchStrength : 0;
+        const vy = mag > 0 ? (dy / mag) * launchStrength : 0;
+        
+        const animationDuration = 8000;
+        game.animation = { type: 'curling_flick', stone: newStoneToLaunch, velocity: { x: vx, y: vy }, startTime: Date.now(), duration: animationDuration };
+        if (!game.stonesThrownThisRound) game.stonesThrownThisRound = {};
+        game.stonesThrownThisRound[aiId] = (game.stonesThrownThisRound[aiId] || 0) + 1;
+        game.gameStatus = GameStatus.CurlingAnimating;
+        game.revealEndTime = Date.now() + animationDuration;
+    }
 };

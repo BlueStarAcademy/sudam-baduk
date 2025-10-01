@@ -1,5 +1,9 @@
+
+
 import React, { useState, useEffect } from 'react';
-import { LiveGameSession, User, ServerAction, Player } from '../types.js';
+// FIX: Separate enum and type imports.
+import { Player } from '../types/index.js';
+import type { LiveGameSession, User, ServerAction } from '../types/index.js';
 import Avatar from './Avatar.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';

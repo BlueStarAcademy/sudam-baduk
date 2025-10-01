@@ -7,7 +7,7 @@ interface TowerStatusPanelProps {
 
 const TowerStatusPanel: React.FC<TowerStatusPanelProps> = ({ session }) => {
     const isSurvival = session.gameType === 'survival';
-    const { blackStoneLimit = 0, blackStonesPlaced = 0, captures, effectiveCaptureTargets } = session;
+    const { blackStoneLimit = 0, blackStonesPlaced = 0, captures, effectiveCaptureTargets, whiteStoneLimit, whiteStonesPlaced } = session;
     
     const isTower = session.isTowerChallenge;
 
@@ -24,11 +24,12 @@ const TowerStatusPanel: React.FC<TowerStatusPanelProps> = ({ session }) => {
     let number: number;
 
     if (isSurvival) {
-        const aiCaptures = captures[Player.White] || 0;
-        const livesLeft = (effectiveCaptureTargets?.[Player.White] ?? 5) - aiCaptures;
-        title = '남은 생명';
-        number = livesLeft;
+        // For survival, show how many stones the AI has left to place.
+        const stonesLeft = (whiteStoneLimit ?? 999) - (whiteStonesPlaced ?? 0);
+        title = 'AI 남은 돌';
+        number = stonesLeft;
     } else {
+        // For tower/capture, show how many stones the player has left to place.
         const stonesLeft = blackStoneLimit - blackStonesPlaced;
         title = '남은 흑돌';
         number = stonesLeft;

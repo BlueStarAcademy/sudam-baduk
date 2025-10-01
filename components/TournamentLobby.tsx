@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { UserWithStatus, TournamentState, TournamentType, User, ChatMessage, LeagueTier } from '../types.js';
+import { UserWithStatus, TournamentState, TournamentType, User, ChatMessage, LeagueTier } from '../types/index.js';
 import { TournamentBracket } from './TournamentBracket.js';
 import Button from './Button.js';
-import { TOURNAMENT_DEFINITIONS, AVATAR_POOL, LEAGUE_DATA, BORDER_POOL } from '../constants.js';
+import { TOURNAMENT_DEFINITIONS, AVATAR_POOL, LEAGUE_DATA, BORDER_POOL } from '../constants/index.js';
 import Avatar from './Avatar.js';
 import { isSameDayKST } from '../utils/timeUtils.js';
 import { useAppContext } from '../hooks/useAppContext.js';
@@ -57,30 +57,28 @@ const WeeklyCompetitorsPanel: React.FC<{ setHasRankChanged: (changed: boolean) =
             return [];
         }
     
-        const MIN_DAILY_SCORE_GAIN = 6;
-        const MAX_DAILY_SCORE_GAIN = 136;
+        const MIN_DAILY_SCORE_GAIN = 0;
+        const MAX_DAILY_SCORE_GAIN = 50;
     
         const lastUpdateTs = currentUserWithStatus.lastWeeklyCompetitorsUpdate || Date.now();
-        const startOfUpdateDay = new Date(lastUpdateTs);
-        startOfUpdateDay.setHours(0, 0, 0, 0);
-
-        const now = new Date();
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-
-        const diffTime = Math.max(0, startOfToday.getTime() - startOfUpdateDay.getTime());
+        
+        const startDate = new Date(lastUpdateTs);
+        startDate.setHours(0, 0, 0, 0); 
+        
+        const nowDate = new Date();
+        nowDate.setHours(0, 0, 0, 0); 
+    
+        const diffTime = Math.max(0, nowDate.getTime() - startDate.getTime());
         const daysPassed = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
         return (currentUserWithStatus.weeklyCompetitors).map(competitor => {
             if (competitor.id.startsWith('bot-')) {
                 let totalGain = 0;
-                for (let i = 0; i <= daysPassed; i++) {
-                    const dateForSeed = new Date(startOfUpdateDay.getTime() + i * 24 * 60 * 60 * 1000);
-                    const seedStr = `${competitor.id}-${dateForSeed.toISOString().slice(0, 10)}`;
+                for (let i = 1; i <= daysPassed; i++) {
+                    const seedStr = `${competitor.id}-${new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}`;
                     const seed = stringToSeed(seedStr);
                     const randomVal = seededRandom(seed);
-                    const scoreRange = MAX_DAILY_SCORE_GAIN - MIN_DAILY_SCORE_GAIN;
-                    const dailyGain = MIN_DAILY_SCORE_GAIN + Math.floor(randomVal * (scoreRange * 0.75));
+                    const dailyGain = MIN_DAILY_SCORE_GAIN + Math.floor(randomVal * (MAX_DAILY_SCORE_GAIN - MIN_DAILY_SCORE_GAIN + 1));
                     totalGain += dailyGain;
                 }
                 const liveScore = competitor.initialScore + totalGain;
@@ -154,60 +152,20 @@ const WeeklyCompetitorsPanel: React.FC<{ setHasRankChanged: (changed: boolean) =
     );
 };
 
-interface RankItemProps {
-    user: User;
-    rank: number;
-    isMyRankDisplay: boolean;
-}
-
-const RankItem: React.FC<RankItemProps> = ({ user, rank, isMyRankDisplay }) => {
-    const { currentUserWithStatus, handlers } = useAppContext();
-    if (!currentUserWithStatus) return null;
-
-    const score = user.tournamentScore || 0;
-
-    const rankDisplay = useMemo(() => {
-        if (rank === 1) return <span className="text-3xl" role="img" aria-label="Gold Trophy">🥇</span>;
-        if (rank === 2) return <span className="text-3xl" role="img" aria-label="Silver Trophy">🥈</span>;
-        if (rank === 3) return <span className="text-3xl" role="img" aria-label="Bronze Trophy">🥉</span>;
-        return <span className="text-2xl font-bold text-gray-300">{rank}</span>;
-    }, [rank]);
-
-    const isCurrentUserInList = !isMyRankDisplay && user.id === currentUserWithStatus.id;
-    const baseClass = 'flex items-center rounded-lg';
-    const myRankClass = 'bg-yellow-900/40 border border-yellow-700';
-    const highlightClass = 'bg-blue-900/60 border border-blue-600';
-    const defaultClass = 'bg-gray-900/50';
-    
-    const isClickable = !isMyRankDisplay && user.id !== currentUserWithStatus.id;
-    const finalClass = `${baseClass} ${isMyRankDisplay ? myRankClass : (isCurrentUserInList ? highlightClass : defaultClass)} p-1.5 lg:p-2 ${isClickable ? 'cursor-pointer hover:bg-gray-700/50' : ''}`;
-    const avatarUrl = AVATAR_POOL.find(a => a.id === user.avatarId)?.url;
-    const borderUrl = BORDER_POOL.find(b => b.id === user.borderId)?.url;
-    const leagueInfo = LEAGUE_DATA.find(l => l.tier === user.league);
-    const tierImage = leagueInfo?.icon;
-
-    return (
-        <li
-            className={finalClass}
-            onClick={isClickable ? () => handlers.openViewingUser(user.id) : undefined}
-            title={isClickable ? `${user.nickname} 프로필 보기` : ''}
-        >
-            <div className="w-12 text-center flex-shrink-0 flex flex-col items-center justify-center">
-                {rankDisplay}
-            </div>
-            {tierImage && <img src={tierImage} alt={user.league} className="w-8 h-8 mr-2 flex-shrink-0" title={user.league} />}
-            <Avatar userId={user.id} userName={user.nickname} size={32} avatarUrl={avatarUrl} borderUrl={borderUrl} />
-            <div className="ml-2 lg:ml-3 flex-grow overflow-hidden">
-                <p className="font-semibold text-sm truncate">{user.nickname}</p>
-                <p className="text-xs text-yellow-400 font-mono">{score.toLocaleString()}점</p>
-            </div>
-        </li>
-    );
+const botScoreRanges: Record<LeagueTier, { min: number, max: number }> = {
+    [LeagueTier.Sprout]: { min: 500, max: 599 },
+    [LeagueTier.Rookie]: { min: 600, max: 799 },
+    [LeagueTier.Rising]: { min: 800, max: 999 },
+    [LeagueTier.Ace]: { min: 1000, max: 1199 },
+    [LeagueTier.Diamond]: { min: 1200, max: 1499 },
+    [LeagueTier.Master]: { min: 1500, max: 1799 },
+    [LeagueTier.Grandmaster]: { min: 1800, max: 2199 },
+    [LeagueTier.Challenger]: { min: 2200, max: 2800 },
 };
 
 const ChampionshipRankingPanel: React.FC = () => {
     const { currentUserWithStatus, allUsers, handlers } = useAppContext();
-    const [selectedTier, setSelectedTier] = useState<LeagueTier>(LEAGUE_DATA[0].tier);
+    const [selectedTier, setSelectedTier] = useState<LeagueTier>(currentUserWithStatus?.league || LEAGUE_DATA[0].tier);
     const [isLeagueTierInfoModalOpen, setIsLeagueTierInfoModalOpen] = useState(false);
 
     useEffect(() => {
@@ -215,17 +173,44 @@ const ChampionshipRankingPanel: React.FC = () => {
             setSelectedTier(currentUserWithStatus.league);
         }
     }, [currentUserWithStatus?.league]);
+    
+    const usersWithBots = useMemo(() => {
+        const allBots: User[] = [];
+        const MIN_PLAYERS_PER_LEAGUE = 50;
+
+        LEAGUE_DATA.forEach(league => {
+            const realPlayersInLeague = allUsers.filter(u => u.league === league.tier);
+            const botsToCreate = Math.max(0, MIN_PLAYERS_PER_LEAGUE - realPlayersInLeague.length);
+            const scoreRange = botScoreRanges[league.tier];
+
+            for (let i = 0; i < botsToCreate; i++) {
+                const seed = stringToSeed(`${league.tier}-${i}`);
+                const random = seededRandom(seed);
+                const bot: User = {
+                    id: `bot-${league.tier}-${i}`,
+                    nickname: `Bot_${league.tier.slice(0,2)}_${i+1}`,
+                    avatarId: AVATAR_POOL[Math.floor(random * AVATAR_POOL.length)].id,
+                    borderId: 'default',
+                    league: league.tier,
+                    tournamentScore: scoreRange.min + Math.floor(random * (scoreRange.max - scoreRange.min + 1)),
+                } as User;
+                allBots.push(bot);
+            }
+        });
+        
+        return [...allUsers, ...allBots];
+    }, [allUsers]);
 
     const sortedUsers = useMemo(() => {
         if (!currentUserWithStatus) return [];
-        return [...allUsers]
+        return usersWithBots
             .filter(u => u.league === selectedTier && typeof u.tournamentScore === 'number')
             .sort((a, b) => b.tournamentScore - a.tournamentScore);
-    }, [allUsers, selectedTier, currentUserWithStatus]);
+    }, [usersWithBots, selectedTier, currentUserWithStatus]);
     
     const myOwnLeagueData = useMemo(() => {
         if (!currentUserWithStatus) return { rank: -1, user: null };
-        const usersInMyLeague = [...allUsers]
+        const usersInMyLeague = usersWithBots
             .filter(u => u.league === currentUserWithStatus.league && typeof u.tournamentScore === 'number')
             .sort((a, b) => b.tournamentScore - a.tournamentScore);
         const myRankIndex = usersInMyLeague.findIndex(u => u.id === currentUserWithStatus.id);
@@ -233,8 +218,8 @@ const ChampionshipRankingPanel: React.FC = () => {
             rank: myRankIndex !== -1 ? myRankIndex + 1 : -1,
             user: myRankIndex !== -1 ? usersInMyLeague[myRankIndex] : null
         };
-    }, [allUsers, currentUserWithStatus]);
-    
+    }, [usersWithBots, currentUserWithStatus]);
+
     if (!currentUserWithStatus) {
         return (
              <div className="bg-gray-800 rounded-lg p-4 flex flex-col shadow-lg h-full min-h-0 items-center justify-center text-gray-500">
@@ -262,7 +247,7 @@ const ChampionshipRankingPanel: React.FC = () => {
                     <button
                         key={league.tier}
                         onClick={() => setSelectedTier(league.tier)}
-                        className={`p-1 rounded-md transition-all duration-200 flex-shrink-0 ${selectedTier === league.tier ? 'bg-purple-600 ring-2 ring-purple-400' : 'hover:bg-gray-600'}`}
+                        className={`p-1 rounded-md transition-all duration-200 flex-shrink-0 ${currentUserWithStatus.league === league.tier ? 'border-2 border-yellow-400' : ''} ${selectedTier === league.tier ? 'bg-purple-600 ring-2 ring-purple-400' : 'hover:bg-gray-600'}`}
                         title={league.name}
                     >
                         <img src={league.icon} alt={league.name} className="w-10 h-10" />
@@ -283,12 +268,65 @@ const ChampionshipRankingPanel: React.FC = () => {
     );
 };
 
-const TournamentCard: React.FC<{ 
+interface RankItemProps {
+    user: User;
+    rank: number;
+    isMyRankDisplay: boolean;
+}
+
+const RankItem: React.FC<RankItemProps> = ({ user, rank, isMyRankDisplay }) => {
+    const { currentUserWithStatus, handlers } = useAppContext();
+    if (!currentUserWithStatus) return null;
+
+    const score = user.tournamentScore || 0;
+
+    const rankDisplay = useMemo(() => {
+        if (rank === 1) return <span className="text-3xl" role="img" aria-label="Gold Trophy">🥇</span>;
+        if (rank === 2) return <span className="text-3xl" role="img" aria-label="Silver Trophy">🥈</span>;
+        if (rank === 3) return <span className="text-3xl" role="img" aria-label="Bronze Trophy">🥉</span>;
+        return <span className="text-2xl font-bold text-gray-300">{rank}</span>;
+    }, [rank]);
+
+    const isCurrentUserInList = !isMyRankDisplay && user.id === currentUserWithStatus.id;
+    const baseClass = 'flex items-center rounded-lg';
+    const myRankClass = 'bg-yellow-900/40 border border-yellow-700';
+    const highlightClass = 'bg-blue-900/60 border border-blue-600';
+    const defaultClass = 'bg-gray-900/50';
+    
+    const isClickable = !isMyRankDisplay && user.id !== currentUserWithStatus.id && !user.id.startsWith('bot-');
+    const finalClass = `${baseClass} ${isMyRankDisplay ? myRankClass : (isCurrentUserInList ? highlightClass : defaultClass)} p-1.5 lg:p-2 ${isClickable ? 'cursor-pointer hover:bg-gray-700/50' : ''}`;
+    const avatarUrl = AVATAR_POOL.find(a => a.id === user.avatarId)?.url;
+    const borderUrl = BORDER_POOL.find(b => b.id === user.borderId)?.url;
+    const leagueInfo = LEAGUE_DATA.find(l => l.tier === user.league);
+    const tierImage = leagueInfo?.icon;
+
+    return (
+        <li
+            className={finalClass}
+            onClick={isClickable ? () => handlers.openViewingUser(user.id) : undefined}
+            title={isClickable ? `${user.nickname} 프로필 보기` : ''}
+        >
+            <div className="w-12 text-center flex-shrink-0 flex flex-col items-center justify-center">
+                {rankDisplay}
+            </div>
+            {tierImage && <img src={tierImage} alt={user.league} className="w-8 h-8 mr-2 flex-shrink-0" title={user.league} />}
+            <Avatar userId={user.id} userName={user.nickname} size={32} avatarUrl={avatarUrl} borderUrl={borderUrl} />
+            <div className="ml-2 lg:ml-3 flex-grow overflow-hidden">
+                <p className="font-semibold text-sm truncate">{user.nickname}</p>
+                <p className="text-xs text-yellow-400 font-mono">{score.toLocaleString()}점</p>
+            </div>
+        </li>
+    );
+};
+
+interface TournamentCardProps { 
     type: TournamentType; 
     onClick: () => void;
     onContinue: () => void;
     inProgress: TournamentState | null;
-}> = ({ type, onClick, onContinue, inProgress }) => {
+}
+
+const TournamentCard: React.FC<TournamentCardProps> = ({ type, onClick, onContinue, inProgress }) => {
     const definition = TOURNAMENT_DEFINITIONS[type];
     const isSimulationInProgress = inProgress && inProgress.status === 'round_in_progress';
     const hasResultToView = inProgress && (inProgress.status === 'complete' || inProgress.status === 'eliminated');
@@ -298,13 +336,9 @@ const TournamentCard: React.FC<{
     let action = onClick;
 
     if (inProgress) {
-        if (isSimulationInProgress) {
-            buttonText = '이어서 보기';
-        } else if (hasResultToView) {
-            buttonText = '결과 보기';
-        } else if (isReadyToContinue) {
-            buttonText = '계속하기';
-        }
+        if (isSimulationInProgress) buttonText = '이어서 보기';
+        else if (hasResultToView) buttonText = '결과 보기';
+        else if (isReadyToContinue) buttonText = '계속하기';
         action = onContinue;
     }
     
@@ -324,17 +358,6 @@ const TournamentCard: React.FC<{
     );
 };
 
-
-const PlaceholderCard: React.FC<{ title: string; description: string; imageUrl: string; }> = ({ title, description, imageUrl }) => {
-    return (
-        <div className="bg-gray-800 rounded-lg p-3 flex flex-col text-center shadow-lg opacity-60 cursor-not-allowed h-full">
-            <div className="w-full aspect-video bg-gray-700 rounded-md flex items-center justify-center text-gray-500 overflow-hidden">
-                <img src={imageUrl} alt={title} className="w-full h-full object-cover grayscale" />
-            </div>
-        </div>
-    );
-};
-
 const TournamentLobby: React.FC = () => {
     const { currentUserWithStatus, allUsers, handlers, waitingRoomChats } = useAppContext();
     
@@ -344,11 +367,15 @@ const TournamentLobby: React.FC = () => {
     const [hasRankChanged, setHasRankChanged] = useState(false);
     const [enrollingIn, setEnrollingIn] = useState<TournamentType | null>(null);
 
-    // This effect handles the transition into the bracket view after a user enrolls.
-    // It waits for the user object to update with the new tournament state.
     useEffect(() => {
         if (enrollingIn && currentUserWithStatus) {
-            const stateKey = `last${enrollingIn.charAt(0).toUpperCase() + enrollingIn.slice(1)}Tournament` as keyof User;
+            let stateKey: keyof User;
+            switch(enrollingIn) {
+                case TournamentType.Neighborhood: stateKey = 'lastNeighborhoodTournament'; break;
+                case TournamentType.National: stateKey = 'lastNationalTournament'; break;
+                case TournamentType.World: stateKey = 'lastWorldTournament'; break;
+                default: return;
+            }
             const newState = (currentUserWithStatus as any)[stateKey];
             if (newState) {
                 setViewingTournament(newState);
@@ -357,14 +384,16 @@ const TournamentLobby: React.FC = () => {
         }
     }, [currentUserWithStatus, enrollingIn]);
     
-
-    // This effect synchronizes the local tournament state with the global state from polling.
-    // This is crucial for seeing live updates during a simulation.
     useEffect(() => {
         if (viewingTournament && currentUserWithStatus) {
-            const stateKey = `last${viewingTournament.type.charAt(0).toUpperCase() + viewingTournament.type.slice(1)}Tournament` as keyof User;
+            let stateKey: keyof User;
+            switch(viewingTournament.type) {
+                case TournamentType.Neighborhood: stateKey = 'lastNeighborhoodTournament'; break;
+                case TournamentType.National: stateKey = 'lastNationalTournament'; break;
+                case TournamentType.World: stateKey = 'lastWorldTournament'; break;
+                default: return;
+            }
             const updatedState = (currentUserWithStatus as any)[stateKey] as TournamentState | null;
-            
             if (updatedState && stableStringify(updatedState) !== stableStringify(viewingTournament)) {
                 setViewingTournament(updatedState);
             }
@@ -386,9 +415,10 @@ const TournamentLobby: React.FC = () => {
         const now = Date.now();
         let playedDateKey: keyof User;
         switch (type) {
-            case 'neighborhood': playedDateKey = 'lastNeighborhoodPlayedDate'; break;
-            case 'national': playedDateKey = 'lastNationalPlayedDate'; break;
-            case 'world': playedDateKey = 'lastWorldPlayedDate'; break;
+            case TournamentType.Neighborhood: playedDateKey = 'lastNeighborhoodPlayedDate'; break;
+            case TournamentType.National: playedDateKey = 'lastNationalPlayedDate'; break;
+            case TournamentType.World: playedDateKey = 'lastWorldPlayedDate'; break;
+            default: throw new Error("Invalid tournament type");
         }
         const hasPlayedToday = !!(currentUserWithStatus as any)[playedDateKey] && isSameDayKST((currentUserWithStatus as any)[playedDateKey], now);
 
@@ -405,9 +435,10 @@ const TournamentLobby: React.FC = () => {
     const handleContinueTournament = useCallback((type: TournamentType) => {
         let stateKey: keyof User;
         switch (type) {
-            case 'neighborhood': stateKey = 'lastNeighborhoodTournament'; break;
-            case 'national': stateKey = 'lastNationalTournament'; break;
-            case 'world': stateKey = 'lastWorldTournament'; break;
+            case TournamentType.Neighborhood: stateKey = 'lastNeighborhoodTournament'; break;
+            case TournamentType.National: stateKey = 'lastNationalTournament'; break;
+            case TournamentType.World: stateKey = 'lastWorldTournament'; break;
+            default: throw new Error("Invalid tournament type");
         }
         const existingState = (currentUserWithStatus as any)[stateKey] as TournamentState | null;
         if (existingState) {
@@ -442,7 +473,6 @@ const TournamentLobby: React.FC = () => {
     
     const filterInProgress = (state: TournamentState | null | undefined): TournamentState | null => {
         if (!state) return null;
-        // Keep completed/eliminated states to show "Result" button
         return state;
     };
 
@@ -493,11 +523,10 @@ const TournamentLobby: React.FC = () => {
             
             <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0">
                 <main className="flex-grow grid grid-rows-[auto,1fr] gap-6 min-h-0">
-                    <div className="grid grid-cols-2 gap-4 flex-shrink-0">
-                        <TournamentCard type="neighborhood" onClick={() => handleEnterArena('neighborhood')} onContinue={() => handleContinueTournament('neighborhood')} inProgress={neighborhoodState || null} />
-                        <TournamentCard type="national" onClick={() => handleEnterArena('national')} onContinue={() => handleContinueTournament('national')} inProgress={nationalState || null} />
-                        <TournamentCard type="world" onClick={() => handleEnterArena('world')} onContinue={() => handleContinueTournament('world')} inProgress={worldState || null} />
-                        <PlaceholderCard title="팀 챔피언십" description="다른 플레이어와 팀을 이루어 경쟁하세요." imageUrl="/images/Champ4.png" />
+                    <div className="grid grid-cols-3 gap-4 flex-shrink-0">
+                        <TournamentCard type={TournamentType.Neighborhood} onClick={() => handleEnterArena(TournamentType.Neighborhood)} onContinue={() => handleContinueTournament(TournamentType.Neighborhood)} inProgress={neighborhoodState} />
+                        <TournamentCard type={TournamentType.National} onClick={() => handleEnterArena(TournamentType.National)} onContinue={() => handleContinueTournament(TournamentType.National)} inProgress={nationalState} />
+                        <TournamentCard type={TournamentType.World} onClick={() => handleEnterArena(TournamentType.World)} onContinue={() => handleContinueTournament(TournamentType.World)} inProgress={worldState} />
                     </div>
                     <div className="bg-gray-800/50 rounded-lg shadow-lg min-h-0">
                         <ChatWindow
@@ -515,7 +544,7 @@ const TournamentLobby: React.FC = () => {
                             <WeeklyCompetitorsPanel setHasRankChanged={setHasRankChanged}/>
                         </div>
                         <div className="w-24 flex-shrink-0">
-                            <QuickAccessSidebar fillHeight={true} />
+                            <QuickAccessSidebar fillHeight={true} compact={true}/>
                         </div>
                     </div>
                     <div className="flex-1 min-h-0">

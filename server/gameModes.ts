@@ -1,88 +1,22 @@
 import { getGoLogic } from './goLogic.js';
-import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS, TOWER_STAGES, SINGLE_PLAYER_STAGES } from '../constants.js';
-import * as types from '../types.js';
-import type { LiveGameSession, AppState, Negotiation, ActionButton, GameMode } from '../types.js';
-import { aiUserId, makeAiMove, getAiUser } from './aiPlayer.js';
-// FIX: Corrected import paths to point to the actual module files inside `modes`.
-import { initializeStrategicGame, updateStrategicGameState } from './strategic.js';
-import { initializePlayfulGame, updatePlayfulGameState } from './playful.js';
-import { randomUUID } from 'crypto';
+// FIX: Corrected import paths for constants.
+import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS } from '../constants/index.js';
+import { TOWER_STAGES } from '../constants/towerChallengeConstants.js';
+import { SINGLE_PLAYER_STAGES } from '../constants/singlePlayerConstants.js';
+// FIX: Import types and enums to resolve errors
+import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild } from '../types/index.js';
+import { aiUserId, makeAiMove, getAiUser } from './ai/index.js';
+import { initializeStrategicGame, updateStrategicGameState } from './modes/strategic.js';
+import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.js';
 import * as db from './db.js';
-import * as effectService from './effectService.js';
+import * as effectService from '../utils/statUtils.js';
 import { endGame, getGameResult } from './summaryService.js';
 
-export const finalizeAnalysisResult = (baseAnalysis: types.AnalysisResult, session: types.LiveGameSession): types.AnalysisResult => {
-    const finalAnalysis = JSON.parse(JSON.stringify(baseAnalysis)); // Deep copy
-
-    const { mode, settings, baseStoneCaptures, hiddenStoneCaptures } = session;
-    const isBaseMode = mode === types.GameMode.Base || (mode === types.GameMode.Mix && settings.mixedModes?.includes(types.GameMode.Base));
-    const isHiddenMode = mode === types.GameMode.Hidden || (mode === types.GameMode.Mix && settings.mixedModes?.includes(types.GameMode.Hidden));
-    
-    // Base stone bonus
-    if (isBaseMode && baseStoneCaptures) {
-        finalAnalysis.scoreDetails.black.baseStoneBonus = (baseStoneCaptures[types.Player.Black] || 0) * 5;
-        finalAnalysis.scoreDetails.white.baseStoneBonus = (baseStoneCaptures[types.Player.White] || 0) * 5;
-    } else {
-        finalAnalysis.scoreDetails.black.baseStoneBonus = 0;
-        finalAnalysis.scoreDetails.white.baseStoneBonus = 0;
-    }
-
-    // Hidden stone bonus
-    if (isHiddenMode && hiddenStoneCaptures) {
-        finalAnalysis.scoreDetails.black.hiddenStoneBonus = (hiddenStoneCaptures[types.Player.Black] || 0) * 5; // Using 5 points as per server/modes/standard.ts
-        finalAnalysis.scoreDetails.white.hiddenStoneBonus = (hiddenStoneCaptures[types.Player.White] || 0) * 5;
-    } else {
-        finalAnalysis.scoreDetails.black.hiddenStoneBonus = 0;
-        finalAnalysis.scoreDetails.white.hiddenStoneBonus = 0;
-    }
-    
-    // Time bonus
-    if (session.mode === types.GameMode.Speed || (session.mode === types.GameMode.Mix && session.settings.mixedModes?.includes(types.GameMode.Speed))) {
-        finalAnalysis.scoreDetails.black.timeBonus = Math.floor((session.blackTimeLeft || 0) / TIME_BONUS_SECONDS_PER_POINT);
-        finalAnalysis.scoreDetails.white.timeBonus = Math.floor((session.whiteTimeLeft || 0) / TIME_BONUS_SECONDS_PER_POINT);
-    } else {
-        finalAnalysis.scoreDetails.black.timeBonus = 0;
-        finalAnalysis.scoreDetails.white.timeBonus = 0;
-    }
-    
-    // Item bonus (currently none, placeholder)
-    finalAnalysis.scoreDetails.black.itemBonus = 0;
-    finalAnalysis.scoreDetails.white.itemBonus = 0;
-
-    // Recalculate totals. A dead stone is worth 2 points: 1 for the capture, 1 for the territory.
-    // 'territory' is empty points. 'captures' is live captures. 'deadStones' is end-of-game captures.
-    // So we multiply deadStones by 2 to account for both territory and capture points.
-    finalAnalysis.scoreDetails.black.total = 
-        finalAnalysis.scoreDetails.black.territory + 
-        finalAnalysis.scoreDetails.black.captures + 
-        ((finalAnalysis.scoreDetails.black.deadStones ?? 0) * 2) + 
-        finalAnalysis.scoreDetails.black.baseStoneBonus + 
-        finalAnalysis.scoreDetails.black.hiddenStoneBonus + 
-        finalAnalysis.scoreDetails.black.timeBonus + 
-        finalAnalysis.scoreDetails.black.itemBonus;
-    
-    finalAnalysis.scoreDetails.white.total = 
-        finalAnalysis.scoreDetails.white.territory + 
-        finalAnalysis.scoreDetails.white.captures + 
-        finalAnalysis.scoreDetails.white.komi + 
-        ((finalAnalysis.scoreDetails.white.deadStones ?? 0) * 2) + 
-        finalAnalysis.scoreDetails.white.baseStoneBonus + 
-        finalAnalysis.scoreDetails.white.hiddenStoneBonus + 
-        finalAnalysis.scoreDetails.white.timeBonus + 
-        finalAnalysis.scoreDetails.white.itemBonus;
-    
-    finalAnalysis.areaScore.black = finalAnalysis.scoreDetails.black.total;
-    finalAnalysis.areaScore.white = finalAnalysis.scoreDetails.white.total;
-    
-    return finalAnalysis;
-};
-
-
-export const getNewActionButtons = (game: types.LiveGameSession): ActionButton[] => {
+export const getNewActionButtons = (game: LiveGameSession): ActionButton[] => {
     const { mode, moveHistory } = game;
     
     let phase: 'early' | 'mid' | 'late';
-    const isPlayful = PLAYFUL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === mode);
+    const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === mode);
 
     if (isPlayful) {
         // Use round-based phase for most playful games
@@ -144,15 +78,15 @@ export const getNewActionButtons = (game: types.LiveGameSession): ActionButton[]
     return result.slice(0, 3).sort(() => 0.5 - Math.random());
 };
 
-export const initializeGame = async (neg: Negotiation): Promise<LiveGameSession> => {
-    const gameId = `game-${randomUUID()}`;
+export const initializeGame = async (neg: Negotiation, guilds: Record<string, Guild>): Promise<LiveGameSession> => {
+    const gameId = `game-${globalThis.crypto.randomUUID()}`;
     const { settings: settingsFromNeg, mode } = neg;
     const now = Date.now();
     
-    const settings: types.GameSettings = { ...DEFAULT_GAME_SETTINGS, ...settingsFromNeg };
+    const settings: GameSettings = { ...DEFAULT_GAME_SETTINGS, ...settingsFromNeg };
     
     const challenger = await db.getUser(neg.challenger.id);
-    const opponent = neg.opponent.id === aiUserId ? getAiUser(neg.mode) : await db.getUser(neg.opponent.id);
+    const opponent = neg.opponent.id === aiUserId ? neg.opponent : await db.getUser(neg.opponent.id);
 
     if (!challenger || !opponent) {
         throw new Error(`Could not find one or more players to start the game: ${neg.challenger.id}, ${neg.opponent.id}`);
@@ -166,12 +100,14 @@ export const initializeGame = async (neg: Negotiation): Promise<LiveGameSession>
     const game: LiveGameSession = {
         id: gameId,
         mode, settings, description: randomDescription, player1: challenger, player2: opponent, isAiGame,
-        boardState: Array(settings.boardSize).fill(0).map(() => Array(settings.boardSize).fill(types.Player.None)),
-        moveHistory: [], captures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 },
-        baseStoneCaptures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 }, 
-        hiddenStoneCaptures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 },
+        boardState: Array(settings.boardSize).fill(0).map(() => Array(settings.boardSize).fill(Player.None)),
+        moveHistory: [], captures: { [Player.None]: 0, [Player.Black]: 0, [Player.White]: 0 },
+        baseStoneCaptures: { [Player.None]: 0, [Player.Black]: 0, [Player.White]: 0 }, 
+        hiddenStoneCaptures: { [Player.None]: 0, [Player.Black]: 0, [Player.White]: 0 },
         winner: null, winReason: null, createdAt: now, lastMove: null, passCount: 0, koInfo: null,
-        winningLine: null, statsUpdated: false, blackTimeLeft: settings.timeLimit * 60, whiteTimeLeft: settings.timeLimit * 60,
+        winningLine: null, statsUpdated: false, summary: undefined,
+        animation: undefined,
+        blackTimeLeft: settings.timeLimit * 60, whiteTimeLeft: settings.timeLimit * 60,
         blackByoyomiPeriodsLeft: settings.byoyomiCount, whiteByoyomiPeriodsLeft: settings.byoyomiCount,
         disconnectionState: null, disconnectionCounts: { [challenger.id]: 0, [opponent.id]: 0 },
         currentActionButtons: { [challenger.id]: [], [opponent.id]: [] },
@@ -180,18 +116,45 @@ export const initializeGame = async (neg: Negotiation): Promise<LiveGameSession>
         missileUsedThisTurn: false,
         maxActionButtonUses: 5, actionButtonUses: { [challenger.id]: 0, [opponent.id]: 0 },
         round: 1, turnInRound: 1, newlyRevealed: [], scores: { [challenger.id]: 0, [opponent.id]: 0 },
-        analysisResult: null, isAnalyzing: false,
-        gameStatus: 'pending', blackPlayerId: null, whitePlayerId: null, currentPlayer: types.Player.None,
-    };
+        analysisResult: undefined, isAnalyzing: false,
+        gameStatus: GameStatus.Pending, blackPlayerId: null, whitePlayerId: null, currentPlayer: Player.None,
+    } as unknown as LiveGameSession;
 
-    if (SPECIAL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === mode)) {
-        initializeStrategicGame(game, neg, now);
-    } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode; }) => m.mode === mode)) {
-        await initializePlayfulGame(game, neg, now);
+    if (settingsFromNeg.autoEndTurnCount && settingsFromNeg.autoEndTurnCount > 0) {
+        game.autoEndTurnCount = settingsFromNeg.autoEndTurnCount;
+    }
+
+    if (neg.id.startsWith('neg-tc-')) {
+        game.isTowerChallenge = true;
+    }
+    if (neg.id.startsWith('neg-sp-')) {
+        game.isSinglePlayer = true;
     }
     
-    if (game.gameStatus === 'playing' && game.currentPlayer === types.Player.None) {
-        game.currentPlayer = types.Player.Black;
+    if (isAiGame && mode !== GameMode.Capture && SPECIAL_GAME_MODES.some(m => m.mode === mode)) {
+        if (!game.autoEndTurnCount) {
+             switch (settings.boardSize) {
+                case 7: game.autoEndTurnCount = 30; break;
+                case 9: game.autoEndTurnCount = 40; break;
+                case 11: game.autoEndTurnCount = 60; break;
+                case 13: game.autoEndTurnCount = 80; break;
+                case 19: game.autoEndTurnCount = 200; break;
+            }
+        }
+    }
+
+    const p1Guild = challenger.guildId ? guilds[challenger.guildId] : null;
+    const p2Guild = opponent.id !== aiUserId && opponent.guildId ? guilds[opponent.id] : null;
+
+    if (SPECIAL_GAME_MODES.some(m => m.mode === mode) || game.isSinglePlayer || game.isTowerChallenge) {
+        // FIX: The function call to `initializeStrategicGame` had too many arguments. It expected 3 but received 5. The extra arguments have been removed.
+        initializeStrategicGame(game, neg, now);
+    } else if (PLAYFUL_GAME_MODES.some(m => m.mode === mode)) {
+        await initializePlayfulGame(game, neg, now, p1Guild, p2Guild);
+    }
+    
+    if (game.gameStatus === GameStatus.Playing && game.currentPlayer === Player.None) {
+        game.currentPlayer = Player.Black;
         if (settings.timeLimit > 0) game.turnDeadline = now + game.blackTimeLeft * 1000;
         game.turnStartTime = now;
     }
@@ -199,8 +162,8 @@ export const initializeGame = async (neg: Negotiation): Promise<LiveGameSession>
     return game;
 };
 
-export const resetGameForRematch = (game: LiveGameSession, negotiation: types.Negotiation): LiveGameSession => {
-    const newGame = { ...game, id: `game-${randomUUID()}` };
+export const resetGameForRematch = (game: LiveGameSession, negotiation: Negotiation): LiveGameSession => {
+    const newGame = { ...game, id: `game-${globalThis.crypto.randomUUID()}` };
 
     newGame.mode = negotiation.mode;
     newGame.settings = negotiation.settings;
@@ -209,10 +172,10 @@ export const resetGameForRematch = (game: LiveGameSession, negotiation: types.Ne
     const baseFields = {
         winner: null, winReason: null, statsUpdated: false, summary: undefined, finalScores: undefined,
         winningLine: null,
-        boardState: Array(newGame.settings.boardSize).fill(0).map(() => Array(newGame.settings.boardSize).fill(types.Player.None)),
-        moveHistory: [], captures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 }, 
-        baseStoneCaptures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 }, 
-        hiddenStoneCaptures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 }, 
+        boardState: Array(newGame.settings.boardSize).fill(0).map(() => Array(newGame.settings.boardSize).fill(Player.None)),
+        moveHistory: [], captures: { [Player.None]: 0, [Player.Black]: 0, [Player.White]: 0 }, 
+        baseStoneCaptures: { [Player.None]: 0, [Player.Black]: 0, [Player.White]: 0 }, 
+        hiddenStoneCaptures: { [Player.None]: 0, [Player.Black]: 0, [Player.White]: 0 }, 
         lastMove: null, passCount: 0, koInfo: null,
         blackTimeLeft: newGame.settings.timeLimit * 60, whiteTimeLeft: newGame.settings.timeLimit * 60,
         blackByoyomiPeriodsLeft: newGame.settings.byoyomiCount, whiteByoyomiPeriodsLeft: newGame.settings.byoyomiCount,
@@ -221,34 +184,37 @@ export const resetGameForRematch = (game: LiveGameSession, negotiation: types.Ne
         actionButtonUsedThisCycle: { [game.player1.id]: false, [game.player2.id]: false },
         missileUsedThisTurn: false,
         actionButtonUses: { [game.player1.id]: 0, [game.player2.id]: 0 },
-        isAnalyzing: false, analysisResult: null, round: 1, turnInRound: 1,
+        isAnalyzing: false, analysisResult: undefined, round: 1, turnInRound: 1,
         scores: { [game.player1.id]: 0, [game.player2.id]: 0 },
         rematchRejectionCount: undefined,
     };
 
     Object.assign(newGame, baseFields);
-
-    if (SPECIAL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === newGame.mode)) {
+    
+    // NOTE: Guild information isn't readily available here for a rematch.
+    // This is a potential limitation if guild effects are expected to be recalculated.
+    // For now, assuming stats don't change between matches is acceptable.
+    if (SPECIAL_GAME_MODES.some(m => m.mode === newGame.mode)) {
+        // FIX: The function call to `initializeStrategicGame` had too many arguments. It expected 3 but received 5. The extra arguments have been removed.
         initializeStrategicGame(newGame, negotiation, now);
-    } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === newGame.mode)) {
-        initializePlayfulGame(newGame, negotiation, now);
+    } else if (PLAYFUL_GAME_MODES.some(m => m.mode === newGame.mode)) {
+        initializePlayfulGame(newGame, negotiation, now, null, null);
     }
     
     return newGame;
 };
 
-export const updateGameStates = async (games: LiveGameSession[], now: number): Promise<LiveGameSession[]> => {
+export const updateGameStates = async (games: LiveGameSession[], now: number, guilds: Record<string, Guild>): Promise<LiveGameSession[]> => {
     const updatedGames: LiveGameSession[] = [];
     for (const game of games) {
         if (game.disconnectionState && (now - game.disconnectionState.timerStartedAt > 90000)) {
-            game.winner = game.blackPlayerId === game.disconnectionState.disconnectedPlayerId ? types.Player.White : types.Player.Black;
-            game.winReason = 'disconnect';
-            game.gameStatus = 'ended';
+            game.winner = game.blackPlayerId === game.disconnectionState.disconnectedPlayerId ? Player.White : Player.Black;
+            game.winReason = WinReason.Disconnect;
             game.disconnectionState = null;
         }
 
         if (game.lastTimeoutPlayerIdClearTime && now >= game.lastTimeoutPlayerIdClearTime) {
-            game.lastTimeoutPlayerId = null;
+            game.lastTimeoutPlayerId = undefined;
             game.lastTimeoutPlayerIdClearTime = undefined;
         }
 
@@ -256,46 +222,31 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
             console.warn(`[Game Loop] Skipping corrupted game ${game.id} with missing player data.`);
             continue;
         }
-
-        const p1 = await db.getUser(game.player1.id);
         
-        let p2;
-        if (game.player2.id === aiUserId) {
-            const stageList = game.isTowerChallenge ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
-            const stage = stageList.find((s: { id: string; }) => s.id === game.stageId);
-            p2 = getAiUser(game.mode, 1, stage?.level);
-            if (stage) {
-                p2.strategyLevel = stage.katagoLevel;
-            }
-        } else {
-            p2 = await db.getUser(game.player2.id);
-        }
-
-        if (p1) game.player1 = p1;
-        if (p2) game.player2 = p2;
-
-        const p1Id = game.player1.id;
-        const p2Id = game.player2.id;
-        const players = [game.player1, game.player2].filter(p => p.id !== aiUserId);
-
-        const playableStatuses: types.GameStatus[] = [
-            'playing',
-            'alkkagi_playing',
-            'curling_playing',
-            'dice_rolling',
-            'dice_placing',
-            'thief_rolling',
-            'thief_placing',
+        // Use the stable player objects already in the game session.
+        // DO NOT refetch from DB here to prevent infinite refreshes from non-game-related data changes (e.g., action points).
+        const players = [game.player1, game.player2];
+        
+        // --- Action Buttons Generation ---
+        const playableStatuses: GameStatus[] = [
+            GameStatus.Playing,
+            GameStatus.AlkkagiPlaying,
+            GameStatus.CurlingPlaying,
+            GameStatus.DiceRolling,
+            GameStatus.DicePlacing,
+            GameStatus.ThiefRolling,
+            GameStatus.ThiefPlacing,
         ];
         
-        if (playableStatuses.includes(game.gameStatus)) {
+        if (!game.isAiGame && playableStatuses.includes(game.gameStatus)) {
             for (const player of players) {
                 const deadline = game.actionButtonCooldownDeadline?.[player.id];
                 if (typeof deadline !== 'number' || now >= deadline) {
                     game.currentActionButtons[player.id] = getNewActionButtons(game);
                     
-                    const effects = effectService.calculateUserEffects(player);
-                    const cooldown = (5 * 60 - (effects.mythicStatBonuses[types.MythicStat.MannerActionCooldown]?.flat || 0)) * 1000;
+                    const playerGuild = player.guildId ? guilds[player.id] : null;
+                    const effects = effectService.calculateUserEffects(player, playerGuild);
+                    const cooldown = (5 * 60 - (effects.mythicStatBonuses[MythicStat.MannerActionCooldown]?.flat || 0)) * 1000;
 
                     if (!game.actionButtonCooldownDeadline) game.actionButtonCooldownDeadline = {};
                     game.actionButtonCooldownDeadline[player.id] = now + cooldown;
@@ -306,24 +257,25 @@ export const updateGameStates = async (games: LiveGameSession[], now: number): P
             }
         }
         
-        const isAiTurn = game.isAiGame && game.currentPlayer !== types.Player.None && 
-                        (game.currentPlayer === types.Player.Black ? game.blackPlayerId === aiUserId : game.whitePlayerId === aiUserId);
-        
-        if (isAiTurn && game.gameStatus !== 'ended' && !['missile_animating', 'hidden_reveal_animating', 'alkkagi_animating', 'curling_animating'].includes(game.gameStatus)) {
-            if (!game.aiTurnStartTime) {
-                 game.aiTurnStartTime = now + (1000 + Math.random() * 1500);
-            }
-            if (now >= game.aiTurnStartTime) {
-                await makeAiMove(game);
-                game.aiTurnStartTime = undefined;
-            }
+        if (
+            (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) &&
+            game.autoEndTurnCount &&
+            game.moveHistory.length >= game.autoEndTurnCount &&
+            game.gameStatus === GameStatus.Playing
+        ) {
+            console.log(`[Game Loop] Game ${game.id} reached turn limit (${game.moveHistory.length}/${game.autoEndTurnCount}). Triggering scoring.`);
+            await getGameResult(game);
         }
         
-        if (SPECIAL_GAME_MODES.some((m: { mode: GameMode; }) => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge) {
+        const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge;
+        const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === game.mode);
+
+        if (isStrategic) {
             await updateStrategicGameState(game, now);
-        } else if (PLAYFUL_GAME_MODES.some((m: { mode: GameMode }) => m.mode === game.mode)) {
+        } else if (isPlayful) {
             await updatePlayfulGameState(game, now);
         }
+
         updatedGames.push(game);
     }
     return updatedGames;

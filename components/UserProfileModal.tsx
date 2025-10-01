@@ -1,27 +1,20 @@
+
 import React, { useMemo, useState } from 'react';
-import { UserWithStatus, EquipmentSlot, InventoryItem, ItemGrade, GameMode } from '../types.js';
+// Import EquipmentSlot enum to use its members instead of string literals.
+import { UserWithStatus, EquipmentSlot, InventoryItem, ItemGrade, GameMode } from '../types/index.js';
 import Avatar from './Avatar.js';
 import DraggableWindow from './DraggableWindow.js';
-import { AVATAR_POOL, BORDER_POOL, emptySlotImages, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, LEAGUE_DATA } from '../constants.js';
+import { AVATAR_POOL, BORDER_POOL, emptySlotImages, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, LEAGUE_DATA, GRADE_LEVEL_REQUIREMENTS, RANKING_TIERS, SINGLE_PLAYER_STAGES } from '../constants.js';
+// Update import path for manner functions from the missing utils/manner.js to the new services/manner.js.
 import { getMannerScore, getMannerRank, getMannerStyle } from '../services/manner.js';
 import MbtiInfoModal from './MbtiInfoModal.js';
 
-// Re-using components from Profile.tsx for consistency.
-const XpBar: React.FC<{ level: number, currentXp: number, label: string, colorClass: string }> = ({ level, currentXp, label, colorClass }) => {
-    const maxXp = 1000 + (level - 1) * 200;
-    const percentage = Math.min((currentXp / maxXp) * 100, 100);
-    return (
-        <div>
-            <div className="flex justify-between items-baseline mb-1 text-sm">
-                <span className="font-semibold">{label} <span className="text-lg font-bold">Lv.{level}</span></span>
-                <span className="text-xs font-mono text-gray-400">{currentXp} / {maxXp}</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-4 border border-gray-900">
-                <div className={`${colorClass} h-full rounded-full transition-width duration-500`} style={{ width: `${percentage}%` }}></div>
-            </div>
-        </div>
-    );
-};
+interface UserProfileModalProps {
+  user: UserWithStatus;
+  onClose: () => void;
+  onViewItem: (item: InventoryItem, isOwnedByCurrentUser: boolean) => void;
+  isTopmost?: boolean;
+}
 
 const gradeBackgrounds: Record<ItemGrade, string> = {
     normal: '/images/equipments/normalbgi.png',
@@ -32,65 +25,64 @@ const gradeBackgrounds: Record<ItemGrade, string> = {
     mythic: '/images/equipments/mythicbgi.png',
 };
 
-const getStarDisplay = (stars: number) => {
-    let starImage = '';
-    let numberColor = '';
-
+const getStarDisplayInfo = (stars: number) => {
     if (stars >= 10) {
-        starImage = '/images/equipments/Star4.png';
-        numberColor = "prism-text-effect";
+        return { text: `(★${stars})`, colorClass: "prism-text-effect" };
     } else if (stars >= 7) {
-        starImage = '/images/equipments/Star3.png';
-        numberColor = "text-purple-400";
+        return { text: `(★${stars})`, colorClass: "text-purple-400" };
     } else if (stars >= 4) {
-        starImage = '/images/equipments/Star2.png';
-        numberColor = "text-amber-400";
+        return { text: `(★${stars})`, colorClass: "text-amber-400" };
     } else if (stars >= 1) {
-        starImage = '/images/equipments/Star1.png';
-        numberColor = "text-white";
-    } else {
-        return <img src="/images/equipments/Star1.png" alt="star" className="w-4 h-4 inline-block opacity-30" title="미강화" />;
+        return { text: `(★${stars})`, colorClass: "text-white" };
     }
-
-    // Add text shadow here for consistency across all usages
-    return (
-        <span className="flex items-center gap-0.5" style={{ textShadow: '1px 1px 2px black, 0 0 5px black' }}>
-            <img src={starImage} alt="star" className="w-4 h-4" />
-            <span className={`font-bold ${numberColor}`}>{stars}</span>
-        </span>
-    );
+    return { text: "", colorClass: "text-white" };
 };
 
 const EquipmentSlotDisplay: React.FC<{ slot: EquipmentSlot; item?: InventoryItem; onClick?: () => void; }> = ({ slot, item, onClick }) => {
     const clickableClass = item && onClick ? 'cursor-pointer hover:scale-105 transition-transform' : '';
     
     if (item) {
+        const requiredLevel = GRADE_LEVEL_REQUIREMENTS[item.grade];
+        const titleText = `${item.name} (착용 레벨 합: ${requiredLevel}) - 클릭하여 상세보기`;
+        const starInfo = getStarDisplayInfo(item.stars);
         return (
             <div
-                className={`relative w-full aspect-square rounded-lg border-2 border-gray-700/50 bg-gray-900/50 ${clickableClass}`}
-                title={item.name}
+                className={`relative w-full aspect-square rounded-lg border-2 border-color/50 bg-tertiary/50 ${clickableClass}`}
+                title={titleText}
                 onClick={onClick}
             >
                 <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-md" />
-                <div className="absolute top-1 right-1 text-sm font-bold z-10">
-                    {getStarDisplay(item.stars)}
-                </div>
-                {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-3"/>}
+                {item.stars > 0 && (
+                    <div className={`absolute top-1 right-1.5 text-sm font-bold z-10 ${starInfo.colorClass}`} style={{ textShadow: '1px 1px 2px black' }}>
+                        ★{item.stars}
+                    </div>
+                )}
+                {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-1.5"/>}
             </div>
         );
     } else {
-        return (
-             <img src={emptySlotImages[slot]} alt={`${slot} empty slot`} className="w-full aspect-square rounded-lg bg-gray-900/50 border-2 border-gray-700/50" />
+         return (
+             <img src={emptySlotImages[slot]} alt={`${slot} empty slot`} className="w-full aspect-square rounded-lg bg-tertiary/50 border-2 border-color/50" />
         );
     }
 };
 
-interface UserProfileModalProps {
-  user: UserWithStatus;
-  onClose: () => void;
-  onViewItem: (item: InventoryItem, isOwnedByCurrentUser: boolean) => void;
-  isTopmost?: boolean;
-}
+// FIX: Added XpBar component definition to resolve reference error.
+const XpBar: React.FC<{ level: number, currentXp: number, label: string, colorClass: string }> = ({ level, currentXp, label, colorClass }) => {
+    const maxXp = level * 100;
+    const percentage = Math.min((currentXp / maxXp) * 100, 100);
+    return (
+        <div>
+            <div className="flex justify-between items-baseline mb-0.5 text-xs">
+                <span className="font-semibold">{label} <span className="text-base font-bold">Lv.{level}</span></span>
+                <span className="font-mono text-tertiary">{currentXp} / {maxXp}</span>
+            </div>
+            <div className="w-full bg-tertiary/50 rounded-full h-3 border border-color">
+                <div className={`${colorClass} h-full rounded-full`} style={{ width: `${percentage}%` }}></div>
+            </div>
+        </div>
+    );
+};
 
 const StatsTab: React.FC<{ user: UserWithStatus, type: 'strategic' | 'playful' }> = ({ user, type }) => {
     const modes = type === 'strategic' ? SPECIAL_GAME_MODES : PLAYFUL_GAME_MODES;
@@ -207,12 +199,13 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClose, onVi
                      <div className="bg-gray-800/50 rounded-lg p-4 flex-shrink-0">
                         <h3 className="text-center font-semibold mb-3 text-gray-300">장착 장비</h3>
                         <div className="grid grid-cols-3 gap-3 w-full max-w-xs mx-auto">
-                            <EquipmentSlotDisplay slot="fan" item={getItemForSlot('fan')} onClick={() => getItemForSlot('fan') && onViewItem(getItemForSlot('fan')!, false)} />
-                            <EquipmentSlotDisplay slot="board" item={getItemForSlot('board')} onClick={() => getItemForSlot('board') && onViewItem(getItemForSlot('board')!, false)} />
-                            <EquipmentSlotDisplay slot="top" item={getItemForSlot('top')} onClick={() => getItemForSlot('top') && onViewItem(getItemForSlot('top')!, false)} />
-                            <EquipmentSlotDisplay slot="bottom" item={getItemForSlot('bottom')} onClick={() => getItemForSlot('bottom') && onViewItem(getItemForSlot('bottom')!, false)} />
-                            <EquipmentSlotDisplay slot="bowl" item={getItemForSlot('bowl')} onClick={() => getItemForSlot('bowl') && onViewItem(getItemForSlot('bowl')!, false)} />
-                            <EquipmentSlotDisplay slot="stones" item={getItemForSlot('stones')} onClick={() => getItemForSlot('stones') && onViewItem(getItemForSlot('stones')!, false)} />
+                            {/* Replaced string literals with EquipmentSlot enum members. */}
+                            <EquipmentSlotDisplay slot={EquipmentSlot.Fan} item={getItemForSlot(EquipmentSlot.Fan)} onClick={() => getItemForSlot(EquipmentSlot.Fan) && onViewItem(getItemForSlot(EquipmentSlot.Fan)!, false)} />
+                            <EquipmentSlotDisplay slot={EquipmentSlot.Board} item={getItemForSlot(EquipmentSlot.Board)} onClick={() => getItemForSlot(EquipmentSlot.Board) && onViewItem(getItemForSlot(EquipmentSlot.Board)!, false)} />
+                            <EquipmentSlotDisplay slot={EquipmentSlot.Top} item={getItemForSlot(EquipmentSlot.Top)} onClick={() => getItemForSlot(EquipmentSlot.Top) && onViewItem(getItemForSlot(EquipmentSlot.Top)!, false)} />
+                            <EquipmentSlotDisplay slot={EquipmentSlot.Bottom} item={getItemForSlot(EquipmentSlot.Bottom)} onClick={() => getItemForSlot(EquipmentSlot.Bottom) && onViewItem(getItemForSlot(EquipmentSlot.Bottom)!, false)} />
+                            <EquipmentSlotDisplay slot={EquipmentSlot.Bowl} item={getItemForSlot(EquipmentSlot.Bowl)} onClick={() => getItemForSlot(EquipmentSlot.Bowl) && onViewItem(getItemForSlot(EquipmentSlot.Bowl)!, false)} />
+                            <EquipmentSlotDisplay slot={EquipmentSlot.Stones} item={getItemForSlot(EquipmentSlot.Stones)} onClick={() => getItemForSlot(EquipmentSlot.Stones) && onViewItem(getItemForSlot(EquipmentSlot.Stones)!, false)} />
                         </div>
                      </div>
                 </div>

@@ -110,15 +110,19 @@ html[data-theme="green"] {
 }
 
 
-html {
-  font-size: 16px;
+html, body, #root {
+  height: 100vh; /* Fallback */
+  height: calc(var(--vh, 1vh) * 100);
 }
 
-@media (max-width: 1023px) {
-  html {
-    /* Fluid typography: scales from ~10px at 320px up to 16px at 1024px */
-    font-size: clamp(0.625rem, 0.45rem + 0.833vw, 1rem);
-  }
+#root {
+  display: flex;
+  justify-content: center;
+  align-items: center; /* Align to center for letterboxing */
+}
+
+html {
+  font-size: 16px;
 }
 
 body {
@@ -206,12 +210,33 @@ input, textarea {
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+@keyframes prism-glow-animation {
+  0%, 100% { text-shadow: 0 0 5px #ef4444, 0 0 10px #ef4444; }
+  14% { text-shadow: 0 0 5px #f59e0b, 0 0 10px #f59e0b; }
+  28% { text-shadow: 0 0 5px #eab308, 0 0 10px #eab308; }
+  42% { text-shadow: 0 0 5px #84cc16, 0 0 10px #84cc16; }
+  57% { text-shadow: 0 0 5px #14b8a6, 0 0 10px #14b8a6; }
+  71% { text-shadow: 0 0 5px #3b82f6, 0 0 10px #3b82f6; }
+  85% { text-shadow: 0 0 5px #8b5cf6, 0 0 10px #d946ef; }
+}
 .prism-text-effect {
   background: linear-gradient(to right, #ef4444, #f59e0b, #eab308, #84cc16, #22c55e, #14b8a6, #06b6d4, #3b82f6, #6366f1, #8b5cf6, #d946ef);
   background-size: 200% 200%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: prism-text-animation 4s ease infinite;
+  animation: prism-text-animation 4s ease infinite, prism-glow-animation 4s linear infinite;
+}
+@keyframes prism-glow-image-animation {
+  0%, 100% { filter: drop-shadow(0 0 3px #ef4444); }
+  14% { filter: drop-shadow(0 0 3px #f59e0b); }
+  28% { filter: drop-shadow(0 0 3px #eab308); }
+  42% { filter: drop-shadow(0 0 3px #84cc16); }
+  57% { filter: drop-shadow(0 0 3px #14b8a6); }
+  71% { filter: drop-shadow(0 0 3px #3b82f6); }
+  85% { filter: drop-shadow(0 0 3px #8b5cf6); }
+}
+.prism-image-effect {
+    animation: prism-glow-image-animation 4s linear infinite;
 }
 
 
@@ -455,6 +480,16 @@ input, textarea {
     animation: bonus-score-animation 2.5s ease-out forwards;
 }
 
+@keyframes critical-hit-animation {
+    0% { transform: translateY(0) scale(1.2); opacity: 1; color: yellow; }
+    100% { transform: translateY(-80px) scale(2.5); opacity: 0; color: white; }
+}
+.critical-hit-animation {
+    animation: critical-hit-animation 1.5s ease-out forwards;
+    font-weight: 900; /* extra bold */
+    text-shadow: 0 0 8px yellow, 0 0 12px orange;
+}
+
 
 /* --- Recommended Move --- */
 .recommended-move-marker circle {
@@ -572,15 +607,15 @@ input[type="range"]::-moz-range-thumb {
    border: 2px solid rgb(var(--bg-tertiary));
 }
 
-.bg-wood-pattern {
-    background-image: url('/images/wood_bg.png');
+.bg-strategic {
+    background-image: url('/images/bg/strategicbg.png');
     background-size: cover;
     background-position: center;
     background-color: rgb(var(--bg-tertiary)); /* Fallback color */
 }
 
-.bg-tower-default {
-    background-image: url('/images/tower/InTower.png');
+.bg-playful {
+    background-image: url('/images/bg/playfulbg.png');
     background-size: cover;
     background-position: center;
     background-color: rgb(var(--bg-tertiary)); /* Fallback color */
@@ -593,9 +628,121 @@ input[type="range"]::-moz-range-thumb {
     background-color: rgb(var(--bg-tertiary)); /* Fallback color */
 }
 
+.bg-tower-default {
+    background-image: url('/images/tower/InTower.png');
+    background-size: cover;
+    background-position: center;
+    background-color: rgb(var(--bg-tertiary)); /* Fallback color */
+}
+
 .bg-academy-bg {
     background-image: url('/images/single/AcademyBG.png');
     background-size: cover;
     background-position: center;
     background-color: rgb(var(--bg-tertiary)); /* Fallback color */
+}
+
+/* Single Player Level Backgrounds */
+.bg-sp-intro {
+    background-image: url('/images/single/Academy.png');
+    background-size: cover;
+    background-position: center;
+    background-color: rgb(var(--bg-tertiary));
+}
+.bg-sp-beginner {
+    background-image: url('/images/single/Academy1.png');
+    background-size: cover;
+    background-position: center;
+    background-color: rgb(var(--bg-tertiary));
+}
+.bg-sp-intermediate {
+    background-image: url('/images/single/Academy2.png');
+    background-size: cover;
+    background-position: center;
+    background-color: rgb(var(--bg-tertiary));
+}
+.bg-sp-advanced {
+    background-image: url('/images/single/Academy3.png');
+    background-size: cover;
+    background-position: center;
+    background-color: rgb(var(--bg-tertiary));
+}
+.bg-sp-master {
+    background-image: url('/images/single/Academy4.png');
+    background-size: cover;
+    background-position: center;
+    background-color: rgb(var(--bg-tertiary));
+}
+
+/* Level Up Animation */
+@keyframes level-up-animation {
+  0% { transform: scale(0.5) rotate(-15deg); opacity: 0; }
+  50% { transform: scale(1.1) rotate(5deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.animate-level-up-modal {
+  animation: level-up-animation 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes level-up-text-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px #fde047) drop-shadow(0 0 10px #f59e0b);
+  }
+  50% {
+    filter: drop-shadow(0 0 15px #fde047) drop-shadow(0 0 25px #f59e0b) brightness(1.2);
+  }
+}
+
+.level-up-text {
+  animation: level-up-text-glow 2s ease-in-out infinite;
+}
+
+@keyframes float-up-and-fade {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-60px) scale(0.8);
+    opacity: 0;
+  }
+}
+
+.animate-float-up-and-fade {
+  animation: float-up-and-fade 2s ease-out forwards;
+}
+
+@keyframes float-down-and-fade {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(60px) scale(0.8);
+    opacity: 0;
+  }
+}
+.animate-float-down-and-fade {
+  animation: float-down-and-fade 2s ease-out forwards;
+}
+
+/* Custom Button Styles */
+.btn-text-shadow {
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+
+/* Desktop styles: Allow vertical scrolling for aspect ratio scaling */
+@media (min-width: 1025px) {
+  body {
+    overflow-y: auto;
+  }
+}
+
+/* Mobile styles: Allow vertical scrolling */
+@media (max-width: 1024px) {
+  body {
+    overflow-y: auto;
+  }
 }

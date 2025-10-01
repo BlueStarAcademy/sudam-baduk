@@ -19,6 +19,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, onChange, label, d
           className="sr-only" 
           checked={checked} 
           onChange={e => !disabled && onChange(e.target.checked)}
+          // FIX: Add disabled property to the input itself
           disabled={disabled}
         />
         <div className={`block w-12 h-6 rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-secondary'}`}></div>

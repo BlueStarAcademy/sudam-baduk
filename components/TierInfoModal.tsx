@@ -1,7 +1,8 @@
 import React from 'react';
 import DraggableWindow from './DraggableWindow.js';
 import { RANKING_TIERS, SEASONAL_TIER_REWARDS, CONSUMABLE_ITEMS } from '../constants.js';
-import { QuestReward } from '../types.js';
+// FIX: LeagueRewardTier is now defined in types/entities.ts and exported from types/index.js
+import { QuestReward, LeagueRewardTier } from '../types.js';
 
 interface TierInfoModalProps {
     onClose: () => void;
@@ -9,15 +10,15 @@ interface TierInfoModalProps {
 
 const TierInfoModal: React.FC<TierInfoModalProps> = ({ onClose }) => {
     const requirementMap: Record<string, string> = {
-        '챌린저': '상위 0.1%',
-        '마스터': '상위 3%',
-        '다이아': '상위 5%',
-        '플래티넘': '상위 10%',
-        '골드': '상위 25%',
-        '실버': '상위 40%',
-        '브론즈': '상위 60%',
-        '루키': '상위 80%',
-        '새싹': '모든 플레이어',
+        '챌린저': '3000점 이상 & 상위 10명',
+        '마스터': '2600점 이상',
+        '다이아': '2200점 이상',
+        '플래티넘': '2000점 이상',
+        '골드': '1700점 이상',
+        '실버': '1500점 이상',
+        '브론즈': '1400점 이상',
+        '루키': '1300점 이상',
+        '새싹': '1300점 미만',
     };
 
     const getItemImage = (itemName: string): string | null => {
@@ -36,9 +37,12 @@ const TierInfoModal: React.FC<TierInfoModalProps> = ({ onClose }) => {
         }
         if (reward.items) {
             reward.items.forEach(item => {
+                // Correctly handle union type for item references.
                 const itemName = 'itemId' in item ? item.itemId : item.name;
                 const itemImage = getItemImage(itemName);
-                rewardsToShow.push({ name: `${itemName} x${item.quantity}`, image: itemImage });
+                // Handle optional quantity property on InventoryItem
+                const quantity = 'quantity' in item ? (item.quantity ?? 1) : 1;
+                rewardsToShow.push({ name: `${itemName} x${quantity}`, image: itemImage });
             });
         }
 

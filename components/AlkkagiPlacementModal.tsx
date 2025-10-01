@@ -1,6 +1,9 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { LiveGameSession, User, Player } from '../types.js';
+// FIX: Separate enum and type imports.
+import { Player } from '../types/index.js';
+import type { LiveGameSession, User } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 
 interface AlkkagiPlacementModalProps {

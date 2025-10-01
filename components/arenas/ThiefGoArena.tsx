@@ -1,17 +1,21 @@
 import React, { useMemo } from 'react';
-import { GameProps, Player, Point, GameMode } from '../../types.js';
+// FIX: Separate enum and type imports, and correct import path.
+import { Player, GameMode } from '../../types/index.js';
+import type { GameProps, Point } from '../../types/index.js';
 import GoBoard from '../GoBoard.js';
-import { getGoLogic } from '../../server/goLogic.js';
+import { getGoLogic } from '../../utils/goLogic.js';
 
 interface ThiefGoArenaProps extends GameProps {
     isMyTurn: boolean;
-    isMobile: boolean;
     showLastMoveMarker: boolean;
+    optimisticStone?: Point | null;
+    setOptimisticStone: (stone: Point | null) => void;
+    setIsSubmittingMove: (isSubmitting: boolean) => void;
 }
 
 const ThiefGoArena: React.FC<ThiefGoArenaProps> = (props) => {
-    const { session, onAction, currentUser, isMyTurn, isSpectator, isMobile, showLastMoveMarker } = props;
-    const { id: gameId, boardState, settings, lastMove, winningLine, gameStatus, currentPlayer, blackPlayerId, whitePlayerId, thiefPlayerId, player1, player2, lastTurnStones } = session;
+    const { session, onAction, currentUser, isMyTurn, isSpectator, showLastMoveMarker, optimisticStone, setOptimisticStone, setIsSubmittingMove } = props;
+    const { id: gameId, boardState, settings, lastMove, winningLine, gameStatus, currentPlayer, blackPlayerId, whitePlayerId, thiefPlayerId, player1, player2 } = session;
     
     const myPlayerEnum = blackPlayerId === currentUser.id ? Player.Black : (whitePlayerId === currentUser.id ? Player.White : Player.None);
     const myRole = currentUser.id === thiefPlayerId ? '도둑' : '경찰';
@@ -20,9 +24,15 @@ const ThiefGoArena: React.FC<ThiefGoArenaProps> = (props) => {
     const blackPlayer = players.find(p => p.id === blackPlayerId) || null;
     const whitePlayer = players.find(p => p.id === whitePlayerId) || null;
 
-    const handleBoardClick = (x: number, y: number) => {
+    const handleBoardClick = async (x: number, y: number) => {
         if (!isMyTurn || gameStatus !== 'thief_placing') return;
-        onAction({ type: 'THIEF_PLACE_STONE', payload: { gameId, x, y } });
+        setIsSubmittingMove(true);
+        setOptimisticStone({ x, y });
+        const result = await onAction({ type: 'THIEF_PLACE_STONE', payload: { gameId, x, y } });
+        if (result && !result.success) {
+            setOptimisticStone(null);
+            setIsSubmittingMove(false);
+        }
     };
 
     const highlightedPoints = useMemo(() => {
@@ -73,7 +83,6 @@ const ThiefGoArena: React.FC<ThiefGoArenaProps> = (props) => {
                 boardSize={settings.boardSize}
                 onBoardClick={handleBoardClick}
                 lastMove={lastMove}
-                lastTurnStones={lastTurnStones}
                 isBoardDisabled={!isMyTurn || gameStatus !== 'thief_placing'}
                 stoneColor={myPlayerEnum}
                 winningLine={winningLine}
@@ -88,8 +97,8 @@ const ThiefGoArena: React.FC<ThiefGoArenaProps> = (props) => {
                 blackPlayerNickname={blackPlayer?.nickname || '흑'}
                 whitePlayerNickname={whitePlayer?.nickname || '백'}
                 isItemModeActive={false}
-                isMobile={isMobile}
                 showLastMoveMarker={showLastMoveMarker}
+                optimisticStone={optimisticStone ?? null}
             />
         </div>
     );

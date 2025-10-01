@@ -1,15 +1,28 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { UserWithStatus, TournamentState, PlayerForTournament, ServerAction, User, CoreStat, Match, Round, CommentaryLine, TournamentType, LeagueTier, InventoryItem } from '../types.js';
+import { UserWithStatus, TournamentState, PlayerForTournament, ServerAction, User, CoreStat, Match, Round, CommentaryLine, TournamentType, LeagueTier, InventoryItem } from '../types/index.js';
 import Button from './Button.js';
-import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, AVATAR_POOL, BORDER_POOL, CORE_STATS_DATA, LEAGUE_DATA } from '../constants.js';
+import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, TOURNAMENT_SCORE_REWARDS, CONSUMABLE_ITEMS, AVATAR_POOL, BORDER_POOL, CORE_STATS_DATA, LEAGUE_DATA } from '../constants/index.js';
 import Avatar from './Avatar.js';
 import RadarChart from './RadarChart.js';
 import SgfViewer from './SgfViewer.js';
 import { audioService } from '../services/audioService.js';
 import DraggableWindow from './DraggableWindow.js';
+import { CommentaryPanel, ScoreGraph, SimulationProgressBar } from './ScoreGraphAndCommentary.js';
 
-// FIX: Add missing `parseCommentary` function and its dependency `RandomEventDetails` component.
+// ... (Rest of the components like RandomEventDetails, parseCommentary, etc. remain the same) ...
+const EARLY_GAME_DURATION = 20;
+const MID_GAME_DURATION = 30;
+const END_GAME_DURATION = 20;
+const TOTAL_GAME_DURATION = EARLY_GAME_DURATION + MID_GAME_DURATION + END_GAME_DURATION;
+
+
+const getPhase = (time: number): 'early' | 'mid' | 'end' => {
+    if (time <= EARLY_GAME_DURATION) return 'early';
+    if (time <= EARLY_GAME_DURATION + MID_GAME_DURATION) return 'mid';
+    return 'end';
+};
+
 interface RandomEventDetailsProps {
     details: NonNullable<CommentaryLine['randomEventDetails']>;
     p1Nickname?: string;
@@ -65,7 +78,14 @@ const parseCommentary = (commentaryLine: CommentaryLine, p1Nickname?: string, p2
     
     return (
         <div>
-            {baseText}
+            <span>
+                {baseText}
+                {isRandomEvent && randomEventDetails && (
+                    <span className="font-bold text-yellow-400 ml-1">
+                        (+{randomEventDetails.score_change.toFixed(1).replace('.0', '')}집)
+                    </span>
+                )}
+            </span>
             {randomEventDetails && <RandomEventDetails details={randomEventDetails} p1Nickname={p1Nickname} p2Nickname={p2Nickname} />}
         </div>
     );
@@ -97,6 +117,14 @@ const getMaxStatValueForLeague = (league: LeagueTier): number => {
     }
 };
 
+interface PotionSelectionModalProps {
+    currentUser: UserWithStatus;
+    matchId: string;
+    tournamentType: TournamentType;
+    onClose: () => void;
+    onAction: (action: ServerAction) => void;
+}
+
 interface TournamentBracketProps {
     tournamentState: TournamentState;
     currentUser: UserWithStatus;
@@ -105,18 +133,24 @@ interface TournamentBracketProps {
     onViewUser: (userId: string) => void;
     onAction: (action: ServerAction) => void;
     onStartNextRound: () => void;
-    onReset: () => void;
     onSkip: () => void;
     isMobile: boolean;
+    onReset: () => void;
 }
+const RewardItemDisplay: React.FC<{ item: InventoryItem | { itemId: string; quantity: number } }> = ({ item }) => {
+    const itemName = 'itemId' in item ? item.itemId : (item as any).name;
+    const quantity = 'quantity' in item ? item.quantity : 1;
+    const itemTemplate = CONSUMABLE_ITEMS.find(i => i.name === itemName);
 
-interface PotionSelectionModalProps {
-    currentUser: UserWithStatus;
-    matchId: string;
-    tournamentType: TournamentType;
-    onClose: () => void;
-    onAction: (action: ServerAction) => void;
-}
+    if (!itemTemplate) return null;
+
+    return (
+        <div className="flex items-center gap-2 bg-tertiary/50 p-1.5 rounded-md" title={`${itemName} x${quantity}`}>
+            <img src={itemTemplate.image!} alt={itemName} className="w-6 h-6 object-contain" />
+            <span className="text-xs text-primary">{itemName} x{quantity}</span>
+        </div>
+    );
+};
 
 const PotionSelectionModal: React.FC<PotionSelectionModalProps> = ({ currentUser, matchId, tournamentType, onClose, onAction }) => {
     const potions = useMemo(() => {
@@ -172,8 +206,29 @@ const PlayerProfilePanel: React.FC<{
     isPreMatchView?: boolean;
     matchId?: string;
     onUsePotion?: (matchId: string) => void;
-}> = ({ player, initialPlayer, allUsers, currentUserId, onViewUser, highlightPhase, isPreMatchView, matchId, onUsePotion }) => {
+    tournamentState: TournamentState;
+}> = ({ player, initialPlayer, allUsers, currentUserId, onViewUser, highlightPhase, isPreMatchView, matchId, onUsePotion, tournamentState }) => {
     
+    const [statAnimations, setStatAnimations] = useState<Partial<Record<CoreStat, { change: number; key: number }>>>({});
+
+    useEffect(() => {
+        if (!tournamentState?.lastStatChanges || !player) return;
+
+        const myChange = tournamentState.lastStatChanges.find(c => c.playerId === player.id);
+        if (myChange) {
+            setStatAnimations(prev => ({
+                ...prev,
+                [myChange.stat]: { change: myChange.change, key: Date.now() }
+            }));
+            const timer = setTimeout(() => setStatAnimations(prev => {
+                const newPrev = {...prev};
+                delete newPrev[myChange.stat];
+                return newPrev;
+            }), 1500);
+            return () => clearTimeout(timer);
+        }
+    }, [tournamentState?.lastStatChanges, player?.id]);
+
     if (!player) return <div className="p-2 text-center text-gray-500 flex items-center justify-center h-full bg-gray-900/50 rounded-lg">선수 대기 중...</div>;
 
     const fullUserData = useMemo(() => allUsers.find(u => u.id === player.id), [allUsers, player.id]);
@@ -210,7 +265,7 @@ const PlayerProfilePanel: React.FC<{
                  </div>
             </div>
             <div className="font-bold text-sm mt-1 relative flex items-center justify-center gap-2">
-                <span>컨디션: <span className="text-yellow-300">{player.condition === 1000 ? '-' : player.condition}</span></span>
+                <span>컨디션: <span className="text-yellow-300">{player.condition === 1000 ? '-' : Math.round(player.condition)}</span></span>
                 {isPreMatchView && player.id === currentUserId && onUsePotion && matchId && (
                     <button 
                         onClick={(e) => { e.stopPropagation(); onUsePotion(matchId); }} 
@@ -224,19 +279,25 @@ const PlayerProfilePanel: React.FC<{
             </div>
             <div className="w-full grid grid-cols-2 gap-x-1 sm:gap-x-3 gap-y-0.5 text-xs mt-2 border-t border-gray-600 pt-2">
                 {Object.values(CoreStat).map(stat => {
-                    const initialValue = initialPlayer?.stats?.[stat] ?? player.stats[stat];
+                    const initialValue = initialPlayer?.originalStats?.[stat] ?? player.originalStats?.[stat] ?? 0;
                     const currentValue = player.stats[stat];
-                    const change = currentValue - initialValue;
+                    const cumulativeChange = currentValue - initialValue;
+                    const animation = statAnimations[stat];
 
                     return (
                         <React.Fragment key={stat}>
                             <span className={`text-gray-400 ${isStatHighlighted(stat) ? 'text-yellow-400 font-bold' : ''}`}>{stat}</span>
                             <div className="flex justify-end items-baseline relative">
-                                <span className={`font-mono text-white ${isStatHighlighted(stat) ? 'text-yellow-400 font-bold' : ''}`}>{player.stats[stat]}</span>
-                                {initialPlayer && change !== 0 && (
-                                     <span className={`ml-1 font-bold ${change > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                        ({change > 0 ? '+' : ''}{change})
-                                     </span>
+                                <span className={`font-mono text-white ${isStatHighlighted(stat) ? 'text-yellow-400 font-bold' : ''}`}>{currentValue}</span>
+                                {cumulativeChange !== 0 && (
+                                    <span className={`ml-1 text-xs ${cumulativeChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                        ({cumulativeChange > 0 ? '+' : ''}{cumulativeChange.toFixed(0)})
+                                    </span>
+                                )}
+                                {animation && (
+                                    <span key={animation.key} className={`absolute -right-6 text-sm font-bold ${animation.change > 0 ? 'text-green-400' : 'text-red-400'} animate-float-up-and-fade`}>
+                                        {animation.change > 0 ? '+' : ''}{animation.change}
+                                    </span>
                                 )}
                             </div>
                         </React.Fragment>
@@ -247,69 +308,25 @@ const PlayerProfilePanel: React.FC<{
     );
 };
 
-const SimulationProgressBar: React.FC<{ timeElapsed: number; totalDuration: number }> = ({ timeElapsed, totalDuration }) => {
-    const progress = (timeElapsed / totalDuration) * 100;
-    const earlyStage = Math.min(progress, (40 / 140) * 100);
-    const midStage = Math.min(Math.max(0, progress - (40 / 140) * 100), (60 / 140) * 100);
-    const endStage = Math.min(Math.max(0, progress - (100 / 140) * 100), (40 / 140) * 100);
-
-    return (
-        <div>
-            <div className="w-full bg-gray-900 rounded-full h-2 flex border border-gray-600">
-                <div className="bg-green-500 h-full rounded-l-full" style={{ width: `${earlyStage}%` }} title="초반전"></div>
-                <div className="bg-yellow-500 h-full" style={{ width: `${midStage}%` }} title="중반전"></div>
-                <div className="bg-red-500 h-full rounded-r-full" style={{ width: `${endStage}%` }} title="끝내기"></div>
-            </div>
-            <div className="flex text-xs text-gray-400 mt-1">
-                <div style={{ width: `${(40/140)*100}%` }}>초반</div>
-                <div style={{ width: `${(60/140)*100}%` }} className="text-center">중반</div>
-                <div style={{ width: `${(40/140)*100}%` }} className="text-right">종반</div>
-            </div>
-        </div>
-    );
-};
-
-const ScoreGraph: React.FC<{ p1Percent: number; p2Percent: number; p1Nickname?: string; p2Nickname?: string }> = ({ p1Percent, p2Percent, p1Nickname, p2Nickname }) => {
-    return (
-        <div>
-            {p1Nickname && p2Nickname && (
-                <div className="flex justify-between text-xs px-1 mb-1 font-bold">
-                    <span className="truncate max-w-[45%]">흑: {p1Nickname}</span>
-                    <span className="truncate max-w-[45%] text-right">백: {p2Nickname}</span>
-                </div>
-            )}
-            <div className="flex w-full h-3 bg-gray-700 rounded-full overflow-hidden border-2 border-black/30 relative">
-                <div className="bg-black transition-all duration-500 ease-in-out" style={{ width: `${p1Percent}%` }}></div>
-                <div className="bg-white transition-all duration-500 ease-in-out" style={{ width: `${p2Percent}%` }}></div>
-                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-gray-400/50" title="중앙"></div>
-            </div>
-        </div>
-    );
-};
-
-const CommentaryPanel: React.FC<{ commentary: CommentaryLine[], isSimulating: boolean, p1Nickname?: string, p2Nickname?: string }> = ({ commentary, isSimulating, p1Nickname, p2Nickname }) => {
-    const commentaryContainerRef = useRef<HTMLDivElement>(null);
-    useEffect(() => {
-        if (commentaryContainerRef.current) {
-            commentaryContainerRef.current.scrollTop = commentaryContainerRef.current.scrollHeight;
-        }
-    }, [commentary]);
+const calculateRanks = (tournament: TournamentState): (PlayerForTournament & { rank: number })[] => {
+    const playerWins: Record<string, number> = {};
+    tournament.players.forEach(p => { playerWins[p.id] = p.wins; });
     
-    return (
-        <div className="h-full flex flex-col min-h-0">
-            <h4 className="text-center font-bold text-sm mb-2 text-gray-400 py-1 flex-shrink-0">
-                실시간 중계
-                {isSimulating && <span className="ml-2 text-yellow-400 animate-pulse">경기 진행 중...</span>}
-            </h4>
-            <div ref={commentaryContainerRef} className="flex-grow overflow-y-auto space-y-2 text-sm text-gray-300 bg-gray-800/50 p-3 rounded-md min-h-0">
-                {commentary.length > 0 ? (
-                    commentary.slice(-30).map((line, index) => <div key={`${index}-${line.text}`} className="animate-fade-in">{parseCommentary(line, p1Nickname, p2Nickname)}</div>)
-                ) : (
-                    <div className="text-gray-500 text-center h-full flex items-center justify-center">경기 시작 대기 중...</div>
-                )}
-            </div>
-        </div>
-    );
+    const sortedPlayers = [...tournament.players].sort((a, b) => playerWins[b.id] - playerWins[a.id]);
+    
+    let rankedPlayers: (PlayerForTournament & { rank: number })[] = [];
+    let currentRank = 0;
+    let lastWins = -1;
+
+    sortedPlayers.forEach((p, i) => {
+        if (playerWins[p.id] !== lastWins) {
+            currentRank = i + 1;
+        }
+        rankedPlayers.push({ ...p, rank: currentRank });
+        lastWins = playerWins[p.id];
+    });
+
+    return rankedPlayers;
 };
 
 const TournamentResultPanel: React.FC<{
@@ -321,72 +338,34 @@ const TournamentResultPanel: React.FC<{
     const isTournamentFullyComplete = tournamentState.status === 'complete';
     const isUserEliminated = tournamentState.status === 'eliminated';
     
-    const { type, rounds, players } = tournamentState;
-    const definition = TOURNAMENT_DEFINITIONS[type];
+    const { type } = tournamentState;
     
-    const userRank = useMemo(() => {
-        if (!definition) return -1;
-    
-        if (type === 'neighborhood') {
-            const wins: Record<string, number> = {};
-            players.forEach(p => { wins[p.id] = 0; });
-            rounds[0].matches.forEach(m => {
-                if (m.winner) { wins[m.winner.id] = (wins[m.winner.id] || 0) + 1; }
-            });
-            const sortedPlayers = [...players].sort((a, b) => wins[b.id] - wins[a.id]);
-            let currentRank = -1;
-            for (let i = 0; i < sortedPlayers.length; i++) {
-                if (i === 0) { currentRank = 1; } 
-                else { if (wins[sortedPlayers[i].id] < wins[sortedPlayers[i-1].id]) { currentRank = i + 1; } }
-                if (sortedPlayers[i].id === currentUser.id) { return currentRank; }
-            }
-            return -1;
-        } else { // tournament format ('national', 'world')
-            const finalMatch = rounds.find(r => r.name === '결승')?.matches[0];
-            const thirdPlaceMatch = rounds.find(r => r.name === '3,4위전')?.matches[0];
-            
-            if (finalMatch?.winner?.id === currentUser.id) return 1;
-            if (finalMatch?.players.some(p => p?.id === currentUser.id) && finalMatch.winner?.id !== currentUser.id) return 2;
-            if (thirdPlaceMatch?.winner?.id === currentUser.id) return 3;
-            if (thirdPlaceMatch?.players.some(p => p?.id === currentUser.id) && thirdPlaceMatch.winner?.id !== currentUser.id) return 4;
-            
-            for (let i = rounds.length - 1; i >= 0; i--) {
-                const round = rounds[i];
-                for (const match of round.matches) {
-                    if (match.isUserMatch && match.winner?.id !== currentUser.id) {
-                        const roundName = round.name;
-                        const roundSize = parseInt(roundName.replace(/[^0-9]/g, ''), 10);
-                        if (!isNaN(roundSize)) {
-                            return roundSize;
-                        }
-                    }
-                }
-            }
-        }
-        return -1; // Fallback
-    }, [tournamentState, currentUser.id, type, rounds, players, definition]);
+    const myRankInfo = useMemo(() => {
+        const ranks = calculateRanks(tournamentState);
+        return ranks.find(r => r.id === currentUser.id);
+    }, [tournamentState, currentUser.id]);
+
+    const rewardKey = useMemo(() => {
+        if (!myRankInfo) return 99;
+        if (type === 'neighborhood') return myRankInfo.rank <= 3 ? myRankInfo.rank : 4;
+        if (type === 'national') return myRankInfo.rank <= 4 ? myRankInfo.rank : 5;
+        if (myRankInfo.rank <= 4) return myRankInfo.rank;
+        if (myRankInfo.rank <= 8) return 5;
+        return 9;
+    }, [myRankInfo, type]);
 
     const reward = useMemo(() => {
-        if (userRank === -1) return null;
+        if (!myRankInfo) return null;
         const rewardInfo = BASE_TOURNAMENT_REWARDS[type];
         if (!rewardInfo) return null;
-        let rewardKey: number;
-        if (type === 'neighborhood') rewardKey = userRank <= 3 ? userRank : 4;
-        else if (type === 'national') rewardKey = userRank <= 4 ? userRank : 5;
-        else { // world
-            if (userRank <= 4) rewardKey = userRank;
-            else if (userRank <= 8) rewardKey = 5;
-            else rewardKey = 9;
-        }
         return rewardInfo.rewards[rewardKey];
-    }, [userRank, type]);
+    }, [myRankInfo, type, rewardKey]);
     
     const rewardClaimedKey = useMemo(() => `${type}RewardClaimed` as keyof User, [type]);
     const isClaimed = useMemo(() => !!(currentUser as any)[rewardClaimedKey], [currentUser, rewardClaimedKey]);
 
     const handleClaim = () => {
         if (!isClaimed && (isTournamentFullyComplete || isUserEliminated)) {
-            audioService.claimReward();
             onAction({ type: 'CLAIM_TOURNAMENT_REWARD', payload: { tournamentType: type } })
         }
     };
@@ -408,8 +387,8 @@ const TournamentResultPanel: React.FC<{
                 <h4 className="font-bold text-gray-400 text-sm">우승자</h4>
                 {winner ? <p className="text-base font-semibold text-yellow-300">{winner.nickname}</p> : <p className="text-xs text-gray-500">집계 중...</p>}
                 
-                { userRank > 0 &&
-                    <p className="mt-1 text-xs text-gray-300">나의 순위: <span className="font-bold text-white">{userRank}위</span></p>
+                { myRankInfo &&
+                    <p className="mt-1 text-xs text-gray-300">나의 순위: <span className="font-bold text-white">{myRankInfo.rank}위</span></p>
                 }
             </div>
 
@@ -421,17 +400,8 @@ const TournamentResultPanel: React.FC<{
                     title={isClaimed ? '수령 완료' : '클릭하여 보상 수령'}
                 >
                     {isClaimed && <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center text-green-400 font-bold">수령 완료</div>}
-                    {reward ? (reward.items || []).map((item, index) => {
-                        const itemName = 'itemId' in item ? item.itemId : (item as any).name;
-                        const itemTemplate = CONSUMABLE_ITEMS.find(i => i.name === itemName);
-                        const imageUrl = itemTemplate?.image || '';
-                        return (
-                            <div key={index} className="flex flex-col items-center" title={`${itemName} x${item.quantity}`}>
-                                <img src={imageUrl} alt={itemName} className="w-6 h-6 object-contain"/>
-                                <span className="text-[10px]">x{item.quantity}</span>
-                            </div>
-                        );
-                    }) : <p className="text-xs text-gray-500">획득한 보상이 없습니다.</p>}
+                    {/* FIX: Changed undefined variable `myReward` to the correct `reward` variable to display tournament rewards. */}
+                    {reward ? (reward.items || []).map((item, i) => <RewardItemDisplay key={i} item={item} />) : <p className="text-xs text-gray-500">획득한 보상이 없습니다.</p>}
                 </div>
             </div>
         </div>
@@ -617,10 +587,12 @@ const TournamentRoundViewer: React.FC<{ rounds: Round[]; currentUser: UserWithSt
         return (
             <div className="h-full flex flex-col min-h-0">
                 <h4 className="font-bold text-center mb-2 flex-shrink-0 text-gray-300">대진표</h4>
-                <div className="flex-grow overflow-auto flex items-center justify-center p-2 space-x-4">
-                    {sortedRounds.map((round) => (
-                        <RoundColumn key={round.id} name={round.name} matches={round.matches} currentUser={currentUser} />
-                    ))}
+                <div className="flex-grow overflow-auto">
+                     <div className="flex items-center justify-start h-full p-4 space-x-4" style={{ minWidth: `${sortedRounds.length * 12}rem` }}>
+                        {sortedRounds.map((round) => (
+                            <RoundColumn key={round.id} name={round.name} matches={round.matches} currentUser={currentUser} />
+                        ))}
+                    </div>
                 </div>
             </div>
         );
@@ -669,7 +641,7 @@ const TournamentRoundViewer: React.FC<{ rounds: Round[]; currentUser: UserWithSt
 };
 
 export const TournamentBracket = (props: TournamentBracketProps) => {
-    const { tournamentState, currentUser, onBack, allUsersForRanking, onViewUser, onAction, onStartNextRound, onReset, onSkip, isMobile } = props;
+    const { tournamentState, currentUser, onBack, allUsersForRanking, onViewUser, onAction, onStartNextRound, onSkip, isMobile } = props;
     const [lastUserMatchSgfIndex, setLastUserMatchSgfIndex] = useState<number | null>(null);
     const [initialMatchPlayers, setInitialMatchPlayers] = useState<{ p1: PlayerForTournament | null, p2: PlayerForTournament | null }>({ p1: null, p2: null });
     const prevStatusRef = useRef(tournamentState.status);
@@ -717,21 +689,19 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
         prevStatusRef.current = status;
     }, [tournamentState, safeRounds]);
     
-    const handleBackClick = useCallback(() => {
-        if (tournamentState.status === 'round_in_progress') {
-            if (window.confirm('경기가 진행중입니다. 경기를 포기하시겠습니까? 남은 모든 경기는 패배 처리됩니다.')) {
-                onAction({ type: 'FORFEIT_TOURNAMENT', payload: { type: tournamentState.type } });
-            }
-        } else {
-            onBack();
-        }
-    }, [onBack, onAction, tournamentState.status, tournamentState.type]);
-
     const handleForfeitClick = useCallback(() => {
         if (window.confirm('토너먼트를 포기하고 나가시겠습니까? 오늘의 참가 기회는 사라집니다.')) {
             onAction({ type: 'FORFEIT_TOURNAMENT', payload: { type: tournamentState.type } });
         }
     }, [onAction, tournamentState.type]);
+
+    const handleBackClick = useCallback(() => {
+        if (tournamentState.status === 'round_in_progress') {
+            handleForfeitClick();
+        } else {
+            onBack();
+        }
+    }, [onBack, handleForfeitClick, tournamentState.status]);
 
     const isSimulating = tournamentState.status === 'round_in_progress';
     const currentSimMatch = isSimulating && tournamentState.currentSimulatingMatch 
@@ -856,11 +826,7 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
 
     const currentPhase = useMemo((): 'early' | 'mid' | 'end' | 'none' => {
         if (tournamentState.status !== 'round_in_progress') return 'none';
-        const time = tournamentState.timeElapsed;
-        if (time <= 40) return 'early';
-        if (time <= 100) return 'mid';
-        if (time <= 140) return 'end';
-        return 'none';
+        return getPhase(tournamentState.timeElapsed);
     }, [tournamentState.timeElapsed, tournamentState.status]);
 
     const p1Cumulative = tournamentState.currentMatchScores?.player1 || 0;
@@ -902,7 +868,11 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
             );
         }
         
-        if (status === 'complete' || status === 'eliminated') {
+        if (status === 'complete') {
+            return <Button onClick={onBack} colorScheme="gray" className="w-full">로비로 돌아가기</Button>;
+        }
+
+        if (status === 'eliminated') {
              return (
                 <div className="flex items-center justify-center gap-4">
                     <Button onClick={onBack} colorScheme="gray">나가기</Button>
@@ -924,9 +894,10 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
             );
         }
         
+        // This case handles when a player won their match, but other matches in the tournament are still being simulated.
         return (
             <div className="flex items-center justify-center gap-4">
-                <Button disabled colorScheme="gray">경기 완료</Button>
+                <Button disabled colorScheme="gray">다른 경기 진행 중...</Button>
                 <Button onClick={onSkip} colorScheme="yellow">결과 스킵</Button>
             </div>
         );
@@ -953,7 +924,7 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
                 {isSimulating ? (
                     <section className="flex-shrink-0 flex flex-row gap-1 md:gap-2 items-stretch p-2 bg-gray-800/50 rounded-lg">
                         <div className="flex-1 min-w-0 flex-shrink-0">
-                            <PlayerProfilePanel player={p1} initialPlayer={initialMatchPlayers.p1} allUsers={allUsersForRanking} currentUserId={currentUser.id} onViewUser={onViewUser} highlightPhase={currentPhase} />
+                            <PlayerProfilePanel player={p1} initialPlayer={initialMatchPlayers.p1} allUsers={allUsersForRanking} currentUserId={currentUser.id} onViewUser={onViewUser} highlightPhase={currentPhase} tournamentState={tournamentState}/>
                         </div>
                         <div className="flex-shrink-0 w-44 sm:w-52 flex flex-col items-center justify-center min-w-0">
                             <RadarChart datasets={radarDatasets} maxStatValue={maxStatValue} size={isMobile ? 140 : undefined} />
@@ -963,20 +934,20 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
                             </div>
                         </div>
                         <div className="flex-1 min-w-0 flex-shrink-0">
-                            <PlayerProfilePanel player={p2} initialPlayer={initialMatchPlayers.p2} allUsers={allUsersForRanking} currentUserId={currentUser.id} onViewUser={onViewUser} highlightPhase={currentPhase} />
+                            <PlayerProfilePanel player={p2} initialPlayer={initialMatchPlayers.p2} allUsers={allUsersForRanking} currentUserId={currentUser.id} onViewUser={onViewUser} highlightPhase={currentPhase} tournamentState={tournamentState}/>
                         </div>
                     </section>
                 ) : nextUserMatch ? (
                     <section className="flex-shrink-0 flex flex-row gap-1 md:gap-2 items-stretch p-2 bg-gray-800/50 rounded-lg">
                          <div className="flex-1 min-w-0 flex-shrink-0">
-                            <PlayerProfilePanel player={nextMatchPlayers.p1} initialPlayer={null} allUsers={allUsersForRanking} currentUserId={currentUser.id} onViewUser={onViewUser} highlightPhase={'none'} isPreMatchView={true} matchId={nextUserMatch.id} onUsePotion={() => setPotionModalInfo({ matchId: nextUserMatch.id, tournamentType: tournamentState.type })} />
+                            <PlayerProfilePanel player={nextMatchPlayers.p1} initialPlayer={null} allUsers={allUsersForRanking} currentUserId={currentUser.id} onViewUser={onViewUser} highlightPhase={'none'} isPreMatchView={true} matchId={nextUserMatch.id} onUsePotion={() => setPotionModalInfo({ matchId: nextUserMatch.id, tournamentType: tournamentState.type })} tournamentState={tournamentState} />
                         </div>
                          <div className="flex-shrink-0 w-44 sm:w-52 flex flex-col items-center justify-center min-w-0 text-gray-400">
                              <h3 className="text-lg font-bold text-yellow-300">다음 경기</h3>
                              <p className="text-4xl font-bold my-4">VS</p>
                          </div>
                          <div className="flex-1 min-w-0 flex-shrink-0">
-                            <PlayerProfilePanel player={nextMatchPlayers.p2} initialPlayer={null} allUsers={allUsersForRanking} currentUserId={currentUser.id} onViewUser={onViewUser} highlightPhase={'none'} isPreMatchView={true} matchId={nextUserMatch.id} onUsePotion={() => setPotionModalInfo({ matchId: nextUserMatch.id, tournamentType: tournamentState.type })} />
+                            <PlayerProfilePanel player={nextMatchPlayers.p2} initialPlayer={null} allUsers={allUsersForRanking} currentUserId={currentUser.id} onViewUser={onViewUser} highlightPhase={'none'} isPreMatchView={true} matchId={nextUserMatch.id} onUsePotion={() => setPotionModalInfo({ matchId: nextUserMatch.id, tournamentType: tournamentState.type })} tournamentState={tournamentState}/>
                         </div>
                     </section>
                 ) : (
@@ -987,14 +958,14 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
                 )}
                 
                 <section className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 min-h-0">
-                    <div className="bg-gray-800/50 rounded-lg min-h-0">
+                    <div className="bg-gray-800/50 rounded-lg flex flex-col min-h-0 h-full">
                         <CommentaryPanel commentary={tournamentState.currentMatchCommentary} isSimulating={isSimulating} p1Nickname={p1?.nickname} p2Nickname={p2?.nickname}/>
                     </div>
-                    <div className="bg-gray-800/50 rounded-lg flex flex-col p-2 gap-2 min-h-0">
+                    <div className="bg-gray-800/50 rounded-lg flex flex-col p-2 gap-2 min-h-0 h-full">
                         <div className="flex-shrink-0">
                             <ScoreGraph p1Percent={p1Percent} p2Percent={p2Percent} p1Nickname={p1?.nickname} p2Nickname={p2?.nickname} />
                              <div className="mt-2">
-                                <SimulationProgressBar timeElapsed={tournamentState.timeElapsed} totalDuration={140} />
+                                <SimulationProgressBar timeElapsed={tournamentState.timeElapsed} totalDuration={TOTAL_GAME_DURATION} />
                             </div>
                         </div>
                         <div className="flex-grow relative min-h-0">

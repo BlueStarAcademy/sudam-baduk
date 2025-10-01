@@ -1,515 +1,326 @@
-
-import * as summaryService from '../summaryService.js';
-import * as types from '../../types.js';
+import {
+    type LiveGameSession,
+    type VolatileState,
+    type ServerAction,
+    type User,
+    type HandleActionResult,
+    Player,
+    GameStatus,
+    WinReason,
+    GameMode,
+    type Negotiation,
+    GameType,
+    Point,
+} from '../../types/index.js';
 import * as db from '../db.js';
-import { getGoLogic, processMove } from '../goLogic.js';
-import { getGameResult } from '../summaryService.js';
-import { analyzeGame } from '../kataGoService.js';
-import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
-import { initializeBase, updateBaseState, handleBaseAction } from './base.js';
+import { endGame, getGameResult } from '../summaryService.js';
+import { makeAiHiddenMove, makeAiMove } from '../ai/index.js';
+import { processMove } from '../goLogic.js';
+import { gnuGoServiceManager } from '../services/gnuGoService.js';
+
+// Import handlers from specific mode files
+import { handleStandardAction } from './standard.js';
 import { initializeCapture, updateCaptureState, handleCaptureAction } from './capture.js';
+import { updateSpeedState } from './speed.js';
+import { initializeBase, updateBaseState, handleBaseAction } from './base.js';
 import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidden.js';
 import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
+import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
 import { handleSharedAction, transitionToPlaying } from './shared.js';
+import * as currencyService from '../currencyService.js';
+import { DEFAULT_GAME_SETTINGS } from '../../constants/gameSettings.js';
 
 
-export const initializeStrategicGame = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {
+// Helper function
+export const isFischerGame = (game: LiveGameSession): boolean => {
+    return game.mode === GameMode.Speed || (game.mode === GameMode.Mix && !!game.settings.mixedModes?.includes(GameMode.Speed));
+};
+
+export const initializeStrategicGame = (game: LiveGameSession, neg: Negotiation, now: number) => {
     const p1 = game.player1;
     const p2 = game.player2;
-
-    switch (game.mode) {
-        case types.GameMode.Standard:
-        case types.GameMode.Speed:
-        case types.GameMode.Mix:
-            if (game.isAiGame) {
-                const humanPlayerColor = neg.settings.player1Color || types.Player.Black;
-                if (humanPlayerColor === types.Player.Black) {
-                    game.blackPlayerId = p1.id;
-                    game.whitePlayerId = p2.id;
-                } else {
-                    game.whitePlayerId = p1.id;
-                    game.blackPlayerId = p2.id;
-                }
-                transitionToPlaying(game, now);
+    
+    // Determine black player
+    if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
+        const humanPlayerColor = neg.settings.player1Color || Player.Black;
+        if (humanPlayerColor === Player.Black) {
+            game.blackPlayerId = p1.id;
+            game.whitePlayerId = p2.id;
+        } else {
+            game.whitePlayerId = p1.id;
+            game.blackPlayerId = p2.id;
+        }
+        transitionToPlaying(game, now);
+    } else {
+        // Nigiri for player games in standard mode
+        if (game.mode === GameMode.Standard) {
+             initializeNigiri(game, now);
+        } else {
+            // For other strategic modes, default to P1 as black unless specified
+            const p1Color = neg.settings.player1Color || Player.Black;
+            if (p1Color === Player.Black) {
+                game.blackPlayerId = p1.id;
+                game.whitePlayerId = p2.id;
             } else {
-                initializeNigiri(game, now);
+                game.whitePlayerId = p1.id;
+                game.blackPlayerId = p2.id;
             }
-            break;
-        case types.GameMode.Capture:
+            transitionToPlaying(game, now);
+        }
+    }
+    
+    // Mode specific initializations
+    switch (game.mode) {
+        case GameMode.Capture:
             initializeCapture(game, now);
             break;
-        case types.GameMode.Base:
+        case GameMode.Base:
             initializeBase(game, now);
             break;
-        case types.GameMode.Hidden:
+        case GameMode.Hidden:
             initializeHidden(game);
-            initializeNigiri(game, now); // Also uses nigiri
             break;
-        case types.GameMode.Missile:
+        case GameMode.Missile:
             initializeMissile(game);
-            initializeNigiri(game, now); // Also uses nigiri
+            break;
+        case GameMode.Mix:
+            if (game.settings.mixedModes?.includes(GameMode.Base)) initializeBase(game, now);
+            if (game.settings.mixedModes?.includes(GameMode.Capture)) initializeCapture(game, now);
+            if (game.settings.mixedModes?.includes(GameMode.Hidden)) initializeHidden(game);
+            if (game.settings.mixedModes?.includes(GameMode.Missile)) initializeMissile(game);
             break;
     }
 };
 
-export const updateStrategicGameState = async (game: types.LiveGameSession, now: number) => {
-    // This is the core update logic for all Go-based games.
-    if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
-        if (game.gameStatus !== 'scoring' && game.gameStatus !== 'ended' && game.gameStatus !== 'no_contest') {
-            getGameResult(game);
-            return;
-        }
+export const handleStrategicGameAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
+    const { type, payload } = action;
+    const now = Date.now();
+    
+    if (type === 'PLACE_STONE' || type === 'PASS_TURN') {
+        return handleStandardAction(volatileState, game, action, user);
     }
 
-    if (game.gameStatus === 'playing' && game.turnDeadline && now > game.turnDeadline) {
-        const timedOutPlayer = game.currentPlayer;
-        const timeKey = timedOutPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        const byoyomiKey = timedOutPlayer === types.Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
-        const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
+    const sharedResult = await handleSharedAction(volatileState, game, action, user);
+    if (sharedResult) return sharedResult;
 
-        if (isFischer) {
-            // Fischer timeout is an immediate loss.
-        } else if (game[timeKey] > 0) { // Main time expired
-            game[timeKey] = 0;
-            if (game.settings.byoyomiCount > 0 && game[byoyomiKey] > 0) {
-                // When main time expires, we just enter the first byoyomi period. We don't decrement a period yet.
-                game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-                game.turnStartTime = now;
-                return;
+    const nigiriResult = handleNigiriAction(game, action, user);
+    if (nigiriResult) return nigiriResult;
+    
+    const captureResult = handleCaptureAction(game, action, user);
+    if (captureResult) return captureResult;
+
+    const baseResult = handleBaseAction(game, action, user);
+    if (baseResult) return baseResult;
+
+    const hiddenResult = handleHiddenAction(volatileState, game, action, user);
+    if (hiddenResult) return hiddenResult;
+
+    const missileResult = handleMissileAction(game, action, user);
+    if (missileResult) return missileResult;
+
+    if (type === 'PAUSE_GAME' || type === 'RESUME_GAME') {
+        const isPaused = game.gameStatus === GameStatus.Paused;
+        if (type === 'PAUSE_GAME' && !isPaused) {
+            game.gameStatus = GameStatus.Paused;
+            if (game.turnDeadline) {
+                game.pausedTurnTimeLeft = (game.turnDeadline - now) / 1000;
+                game.turnDeadline = undefined;
+                game.turnStartTime = undefined;
             }
-        } else { // Byoyomi expired
-            if (game[byoyomiKey] > 0) {
-                // Decrement a byoyomi period for ALL game types, including single player.
-                game[byoyomiKey]--;
+        } else if (type === 'RESUME_GAME' && isPaused) {
+            game.gameStatus = GameStatus.Playing;
+            game.promptForMoreStones = false; // Always clear prompt on resume
+            if (game.pausedTurnTimeLeft) {
+                game.turnDeadline = now + game.pausedTurnTimeLeft * 1000;
+                game.turnStartTime = now;
+                game.pausedTurnTimeLeft = undefined;
+            }
+        }
+        return {};
+    }
+
+    return null;
+};
+
+export const updateStrategicGameState = async (game: LiveGameSession, now: number) => {
+    // Timeout logic for standard time control
+    if (game.gameStatus === GameStatus.Playing && game.turnDeadline && now > game.turnDeadline && !isFischerGame(game)) {
+        const timedOutPlayer = game.currentPlayer;
+        const winner = timedOutPlayer === Player.Black ? Player.White : Player.Black;
+        const timeKey = timedOutPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+        const byoyomiKey = timedOutPlayer === Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
+
+        const wasInMainTime = (game as any)[timeKey] > 0;
+
+        if (wasInMainTime) {
+            (game as any)[timeKey] = 0; // Transition to byoyomi
+            if ((game.settings.byoyomiCount ?? 0) > 0) {
+                // Start first byoyomi period WITHOUT decrementing count
                 game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                 game.turnStartTime = now;
-                return;
+                return; // Game continues
+            }
+        } else { // Was already in byoyomi
+            if ((game.settings.byoyomiCount ?? 0) > 0) {
+                (game as any)[byoyomiKey]--; // Decrement byoyomi period
+                if (((game as any)[byoyomiKey] ?? 0) >= 1) { // End game when count becomes 0
+                    // Start next byoyomi period
+                    game.turnDeadline = now + game.settings.byoyomiTime * 1000;
+                    game.turnStartTime = now;
+                    return; // Game continues
+                }
             }
         }
         
-        // No time or byoyomi left
-        const winner = timedOutPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-        game.lastTimeoutPlayerId = game.currentPlayer === types.Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+        game.lastTimeoutPlayerId = game.currentPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
         game.lastTimeoutPlayerIdClearTime = now + 5000;
         
-        summaryService.endGame(game, winner, 'timeout');
+        await endGame(game, winner, WinReason.Timeout);
+    }
+    
+    const isAiGame = game.isAiGame || game.isSinglePlayer || game.isTowerChallenge;
+    const aiPlayerId = isAiGame ? game.player2.id : null;
+    const aiPlayerEnum = game.blackPlayerId === aiPlayerId ? Player.Black : (game.whitePlayerId === aiPlayerId ? Player.White : Player.None);
+    
+    // AI move initiation
+    if (isAiGame && game.currentPlayer === aiPlayerEnum && !game.pendingAiMove) {
+        if (game.gameStatus === GameStatus.HiddenPlacing) {
+            game.gameStatus = GameStatus.AiHiddenThinking;
+            game.aiTurnStartTime = now + 1500;
+        } else if (game.gameStatus === GameStatus.Playing) {
+             makeAiMove(game);
+        }
     }
 
-    // Delegate to mode-specific update logic
+    // AI "thinking" for hidden moves
+    if (game.gameStatus === GameStatus.AiHiddenThinking) {
+        if (now >= (game.aiTurnStartTime ?? Infinity)) {
+            await makeAiHiddenMove(game);
+            game.aiTurnStartTime = undefined;
+        }
+        return;
+    }
+    
+    // Process a completed AI move
+    if (isAiGame && game.currentPlayer === aiPlayerEnum && game.pendingAiMove) {
+        const aiMove = await game.pendingAiMove;
+        game.pendingAiMove = undefined;
+
+        if (aiMove.x === -3 && aiMove.y === -3) {
+            return;
+        }
+
+        if (aiMove.x === -2 && aiMove.y === -2) { // AI resigns
+            const winner = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+            await endGame(game, winner, WinReason.Resign);
+            console.log(`[AI] AI resigns in game ${game.id} due to no legal moves.`);
+            return;
+        }
+
+        const now = Date.now();
+        const playerWhoMoved = game.currentPlayer;
+        const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+        const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0;
+
+        if (game.turnDeadline && !wasInByoyomi) {
+            (game as any)[timeKey] = Math.max(0, (game.turnDeadline - now) / 1000);
+        }
+
+        if (aiMove.x === -1 && aiMove.y === -1) { // AI passes
+            game.passCount++;
+            game.lastMove = { x: -1, y: -1 };
+            game.moveHistory.push({ player: game.currentPlayer, x: -1, y: -1 });
+            if (game.passCount >= 2) {
+                await getGameResult(game);
+                return;
+            }
+        } else {
+            const result = processMove(game.boardState, { ...aiMove, player: game.currentPlayer }, game.koInfo, game.moveHistory.length);
+            if (result.isValid) {
+                game.boardState = result.newBoardState;
+                game.lastMove = { x: aiMove.x, y: aiMove.y };
+                game.moveHistory.push({ player: game.currentPlayer, ...aiMove });
+                
+                // After server state is updated, inform GnuGo
+                if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
+                    gnuGoServiceManager.playUserMove(game.id, aiMove, aiPlayerEnum, game.settings.boardSize, game.moveHistory, game.finalKomi ?? game.settings.komi).catch(e => {
+                        console.error(`[Strategic Action] Failed to inform GNU Go of AI move for game ${game.id}`, e);
+                    });
+                }
+    
+                game.koInfo = result.newKoInfo;
+                game.passCount = 0;
+    
+                if (result.capturedStones.length > 0) {
+                     game.captures[game.currentPlayer] += result.capturedStones.length;
+                }
+    
+                if(game.isSinglePlayer || game.isTowerChallenge) {
+                    if (game.currentPlayer === Player.White) {
+                        game.whiteStonesPlaced = (game.whiteStonesPlaced || 0) + 1;
+                    }
+                }
+    
+                const isSpOrTowerCapture = (game.isSinglePlayer || game.isTowerChallenge) && game.gameType === 'capture';
+                if (isSpOrTowerCapture) {
+                    const blackTarget = game.effectiveCaptureTargets?.[Player.Black];
+                    const whiteTarget = game.effectiveCaptureTargets?.[Player.White];
+
+                    if (blackTarget && game.captures[Player.Black] >= blackTarget) {
+                        await endGame(game, Player.Black, WinReason.CaptureLimit);
+                        return;
+                    }
+                    if (whiteTarget && game.captures[Player.White] >= whiteTarget) {
+                        await endGame(game, Player.White, WinReason.CaptureLimit);
+                        return;
+                    }
+                }
+
+                if (game.gameType === 'survival') {
+                    if (game.whiteStoneLimit && (game.whiteStonesPlaced || 0) >= game.whiteStoneLimit) {
+                        await endGame(game, Player.Black, WinReason.StoneLimitExceeded);
+                        return;
+                    }
+                }
+    
+            } else {
+                console.error(`[AI Error] AI generated an invalid move: ${JSON.stringify(aiMove)} for game ${game.id}. Reason: ${result.reason}`);
+                const winner = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+                await endGame(game, winner, WinReason.Resign);
+                return;
+            }
+        }
+        
+        if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
+            await getGameResult(game);
+            return;
+        }
+
+        if (isFischerGame(game)) {
+            (game as any)[timeKey] += game.settings.timeIncrement || 0;
+        }
+
+        game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+        game.missileUsedThisTurn = false;
+        const nextTimeKey = game.currentPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+        const isNextInByoyomi = (game as any)[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischerGame(game);
+        
+        game.turnStartTime = now;
+        if (isNextInByoyomi) {
+            game.turnDeadline = now + game.settings.byoyomiTime * 1000;
+        } else {
+            game.turnDeadline = now + (game as any)[nextTimeKey] * 1000;
+        }
+    }
+    
+    // Time-based updates for each mode
     updateNigiriState(game, now);
     updateCaptureState(game, now);
     updateBaseState(game, now);
     updateHiddenState(game, now);
     updateMissileState(game, now);
-};
-
-export const handleStrategicGameAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction & { userId: string }, user: types.User): Promise<types.HandleActionResult | undefined> => {
-    // Try shared actions first
-    const sharedResult = await handleSharedAction(volatileState, game, action, user);
-    if (sharedResult) return sharedResult;
-
-    // Then try each specific handler.
-    let result: types.HandleActionResult | null = null;
     
-    result = handleNigiriAction(game, action, user);
-    if (result) return result;
-    
-    result = handleCaptureAction(game, action, user);
-    if (result) return result;
-
-    result = handleBaseAction(game, action, user);
-    if (result) return result;
-
-    result = handleHiddenAction(volatileState, game, action, user);
-    if (result) return result;
-
-    result = handleMissileAction(game, action, user);
-    if (result) return result;
-    
-    // Fallback to standard actions if no other handler caught it.
-    const standardResult = await handleStandardAction(volatileState, game, action, user);
-    if(standardResult) return standardResult;
-    
-    return undefined;
-};
-
-
-// Keep the original standard action handler, but rename it to avoid conflicts.
-const handleStandardAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction, user: types.User): Promise<types.HandleActionResult | null> => {
-    const { type, payload } = action as any;
-    const now = Date.now();
-    const myPlayerEnum = user.id === game.blackPlayerId ? types.Player.Black : (user.id === game.whitePlayerId ? types.Player.White : types.Player.None);
-    const isMyTurn = myPlayerEnum === game.currentPlayer;
-    const opponentPlayerEnum = myPlayerEnum === types.Player.Black ? types.Player.White : (myPlayerEnum === types.Player.White ? types.Player.Black : types.Player.None);
-
-    switch (type) {
-        case 'PLACE_STONE': {
-            if (!isMyTurn || (game.gameStatus !== 'playing' && game.gameStatus !== 'hidden_placing')) {
-                return { error: '내 차례가 아닙니다.' };
-            }
-
-            const { x, y, isHidden } = payload;
-            const stoneAtTarget = game.boardState[y][x];
-
-            const moveIndexAtTarget = game.moveHistory.findIndex(m => m.x === x && m.y === y);
-            const isTargetHiddenOpponentStone =
-                stoneAtTarget === opponentPlayerEnum &&
-                moveIndexAtTarget !== -1 &&
-                game.hiddenMoves?.[moveIndexAtTarget] &&
-                !game.permanentlyRevealedStones?.some(p => p.x === x && p.y === y);
-            
-            if (game.isTowerChallenge && !isTargetHiddenOpponentStone) {
-                if ((game.blackStonesPlaced || 0) >= game.blackStoneLimit!) {
-                    return { error: 'You have no stones left to place.' };
-                }
-            }
-
-            if (stoneAtTarget !== types.Player.None && !isTargetHiddenOpponentStone) {
-                return {};
-            }
-
-            if (isTargetHiddenOpponentStone) {
-                game.captures[myPlayerEnum] += 5;
-                game.hiddenStoneCaptures[myPlayerEnum]++;
-                
-                if (!game.justCaptured) game.justCaptured = [];
-                game.justCaptured.push({ point: { x, y }, player: opponentPlayerEnum, wasHidden: true });
-                
-                if (!game.permanentlyRevealedStones) game.permanentlyRevealedStones = [];
-                game.permanentlyRevealedStones.push({ x, y });
-
-                game.animation = { 
-                    type: 'hidden_reveal', 
-                    stones: [{ point: { x, y }, player: opponentPlayerEnum }], 
-                    startTime: now, 
-                    duration: 2000 
-                };
-                game.revealAnimationEndTime = now + 2000;
-                
-                return {};
-            }
-
-            const move = { x, y, player: myPlayerEnum };
-            
-            if (isHidden) {
-                const hiddenKey = user.id === game.player1.id ? 'hidden_stones_used_p1' : 'hidden_stones_used_p2';
-                const usedCount = (game as any)[hiddenKey] || 0;
-                if (usedCount >= game.settings.hiddenStoneCount!) {
-                    return { error: "No hidden stones left." };
-                }
-                (game as any)[hiddenKey] = usedCount + 1;
-            }
-
-            const result = processMove(game.boardState, move, game.koInfo, game.moveHistory.length);
-
-            if (!result.isValid) {
-                return { error: `Invalid move: ${result.reason}` };
-            }
-            
-            const contributingHiddenStones: { point: types.Point, player: types.Player }[] = [];
-            if (result.capturedStones.length > 0) {
-                const boardAfterMove = JSON.parse(JSON.stringify(game.boardState));
-                boardAfterMove[y][x] = myPlayerEnum;
-                const logic = getGoLogic({ ...game, boardState: boardAfterMove });
-                const checkedStones = new Set<string>();
-
-                for (const captured of result.capturedStones) {
-                    const neighbors = logic.getNeighbors(captured.x, captured.y);
-                    for (const n of neighbors) {
-                        const neighborKey = `${n.x},${n.y}`;
-                        if (checkedStones.has(neighborKey) || boardAfterMove[n.y][n.x] !== myPlayerEnum) continue;
-                        checkedStones.add(neighborKey);
-                        const isCurrentMove = n.x === x && n.y === y;
-                        let isHiddenStone = isCurrentMove ? isHidden : false;
-                        if (!isCurrentMove) {
-                            const moveIndex = game.moveHistory.findIndex(m => m.x === n.x && m.y === n.y);
-                            isHiddenStone = moveIndex !== -1 && !!game.hiddenMoves?.[moveIndex];
-                        }
-                        if (isHiddenStone) {
-                            if (!game.permanentlyRevealedStones || !game.permanentlyRevealedStones.some(p => p.x === n.x && p.y === n.y)) {
-                                contributingHiddenStones.push({ point: { x: n.x, y: n.y }, player: myPlayerEnum });
-                            }
-                        }
-                    }
-                }
-            }
-
-            const capturedHiddenStones: { point: types.Point; player: types.Player }[] = [];
-            if (result.capturedStones.length > 0) {
-                for (const capturedStone of result.capturedStones) {
-                    const moveIndex = game.moveHistory.findIndex(m => m.x === capturedStone.x && m.y === capturedStone.y);
-                    if (moveIndex !== -1 && game.hiddenMoves?.[moveIndex]) {
-                        const isPermanentlyRevealed = game.permanentlyRevealedStones?.some(p => p.x === capturedStone.x && p.y === capturedStone.y);
-                        if (!isPermanentlyRevealed) {
-                            capturedHiddenStones.push({ point: capturedStone, player: opponentPlayerEnum });
-                        }
-                    }
-                }
-            }
-            
-            const allStonesToReveal = [...contributingHiddenStones, ...capturedHiddenStones];
-            const uniqueStonesToReveal = Array.from(new Map(allStonesToReveal.map(item => [JSON.stringify(item.point), item])).values());
-            
-            if (uniqueStonesToReveal.length > 0) {
-                game.gameStatus = 'hidden_reveal_animating';
-                game.animation = { type: 'hidden_reveal', stones: uniqueStonesToReveal, startTime: now, duration: 2000 };
-                game.revealAnimationEndTime = now + 2000;
-                game.pendingCapture = { stones: result.capturedStones, move, hiddenContributors: contributingHiddenStones.map(c => c.point) };
-            
-                game.lastMove = { x, y };
-                game.lastTurnStones = null;
-                game.moveHistory.push(move);
-                if (isHidden) {
-                    if (!game.hiddenMoves) game.hiddenMoves = {};
-                    game.hiddenMoves[game.moveHistory.length - 1] = true;
-                }
-            
-                game.boardState = result.newBoardState;
-                for (const stone of result.capturedStones) {
-                    game.boardState[stone.y][stone.x] = opponentPlayerEnum;
-                }
-            
-                if (!game.permanentlyRevealedStones) game.permanentlyRevealedStones = [];
-                uniqueStonesToReveal.forEach(s => {
-                    if (!game.permanentlyRevealedStones!.some(p => p.x === s.point.x && p.y === s.point.y)) {
-                        game.permanentlyRevealedStones!.push(s.point);
-                    }
-                });
-            
-                if (game.turnDeadline) {
-                    game.pausedTurnTimeLeft = (game.turnDeadline - now) / 1000;
-                    game.turnDeadline = undefined;
-                    game.turnStartTime = undefined;
-                }
-                return {};
-            }
-
-
-            game.boardState = result.newBoardState;
-            game.lastMove = { x, y };
-            game.lastTurnStones = null;
-            game.moveHistory.push(move);
-            game.koInfo = result.newKoInfo;
-            game.passCount = 0;
-
-            if (isHidden) {
-                if (!game.hiddenMoves) game.hiddenMoves = {};
-                game.hiddenMoves[game.moveHistory.length - 1] = true;
-            }
-
-            if (result.capturedStones.length > 0) {
-                if (!game.justCaptured) game.justCaptured = [];
-                for (const stone of result.capturedStones) {
-                    const capturedPlaye = opponentPlayerEnum;
-                    
-                    let points = 1;
-                    let wasHiddenForJustCaptured = false; // default for justCaptured
-
-                    if (game.isSinglePlayer || game.isTowerChallenge) {
-                        const patternStones = capturedPlaye === types.Player.Black ? game.blackPatternStones : game.whitePatternStones;
-                        if (patternStones) {
-                            const patternIndex = patternStones.findIndex(p => p.x === stone.x && p.y === stone.y);
-                            if (patternIndex !== -1) {
-                                points = 2; // Pattern stones are worth 2 points
-                                patternStones.splice(patternIndex, 1);
-                            }
-                        }
-                    } else { // PvP logic
-                        const isBaseStone = game.baseStones?.some(bs => bs.x === stone.x && bs.y === stone.y);
-                        const moveIndex = game.moveHistory.findIndex(m => m.x === stone.x && m.y === stone.y);
-                        const wasHidden = moveIndex !== -1 && !!game.hiddenMoves?.[moveIndex];
-                        wasHiddenForJustCaptured = wasHidden;
-                        
-                        if (isBaseStone) {
-                            game.baseStoneCaptures[myPlayerEnum]++;
-                            points = 5;
-                        } else if (wasHidden) {
-                             game.hiddenStoneCaptures[myPlayerEnum]++;
-                             points = 5;
-                             if (!game.permanentlyRevealedStones) game.permanentlyRevealedStones = [];
-                             game.permanentlyRevealedStones.push(stone);
-                        }
-                    }
-
-                    game.captures[myPlayerEnum] += points;
-                    game.justCaptured.push({ point: stone, player: capturedPlaye, wasHidden: wasHiddenForJustCaptured });
-                }
-            }
-
-            if (game.isSinglePlayer || game.isTowerChallenge) {
-                game.blackStonesPlaced = (game.blackStonesPlaced || 0) + 1;
-            }
-            
-            if (game.isTowerChallenge) {
-                const humanPlayerEnum = types.Player.Black; // Human is always black in Tower
-                const aiPlayerEnum = types.Player.White;
-                const humanTarget = game.effectiveCaptureTargets![humanPlayerEnum];
-                const humanCaptures = game.captures[humanPlayerEnum];
-                const stonesDepleted = (game.blackStonesPlaced || 0) >= game.blackStoneLimit!;
-            
-                // Check for win first
-                if (humanCaptures >= humanTarget) {
-                    await summaryService.endGame(game, humanPlayerEnum, 'capture_limit');
-                    return {}; // Game over
-                }
-            
-                // Then check for loss condition
-                if (stonesDepleted) {
-                    // Player did not win and ran out of stones. AI wins.
-                    await summaryService.endGame(game, aiPlayerEnum, 'stone_limit_exceeded');
-                    return {}; // Game over
-                }
-            } 
-            else if (game.isSinglePlayer && (game.gameType === 'capture' || game.gameType === 'survival')) {
-                const humanPlayerEnum = types.Player.Black;
-                const target = game.effectiveCaptureTargets![humanPlayerEnum];
-                if (game.captures[humanPlayerEnum] >= target) {
-                    await summaryService.endGame(game, humanPlayerEnum, 'capture_limit');
-                    return {}; // Game over
-                }
-            }
-
-
-            if (game.autoEndTurnCount && game.moveHistory.length >= game.autoEndTurnCount) {
-                getGameResult(game);
-                return {};
-            }
-
-            const playerWhoMoved = myPlayerEnum;
-            if (game.settings.timeLimit > 0) {
-                const timeKey = playerWhoMoved === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
-                const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
-            
-                // Only update the main time if the player was NOT in byoyomi.
-                if (!wasInByoyomi) {
-                    const fischerIncrement = isFischer ? (game.settings.timeIncrement || 0) : 0;
-                    if (game.turnDeadline) {
-                        const timeRemaining = Math.max(0, (game.turnDeadline - now) / 1000);
-                        (game as any)[timeKey] = timeRemaining + fischerIncrement;
-                    } else if (game.pausedTurnTimeLeft) {
-                        (game as any)[timeKey] = game.pausedTurnTimeLeft + fischerIncrement;
-                    } else if (isFischer) {
-                        (game as any)[timeKey] += fischerIncrement;
-                    }
-                }
-            }
-
-            game.currentPlayer = opponentPlayerEnum;
-            game.missileUsedThisTurn = false;
-            
-            game.gameStatus = 'playing';
-            game.itemUseDeadline = undefined;
-            game.pausedTurnTimeLeft = undefined;
-
-
-            if (game.settings.timeLimit > 0) {
-                const nextPlayer = game.currentPlayer;
-                const nextTimeKey = nextPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                 const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
-                const isNextInByoyomi = (game as any)[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
-                if (isNextInByoyomi) {
-                    game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-                } else {
-                    game.turnDeadline = now + (game as any)[nextTimeKey] * 1000;
-                }
-                game.turnStartTime = now;
-            } else {
-                 game.turnDeadline = undefined;
-                 game.turnStartTime = undefined;
-            }
-
-            return {};
-        }
-        case 'PASS_TURN': {
-            if (!isMyTurn || game.gameStatus !== 'playing') return { error: 'Not your turn to pass.' };
-            game.passCount++;
-            game.lastMove = { x: -1, y: -1 };
-            game.lastTurnStones = null;
-            game.moveHistory.push({ player: myPlayerEnum, x: -1, y: -1 });
-
-            if (game.passCount >= 2) {
-                const isHiddenMode = game.mode === types.GameMode.Hidden || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Hidden));
-
-                if (isHiddenMode) {
-                    const unrevealedStones: { point: types.Point, player: types.Player }[] = [];
-                    if (game.hiddenMoves && game.moveHistory) {
-                        for (const moveIndexStr in game.hiddenMoves) {
-                            const moveIndex = parseInt(moveIndexStr, 10);
-                            if (game.hiddenMoves[moveIndex]) {
-                                const move = game.moveHistory[moveIndex];
-                                if (move && move.x !== -1 && game.boardState[move.y]?.[move.x] === move.player) {
-                                    const isPermanentlyRevealed = game.permanentlyRevealedStones?.some(p => p.x === move.x && p.y === move.y);
-                                    if (!isPermanentlyRevealed) {
-                                        unrevealedStones.push({ point: { x: move.x, y: move.y }, player: move.player });
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (unrevealedStones.length > 0) {
-                        game.gameStatus = 'hidden_final_reveal';
-                        game.animation = {
-                            type: 'hidden_reveal',
-                            stones: unrevealedStones,
-                            startTime: now,
-                            duration: 3000
-                        };
-                        game.revealAnimationEndTime = now + 3000;
-                        if (!game.permanentlyRevealedStones) game.permanentlyRevealedStones = [];
-                        game.permanentlyRevealedStones.push(...unrevealedStones.map(s => s.point));
-                    } else {
-                        getGameResult(game);
-                    }
-                } else {
-                    getGameResult(game);
-                }
-            } else {
-                const playerWhoMoved = myPlayerEnum;
-                if (game.settings.timeLimit > 0) {
-                    const timeKey = playerWhoMoved === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                    
-                    if (game.turnDeadline) {
-                        const timeRemaining = Math.max(0, (game.turnDeadline - now) / 1000);
-                        (game as any)[timeKey] = timeRemaining;
-                    }
-                }
-                game.currentPlayer = myPlayerEnum === types.Player.Black ? types.Player.White : types.Player.Black;
-                if (game.settings.timeLimit > 0) {
-                    const nextPlayer = game.currentPlayer;
-                    const nextTimeKey = nextPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                     const isFischer = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
-                    const isNextInByoyomi = (game as any)[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischer;
-                    if (isNextInByoyomi) {
-                        game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-                    } else {
-                        game.turnDeadline = now + (game as any)[nextTimeKey] * 1000;
-                    }
-                    game.turnStartTime = now;
-                }
-            }
-            return {};
-        }
-        case 'REQUEST_NO_CONTEST_LEAVE': {
-            if (!game.canRequestNoContest?.[user.id]) {
-                return { error: "무효 처리 요청을 할 수 없습니다." };
-            }
-
-            game.gameStatus = 'no_contest';
-            game.winReason = 'disconnect';
-            if(!game.noContestInitiatorIds) game.noContestInitiatorIds = [];
-            game.noContestInitiatorIds.push(user.id);
-            
-            await summaryService.processGameSummary(game);
-
-            if (volatileState.userStatuses[user.id]) {
-                volatileState.userStatuses[user.id] = { status: 'waiting', mode: game.mode };
-            }
-
-            return {};
-        }
+    if (isFischerGame(game)) {
+        updateSpeedState(game, now);
     }
-
-    return null;
 };

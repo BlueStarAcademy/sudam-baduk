@@ -1,22 +1,61 @@
+
 import React, { useMemo } from 'react';
-import { GameProps, Player } from '../../types.js';
+import { GameProps, Player, ServerAction, SinglePlayerLevel, Point, GameStatus, AppSettings } from '../../types/index.js';
 import Button from '../Button.js';
-import { SINGLE_PLAYER_STAGES } from '../../constants.js';
+import { SINGLE_PLAYER_STAGES } from '../../constants/singlePlayerConstants.js';
+import { useAppContext } from '../../hooks/useAppContext.js';
 
-interface SinglePlayerControlsProps extends Pick<GameProps, 'session' | 'onAction' | 'currentUser'> {}
+interface SinglePlayerControlsProps extends Pick<GameProps, 'session' | 'onAction' | 'currentUser'> {
+    pendingMove: Point | null;
+    onConfirmMove: () => void;
+    onCancelMove: () => void;
+}
 
-const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, onAction, currentUser }) => {
+const ControlButton: React.FC<{
+    imgSrc: string;
+    label: string;
+    count?: string | number;
+    cost?: string;
+    onClick: () => void;
+    disabled?: boolean;
+    title?: string;
+}> = ({ imgSrc, label, count, cost, onClick, disabled, title }) => (
+    <Button
+        onClick={onClick}
+        disabled={disabled}
+        title={title}
+        className={`!p-1 flex flex-col items-center justify-center h-full w-20 aspect-square relative !rounded-lg !shadow-lg border-2 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed !bg-wood-pattern ${disabled ? 'border-gray-600' : 'border-yellow-600'}`}
+        colorScheme="gray" // use gray as base, apply custom bg
+    >
+        <div className="flex-1 flex flex-col items-center justify-center">
+            <img src={imgSrc} alt={label} className="w-8 h-8" />
+            <span className="text-sm font-semibold mt-1 text-white" style={{ textShadow: '1px 1px 2px black' }}>{label}</span>
+        </div>
+        {count !== undefined && (
+             <span className="absolute top-0.5 right-0.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-gray-400">
+                {count}
+            </span>
+        )}
+        {cost && (
+            <div className="flex-shrink-0 text-xs text-yellow-300 flex items-center justify-center gap-0.5">
+                {cost !== '무료' && <img src="/images/Gold.png" alt="골드" className="w-3 h-3" />}
+                <span>{cost}</span>
+            </div>
+        )}
+    </Button>
+);
+
+const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, onAction, currentUser, pendingMove, onConfirmMove, onCancelMove }) => {
+    const { handlers, settings, isMobile } = useAppContext();
+    const { id: gameId, gameStatus, gameType, moveHistory, singlePlayerPlacementRefreshesUsed } = session;
     const isWinner = session.winner === Player.Black;
 
-    if (session.gameStatus === 'ended' || session.gameStatus === 'no_contest') {
+    if (gameStatus === 'ended' || gameStatus === 'no_contest') {
         const currentStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId);
         const nextStage = SINGLE_PLAYER_STAGES[currentStageIndex + 1];
 
         const canTryNext = useMemo(() => {
             if (!isWinner || !nextStage) return false;
-            // The progress is the index of the *next* stage to be played.
-            // So if you just beat stage 5 (index 4), your progress is 5.
-            // You can try stage 6 (index 5) if your progress is >= 5.
             return (currentUser.singlePlayerProgress ?? 0) > currentStageIndex;
         }, [isWinner, nextStage, currentUser.singlePlayerProgress, currentStageIndex]);
 
@@ -31,8 +70,8 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
         };
 
         const handleExitToLobby = () => {
-            sessionStorage.setItem('postGameRedirect', '#/singleplayer');
-            onAction({ type: 'LEAVE_AI_GAME', payload: { gameId: session.id } });
+            handlers.setPostGameRedirect('#/singleplayer');
+            handlers.handleAction({ type: 'LEAVE_AI_GAME', payload: { gameId: session.id } });
         };
 
         return (
@@ -46,14 +85,11 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
         );
     }
     
-    const { id: gameId, gameStatus, gameType, moveHistory, singlePlayerPlacementRefreshesUsed } = session;
-    const isMyTurn = session.currentPlayer === Player.Black;
-
-    // --- Refresh Logic ---
+    // In-game controls
     const refreshesUsed = singlePlayerPlacementRefreshesUsed || 0;
     const canRefresh = moveHistory.length === 0 && refreshesUsed < 5;
     const costs = [0, 50, 100, 200, 300];
-    const nextCost = costs[refreshesUsed] || 0;
+    const nextCost = costs[refreshesUsed];
     const canAfford = currentUser.gold >= nextCost;
     
     const handleRefresh = () => {
@@ -67,16 +103,10 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
             }
         }
     };
+    
+    const isMyTurn = session.currentPlayer === Player.Black;
 
-    // --- Forfeit Logic ---
-    const handleForfeit = () => {
-        if (window.confirm('현재 스테이지를 포기하고 로비로 돌아가시겠습니까?')) {
-            sessionStorage.setItem('postGameRedirect', '#/singleplayer');
-            onAction({ type: 'LEAVE_AI_GAME', payload: { gameId: session.id } });
-        }
-    };
-
-    // --- Item Logic ---
+    // Item logic
     const isHiddenMode = gameType === 'hidden';
     const isMissileMode = gameType === 'missile';
 
@@ -84,15 +114,16 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
     const myScansLeft = session.scans_p1 ?? 0;
     const myMissilesLeft = session.missiles_p1 ?? 0;
     const hiddenLeft = (session.settings.hiddenStoneCount || 0) - myHiddenUsed;
-
+    
     const canScan = useMemo(() => {
+        const opponentPlayerEnum = Player.White;
         if (!session.hiddenMoves || !session.moveHistory) return false;
         return Object.entries(session.hiddenMoves).some(([moveIndexStr, isHidden]) => {
             if (!isHidden) return false;
             const move = session.moveHistory[parseInt(moveIndexStr)];
-            if (!move || move.player !== Player.White) return false; // Opponent is always White in SP
+            if (!move || move.player !== opponentPlayerEnum) return false;
             const { x, y } = move;
-            if (session.boardState[y]?.[x] !== Player.White) return false; // Stone must be on board
+            if (session.boardState[y]?.[x] !== opponentPlayerEnum) return false;
             const isPermanentlyRevealed = session.permanentlyRevealedStones?.some(p => p.x === x && p.y === y);
             return !isPermanentlyRevealed;
         });
@@ -103,27 +134,32 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
         const actionType = item === 'hidden' ? 'START_HIDDEN_PLACEMENT' : (item === 'scan' ? 'START_SCANNING' : 'START_MISSILE_SELECTION');
         onAction({ type: actionType, payload: { gameId } });
     };
-    
-    const buttonClasses = "!text-xs !py-1";
+
+    if (isMobile && settings.features.mobileConfirm && pendingMove && onConfirmMove && onCancelMove) {
+        return (
+            <div className="bg-stone-800/60 backdrop-blur-sm rounded-lg p-2 flex items-center justify-center gap-4 w-full h-full border border-stone-700/50">
+                <Button onClick={onCancelMove} colorScheme="red" className="!py-3 !px-6">취소</Button>
+                <Button onClick={onConfirmMove} colorScheme="green" className="!py-3 !px-6 animate-pulse">착수</Button>
+            </div>
+        );
+    }
 
     return (
-        <div className="bg-stone-800/60 backdrop-blur-sm rounded-lg p-2 flex items-center justify-between gap-2 w-full h-full border border-stone-700/50">
-            <Button onClick={handleForfeit} colorScheme="red" className={buttonClasses}>포기하기</Button>
-            
-            <div className="flex items-center gap-2">
-                {isHiddenMode && <Button onClick={() => handleUseItem('hidden')} disabled={!isMyTurn || gameStatus !== 'playing' || hiddenLeft <= 0} colorScheme="purple" className={buttonClasses}>히든 ({hiddenLeft})</Button>}
-                {isHiddenMode && <Button onClick={() => handleUseItem('scan')} disabled={!isMyTurn || gameStatus !== 'playing' || myScansLeft <= 0 || !canScan} colorScheme="purple" className={buttonClasses}>스캔 ({myScansLeft})</Button>}
-                {isMissileMode && <Button onClick={() => handleUseItem('missile')} disabled={!isMyTurn || gameStatus !== 'playing' || myMissilesLeft <= 0} colorScheme="orange" className={buttonClasses}>미사일 ({myMissilesLeft})</Button>}
-            </div>
+        <div className="bg-stone-800/60 backdrop-blur-sm rounded-lg p-2 flex items-center justify-around gap-1 w-full h-full border border-stone-700/50">
+            {isHiddenMode && <ControlButton imgSrc="/images/button/hidden.png" label="히든" count={hiddenLeft} onClick={() => handleUseItem('hidden')} disabled={!isMyTurn || gameStatus !== 'playing' || hiddenLeft <= 0} />}
+            {isHiddenMode && <ControlButton imgSrc="/images/button/scan.png" label="스캔" count={myScansLeft} onClick={() => handleUseItem('scan')} disabled={!isMyTurn || gameStatus !== 'playing' || myScansLeft <= 0 || !canScan} />}
+            {isMissileMode && <ControlButton imgSrc="/images/button/missile.png" label="미사일" count={myMissilesLeft} onClick={() => handleUseItem('missile')} disabled={!isMyTurn || gameStatus !== 'playing' || myMissilesLeft <= 0} />}
 
-            <div className="flex items-center gap-2">
-                <span className="text-[10px] text-stone-400 text-center">다음 비용:<br/>💰{canRefresh ? nextCost : '-'}</span>
-                <Button onClick={handleRefresh} colorScheme="accent" className={buttonClasses} disabled={!canRefresh || !canAfford} title={!canAfford ? '골드가 부족합니다.' : ''}>
-                    배치 새로고침 ({5 - refreshesUsed}/5)
-                </Button>
-            </div>
+            <ControlButton 
+                imgSrc="/images/button/reflesh.png" 
+                label="새로고침" 
+                count={`${5 - refreshesUsed}`}
+                cost={nextCost > 0 ? `${nextCost}` : '무료'}
+                onClick={handleRefresh} 
+                disabled={!canRefresh || !canAfford} 
+                title={!canAfford ? '골드가 부족합니다.' : `판 새로고침 (${5-refreshesUsed}회 남음)`}
+            />
         </div>
     );
 };
-
 export default SinglePlayerControls;

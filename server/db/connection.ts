@@ -1,6 +1,8 @@
 import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 import path from 'path';
+// FIX: Corrected import path for types.
+import { Player } from '../../types/index.js';
 
 const DB_FILE_PATH = path.resolve('database.sqlite');
 let dbInstance: Database | null = null;
@@ -19,9 +21,9 @@ const migrations: { [version: number]: string } = {
     12: 'ALTER TABLE users ADD COLUMN actionPointPurchasesToday INTEGER; ALTER TABLE users ADD COLUMN lastActionPointPurchaseDate INTEGER;',
     13: 'ALTER TABLE users ADD COLUMN dailyShopPurchases TEXT;',
     14: 'ALTER TABLE users ADD COLUMN tournamentScore INTEGER; ALTER TABLE users ADD COLUMN league TEXT; ALTER TABLE users ADD COLUMN mannerMasteryApplied BOOLEAN; ALTER TABLE users ADD COLUMN pendingPenaltyNotification TEXT;',
-    15: 'ALTER TABLE users ADD COLUMN lastNeighborhoodPlayedDate INTEGER; ALTER TABLE users ADD COLUMN dailyNeighborhoodWins INTEGER; ALTER TABLE users ADD COLUMN neighborhoodRewardClaimed BOOLEAN; ALTER TABLE users ADD COLUMN lastNeighborhoodTournament TEXT;',
-    16: 'ALTER TABLE users ADD COLUMN lastNationalPlayedDate INTEGER; ALTER TABLE users ADD COLUMN dailyNationalWins INTEGER; ALTER TABLE users ADD COLUMN nationalRewardClaimed BOOLEAN; ALTER TABLE users ADD COLUMN lastNationalTournament TEXT;',
-    17: 'ALTER TABLE users ADD COLUMN lastWorldPlayedDate INTEGER; ALTER TABLE users ADD COLUMN dailyWorldWins INTEGER; ALTER TABLE users ADD COLUMN worldRewardClaimed BOOLEAN; ALTER TABLE users ADD COLUMN lastWorldTournament TEXT;',
+    15: 'ALTER TABLE users ADD COLUMN lastNeighborhoodPlayedDate INTEGER; ALTER TABLE users ADD COLUMN neighborhoodRewardClaimed BOOLEAN; ALTER TABLE users ADD COLUMN lastNeighborhoodTournament TEXT;',
+    16: 'ALTER TABLE users ADD COLUMN lastNationalPlayedDate INTEGER; ALTER TABLE users ADD COLUMN nationalRewardClaimed BOOLEAN; ALTER TABLE users ADD COLUMN lastNationalTournament TEXT;',
+    17: 'ALTER TABLE users ADD COLUMN lastWorldPlayedDate INTEGER; ALTER TABLE users ADD COLUMN worldRewardClaimed BOOLEAN; ALTER TABLE users ADD COLUMN lastWorldTournament TEXT;',
     18: 'ALTER TABLE users ADD COLUMN weeklyCompetitors TEXT; ALTER TABLE users ADD COLUMN lastWeeklyCompetitorsUpdate INTEGER; ALTER TABLE users ADD COLUMN lastLeagueUpdate INTEGER;',
     19: 'ALTER TABLE users ADD COLUMN ownedBorders TEXT;',
     20: 'ALTER TABLE live_games ADD COLUMN mythicBonuses TEXT; ALTER TABLE live_games ADD COLUMN lastPlayfulGoldCheck TEXT; ALTER TABLE live_games ADD COLUMN pendingSystemMessages TEXT;',
@@ -77,6 +79,26 @@ const migrations: { [version: number]: string } = {
     35: 'ALTER TABLE live_games ADD COLUMN gameType TEXT; ALTER TABLE live_games ADD COLUMN whiteStonesPlaced INTEGER; ALTER TABLE live_games ADD COLUMN whiteStoneLimit INTEGER;',
     36: 'ALTER TABLE live_games ADD COLUMN autoEndTurnCount INTEGER;',
     37: 'ALTER TABLE users ADD COLUMN claimedFirstClearRewards TEXT;',
+    38: 'ALTER TABLE live_games ADD COLUMN towerChallengePlacementRefreshesUsed INTEGER;',
+    39: 'ALTER TABLE users ADD COLUMN actionPointQuizzesToday INTEGER; ALTER TABLE users ADD COLUMN lastActionPointQuizDate INTEGER;',
+    40: 'ALTER TABLE users ADD COLUMN currencyLogs TEXT;',
+    41: 'ALTER TABLE live_games ADD COLUMN towerAddStonesUsed INTEGER;',
+    42: 'ALTER TABLE users ADD COLUMN guildId TEXT;',
+    43: 'ALTER TABLE live_games ADD COLUMN turnOrderRollTies INTEGER;',
+    44: 'ALTER TABLE users ADD COLUMN guildApplications TEXT; ALTER TABLE users ADD COLUMN guildLeaveCooldownUntil INTEGER;',
+    45: 'ALTER TABLE live_games ADD COLUMN pendingAiMove TEXT;',
+    46: 'ALTER TABLE users ADD COLUMN guildCoins INTEGER; ALTER TABLE users ADD COLUMN guildBossAttempts INTEGER; ALTER TABLE users ADD COLUMN lastGuildBossAttemptDate INTEGER;',
+    47: 'ALTER TABLE users ADD COLUMN lastLoginAt INTEGER;',
+    48: 'ALTER TABLE users ADD COLUMN dailyDonations TEXT;',
+    49: 'ALTER TABLE live_games ADD COLUMN animation TEXT;',
+    50: 'ALTER TABLE users ADD COLUMN guildShopPurchases TEXT; ALTER TABLE users ADD COLUMN monthlyGoldBuffExpiresAt INTEGER;',
+    51: 'ALTER TABLE users ADD COLUMN dailyMissionContribution TEXT;',
+    52: 'ALTER TABLE users ADD COLUMN equipmentPresets TEXT;',
+    53: 'ALTER TABLE users ADD COLUMN appSettings TEXT;',
+    54: 'ALTER TABLE users ADD COLUMN dailyChampionshipMatchesPlayed INTEGER; ALTER TABLE users ADD COLUMN lastChampionshipMatchDate INTEGER;',
+    55: 'ALTER TABLE live_games ADD COLUMN towerItemPurchases TEXT;',
+    56: 'ALTER TABLE live_games ADD COLUMN pausedTurnTimeLeft REAL;',
+    57: 'ALTER TABLE live_games ADD COLUMN promptForMoreStones BOOLEAN;',
 };
 
 export const initializeAndGetDb = async (): Promise<Database> => {
@@ -135,6 +157,8 @@ export const initializeAndGetDb = async (): Promise<Database> => {
             finalScores TEXT,
             createdAt INTEGER,
             lastMove TEXT,
+            lastTurnStones TEXT,
+            stonesPlacedThisTurn TEXT,
             passCount INTEGER,
             koInfo TEXT,
             winningLine TEXT,
@@ -182,6 +206,7 @@ export const initializeAndGetDb = async (): Promise<Database> => {
             hidden_stones_used_p2 INTEGER,
             pendingCapture TEXT,
             permanentlyRevealedStones TEXT,
+            pendingAiMove TEXT,
             missiles_p1 INTEGER,
             missiles_p2 INTEGER,
             missileUsedThisTurn BOOLEAN,
@@ -192,6 +217,7 @@ export const initializeAndGetDb = async (): Promise<Database> => {
             turnOrderRolls TEXT,
             turnOrderRollReady TEXT,
             turnOrderRollResult TEXT,
+            turnOrderRollTies INTEGER,
             turnOrderRollDeadline REAL,
             turnOrderAnimationEndTime REAL,
             turnChoiceDeadline REAL,
@@ -265,13 +291,18 @@ export const initializeAndGetDb = async (): Promise<Database> => {
             blackPatternStones TEXT,
             whitePatternStones TEXT,
             singlePlayerPlacementRefreshesUsed INTEGER,
+            towerChallengePlacementRefreshesUsed INTEGER,
+            towerAddStonesUsed INTEGER,
+            towerItemPurchases TEXT,
             blackStonesPlaced INTEGER,
             blackStoneLimit INTEGER,
             isTowerChallenge BOOLEAN,
             floor INTEGER,
             gameType TEXT,
             whiteStonesPlaced INTEGER,
-            whiteStoneLimit INTEGER
+            whiteStoneLimit INTEGER,
+            autoEndTurnCount INTEGER,
+            promptForMoreStones BOOLEAN
         );
     `);
 
@@ -282,20 +313,39 @@ export const initializeAndGetDb = async (): Promise<Database> => {
             console.log('[DB] Verification: connectionBanUntil column is missing. Adding it now.');
             await db.exec('ALTER TABLE users ADD COLUMN connectionBanUntil INTEGER;');
         }
-
+        // FIX: Add check for guild related columns
+        if (!usersColumns.some(col => col.name === 'guildId')) await db.exec('ALTER TABLE users ADD COLUMN guildId TEXT;');
+        if (!usersColumns.some(col => col.name === 'guildApplications')) await db.exec('ALTER TABLE users ADD COLUMN guildApplications TEXT;');
+        if (!usersColumns.some(col => col.name === 'guildLeaveCooldownUntil')) await db.exec('ALTER TABLE users ADD COLUMN guildLeaveCooldownUntil INTEGER;');
+        if (!usersColumns.some(col => col.name === 'guildCoins')) await db.exec('ALTER TABLE users ADD COLUMN guildCoins INTEGER;');
+        if (!usersColumns.some(col => col.name === 'guildBossAttempts')) await db.exec('ALTER TABLE users ADD COLUMN guildBossAttempts INTEGER;');
+        if (!usersColumns.some(col => col.name === 'lastGuildBossAttemptDate')) await db.exec('ALTER TABLE users ADD COLUMN lastGuildBossAttemptDate INTEGER;');
+        if (!usersColumns.some(col => col.name === 'lastLoginAt')) await db.exec('ALTER TABLE users ADD COLUMN lastLoginAt INTEGER;');
+        if (!usersColumns.some(col => col.name === 'dailyDonations')) await db.exec('ALTER TABLE users ADD COLUMN dailyDonations TEXT;');
+        if (!usersColumns.some(col => col.name === 'dailyMissionContribution')) await db.exec('ALTER TABLE users ADD COLUMN dailyMissionContribution TEXT;');
+        
         const liveGamesColumns = await db.all("PRAGMA table_info(live_games)");
         const liveGamesColumnNames = liveGamesColumns.map(c => c.name);
         const criticalLiveGameColumns = [
             'mannerScoreChanges', 
-            'activeCurlingItems', // This was misspelled in a previous migration
+            'activeCurlingItems',
             'alkkagiStones',      // Representative of the alkkagi update
-            'preGameConfirmations' // Representative of the pre-game update
+            'preGameConfirmations', // Representative of the pre-game update
+            'turnOrderRollTies',
+            'pendingAiMove',
+            'animation',
         ];
         
         for (const col of criticalLiveGameColumns) {
             if (!liveGamesColumnNames.includes(col)) {
                 console.log(`[DB] Verification: Column '${col}' is missing in 'live_games'. Adding it.`);
-                await db.exec(`ALTER TABLE live_games ADD COLUMN ${col} TEXT;`);
+                if (col === 'turnOrderRollTies') {
+                    await db.exec(`ALTER TABLE live_games ADD COLUMN ${col} INTEGER;`);
+                } else if (col === 'pendingAiMove') {
+                    await db.exec(`ALTER TABLE live_games ADD COLUMN ${col} TEXT;`);
+                } else {
+                    await db.exec(`ALTER TABLE live_games ADD COLUMN ${col} TEXT;`);
+                }
             }
         }
 

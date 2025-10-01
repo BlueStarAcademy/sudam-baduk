@@ -1,6 +1,9 @@
 
-import React, { forwardRef, useImperativeHandle, useState, useEffect, useRef, useMemo, ReactNode, useCallback } from 'react';
-import { AlkkagiStone, GameStatus, Player, Point, LiveGameSession, UserWithStatus, GameProps } from '../../types.js';
+
+import React, { forwardRef, useImperativeHandle, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
+// FIX: Separate enum and type imports, and correct import path.
+import { GameStatus, Player } from '../../types/index.js';
+import type { AlkkagiStone, GameSettings, Point, LiveGameSession, UserWithStatus, GameProps } from '../../types/index.js';
 import CurlingBoard, { CurlingBoardHandle } from '../CurlingBoard.js';
 import { CURLING_TURN_TIME_LIMIT } from '../../constants.js';
 import { audioService } from '../../services/audioService.js';
@@ -20,7 +23,7 @@ const CurlingArena = forwardRef<CurlingBoardHandle, CurlingArenaProps>((props, r
     const { id: gameId, settings, gameStatus, curlingStones, currentPlayer, activeCurlingItems } = session;
 
     const boardRef = useRef<CurlingBoardHandle>(null);
-    const animationFrameRef = useRef<number | null>(null);
+    const animationIntervalRef = useRef<number | null>(null);
     const powerGaugeAnimFrameRef = useRef<number | null>(null);
     const gaugeStartTimeRef = useRef<number | null>(null);
     const lastAnimationTimestampRef = useRef(0);
@@ -36,7 +39,6 @@ const CurlingArena = forwardRef<CurlingBoardHandle, CurlingArenaProps>((props, r
     const [power, setPower] = useState(0);
     const [flickPower, setFlickPower] = useState<number | null>(null);
     const [isRenderingPreviewStone, setIsRenderingPreviewStone] = useState(false);
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
     const latestProps = useRef(props);
     useEffect(() => {
@@ -66,18 +68,12 @@ const CurlingArena = forwardRef<CurlingBoardHandle, CurlingArenaProps>((props, r
     useEffect(() => {
         if (prevGameStatus === 'curling_animating' && session.gameStatus !== 'curling_animating') {
             setSimStones(null);
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-                animationFrameRef.current = null;
+            if (animationIntervalRef.current) {
+                clearInterval(animationIntervalRef.current);
+                animationIntervalRef.current = null;
             }
         }
     }, [session.gameStatus, prevGameStatus]);
-
-    useEffect(() => {
-        const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
-        window.addEventListener('resize', checkIsMobile);
-        return () => window.removeEventListener('resize', checkIsMobile);
-    }, []);
     
     const stopPowerGauge = useCallback(() => {
         if (powerGaugeAnimFrameRef.current) {
@@ -99,7 +95,7 @@ const CurlingArena = forwardRef<CurlingBoardHandle, CurlingArenaProps>((props, r
         setIsRenderingPreviewStone(false);
         powerRef.current = 0;
     }, [stopPowerGauge]);
-
+    
     const startPowerGauge = useCallback(() => {
         stopPowerGauge();
         setFlickPower(null);
@@ -115,7 +111,7 @@ const CurlingArena = forwardRef<CurlingBoardHandle, CurlingArenaProps>((props, r
             const isSlowActive = myActiveItems.includes('slow');
             
             const baseCycleDuration = currentSession.settings.curlingGaugeSpeed || 700;
-            const cycleDuration = (isSlowActive ? baseCycleDuration * 2 : baseCycleDuration);
+            const cycleDuration = isSlowActive ? baseCycleDuration * 2 : baseCycleDuration;
             const halfCycle = cycleDuration / 2;
     
             const elapsedTime = timestamp - gaugeStartTimeRef.current;
@@ -137,44 +133,43 @@ const CurlingArena = forwardRef<CurlingBoardHandle, CurlingArenaProps>((props, r
     }, [stopPowerGauge]);
     
     const runClientAnimation = useCallback((initialStones: AlkkagiStone[], stoneToLaunch: AlkkagiStone, velocity: Point) => {
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-
+        if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
+    
         let simStones: AlkkagiStone[] = JSON.parse(JSON.stringify(initialStones || []));
         let stoneToAnimate = { ...stoneToLaunch, vx: velocity.x, vy: velocity.y, onBoard: true };
         simStones.push(stoneToAnimate);
         setSimStones(simStones);
-
+    
         const boardSizePx = 840;
         const friction = 0.98;
-        let iterations = 0;
-        const maxIterations = 1000;
-
+        const timeStep = 1000 / 60; // 60 FPS
+    
         const animate = () => {
             let stonesAreMoving = false;
             
             for (const stone of simStones) {
                 if (!stone.onBoard) continue;
-                
-                // Use fixed time step logic to match server simulation
+    
                 stone.x += stone.vx;
                 stone.y += stone.vy;
                 stone.vx *= friction;
                 stone.vy *= friction;
-
+            
                 if (Math.abs(stone.vx) < 0.01) stone.vx = 0;
                 if (Math.abs(stone.vy) < 0.01) stone.vy = 0;
                 if (Math.abs(stone.vx) > 0 || Math.abs(stone.vy) > 0) {
                     stonesAreMoving = true;
                 }
-
+    
                 if (stone.x < 0 || stone.x > boardSizePx || stone.y < 0 || stone.y > boardSizePx) {
                     if (stone.onBoard) {
                         stone.onBoard = false;
-                        stone.timeOffBoard = Date.now();
+                        (stone as any).timeOffBoard = Date.now();
                         audioService.stoneFallOff();
                     }
                 }
             }
+    
             for (let i = 0; i < simStones.length; i++) {
                 for (let j = i + 1; j < simStones.length; j++) {
                     const s1 = simStones[i]; const s2 = simStones[j];
@@ -189,32 +184,26 @@ const CurlingArena = forwardRef<CurlingBoardHandle, CurlingArenaProps>((props, r
                         const dot = dvx * nx + dvy * ny;
                         if (dot < 0) {
                             const impulse = dot;
-                            s1.vx += impulse * nx;
-                            s1.vy += impulse * ny;
-                            s2.vx -= impulse * nx;
-                            s2.vy -= impulse * ny;
+                            s1.vx += impulse * nx; s1.vy += impulse * ny;
+                            s2.vx -= impulse * nx; s2.vy -= impulse * ny;
                         }
                         const overlap = (radiiSum - distance) / 2;
-                        s1.x -= overlap * nx;
-                        s1.y -= overlap * ny;
-                        s2.x += overlap * nx;
-                        s2.y += overlap * ny;
+                        s1.x -= overlap * nx; s1.y -= overlap * ny;
+                        s2.x += overlap * nx; s2.y += overlap * ny;
                     }
                 }
             }
             
             setSimStones([...simStones]);
             
-            iterations++;
-            if (stonesAreMoving && iterations < maxIterations) {
-                animationFrameRef.current = requestAnimationFrame(animate);
-            } else {
-                animationFrameRef.current = null;
-                // Animation finished client-side, wait for server confirmation to clear simStones
+            if (!stonesAreMoving && animationIntervalRef.current) {
+                clearInterval(animationIntervalRef.current);
+                animationIntervalRef.current = null;
             }
         };
-        animationFrameRef.current = requestAnimationFrame(animate);
+        animationIntervalRef.current = window.setInterval(animate, timeStep);
     }, []);
+    
     
     const handleLaunchAreaInteractionStart = useCallback((e: React.MouseEvent | React.TouchEvent, area: { x: number; y: number; player: Player; }) => {
         const { session: currentSession, currentUser: user } = latestProps.current;
@@ -339,7 +328,7 @@ const CurlingArena = forwardRef<CurlingBoardHandle, CurlingArenaProps>((props, r
             window.removeEventListener('touchend', handleInteractionEnd);
             window.removeEventListener('contextmenu', handleContextMenu);
             stopPowerGauge();
-            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
         };
     }, [stopPowerGauge, cancelFlick]);
 

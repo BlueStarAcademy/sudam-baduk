@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LiveGameSession, User, ServerAction } from '../types.js';
 import Button from './Button.js';
@@ -13,7 +14,6 @@ interface NigiriModalProps {
 const NigiriModal: React.FC<NigiriModalProps> = ({ session, currentUser, onAction }) => {
     const { id: gameId, nigiri, player1, player2, gameStatus, guessDeadline } = session;
     
-    // FIX: Initialize countdown from session deadline to prevent flicker. Default to 30.
     const [countdown, setCountdown] = useState(() => {
         if (!guessDeadline) return 30;
         return Math.max(0, Math.ceil((guessDeadline - Date.now()) / 1000));

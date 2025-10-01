@@ -1,24 +1,30 @@
-import { randomUUID } from 'crypto';
-import { InventoryItem, InventoryItemType } from '../types.js';
-import { CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../constants.js';
+// Import InventoryItem type.
+import { InventoryItem, InventoryItemType } from '../types/index.js';
+// Corrected import path for constants.
+import { CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../constants/items.js';
 
 export const addItemsToInventory = (inventory: InventoryItem[], inventorySlots: number, itemsToAdd: InventoryItem[]): { success: boolean, addedItems: InventoryItem[] } => {
     const tempInventory = JSON.parse(JSON.stringify(inventory));
     
     const nonStackableItems = itemsToAdd.filter(item => item.type === 'equipment');
-    const stackableItems = itemsToAdd.filter(item => item.type !== 'equipment');
     
-    let neededSlots = nonStackableItems.length;
-
-    const stackableToAdd: Record<string, number> = {};
-    for(const item of stackableItems) {
-        stackableToAdd[item.name] = (stackableToAdd[item.name] || 0) + (item.quantity || 1);
+    // Aggregate stackable items before processing to handle multiple stacks of the same item being added at once.
+    const stackableItemsMap: Record<string, { quantity: number; item: InventoryItem }> = {};
+    for (const item of itemsToAdd) {
+        if (item.type === 'consumable' || item.type === 'material') {
+            if (!stackableItemsMap[item.name]) {
+                stackableItemsMap[item.name] = { quantity: 0, item: item };
+            }
+            stackableItemsMap[item.name].quantity += item.quantity || 1;
+        }
     }
-    
-    for (const name in stackableToAdd) {
-        let quantityToPlace = stackableToAdd[name];
+
+    let neededSlots = nonStackableItems.length;
+    for (const name in stackableItemsMap) {
+        let quantityToPlace = stackableItemsMap[name].quantity;
+        // Check existing stacks in a temporary inventory copy
         for (const existingItem of tempInventory) {
-            if (existingItem.name === name && (existingItem.quantity || 0) < 100) {
+            if (existingItem.name === name && (existingItem.type === 'consumable' || existingItem.type === 'material') && (existingItem.quantity || 0) < 100) {
                 const space = 100 - (existingItem.quantity || 0);
                 quantityToPlace -= Math.min(quantityToPlace, space);
             }
@@ -27,29 +33,49 @@ export const addItemsToInventory = (inventory: InventoryItem[], inventorySlots: 
             neededSlots += Math.ceil(quantityToPlace / 100);
         }
     }
-    
+
     if (inventorySlots - inventory.length < neededSlots) {
         return { success: false, addedItems: [] };
     }
 
+    // Add equipment first
     inventory.push(...nonStackableItems);
 
-    for (const item of stackableItems) {
-        let quantityLeft = item.quantity || 1;
+    // Process aggregated stackable items
+    for (const name in stackableItemsMap) {
+        let quantityLeft = stackableItemsMap[name].quantity;
+
+        // First pass: fill existing stacks in the actual inventory
         for (const existingItem of inventory) {
             if (quantityLeft <= 0) break;
-            if (existingItem.name === item.name && (existingItem.quantity || 0) < 100) {
+            // Add explicit type check to prevent stacking on equipment with the same name
+            if (existingItem.name === name && (existingItem.type === 'consumable' || existingItem.type === 'material') && (existingItem.quantity || 0) < 100) {
                 const canAdd = 100 - (existingItem.quantity || 0);
                 const toAdd = Math.min(quantityLeft, canAdd);
                 existingItem.quantity = (existingItem.quantity || 0) + toAdd;
                 quantityLeft -= toAdd;
             }
         }
+        
+        // Second pass: create new stacks if needed
         while (quantityLeft > 0) {
             const toAdd = Math.min(quantityLeft, 100);
-            const template = [...Object.values(CONSUMABLE_ITEMS), ...Object.values(MATERIAL_ITEMS)].find(t => t.name === item.name) as Omit<InventoryItem, 'id'|'createdAt'|'isEquipped'|'level'|'stars'|'options'>;
+            const template = [...CONSUMABLE_ITEMS, ...Object.values(MATERIAL_ITEMS)].find(t => t.name === name);
             if (template) {
-                 inventory.push({ ...template, id: `item-${randomUUID()}`, quantity: toAdd, createdAt: Date.now(), isEquipped: false, stars: 0, level: 1 });
+                 const newItem: InventoryItem = {
+                     ...(template as any),
+                     id: `item-${globalThis.crypto.randomUUID()}`,
+                     quantity: toAdd, 
+                     createdAt: Date.now(), 
+                     isEquipped: false, 
+                     stars: 0, 
+                     level: 1,
+                     slot: null,
+                     options: undefined,
+                 };
+                 inventory.push(newItem);
+            } else {
+                console.error(`[Inventory] Could not find template for ${name} when creating new stack.`);
             }
             quantityLeft -= toAdd;
         }
@@ -70,18 +96,19 @@ export const createItemInstancesFromReward = (itemRefs: (InventoryItem | { itemI
         
         // This logic finds the item template and creates an instance, which is correct for granting a reward item.
         // It avoids the previous issue of "opening" the item via shop logic.
-        const template = [...CONSUMABLE_ITEMS, ...Object.values(MATERIAL_ITEMS)].find(t => t.name === itemId);
+        const template = [...CONSUMABLE_ITEMS, ...Object.values(MATERIAL_ITEMS)].find((t: { name: string; }) => t.name === itemId);
 
         if (template) {
             const newItem: InventoryItem = {
                 ...template,
-                id: `item-${randomUUID()}`,
+                id: `item-${globalThis.crypto.randomUUID()}`,
                 createdAt: Date.now(),
                 quantity: quantity,
                 isEquipped: false, 
                 level: 1,
                 stars: 0,
                 options: undefined,
+                slot: null, // Ensure slot is null for non-equipment
             };
             createdItems.push(newItem);
         } else {

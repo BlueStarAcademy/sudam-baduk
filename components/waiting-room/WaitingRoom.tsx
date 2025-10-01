@@ -30,13 +30,14 @@ function usePrevious<T>(value: T): T | undefined {
 
 const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
     const { handlers } = useAppContext();
+    const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
     const isPlayfulAiSupported = PLAYFUL_AI_MODES.includes(mode);
 
-    if (!isPlayfulAiSupported) {
+    if (!isStrategic && !isPlayfulAiSupported) {
         return null;
     }
     
-    const botName = `${mode}봇`;
+    const botName = isStrategic ? `${mode}봇(카타고)` : `${mode}봇`;
 
     return (
         <div className="bg-panel rounded-lg shadow-lg p-3 flex items-center justify-between flex-shrink-0 text-on-panel">
@@ -142,7 +143,7 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
   
   if (!currentUserWithStatus) return null;
 
-  const ongoingGames = (Object.values(liveGames) as LiveGameSession[]).filter(g => g.mode === mode);
+  const ongoingGames = (Object.values(liveGames) as LiveGameSession[]).filter(g => g.mode === mode && !g.isAiGame);
   
   const usersInThisRoom = useMemo(() => {
         const all = onlineUsers.filter(u => {
@@ -193,19 +194,18 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
       <div className="flex-1 min-h-0 relative px-2 sm:px-4 lg:px-6 pb-2 sm:pb-4 lg:pb-6">
         {isMobile ? (
           <>
-            <div className="flex flex-col h-full gap-2">
+            <div className="flex flex-col h-full gap-4">
                 <div className="flex-shrink-0"><AnnouncementBoard mode={mode} /></div>
                 <div className="flex-shrink-0"><AiChallengePanel mode={mode} /></div>
-                <div className="flex-1 flex flex-row gap-2 items-stretch min-h-0">
-                    <div className="flex-1 min-w-0">
+                <div className="flex-1 flex flex-col gap-4 min-h-0">
+                    <div className="h-1/2 bg-panel border border-color rounded-lg shadow-lg flex flex-col min-h-0">
                         <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                     </div>
-                </div>
-                 <div className="h-60 flex-shrink-0 flex flex-col bg-panel border border-color rounded-lg shadow-lg">
-                    <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
+                    <div className="h-1/2 bg-panel border border-color rounded-lg shadow-lg flex flex-col min-h-0">
+                        <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} />
+                    </div>
                 </div>
             </div>
-
             <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
                 <button 
                     onClick={() => { setIsMobileSidebarOpen(true); setHasNewMessage(false); }}
@@ -230,39 +230,39 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
           </>
         ) : (
           <div ref={desktopContainerRef} className="grid grid-cols-1 lg:grid-cols-5 h-full gap-4">
-              {/* Main Content Column */}
-              <div className="lg:col-span-3 flex flex-col gap-4 min-h-0">
-                  <div className="flex-shrink-0">
-                      <AnnouncementBoard mode={mode} />
-                  </div>
-                   <div className="flex-shrink-0">
-                      <AiChallengePanel mode={mode} />
-                  </div>
-                  <div className="bg-panel border border-color rounded-lg shadow-lg flex flex-col flex-1 min-h-0 text-on-panel">
-                      <div className="flex-[6] min-h-0">
-                          <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
-                      </div>
-                      <div className="flex-[4] min-h-0 border-t-2 border-color">
-                          <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
-                      </div>
-                  </div>
-              </div>
-              
-              {/* Right Sidebar Column */}
-              <div className="lg:col-span-2 grid grid-rows-2 gap-4">
-                <div className="flex flex-row gap-4 items-stretch min-h-0">
-                  <div className="flex-1 bg-panel border border-color rounded-lg shadow-lg min-w-0">
-                    <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
-                  </div>
-                  <div className="w-24 flex-shrink-0">
-                    <QuickAccessSidebar />
-                  </div>
+            {/* Main Content Column */}
+            <div className="lg:col-span-3 flex flex-col gap-4 min-h-0">
+                <div className="flex-shrink-0">
+                    <AnnouncementBoard mode={mode} />
                 </div>
+                 <div className="flex-shrink-0">
+                    <AiChallengePanel mode={mode} />
+                </div>
+                <div className="grid grid-rows-2 gap-4 flex-1 min-h-0">
+                    <div className="min-h-0 bg-panel border border-color rounded-lg shadow-lg flex flex-col">
+                        <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
+                    </div>
+                    <div className="min-h-0 flex flex-col bg-panel border border-color rounded-lg shadow-lg">
+                        <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
+                    </div>
+                </div>
+            </div>
+            
+            {/* Right Sidebar Column */}
+            <div className="lg:col-span-2 grid grid-rows-2 gap-4">
+              <div className="flex flex-row gap-4 items-stretch min-h-0">
+                <div className="flex-1 bg-panel border border-color rounded-lg shadow-lg min-w-0">
+                  <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
+                </div>
+                <div className="w-24 flex-shrink-0">
+                  <QuickAccessSidebar />
+                </div>
+              </div>
 
-                <div className="bg-panel border border-color rounded-lg shadow-lg">
-                  <RankingList currentUser={currentUserWithStatus} mode={mode} onViewUser={handlers.openViewingUser} onShowTierInfo={() => setIsTierInfoModalOpen(true)} onShowPastRankings={handlers.openPastRankings} />
-                </div>
+              <div className="bg-panel border border-color rounded-lg shadow-lg min-h-0">
+                <RankingList currentUser={currentUserWithStatus} mode={mode} onViewUser={handlers.openViewingUser} onShowTierInfo={() => setIsTierInfoModalOpen(true)} onShowPastRankings={handlers.openPastRankings} />
               </div>
+            </div>
           </div>
         )}
       </div>

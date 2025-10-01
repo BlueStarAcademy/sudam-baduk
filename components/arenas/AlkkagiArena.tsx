@@ -1,8 +1,11 @@
 
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { AlkkagiStone, GameProps, Player, Point, GameStatus } from '../../types.js';
+
+import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef, ReactNode, useMemo, useCallback } from 'react';
+// FIX: Separate enum and type imports, and correct import path.
+import { AlkkagiLayoutType, GameStatus, Player } from '../../types/index.js';
+import type { AlkkagiStone, GameSettings, Point, LiveGameSession, UserWithStatus, GameProps } from '../../types/index.js';
 import AlkkagiBoard, { AlkkagiBoardHandle } from '../AlkkagiBoard.js';
-import { ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT } from '../../constants.js';
+import { ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES } from '../../constants.js';
 import { audioService } from '../../services/audioService.js';
 
 interface AlkkagiArenaProps extends GameProps {}
@@ -20,7 +23,7 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
     const { id: gameId, settings, gameStatus, alkkagiStones, currentPlayer, player1, alkkagiStones_p1, alkkagiStones_p2, activeAlkkagiItems } = session;
     
     const boardRef = useRef<AlkkagiBoardHandle>(null);
-    const animationFrameRef = useRef<number | null>(null);
+    const animationIntervalRef = useRef<number | null>(null);
     const powerGaugeAnimFrameRef = useRef<number | null>(null);
     const gaugeStartTimeRef = useRef<number | null>(null);
     const lastAnimationTimestampRef = useRef(0);
@@ -29,11 +32,11 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
     const selectedStoneRef = useRef<AlkkagiStone | null>(null);
     const dragStartPointRef = useRef<Point | null>(null);
     const powerRef = useRef(0);
+    const powerBarFillRef = useRef<HTMLDivElement>(null);
     
     const [selectedStoneId, setSelectedStoneId] = useState<number | null>(null);
     const [dragStartPoint, setDragStartPoint] = useState<Point | null>(null);
     const [dragEndPoint, setDragEndPoint] = useState<Point | null>(null);
-    const [power, setPower] = useState(0);
     const [flickPower, setFlickPower] = useState<number | null>(null);
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
 
@@ -61,8 +64,10 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
         setSelectedStoneId(null);
         setDragStartPoint(null);
         setDragEndPoint(null);
-        setPower(0);
         powerRef.current = 0;
+        if (powerBarFillRef.current) {
+            powerBarFillRef.current.style.width = '0%';
+        }
     }, [stopPowerGauge]);
 
     useEffect(() => {
@@ -120,6 +125,7 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
     
     const startPowerGauge = useCallback(() => {
         stopPowerGauge();
+        if (powerBarFillRef.current) powerBarFillRef.current.style.width = '0%';
         setFlickPower(null);
         gaugeStartTimeRef.current = performance.now();
     
@@ -133,7 +139,7 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
             const isSlowActive = myActiveItems.includes('slow');
             
             const baseCycleDuration = currentSession.settings.alkkagiGaugeSpeed || 900;
-            const cycleDuration = (isSlowActive ? baseCycleDuration * 2 : baseCycleDuration);
+            const cycleDuration = isSlowActive ? baseCycleDuration * 2 : baseCycleDuration;
             const halfCycle = cycleDuration / 2;
     
             const elapsedTime = timestamp - gaugeStartTimeRef.current;
@@ -146,8 +152,10 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
                 newPower = (2 - progressInCycle) * 100;
             }
     
-            setPower(newPower);
             powerRef.current = newPower;
+            if (powerBarFillRef.current) {
+                powerBarFillRef.current.style.width = `${newPower}%`;
+            }
             powerGaugeAnimFrameRef.current = requestAnimationFrame(animateGauge);
         };
     
@@ -155,26 +163,25 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
     }, [stopPowerGauge]);
     
     const runClientAnimation = useCallback((stones: AlkkagiStone[], flickedStoneId: number, vx: number, vy: number) => {
-        if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+        if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
 
         let simStones: AlkkagiStone[] = JSON.parse(JSON.stringify(stones || []));
         let stoneToAnimate = simStones.find(s => s.id === flickedStoneId);
-        if (stoneToAnimate) {
-            stoneToAnimate.vx = vx;
-            stoneToAnimate.vy = vy;
-        } else { return; }
+        if (!stoneToAnimate) return;
+
+        stoneToAnimate.vx = vx;
+        stoneToAnimate.vy = vy;
 
         const boardSizePx = 840;
         const friction = 0.98;
-        let iterations = 0;
-        const maxIterations = 1000;
+        const timeStep = 1000 / 60; // 60 FPS
 
         const animate = () => {
             let stonesAreMoving = false;
             
             for (const stone of simStones) {
                 if (!stone.onBoard) continue;
-                // Use fixed time step logic to match server simulation
+                
                 stone.x += stone.vx;
                 stone.y += stone.vy;
                 stone.vx *= friction;
@@ -183,10 +190,11 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
                 if (Math.abs(stone.vx) < 0.01) stone.vx = 0;
                 if (Math.abs(stone.vy) < 0.01) stone.vy = 0;
                 if (Math.abs(stone.vx) > 0 || Math.abs(stone.vy) > 0) stonesAreMoving = true;
+                
                 if (stone.x < 0 || stone.x > boardSizePx || stone.y < 0 || stone.y > boardSizePx) {
                     if (stone.onBoard) { 
                         stone.onBoard = false; 
-                        stone.timeOffBoard = Date.now(); 
+                        (stone as any).timeOffBoard = Date.now(); 
                         audioService.stoneFallOff(); 
                     }
                 }
@@ -217,14 +225,13 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
             }
             
             boardRef.current?.updateLocalStones(simStones);
-            iterations++;
-            if (stonesAreMoving && iterations < maxIterations) {
-                animationFrameRef.current = requestAnimationFrame(animate);
-            } else {
-                animationFrameRef.current = null;
+
+            if (!stonesAreMoving && animationIntervalRef.current) {
+                clearInterval(animationIntervalRef.current);
+                animationIntervalRef.current = null;
             }
         };
-        animationFrameRef.current = requestAnimationFrame(animate);
+        animationIntervalRef.current = window.setInterval(animate, timeStep);
     }, []);
 
 
@@ -271,12 +278,14 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
             if (finalSelectedStone && finalDragStart && finalDragEnd) {
                 const svg = boardRef.current?.getSvg();
                 if (!svg) {
+                    console.error("SVG element not found for coordinate conversion.");
                     cancelFlick();
                     return;
                 }
 
                 const ctm = svg.getScreenCTM()?.inverse();
                 if (!ctm) {
+                    console.error("Could not get CTM for coordinate conversion.");
                     cancelFlick();
                     return;
                 }
@@ -313,7 +322,6 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
             setSelectedStoneId(null);
             setDragStartPoint(null);
             setDragEndPoint(null);
-            setPower(0);
             powerRef.current = 0;
             setTimeout(() => setFlickPower(null), 1500);
         };
@@ -338,8 +346,8 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
             window.removeEventListener('touchend', handleInteractionEnd);
             window.removeEventListener('contextmenu', handleContextMenu);
             stopPowerGauge();
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
+            if (animationIntervalRef.current) {
+                clearInterval(animationIntervalRef.current);
             }
         };
     }, [stopPowerGauge, cancelFlick]);
@@ -354,7 +362,7 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
         }
     }, [session.animation, runClientAnimation]);
     
-    const displayedPower = flickPower !== null ? flickPower : power;
+    const displayedPower = flickPower !== null ? flickPower : 0;
     const maxStones = session.settings.alkkagiStoneCount || 5;
 
     const selectedStoneForRender = useMemo(() => {
@@ -368,6 +376,7 @@ const AlkkagiArena: React.FC<AlkkagiArenaProps> = (props) => {
                 {(dragStartPoint || flickPower !== null) && (
                     <div className={`bg-gray-900/50 rounded-full h-6 border-2 border-gray-500 ${flickPower !== null ? 'animate-flick-power-pulse' : ''}`}>
                         <div 
+                            ref={powerBarFillRef}
                             className="bg-gradient-to-r from-yellow-400 to-red-500 h-full rounded-full" 
                             style={{ width: `${displayedPower}%` }}
                         />

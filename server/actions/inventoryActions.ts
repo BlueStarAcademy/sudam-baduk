@@ -1,9 +1,10 @@
-import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult } from '../../types.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult, Guild } from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
 import { SHOP_ITEMS, createItemFromTemplate, pickRandom } from '../shop.js';
+// FIX: Corrected import paths for constants.
 import { 
+    currencyBundles,
     CONSUMABLE_ITEMS, 
     MATERIAL_ITEMS, 
     GRADE_LEVEL_REQUIREMENTS,
@@ -17,23 +18,12 @@ import {
     SYNTHESIS_COSTS,
     SYNTHESIS_UPGRADE_CHANCES,
     EQUIPMENT_POOL,
-    // FIX: Import the missing 'ENHANCEMENT_LEVEL_REQUIREMENTS' constant.
     ENHANCEMENT_LEVEL_REQUIREMENTS
-} from '../../constants.js';
+} from '../../constants/index.js';
 import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
-import * as effectService from '../effectService.js';
-
-
-const currencyBundles: Record<string, { type: 'gold' | 'diamonds', min: number, max: number }> = {
-    '골드 꾸러미1': { type: 'gold', min: 10, max: 500 },
-    '골드 꾸러미2': { type: 'gold', min: 100, max: 1000 },
-    '골드 꾸러미3': { type: 'gold', min: 500, max: 3000 },
-    '골드 꾸러미4': { type: 'gold', min: 1000, max: 10000 },
-    '다이아 꾸러미1': { type: 'diamonds', min: 1, max: 20 },
-    '다이아 꾸러미2': { type: 'diamonds', min: 10, max: 30 },
-    '다이아 꾸러미3': { type: 'diamonds', min: 20, max: 50 },
-    '다이아 꾸러미4': { type: 'diamonds', min: 30, max: 100 },
-};
+import * as effectService from '../../utils/statUtils.js';
+import * as currencyService from '../currencyService.js';
+import * as guildService from '../guildService.js';
 
 const getRandomInt = (min: number, max: number): number => {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -79,35 +69,26 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const { itemId } = payload;
             const itemIndex = user.inventory.findIndex(i => i.id === itemId);
             if (itemIndex === -1) return { error: '아이템을 찾을 수 없습니다.' };
-        
+
             const itemToConsume = user.inventory[itemIndex];
             if (itemToConsume.type !== 'consumable') return { error: '사용할 수 없는 아이템입니다.' };
 
-            if (itemToConsume.name === '싱글플레이 최초보상 초기화권') {
-                user.claimedFirstClearRewards = [];
-                 if (itemToConsume.quantity && itemToConsume.quantity > 1) {
-                    itemToConsume.quantity--;
-                } else {
-                    user.inventory.splice(itemIndex, 1);
-                }
-                await db.updateUser(user);
-                return { clientResponse: { updatedUser: user } };
-            }
-        
-            // Handle currency bundles
+            // --- Handle specific item types ---
+
+            // 1. Currency Bundles
             const bundleInfo = currencyBundles[itemToConsume.name];
             if (bundleInfo) {
                 const amount = getRandomInt(bundleInfo.min, bundleInfo.max);
                 let obtainedItem: Partial<InventoryItem>;
-        
+
                 if (bundleInfo.type === 'gold') {
-                    user.gold += amount;
-                    obtainedItem = { name: '골드', quantity: amount, image: '/images/Gold.png', type: 'material', grade: 'uncommon' };
-                } else {
-                    user.diamonds += amount;
-                    obtainedItem = { name: '다이아', quantity: amount, image: '/images/Zem.png', type: 'material', grade: 'rare' };
+                    currencyService.grantGold(user, amount, `${itemToConsume.name} 사용`);
+                    obtainedItem = { name: '골드', quantity: amount, image: '/images/Gold.png', type: 'material', grade: ItemGrade.Uncommon };
+                } else { // diamonds
+                    currencyService.grantDiamonds(user, amount, `${itemToConsume.name} 사용`);
+                    obtainedItem = { name: '다이아', quantity: amount, image: '/images/Zem.png', type: 'material', grade: ItemGrade.Rare };
                 }
-        
+
                 if (itemToConsume.quantity && itemToConsume.quantity > 1) {
                     itemToConsume.quantity--;
                 } else {
@@ -116,48 +97,57 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 await db.updateUser(user);
                 return { clientResponse: { obtainedItemsBulk: [obtainedItem], updatedUser: user } };
             }
-        
-            // Handle other consumable items (boxes, potions, etc.)
-            const shopItemKey = Object.keys(SHOP_ITEMS).find(key => SHOP_ITEMS[key as keyof typeof SHOP_ITEMS].name === itemToConsume.name);
-            if (!shopItemKey) {
-                return { error: '알 수 없는 아이템입니다.' };
-            }
-        
-            const shopItem = SHOP_ITEMS[shopItemKey as keyof typeof SHOP_ITEMS];
 
+            // 2. Single Player Reset Ticket
+            if (itemToConsume.name === '싱글플레이 최초보상 초기화권') {
+                user.claimedFirstClearRewards = [];
+                if (itemToConsume.quantity && itemToConsume.quantity > 1) {
+                    itemToConsume.quantity--;
+                } else {
+                    user.inventory.splice(itemIndex, 1);
+                }
+                await db.updateUser(user);
+                return { clientResponse: { updatedUser: user } };
+            }
+
+            // 3. Condition Potions
             if (itemToConsume.name.includes('컨디션 물약')) {
                 return { error: '컨디션 물약은 토너먼트 경기 시작 전에만 사용할 수 있습니다.' };
             }
 
-            const obtainedItems = shopItem.onPurchase();
-            const itemsArray = Array.isArray(obtainedItems) ? obtainedItems : [obtainedItems];
-            
-            // Create a new inventory array representing the state AFTER consumption.
-            let inventoryAfterConsumption: InventoryItem[];
-            if (itemToConsume.quantity && itemToConsume.quantity > 1) {
-                inventoryAfterConsumption = user.inventory.map(i => 
-                    i.id === itemId ? { ...i, quantity: (i.quantity as number) - 1 } : i
-                );
-            } else {
-                inventoryAfterConsumption = user.inventory.filter(i => i.id !== itemId);
+            // 4. Item Boxes (from Shop)
+            const shopItemKey = Object.keys(SHOP_ITEMS).find(key => SHOP_ITEMS[key as keyof typeof SHOP_ITEMS].name === itemToConsume.name);
+            if (shopItemKey) {
+                const shopItem = SHOP_ITEMS[shopItemKey as keyof typeof SHOP_ITEMS];
+                const obtainedItems = shopItem.onPurchase();
+                const itemsArray = Array.isArray(obtainedItems) ? obtainedItems : [obtainedItems];
+                
+                let inventoryAfterConsumption: InventoryItem[];
+                if (itemToConsume.quantity && itemToConsume.quantity > 1) {
+                    inventoryAfterConsumption = user.inventory.map(i => 
+                        i.id === itemId ? { ...i, quantity: (i.quantity as number) - 1 } : i
+                    );
+                } else {
+                    inventoryAfterConsumption = user.inventory.filter(i => i.id !== itemId);
+                }
+                
+                const inventoryForCheck = JSON.parse(JSON.stringify(inventoryAfterConsumption));
+                const { success } = addItemsToInventoryUtil(inventoryForCheck, user.inventorySlots, itemsArray);
+                
+                if (!success) {
+                    return { error: '인벤토리 공간이 부족합니다.' };
+                }
+                
+                user.inventory = inventoryAfterConsumption;
+                addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsArray);
+                
+                await db.updateUser(user);
+                return { clientResponse: { obtainedItemsBulk: itemsArray, updatedUser: user } };
             }
-            
-            // Check for space using a deep copy, because the utility function mutates its input.
-            const inventoryForCheck = JSON.parse(JSON.stringify(inventoryAfterConsumption));
-            const { success } = addItemsToInventoryUtil(inventoryForCheck, user.inventorySlots, itemsArray);
-            
-            if (!success) {
-                return { error: '인벤토리 공간이 부족합니다.' };
-            }
-            
-            // Apply the changes to the actual user object.
-            user.inventory = inventoryAfterConsumption;
-            addItemsToInventoryUtil(user.inventory, user.inventorySlots, itemsArray);
-            
-            await db.updateUser(user);
-            return { clientResponse: { obtainedItemsBulk: itemsArray, updatedUser: user } };
-        }
         
+            // If none of the above, it's an unhandled consumable
+            return { error: `사용할 수 없는 아이템입니다: ${itemToConsume.name}` };
+        }
         case 'USE_ITEM_BULK': {
             const { itemName, quantity } = payload;
             if (quantity <= 0) return { error: "수량은 1 이상이어야 합니다." };
@@ -208,15 +198,16 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             if (!hasSpace) return { error: '모든 아이템을 받기에 가방 공간이 부족합니다.' };
 
             user.inventory = inventoryAfterRemoval;
-            user.gold += totalGoldGained;
-            user.diamonds += totalDiamondsGained;
+            if (totalGoldGained > 0) currencyService.grantGold(user, totalGoldGained, `${itemName} ${quantity}개 사용`);
+            if (totalDiamondsGained > 0) currencyService.grantDiamonds(user, totalDiamondsGained, `${itemName} ${quantity}개 사용`);
+
             addItemsToInventoryUtil(user.inventory, user.inventorySlots, allObtainedItems);
 
             await db.updateUser(user);
 
             const clientResponseItems = [...allObtainedItems];
-            if (totalGoldGained > 0) clientResponseItems.push({ name: '골드', quantity: totalGoldGained, image: '/images/Gold.png', type: 'material', grade: 'uncommon' } as any);
-            if (totalDiamondsGained > 0) clientResponseItems.push({ name: '다이아', quantity: totalDiamondsGained, image: '/images/Zem.png', type: 'material', grade: 'rare' } as any);
+            if (totalGoldGained > 0) clientResponseItems.push({ name: '골드', quantity: totalGoldGained, image: '/images/Gold.png', type: 'material', grade: ItemGrade.Uncommon } as any);
+            if (totalDiamondsGained > 0) clientResponseItems.push({ name: '다이아', quantity: totalDiamondsGained, image: '/images/Zem.png', type: 'material', grade: ItemGrade.Rare } as any);
             
             return { clientResponse: { obtainedItemsBulk: clientResponseItems, updatedUser: user } };
         }
@@ -250,7 +241,9 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 user.equipment[itemToToggle.slot] = itemToToggle.id;
             }
             
-            const effects = effectService.calculateUserEffects(user);
+            const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
+            const userGuild = user.guildId ? (guilds[user.guildId] ?? null) : null;
+            const effects = effectService.calculateUserEffects(user, userGuild);
             user.actionPoints.max = effects.maxActionPoints;
             user.actionPoints.current = Math.min(user.actionPoints.current, user.actionPoints.max);
             
@@ -279,8 +272,8 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             } else {
                 return { error: '판매할 수 없는 아이템입니다. (소모품 판매 불가)' };
             }
-
-            user.gold += sellPrice;
+            
+            currencyService.grantGold(user, sellPrice, `${item.name} 판매`);
             user.inventory.splice(itemIndex, 1);
 
             await db.updateUser(user);
@@ -304,13 +297,17 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             
             const originalItemState = JSON.parse(JSON.stringify(item));
 
-            const costs = ENHANCEMENT_COSTS[item.grade]?.[item.stars];
-            if (!costs) return { error: '강화 정보를 찾을 수 없습니다.' };
+            const costInfo = ENHANCEMENT_COSTS[item.grade]?.[item.stars];
+            if (!costInfo) return { error: '강화 정보를 찾을 수 없습니다.' };
 
             if (!user.isAdmin) {
-                if (!removeUserItems(user, costs)) {
+                if (user.gold < costInfo.gold) {
+                    return { error: '골드가 부족합니다.' };
+                }
+                if (!removeUserItems(user, costInfo.materials)) {
                     return { error: '재료가 부족합니다.' };
                 }
+                currencyService.spendGold(user, costInfo.gold, `${item.name} +${item.stars + 1} 강화`);
             }
             
             updateQuestProgress(user, 'enhancement_attempt');
@@ -327,6 +324,10 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 item.stars++;
                 item.enhancementFails = 0;
                 resultMessage = `강화 성공! +${item.stars} ${item.name}이(가) 되었습니다.`;
+                
+                if (user.guildId) {
+                    guildService.updateGuildMissionProgress(user.guildId, 'equipmentEnhancements', 1);
+                }
                 
                 const main = item.options.main;
                 if(main.baseValue) {
@@ -345,7 +346,8 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                     const combatTier = rules.combatTier;
                     const combatPool = SUB_OPTION_POOLS[item.slot!][combatTier].filter(opt => !existingSubTypes.has(opt.type));
                     if(combatPool.length > 0) {
-                        const newSubDef = pickRandom(combatPool);
+                        // FIX: Cast return of pickRandom to `any` to resolve property access errors.
+                        const newSubDef = pickRandom(combatPool) as any;
                         combatPool.splice(combatPool.indexOf(newSubDef), 1);
                         
                         const value = getRandomInt(newSubDef.range[0], newSubDef.range[1]);
@@ -365,7 +367,8 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
         
                     const itemTier = GRADE_SUB_OPTION_RULES[item.grade].combatTier;
                     const subOptionPool = SUB_OPTION_POOLS[item.slot!][itemTier];
-                    const subDef = subOptionPool.find(s => s.type === subToUpgrade.type && s.isPercentage === subToUpgrade.isPercentage);
+                    // FIX: Cast return of find to `any` to resolve property access errors.
+                    const subDef = subOptionPool.find(s => s.type === subToUpgrade.type && s.isPercentage === subToUpgrade.isPercentage) as any;
         
                     if (subDef) {
                         const increaseAmount = getRandomInt(subDef.range[0], subDef.range[1]);
@@ -419,7 +422,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                     const enhancementIndex = Math.min(item.stars, 9);
                     const costsForNextLevel = ENHANCEMENT_COSTS[item.grade]?.[enhancementIndex];
                     if (costsForNextLevel) {
-                        for (const cost of costsForNextLevel) {
+                        for (const cost of costsForNextLevel.materials) {
                             const yieldAmount = Math.floor(cost.amount * 0.25);
                             if (yieldAmount > 0) {
                                 gainedMaterials[cost.name] = (gainedMaterials[cost.name] || 0) + yieldAmount;
@@ -439,8 +442,9 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
                 }
             }
             
+// FIX: Add missing 'options' property to created item object to satisfy InventoryItem type.
             const itemsToAdd: InventoryItem[] = Object.entries(gainedMaterials).map(([name, quantity]) => ({
-                ...MATERIAL_ITEMS[name as keyof typeof MATERIAL_ITEMS], id: '', quantity, createdAt: 0, isEquipped: false, level: 1, stars: 0
+                ...MATERIAL_ITEMS[name as keyof typeof MATERIAL_ITEMS], id: `item-${globalThis.crypto.randomUUID()}`, quantity, createdAt: Date.now(), isEquipped: false, level: 1, stars: 0, options: undefined
             }));
             
             user.inventory = user.inventory.filter(item => !itemsToRemove.includes(item.id));
@@ -485,8 +489,9 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             }
         
             const toAddTemplate = MATERIAL_ITEMS[toMaterialName as keyof typeof MATERIAL_ITEMS];
+// FIX: Add missing 'options' property to created item object to satisfy InventoryItem type.
             const itemsToAdd: InventoryItem[] = [{
-                ...toAddTemplate, id: `item-${randomUUID()}`, quantity: toYield, createdAt: Date.now(), isEquipped: false, level: 1, stars: 0
+                ...toAddTemplate, id: `item-${globalThis.crypto.randomUUID()}`, quantity: toYield, createdAt: Date.now(), isEquipped: false, level: 1, stars: 0, options: undefined
             }];
 
             const { success: hasSpace } = addItemsToInventoryUtil(tempUser.inventory, tempUser.inventorySlots, itemsToAdd);
@@ -497,6 +502,9 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
 
             // All checks passed, apply changes to the real user object
             user.inventory = tempUser.inventory;
+            if (user.guildId) {
+                guildService.updateGuildMissionProgress(user.guildId, 'materialCrafts', quantity);
+            }
             
             updateQuestProgress(user, 'craft_attempt');
             await db.updateUser(user);
@@ -529,7 +537,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             
             const firstItemGrade = itemsToSynthesize[0].grade;
             if (itemsToSynthesize.some(i => i.grade !== firstItemGrade)) {
-                return { error: '같은 등급의 장비만 합성할 수 있습니다.' };
+                return { error: '같은 등급의 장비만 합성할 수 없습니다.' };
             }
             
             if (itemsToSynthesize.some(i => i.isEquipped)) {
@@ -546,23 +554,32 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             }
             
             if (!user.isAdmin) {
-                user.gold -= synthesisCost;
+                currencyService.spendGold(user, synthesisCost, `장비 합성 (${firstItemGrade})`);
             }
             user.inventory = user.inventory.filter(i => !itemIds.includes(i.id));
         
+            const isAllDoubleMythic = firstItemGrade === ItemGrade.Mythic && itemsToSynthesize.every(i => i.options?.mythicSubs.length === 2);
+            
             const upgradeChance = SYNTHESIS_UPGRADE_CHANCES[firstItemGrade];
             const roll = Math.random() * 100;
             let wasUpgraded = roll < upgradeChance;
             let newGrade: ItemGrade;
             let isDoubleMythic = false;
         
-            const gradeOrder: ItemGrade[] = ['normal', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+            // FIX: Replaced string literals with ItemGrade enum members.
+            const gradeOrder: ItemGrade[] = [ItemGrade.Normal, ItemGrade.Uncommon, ItemGrade.Rare, ItemGrade.Epic, ItemGrade.Legendary, ItemGrade.Mythic];
             const currentGradeIndex = gradeOrder.indexOf(firstItemGrade);
         
-            if (firstItemGrade === 'mythic') {
+            if (isAllDoubleMythic) {
+                wasUpgraded = true; // Always show as great success
+                isDoubleMythic = true;
+                // FIX: Replaced string literal with ItemGrade enum member.
+                newGrade = ItemGrade.Mythic;
+            } else if (firstItemGrade === ItemGrade.Mythic) {
                 wasUpgraded = roll < upgradeChance; // This represents the chance for double mythic option
                 isDoubleMythic = wasUpgraded;
-                newGrade = 'mythic';
+                // FIX: Replaced string literal with ItemGrade enum member.
+                newGrade = ItemGrade.Mythic;
             } else {
                 newGrade = wasUpgraded && currentGradeIndex < gradeOrder.length - 1 
                     ? gradeOrder[currentGradeIndex + 1] 
@@ -593,6 +610,12 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             const newItem = createItemFromTemplate(template, { forceDoubleMythic: isDoubleMythic });
             
             user.inventory.push(newItem);
+
+            if (user.guildId) {
+                if (['epic', 'legendary', 'mythic'].includes(newItem.grade)) {
+                    guildService.updateGuildMissionProgress(user.guildId, 'equipmentSyntheses', 1);
+                }
+            }
             
             updateQuestProgress(user, 'craft_attempt');
             await db.updateUser(user);

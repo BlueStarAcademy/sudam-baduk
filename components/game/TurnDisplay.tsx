@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { LiveGameSession, Player, GameStatus, GameMode, User } from '../../types.js';
-import { PLAYFUL_GAME_MODES, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS } from '../../constants.js';
+import { LiveGameSession, Player, GameStatus, GameMode, User, UserWithStatus, WinReason } from '../../types.js';
+import { PLAYFUL_GAME_MODES, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS } from '../../constants/index.js';
 import { audioService } from '../../services/audioService.js';
 
 interface TurnDisplayProps {
     session: LiveGameSession;
+    currentUser: UserWithStatus;
 }
 
 function usePrevious<T>(value: T): T | undefined {
@@ -15,64 +16,76 @@ function usePrevious<T>(value: T): T | undefined {
   return ref.current;
 }
 
-const getGameStatusText = (session: LiveGameSession): string => {
-    const { gameStatus, currentPlayer, blackPlayerId, whitePlayerId, player1, player2, mode, settings, passCount, moveHistory, alkkagiRound, blackStonesPlaced, blackStoneLimit, gameType, whiteStonesPlaced, whiteStoneLimit } = session;
+const getGameStatusText = (session: LiveGameSession, currentUser: UserWithStatus): string => {
+    const { 
+        gameStatus, currentPlayer, blackPlayerId, whitePlayerId, player1, player2, 
+        mode, settings, passCount, moveHistory, alkkagiRound, blackStonesPlaced, 
+        blackStoneLimit, gameType, whiteStonesPlaced, whiteStoneLimit, winReason, 
+        lastTimeoutPlayerId, autoEndTurnCount, blackTimeLeft, whiteTimeLeft, 
+        blackByoyomiPeriodsLeft, whiteByoyomiPeriodsLeft, round 
+    } = session;
 
+    if (winReason === WinReason.Timeout && lastTimeoutPlayerId) {
+        const loser = player1.id === lastTimeoutPlayerId ? player1 : player2;
+        return `${loser.nickname}님 시간초과. 시간패입니다.`;
+    }
+    
     const getPlayerByEnum = (playerEnum: Player): User | null => {
         const targetId = playerEnum === Player.Black ? blackPlayerId : whitePlayerId;
         if (!targetId) return null;
         return player1.id === targetId ? player1 : player2;
     };
 
-    const player = getPlayerByEnum(currentPlayer);
-
-    if (session.isTowerChallenge && gameStatus === 'playing' && player) {
-        return `${session.floor}층 도전 - ${player.nickname}님 차례`;
-    }
-    
-    if (session.gameType === 'survival' && gameStatus === 'playing' && player) {
-        const stonesLeft = (whiteStoneLimit ?? 0) - (whiteStonesPlaced ?? 0);
-        return `${player.nickname}님 차례`;
-    }
-
+    const isAutoScoring = autoEndTurnCount && moveHistory.length >= autoEndTurnCount;
     const lastMoveInHistory = moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : null;
 
-    if (passCount >= 2 && lastMoveInHistory?.x === -1) {
-        return "양측 모두 통과하여 계가를 시작합니다.";
-    }
-
-    if (gameStatus !== 'ended' && passCount === 1 && lastMoveInHistory?.x === -1) {
-        const opponentOfCurrent = currentPlayer === Player.Black ? Player.White : Player.Black;
-        const passingPlayer = getPlayerByEnum(opponentOfCurrent);
-        if (passingPlayer) {
-            return `${passingPlayer.nickname}님이 통과했습니다.`;
+    if (!isAutoScoring) {
+        if (passCount >= 2 && lastMoveInHistory?.x === -1) {
+            return "양측 모두 통과하여 계가를 시작합니다.";
+        }
+        if (gameStatus !== GameStatus.Ended && passCount === 1 && lastMoveInHistory?.x === -1) {
+            const opponentOfCurrent = currentPlayer === Player.Black ? Player.White : Player.Black;
+            const passingPlayer = getPlayerByEnum(opponentOfCurrent);
+            if (passingPlayer) {
+                return `${passingPlayer.nickname}님이 통과했습니다.`;
+            }
         }
     }
+    
+    const currentPlayerObj = getPlayerByEnum(currentPlayer);
+    const currentPlayerTimeLeft = currentPlayer === Player.Black ? blackTimeLeft : whiteTimeLeft;
+    const currentPlayerByoyomiLeft = currentPlayer === Player.Black ? blackByoyomiPeriodsLeft : whiteByoyomiPeriodsLeft;
 
+    if (currentPlayerTimeLeft <= 0 && (settings.byoyomiCount ?? 0) > 0) {
+        if (currentPlayerByoyomiLeft === 1) {
+            return `${currentPlayerObj?.nickname}님 마지막 초읽기입니다.`;
+        }
+    }
+    
     switch (gameStatus) {
-        case 'playing':
+        case GameStatus.Scoring:
+            return '계가 중입니다...';
+        case GameStatus.SinglePlayerIntro:
+            return '게임 방법을 확인해주세요.';
+        case GameStatus.AiHiddenThinking:
+            return 'AI가 히든돌을 사용합니다...';
+        case GameStatus.Playing: {
+            const player = getPlayerByEnum(currentPlayer);
             return player ? `${player.nickname}님의 차례입니다.` : '대국 진행 중';
-        case 'nigiri_choosing':
-        case 'nigiri_guessing':
-        case 'nigiri_reveal':
-            return '돌 가리기 진행 중...';
-        case 'base_placement':
-            return `베이스돌 배치 중... (${settings.baseStones}개)`;
-        case 'komi_bidding':
-            return '덤 설정 중...';
-        case 'ended':
+        }
+        case GameStatus.Ended:
             return '대국 종료';
-        case 'no_contest':
+        case GameStatus.NoContest:
             return '무효 대국';
-        case 'rematch_pending':
+        case GameStatus.RematchPending:
             return '재대결 대기 중...';
-        case 'hidden_placing':
-        case 'scanning':
-        case 'missile_selecting':
+        case GameStatus.HiddenPlacing:
+        case GameStatus.Scanning:
+        case GameStatus.MissileSelecting:
             return '아이템 사용 중...';
-        case 'hidden_final_reveal':
+        case GameStatus.HiddenFinalReveal:
             return "모든 히든돌을 공개하고 계가를 시작합니다.";
-        case 'alkkagi_placement': {
+        case GameStatus.AlkkagiPlacement: {
             const currentRound = alkkagiRound || 1;
             const totalRounds = settings.alkkagiRounds || 1;
             if (currentRound > 1) {
@@ -80,42 +93,50 @@ const getGameStatusText = (session: LiveGameSession): string => {
             }
             return `돌을 배치하세요. (${currentRound} / ${totalRounds} 라운드)`;
         }
-        case 'alkkagi_playing': {
+        case GameStatus.AlkkagiPlaying: {
             const currentRound = alkkagiRound || 1;
             const totalRounds = settings.alkkagiRounds || 1;
-            return `${player?.nickname}님 차례입니다. (${currentRound} / ${totalRounds} 라운드)`;
+            return `${currentPlayerObj?.nickname}님 차례입니다. (${currentRound} / ${totalRounds} 라운드)`;
         }
-        case 'alkkagi_round_end':
+        case GameStatus.AlkkagiRoundEnd:
             return `라운드 종료! 결과를 확인하세요.`;
-        case 'dice_rolling':
-             return player ? `${player.nickname}님이 주사위를 굴릴 차례입니다.` : '주사위 굴릴 차례';
-        case 'thief_rolling':
-             return player ? `${player.nickname}님이 주사위를 굴릴 차례입니다.` : '주사위 굴릴 차례';
-        case 'curling_tiebreaker_preference_selection':
-        case 'curling_tiebreaker_rps':
-        case 'curling_tiebreaker_rps_reveal':
+        case GameStatus.DiceRolling:
+             return currentPlayerObj ? `${currentPlayerObj.nickname}님이 주사위를 굴릴 차례입니다.` : '주사위 굴릴 차례';
+        case GameStatus.ThiefRolling:
+             return currentPlayerObj ? `${currentPlayerObj.nickname}님이 주사위를 굴릴 차례입니다.` : '주사위 굴릴 차례';
+        case GameStatus.CurlingTiebreakerPreferenceSelection:
+        case GameStatus.CurlingTiebreakerRps:
+        case GameStatus.CurlingTiebreakerRpsReveal:
             return '승부치기 순서 결정 중...';
-        case 'curling_tiebreaker_playing':
-            return `승부치기 진행 중... (${player?.nickname}님 차례)`;
+        case GameStatus.CurlingTiebreakerPlaying:
+            return `승부치기 진행 중... (${currentPlayerObj?.nickname}님 차례)`;
         default:
-            if (mode === GameMode.Dice) return `주사위 바둑 (${session.round} / ${session.settings.diceGoRounds} 라운드)`;
-            if (mode === GameMode.Thief) return `도둑과 경찰 (${session.round} 라운드)`;
-            return player ? `${player.nickname}님의 차례입니다.` : '게임 준비 중...';
+            if (mode === GameMode.Dice) return `주사위 바둑 (${round} / ${settings.diceGoRounds} 라운드)`;
+            if (mode === GameMode.Thief) return `도둑과 경찰 (${round} 라운드)`;
+            return currentPlayerObj ? `${currentPlayerObj.nickname}님의 차례입니다.` : '게임 준비 중...';
     }
 };
 
-const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
+const TurnDisplay: React.FC<TurnDisplayProps> = ({ session, currentUser }) => {
     const [timeLeft, setTimeLeft] = useState(30);
     const [percentage, setPercentage] = useState(100);
     const [foulMessage, setFoulMessage] = useState<string | null>(null);
+    const [byoyomiMessage, setByoyomiMessage] = useState<string | null>(null);
+    
     const prevTimeoutPlayerId = usePrevious(session.lastTimeoutPlayerId);
     const prevFoulInfoMessage = usePrevious(session.foulInfo?.message);
+    const { blackByoyomiPeriodsLeft, whiteByoyomiPeriodsLeft, player1, player2, blackPlayerId, whitePlayerId, settings } = session;
+    const prevBlackByoyomi = usePrevious(blackByoyomiPeriodsLeft);
+    const prevWhiteByoyomi = usePrevious(whiteByoyomiPeriodsLeft);
+    const prevBlackTimeLeft = usePrevious(session.blackTimeLeft);
+    const prevWhiteTimeLeft = usePrevious(session.whiteTimeLeft);
+
 
     const isPlayfulTurn = useMemo(() => {
         return PLAYFUL_GAME_MODES.some(m => m.mode === session.mode) && 
                session.turnDeadline && 
                session.turnStartTime &&
-               ['dice_rolling', 'dice_placing', 'thief_rolling', 'thief_placing'].includes(session.gameStatus);
+               [GameStatus.DiceRolling, GameStatus.DicePlacing, GameStatus.ThiefRolling, GameStatus.ThiefPlacing].includes(session.gameStatus);
     }, [session.mode, session.turnDeadline, session.turnStartTime, session.gameStatus]);
 
     useEffect(() => {
@@ -161,10 +182,9 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
     }, [session.lastTimeoutPlayerId, prevTimeoutPlayerId, session.mode, session.player1, session.player2]);
     
     useEffect(() => {
-        // Reset foul message when moving to a new turn/phase to prevent it from persisting.
         const resetStatuses: GameStatus[] = [
-            'playing', 'ended', 'no_contest', // Strategic/General
-            'alkkagi_playing', 'curling_playing', 'dice_rolling', 'dice_placing', 'thief_rolling', 'thief_placing' // Playful
+            GameStatus.Playing, GameStatus.Ended, GameStatus.NoContest, // Strategic/General
+            GameStatus.AlkkagiPlaying, GameStatus.CurlingPlaying, GameStatus.DiceRolling, GameStatus.DicePlacing, GameStatus.ThiefRolling, GameStatus.ThiefPlacing // Playful
         ];
     
         if (resetStatuses.includes(session.gameStatus)) {
@@ -172,7 +192,7 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
         }
     }, [session.gameStatus]);
 
-    const isItemMode = ['hidden_placing', 'scanning', 'missile_selecting'].includes(session.gameStatus);
+    const isItemMode = [GameStatus.HiddenPlacing, GameStatus.Scanning, GameStatus.MissileSelecting].includes(session.gameStatus);
 
     useEffect(() => {
         if (!isItemMode || !session.itemUseDeadline) {
@@ -190,9 +210,59 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
         return () => clearInterval(timerId);
     }, [isItemMode, session.itemUseDeadline]);
     
+    useEffect(() => {
+        let msg = '';
+        const { byoyomiCount, byoyomiTime } = settings;
+        let playByoyomiSound = false;
+    
+        const blackEnteredByoyomi = prevBlackTimeLeft !== undefined && prevBlackTimeLeft > 0 && session.blackTimeLeft <= 0;
+        const whiteEnteredByoyomi = prevWhiteTimeLeft !== undefined && prevWhiteTimeLeft > 0 && session.whiteTimeLeft <= 0;
+    
+        if (blackEnteredByoyomi && byoyomiCount > 0) {
+            const blackPlayerName = blackPlayerId === player1.id ? player1.nickname : player2.nickname;
+            msg = `${blackPlayerName}님 초읽기를 시작합니다. ${byoyomiTime}초 초읽기 ${byoyomiCount}회 입니다.`;
+            playByoyomiSound = true;
+        } else if (whiteEnteredByoyomi && byoyomiCount > 0) {
+            const whitePlayerName = whitePlayerId === player1.id ? player1.nickname : player2.nickname;
+            msg = `${whitePlayerName}님 초읽기를 시작합니다. ${byoyomiTime}초 초읽기 ${byoyomiCount}회 입니다.`;
+            playByoyomiSound = true;
+        } else if (prevBlackByoyomi !== undefined && blackByoyomiPeriodsLeft < prevBlackByoyomi) {
+            const blackPlayerName = blackPlayerId === player1.id ? player1.nickname : player2.nickname;
+            playByoyomiSound = true;
+            if (blackByoyomiPeriodsLeft === 1) {
+                msg = `${blackPlayerName}님 마지막 초읽기입니다.`;
+            } else if (blackByoyomiPeriodsLeft > 1) {
+                msg = `${blackPlayerName}님, 초읽기 ${blackByoyomiPeriodsLeft}회 남았습니다.`;
+            }
+        } else if (prevWhiteByoyomi !== undefined && whiteByoyomiPeriodsLeft < prevWhiteByoyomi) {
+            const whitePlayerName = whitePlayerId === player1.id ? player1.nickname : player2.nickname;
+            playByoyomiSound = true;
+            if (whiteByoyomiPeriodsLeft === 1) {
+                msg = `${whitePlayerName}님 마지막 초읽기입니다.`;
+            } else if (whiteByoyomiPeriodsLeft > 1) {
+                msg = `${whitePlayerName}님, 초읽기 ${whiteByoyomiPeriodsLeft}회 남았습니다.`;
+            }
+        }
+    
+        if (msg) {
+            setByoyomiMessage(msg);
+            const timer = setTimeout(() => setByoyomiMessage(null), 5000);
+            if (playByoyomiSound) {
+                audioService.timeoutFoul();
+            }
+            return () => clearTimeout(timer);
+        }
+    }, [
+        session.blackTimeLeft, session.whiteTimeLeft, 
+        session.blackByoyomiPeriodsLeft, session.whiteByoyomiPeriodsLeft, 
+        prevBlackTimeLeft, prevWhiteTimeLeft, 
+        prevBlackByoyomi, prevWhiteByoyomi,
+        player1, player2, blackPlayerId, whitePlayerId, settings
+    ]);
+
     const isSinglePlayer = session.isSinglePlayer;
     const isTowerChallenge = session.isTowerChallenge;
-    const baseClasses = "flex-shrink-0 rounded-lg flex flex-col items-center justify-center shadow-inner py-3 h-auto border";
+    const baseClasses = "flex-shrink-0 rounded-lg flex flex-col items-center justify-center shadow-inner py-2 h-auto border";
     
     const themeClasses = isTowerChallenge 
         ? "bg-black/50 border-red-800/50"
@@ -200,18 +270,26 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
             ? "bg-stone-800/70 backdrop-blur-sm border-stone-700/50" 
             : "bg-secondary border-color";
     const textClass = isTowerChallenge ? "text-red-300" : isSinglePlayer ? "text-amber-300" : "text-highlight";
-    const statusTextSize = "text-[clamp(1.1rem,3.5vmin,1.5rem)]";
-    const foulTextSize = "text-[clamp(1.1rem,4vmin,1.75rem)]";
+    const statusTextSize = "text-[clamp(0.9rem,3vmin,1.2rem)]";
+    const foulTextSize = "text-[clamp(1rem,3.5vmin,1.5rem)]";
 
     if (foulMessage) {
         return (
-            <div className={`flex-shrink-0 bg-danger rounded-lg flex items-center justify-center shadow-inner animate-pulse py-3 h-auto border-2 border-red-500`}>
+            <div className={`flex-shrink-0 bg-danger rounded-lg flex items-center justify-center shadow-inner animate-pulse py-2 h-auto border-2 border-red-500`}>
                 <p className={`font-bold text-white tracking-wider ${foulTextSize}`}>{foulMessage}</p>
             </div>
         );
     }
     
-    if (session.mode === GameMode.Dice && session.gameStatus === 'dice_placing' && session.dice) {
+    if (byoyomiMessage) {
+        return (
+            <div className={`flex-shrink-0 bg-yellow-600 rounded-lg flex items-center justify-center shadow-inner py-2 h-auto border-2 border-yellow-400`}>
+                <p className={`font-bold text-white tracking-wider animate-pulse ${statusTextSize}`}>{byoyomiMessage}</p>
+            </div>
+        );
+    }
+
+    if (session.mode === GameMode.Dice && session.gameStatus === GameStatus.DicePlacing && session.dice) {
         return (
             <div className={`${baseClasses} ${themeClasses} px-4 gap-1`}>
                 <div className="flex items-center gap-2">
@@ -224,7 +302,7 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
         )
     }
 
-    if (session.mode === GameMode.Thief && session.gameStatus === 'thief_placing' && session.dice) {
+    if (session.mode === GameMode.Thief && session.gameStatus === GameStatus.ThiefPlacing && session.dice) {
         const { dice1, dice2 } = session.dice;
         const diceDisplay = dice2 > 0 ? `${dice1}, ${dice2}` : `${dice1}`;
         return (
@@ -238,9 +316,9 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
 
     if (isItemMode) {
         let itemText = "아이템 사용시간";
-        if (session.gameStatus === 'hidden_placing') itemText = "히든 사용시간";
-        if (session.gameStatus === 'scanning') itemText = "스캔 사용시간";
-        if (session.gameStatus === 'missile_selecting') itemText = "미사일 조준";
+        if (session.gameStatus === GameStatus.HiddenPlacing) itemText = "히든 사용시간";
+        if (session.gameStatus === GameStatus.Scanning) itemText = "스캔 사용시간";
+        if (session.gameStatus === GameStatus.MissileSelecting) itemText = "미사일 조준";
 
         const percentage = (timeLeft / 30) * 100;
 
@@ -250,12 +328,12 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session }) => {
                 <div className={`w-full bg-tertiary rounded-full h-[clamp(0.5rem,1.5vh,0.75rem)] relative overflow-hidden border-2 ${isSinglePlayer ? 'border-black/20' : 'border-tertiary'}`}>
                     <div className="absolute inset-0 bg-highlight rounded-full" style={{ width: `${percentage}%`, transition: 'width 0.5s linear' }}></div>
                 </div>
-                <span className={`font-mono font-bold text-primary w-[clamp(3rem,10vmin,4rem)] text-center text-[clamp(1.2rem,4vmin,1.6rem)]`}>{timeLeft}초</span>
+                <span className={`font-mono font-bold text-primary w-[clamp(3rem,10vmin,4rem)] text-center text-[clamp(1rem,3.5vmin,1.4rem)]`}>{timeLeft}초</span>
             </div>
         );
     }
     
-    const statusText = getGameStatusText(session);
+    const statusText = getGameStatusText(session, currentUser);
 
     return (
         <div className={`${baseClasses} ${themeClasses}`}>

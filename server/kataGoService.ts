@@ -5,6 +5,14 @@ import path from 'path';
 import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove } from '../types.js';
 import * as types from '../types.js';
 
+// --- Configuration ---
+// These paths should be configured for your environment.
+// Based on user's log, assuming this structure.
+const KATAGO_PATH = 'c:/katago/katago.exe';
+const MODEL_PATH = 'c:/katago/kata1-b28c512nbt-s9853922560-d5031756885.bin.gz';
+const CONFIG_PATH = path.resolve('server/temp_katago_config.cfg');
+const KATAGO_HOME_PATH = path.resolve('server/katago_home');
+
 const LETTERS = "ABCDEFGHJKLMNOPQRST";
 
 const pointToKataGoMove = (p: Point, boardSize: number): string => {
@@ -46,16 +54,22 @@ const kataGoResponseToAnalysisResult = (session: LiveGameSession, response: any,
     if (ownership && Array.isArray(ownership) && ownership.length > 0) {
         const ownershipBoardSize = Math.sqrt(ownership.length);
 
+        // Check if the returned ownership map is a perfect square and large enough.
+        // This handles cases where KataGo might incorrectly return a 19x19 map for a smaller board.
         if (Number.isInteger(ownershipBoardSize) && ownershipBoardSize >= boardSize) {
-            const TERRITORY_THRESHOLD = 0.90; // Increased from 0.75
-            const DEAD_STONE_THRESHOLD = 0.90; // Increased from 0.75
+            const TERRITORY_THRESHOLD = 0.75;
+            const DEAD_STONE_THRESHOLD = 0.75;
             for (let y = 0; y < boardSize; y++) {
                 for (let x = 0; x < boardSize; x++) {
+                    // Index into the (potentially larger) ownership grid from KataGo
                     const index = y * ownershipBoardSize + x;
                     
                     let ownerProbRaw = ownership[index];
                     let ownerProb = (typeof ownerProbRaw === 'number' && isFinite(ownerProbRaw)) ? ownerProbRaw : 0;
                     
+                    // KataGo's ownership is from the current player's perspective.
+                    // Positive for current player, negative for opponent.
+                    // We want to standardize to Black's perspective (positive for black, negative for white).
                     if (isWhitesTurn) {
                         ownerProb *= -1;
                     }
@@ -64,6 +78,7 @@ const kataGoResponseToAnalysisResult = (session: LiveGameSession, response: any,
                     
                     const stoneOnBoard = session.boardState[y][x];
 
+                    // Score empty points based on ownership probability
                     if (stoneOnBoard === Player.None) {
                         if (ownerProb > TERRITORY_THRESHOLD) {
                             blackTerritory += 1;
@@ -72,6 +87,7 @@ const kataGoResponseToAnalysisResult = (session: LiveGameSession, response: any,
                         }
                     }
                     
+                    // Identify dead stones for capture count and visualization, based on high ownership certainty
                     if (stoneOnBoard !== Player.None) {
                          if ((stoneOnBoard === Player.Black && ownerProb < -DEAD_STONE_THRESHOLD) || (stoneOnBoard === Player.White && ownerProb > DEAD_STONE_THRESHOLD)) {
                             deadStones.push({ x, y });
@@ -90,10 +106,11 @@ const kataGoResponseToAnalysisResult = (session: LiveGameSession, response: any,
 
     const komi = session.finalKomi ?? session.settings.komi;
 
+    // Korean/Territory scoring: Territory (empty points) + Captured stones (live + dead).
     const scoreDetails = {
         black: { 
             territory: Math.round(blackTerritory), 
-            captures: blackLiveCaptures,
+            captures: blackLiveCaptures, // "captures" now means live captures
             liveCaptures: blackLiveCaptures, 
             deadStones: whiteDeadCount, 
             baseStoneBonus: 0, hiddenStoneBonus: 0, timeBonus: 0, itemBonus: 0, 
@@ -101,7 +118,7 @@ const kataGoResponseToAnalysisResult = (session: LiveGameSession, response: any,
         },
         white: { 
             territory: Math.round(whiteTerritory), 
-            captures: whiteLiveCaptures,
+            captures: whiteLiveCaptures, // "captures" now means live captures
             liveCaptures: whiteLiveCaptures, 
             deadStones: blackDeadCount, 
             komi, baseStoneBonus: 0, hiddenStoneBonus: 0, timeBonus: 0, itemBonus: 0, 
@@ -169,14 +186,9 @@ class KataGoManager {
         this.isStarting = true;
         this.readyPromise = new Promise<void>((resolve, reject) => {
             console.log('[KataGo] Lazily attempting to start engine...');
-            
-            const absoluteKataGoPath = path.resolve('katago-v1.16.3-opencl-windows-x64/katago.exe');
-            const absoluteModelPath = path.resolve('katago-v1.16.3-opencl-windows-x64/kata1-b28c512nbt-s9853922560-d5031756885.bin.gz');
-            const absoluteConfigPath = path.resolve('server/temp_katago_config.cfg');
-            const absoluteKataGoHomePath = path.resolve('server/katago_home');
-            
-            if (!fs.existsSync(absoluteKataGoPath)) {
-                const errorMsg = `[KataGo] Engine not found at ${absoluteKataGoPath}. Analysis will be unavailable.`;
+
+            if (!fs.existsSync(KATAGO_PATH)) {
+                const errorMsg = `[KataGo] Engine not found at ${KATAGO_PATH}. Analysis will be unavailable.`;
                 console.error(errorMsg);
                 this.isStarting = false;
                 this.readyPromise = null;
@@ -184,11 +196,11 @@ class KataGoManager {
             }
             
             try {
-                if (!fs.existsSync(absoluteKataGoHomePath)) {
-                    fs.mkdirSync(absoluteKataGoHomePath, { recursive: true });
+                if (!fs.existsSync(KATAGO_HOME_PATH)) {
+                    fs.mkdirSync(KATAGO_HOME_PATH, { recursive: true });
                 }
             } catch (e: any) {
-                const errorMsg = `[KataGo] Failed to create home directory at ${absoluteKataGoHomePath}: ${e.message}`;
+                const errorMsg = `[KataGo] Failed to create home directory at ${KATAGO_HOME_PATH}: ${e.message}`;
                 console.error(errorMsg);
                 this.isStarting = false;
                 this.readyPromise = null;
@@ -197,18 +209,16 @@ class KataGoManager {
 
             const configContent = `
 logFile = ./katago_analysis_log.txt
-homeDataDir = .
-rules = korean
-backendToUse = opencl
-openclGpuToUse = 0
-numAnalysisThreads = 4
+homeDataDir = ${KATAGO_HOME_PATH.replace(/\\/g, '/')}
 nnMaxBatchSize = 16
-numSearchThreads = 2
-analysisPVLen = 1
+analysisPVLen = 10
+numAnalysisThreads = 4
+numSearchThreads = 8
+maxVisits = 1000
             `.trim();
 
             try {
-                fs.writeFileSync(absoluteConfigPath, configContent);
+                fs.writeFileSync(CONFIG_PATH, configContent);
             } catch (e: any) {
                 const errorMsg = `[KataGo] Failed to write temporary config file: ${e.message}`;
                 console.error(errorMsg);
@@ -218,12 +228,12 @@ analysisPVLen = 1
             }
 
             try {
-                this.process = spawn(absoluteKataGoPath, [
+                this.process = spawn(KATAGO_PATH, [
                     'analysis', 
-                    '-config', absoluteConfigPath,
-                    '-model', absoluteModelPath
+                    '-model', MODEL_PATH, 
+                    '-config', CONFIG_PATH,
                 ], {
-                    cwd: absoluteKataGoHomePath
+                    cwd: KATAGO_HOME_PATH
                 });
             } catch (e: any) {
                 const errorMsg = `[KataGo] Failed to spawn process: ${e.message}`;
@@ -247,6 +257,7 @@ analysisPVLen = 1
                 console.error(errorMsg);
                 this.cleanup();
                 this.readyPromise = null; // Allow restart
+                reject(new Error(errorMsg));
             });
             
             this.process.on('error', (err) => {
@@ -294,18 +305,13 @@ analysisPVLen = 1
     }
 
     public async query(analysisQuery: any): Promise<any> {
-        if (!this.process && !this.isStarting) {
+        if (!this.process) {
             try {
                 await this.start();
             } catch (e: any) {
+                // If start() fails (e.g., file not found), reject the query.
                 return Promise.reject(e);
             }
-        } else if (this.isStarting && this.readyPromise) {
-            await this.readyPromise;
-        }
-
-        if (!this.process) {
-            return Promise.reject(new Error("KataGo process is not running and failed to start."));
         }
 
         return new Promise((resolve, reject) => {
@@ -338,21 +344,30 @@ const getKataGoManager = (): KataGoManager => {
 };
 
 export const analyzeGame = async (session: LiveGameSession, options?: { maxVisits?: number }): Promise<AnalysisResult> => {
-    const useBoardStateForAnalysis = 
-        session.isSinglePlayer ||
-        session.mode === types.GameMode.Missile ||
-        session.mode === types.GameMode.Hidden ||
-        session.mode === types.GameMode.Base ||
-        (session.mode === types.GameMode.Mix && (
-            session.settings.mixedModes?.includes(types.GameMode.Missile) || 
-            session.settings.mixedModes?.includes(types.GameMode.Hidden) ||
-            session.settings.mixedModes?.includes(types.GameMode.Base)
-        ));
+    // GnuGo AI를 사용하는 게임(싱글플레이, 도전의 탑 등)에서는 KataGo 분석을 건너뛰어 충돌을 방지합니다.
+    if (session.isAiGame || session.isSinglePlayer || session.isTowerChallenge) {
+        console.log(`[KataGo] Skipping analysis for GnuGo game ${session.id}.`);
+        return {
+            winRateBlack: 50, winRateChange: 0, scoreLead: 0, deadStones: [], ownershipMap: null, recommendedMoves: [],
+            areaScore: { black: 0, white: 0 },
+            scoreDetails: {
+                black: { territory: 0, captures: 0, liveCaptures: 0, deadStones: 0, baseStoneBonus: 0, hiddenStoneBonus: 0, timeBonus: 0, itemBonus: 0, total: 0 },
+                white: { territory: 0, captures: 0, liveCaptures: 0, deadStones: 0, komi: 0, baseStoneBonus: 0, hiddenStoneBonus: 0, timeBonus: 0, itemBonus: 0, total: 0 },
+            },
+            blackConfirmed: [], whiteConfirmed: [], blackRight: [], whiteRight: [], blackLikely: [], whiteLikely: [],
+        };
+    }
+
+    // Only modes that alter past moves (like missile go) or have a pre-set board (single player) need to send the full board state.
+    const useBoardStateForAnalysis = session.mode === types.GameMode.Missile ||
+                                   (session.mode === types.GameMode.Mix && session.settings.mixedModes?.includes(types.GameMode.Missile)) ||
+                                   session.isSinglePlayer;
 
     let query: any;
     let isCurrentPlayerWhite: boolean;
 
     if (useBoardStateForAnalysis) {
+        // For these modes, send the current board state directly.
         const initialStones: [string, string][] = [];
         for (let y = 0; y < session.settings.boardSize; y++) {
             for (let x = 0; x < session.settings.boardSize; x++) {
@@ -371,7 +386,7 @@ export const analyzeGame = async (session: LiveGameSession, options?: { maxVisit
             id: `query-${randomUUID()}`,
             initialStones: initialStones,
             initialPlayer: isCurrentPlayerWhite ? 'W' : 'B',
-            moves: [],
+            moves: [], // No moves, since we provided the final state.
             rules: "korean",
             komi: session.finalKomi ?? session.settings.komi,
             boardXSize: session.settings.boardSize,
@@ -381,6 +396,7 @@ export const analyzeGame = async (session: LiveGameSession, options?: { maxVisit
             includeOwnership: true,
         };
     } else {
+        // For standard games, send the move history.
         const moves: [string, string][] = session.moveHistory.map(move => [
             move.player === Player.Black ? 'B' : 'W',
             pointToKataGoMove({ x: move.x, y: move.y }, session.settings.boardSize)
@@ -406,6 +422,7 @@ export const analyzeGame = async (session: LiveGameSession, options?: { maxVisit
         return kataGoResponseToAnalysisResult(session, response, isCurrentPlayerWhite);
     } catch (error) {
         console.error('[KataGo] Analysis query failed:', error);
+        // Fallback to a default "error" state analysis result
         return {
             winRateBlack: 50,
             winRateChange: 0,

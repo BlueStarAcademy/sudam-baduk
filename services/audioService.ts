@@ -1,14 +1,17 @@
 /// <reference lib="dom" />
 
-import { ItemGrade } from '../types.js';
-import type { SoundSettings } from '../types.js';
-import { defaultSettings } from '../hooks/useAppSettings.js';
+// FIX: Corrected import path for types.
+import { ItemGrade } from '../types/index.js';
+// FIX: Corrected import path for types.
+import type { SoundSettings } from '../types/index.js';
+import { defaultSettings } from '../constants/index.js';
 
 class AudioService {
     private audioContext: AudioContext | null = null;
     private isInitializing = false;
     private scanBgmSourceNode: AudioBufferSourceNode | null = null;
     private timerWarningSourceNode: AudioBufferSourceNode | null = null;
+    private stonePlacementSourceNode: AudioBufferSourceNode | null = null;
     private audioBuffers = new Map<string, AudioBuffer>();
     private soundsPath = '/sound/';
     private settings: SoundSettings = defaultSettings.sound;
@@ -59,8 +62,17 @@ class AudioService {
         }
     }
 
-    private playSound(buffer: AudioBuffer, volume = 1, loop = false): AudioBufferSourceNode | null {
+    private playSound(buffer: AudioBuffer, volume = 1, loop = false, soundName?: string): AudioBufferSourceNode | null {
         if (!this.isReady() || !this.audioContext) return null;
+
+        if (soundName === 'move' && this.stonePlacementSourceNode) {
+            try {
+                this.stonePlacementSourceNode.stop();
+            } catch (e) {
+                // Could already be stopped, that's fine
+            }
+        }
+
         const source = this.audioContext.createBufferSource();
         source.buffer = buffer;
         source.loop = loop;
@@ -69,6 +81,11 @@ class AudioService {
         source.connect(gainNode);
         gainNode.connect(this.audioContext.destination);
         source.start(0);
+        
+        if (soundName === 'move') {
+            this.stonePlacementSourceNode = source;
+        }
+
         return source;
     }
     
@@ -76,7 +93,7 @@ class AudioService {
         if (this.settings.masterMuted || this.settings.categoryMuted[category]) return null;
         try {
             const buffer = await this.loadSound(`${this.soundsPath}${soundName}.mp3`);
-            if (buffer) return this.playSound(buffer, volume * this.settings.masterVolume, loop);
+            if (buffer) return this.playSound(buffer, volume * this.settings.masterVolume, loop, soundName);
         } catch (e) {
             console.error(`Could not play sound ${soundName}`, e);
         }
@@ -84,7 +101,7 @@ class AudioService {
     }
 
     // Public methods based on user request
-    public placeStone() { this.play('move', 'stone', 0.7); }
+    public placeStone() { this.play('move', 'stone', 1.0); }
     public rollDice(count: number) { this.play('dice', 'item', 0.6); if (count > 1) { setTimeout(() => this.play('dice', 'item', 0.6), 500); } }
     public enhancementFail() { this.play('failure', 'notification', 0.7); }
     public revealHiddenStone() { this.play('hidden', 'item', 0.8); }

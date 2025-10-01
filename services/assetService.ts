@@ -1,16 +1,23 @@
+// Corrected import paths for constants from their specific files.
 import {
-    emptySlotImages, TOURNAMENT_DEFINITIONS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, LEAGUE_DATA, AVATAR_POOL, BORDER_POOL, RANKING_TIERS, EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS
-} from '../constants.js';
+    emptySlotImages, EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS
+} from '../constants/items.js';
+import { TOURNAMENT_DEFINITIONS } from '../constants/tournaments.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/gameModes.js';
+import { LEAGUE_DATA, RANKING_TIERS } from '../constants/ranking.js';
+import { AVATAR_POOL, BORDER_POOL } from '../constants/ui.js';
 import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG, STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG } from '../assets.js';
-import { ItemGrade } from '../types.js';
+// Import ItemGrade to resolve type error.
+// FIX: Corrected import path for types.
+import { ItemGrade } from '../types/index.js';
 
 const gradeBackgrounds: Record<ItemGrade, string> = {
-    normal: '/images/equipments/normalbgi.png',
-    uncommon: '/images/equipments/uncommonbgi.png',
-    rare: '/images/equipments/rarebgi.png',
-    epic: '/images/equipments/epicbgi.png',
-    legendary: '/images/equipments/legendarybgi.png',
-    mythic: '/images/equipments/mythicbgi.png',
+    [ItemGrade.Normal]: '/images/equipments/normalbgi.png',
+    [ItemGrade.Uncommon]: '/images/equipments/uncommonbgi.png',
+    [ItemGrade.Rare]: '/images/equipments/rarebgi.png',
+    [ItemGrade.Epic]: '/images/equipments/epicbgi.png',
+    [ItemGrade.Legendary]: '/images/equipments/legendarybgi.png',
+    [ItemGrade.Mythic]: '/images/equipments/mythicbgi.png',
 };
 
 const starImages = [
@@ -42,15 +49,16 @@ const addUrls = (urls: (string | undefined | null)[]) => {
 };
 
 addUrls(Object.values(emptySlotImages));
-addUrls(TOURNAMENT_DEFINITIONS.neighborhood.image ? [TOURNAMENT_DEFINITIONS.neighborhood.image, TOURNAMENT_DEFINITIONS.national.image, TOURNAMENT_DEFINITIONS.world.image] : []);
+addUrls(Object.values(TOURNAMENT_DEFINITIONS).map(d => d.image));
 addUrls(SPECIAL_GAME_MODES.map(m => m.image));
+// Remove redundant inline type annotation; type is now inferred correctly from the typed constant.
 addUrls(PLAYFUL_GAME_MODES.map(m => m.image));
 addUrls(LEAGUE_DATA.map(l => l.icon));
 addUrls(AVATAR_POOL.map(a => a.url));
 addUrls(BORDER_POOL.map(b => b.url));
 addUrls(RANKING_TIERS.map(t => t.icon));
 addUrls(EQUIPMENT_POOL.map(e => e.image));
-addUrls(CONSUMABLE_ITEMS.map(c => c.image));
+addUrls(Object.values(CONSUMABLE_ITEMS).map(c => c.image));
 addUrls(Object.values(MATERIAL_ITEMS).map(m => m.image));
 addUrls([WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG, STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG]);
 addUrls(Object.values(gradeBackgrounds));

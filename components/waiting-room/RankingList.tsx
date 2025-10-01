@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useCallback } from 'react';
 import { User, UserWithStatus, GameMode } from '../../types.js';
 import Avatar from '../Avatar.js';
@@ -12,16 +13,6 @@ interface RankingListProps {
     onShowTierInfo: () => void;
     onShowPastRankings: (info: { user: UserWithStatus; mode: GameMode }) => void;
 }
-
-const getTier = (rank: number, totalPlayers: number) => {
-    if (totalPlayers === 0) return RANKING_TIERS[RANKING_TIERS.length - 1];
-    for (const tier of RANKING_TIERS) {
-        if (tier.threshold(rank, totalPlayers)) {
-            return tier;
-        }
-    }
-    return RANKING_TIERS[RANKING_TIERS.length - 1];
-};
 
 const getCurrentSeasonName = () => {
     const now = new Date();
@@ -71,7 +62,12 @@ const RankingList: React.FC<RankingListProps> = ({ currentUser, mode, onViewUser
             return sproutTier;
         }
 
-        return getTier(rankAmongEligible, totalEligiblePlayers);
+        for (const tier of RANKING_TIERS) {
+            if (tier.threshold(stats.rankingScore, rankAmongEligible, totalEligiblePlayers)) {
+                return tier;
+            }
+        }
+        return sproutTier;
     }, [mode, eligibleRankedUsers, totalEligiblePlayers, sproutTier]);
 
 
@@ -84,7 +80,7 @@ const RankingList: React.FC<RankingListProps> = ({ currentUser, mode, onViewUser
         const tier = getTierForUser(user);
         
         const isCurrentUserInList = !isMyRankDisplay && user.id === currentUser.id;
-        const baseClass = 'flex items-center gap-2 rounded-lg';
+        const baseClass = 'flex items-center rounded-lg';
         const myRankClass = 'bg-yellow-900/40 border border-yellow-700';
         const highlightClass = 'bg-blue-900/60 border border-blue-600';
         const defaultClass = 'bg-tertiary/50';

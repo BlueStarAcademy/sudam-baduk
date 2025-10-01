@@ -1,5 +1,5 @@
 import React from 'react';
-import { LiveGameSession, Player } from '../../types.js';
+import { LiveGameSession } from '../../types/index.js';
 
 interface TurnCounterPanelProps {
     session: LiveGameSession;

@@ -1,25 +1,43 @@
-
-
-// FIX: Corrected import path from non-existent barrel file.
-import * as types from '../../types.js';
+import { LiveGameSession, Player, ServerAction, User, HandleActionResult, GameStatus, WinReason } from '../../types/index.js';
 import { transitionToPlaying } from './shared.js';
 import { endGame } from '../summaryService.js';
 
-export const initializeCapture = (game: types.LiveGameSession, now: number) => {
-    const p1Id = game.player1.id;
-    const p2Id = game.player2.id;
-    game.gameStatus = 'capture_bidding';
-    game.bids = { [p1Id]: null, [p2Id]: null };
-    game.biddingRound = 1;
-    game.captureBidDeadline = now + 30000;
+export const initializeCapture = (game: LiveGameSession, now: number) => {
+    if (game.isAiGame) {
+        // Set player colors for AI games, which was missing and causing games to get stuck.
+        const humanPlayerColor = game.settings.player1Color || Player.Black;
+        if (humanPlayerColor === Player.Black) {
+            game.blackPlayerId = game.player1.id;
+            game.whitePlayerId = game.player2.id;
+        } else {
+            game.whitePlayerId = game.player1.id;
+            game.blackPlayerId = game.player2.id;
+        }
+
+        // Skips bidding for AI games. Both players get the same target.
+        const target = game.settings.captureTarget || 20;
+        game.effectiveCaptureTargets = {
+            [Player.None]: 0,
+            [Player.Black]: target,
+            [Player.White]: target,
+        };
+    } else {
+        // For PvP, start the bidding process.
+        const p1Id = game.player1.id;
+        const p2Id = game.player2.id;
+        game.gameStatus = GameStatus.CaptureBidding;
+        game.bids = { [p1Id]: null, [p2Id]: null };
+        game.biddingRound = 1;
+        game.captureBidDeadline = now + 30000;
+    }
 };
 
-export const updateCaptureState = (game: types.LiveGameSession, now: number) => {
+export const updateCaptureState = (game: LiveGameSession, now: number) => {
     const p1Id = game.player1.id;
     const p2Id = game.player2.id;
     
     switch (game.gameStatus) {
-        case 'capture_bidding': {
+        case GameStatus.CaptureBidding: {
             const bothHaveBid = game.bids?.[p1Id] != null && game.bids?.[p2Id] != null;
             const deadlinePassedBid = game.captureBidDeadline && now > game.captureBidDeadline;
 
@@ -42,16 +60,16 @@ export const updateCaptureState = (game: types.LiveGameSession, now: number) => 
                     game.whitePlayerId = loserId;
                     
                     game.effectiveCaptureTargets = {
-                        [types.Player.None]: 0,
-                        [types.Player.Black]: baseTarget + winnerBid,
-                        [types.Player.White]: baseTarget,
+                        [Player.None]: 0,
+                        [Player.Black]: baseTarget + winnerBid,
+                        [Player.White]: baseTarget,
                     };
                     
-                    game.gameStatus = 'capture_reveal';
+                    game.gameStatus = GameStatus.CaptureReveal;
                     game.revealEndTime = now + 10000;
                 } else { // Tie
                     if (game.biddingRound === 1) {
-                        game.gameStatus = 'capture_reveal';
+                        game.gameStatus = GameStatus.CaptureReveal;
                         game.revealEndTime = now + 3000;
                     } else {
                         const winnerId = Math.random() < 0.5 ? p1Id : p2Id;
@@ -61,20 +79,20 @@ export const updateCaptureState = (game: types.LiveGameSession, now: number) => 
                         game.whitePlayerId = loserId;
 
                         game.effectiveCaptureTargets = {
-                            [types.Player.None]: 0,
-                            [types.Player.Black]: baseTarget + p1Bid,
-                            [types.Player.White]: baseTarget,
+                            [Player.None]: 0,
+                            [Player.Black]: baseTarget + p1Bid,
+                            [Player.White]: baseTarget,
                         };
 
-                        game.gameStatus = 'capture_tiebreaker';
+                        game.gameStatus = GameStatus.CaptureTiebreaker;
                         game.revealEndTime = now + 3000;
                     }
                 }
             }
             break;
         }
-        case 'capture_reveal':
-        case 'capture_tiebreaker': {
+        case GameStatus.CaptureReveal:
+        case GameStatus.CaptureTiebreaker: {
             const bothConfirmedCapture = game.preGameConfirmations?.[p1Id] && game.preGameConfirmations?.[p2Id];
             if (game.revealEndTime && (now > game.revealEndTime || bothConfirmedCapture)) {
                 
@@ -84,7 +102,7 @@ export const updateCaptureState = (game: types.LiveGameSession, now: number) => 
                     game.biddingRound = 2;
                     game.bids = { [p1Id]: null, [p2Id]: null };
                     game.captureBidDeadline = now + 30000;
-                    game.gameStatus = 'capture_bidding';
+                    game.gameStatus = GameStatus.CaptureBidding;
                     game.preGameConfirmations = {};
                     game.revealEndTime = undefined;
                     return;
@@ -96,56 +114,20 @@ export const updateCaptureState = (game: types.LiveGameSession, now: number) => 
             }
             break;
         }
-        case 'playing': {
-            if (game.turnDeadline && now > game.turnDeadline) {
-                const timedOutPlayer = game.currentPlayer;
-                const timeKey = timedOutPlayer === types.Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-                const byoyomiKey = timedOutPlayer === types.Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
-
-                if (game[timeKey] > 0) { // Main time expired
-                    game[timeKey] = 0;
-                    if (game.settings.byoyomiCount > 0 && game[byoyomiKey] > 0) {
-                        if (!game.isSinglePlayer && !game.isTowerChallenge) {
-                            game[byoyomiKey]--;
-                        }
-                        game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-                        game.turnStartTime = now;
-                        return;
-                    }
-                } else { // Byoyomi expired
-                    if (game[byoyomiKey] > 0) {
-                        if (!game.isSinglePlayer && !game.isTowerChallenge) {
-                            game[byoyomiKey]--;
-                        }
-                        game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-                        game.turnStartTime = now;
-                        return;
-                    }
-                }
-                
-                // No time or byoyomi left
-                const winner = timedOutPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-                game.lastTimeoutPlayerId = game.currentPlayer === types.Player.Black ? game.blackPlayerId : game.whitePlayerId;
-                game.lastTimeoutPlayerIdClearTime = now + 5000;
-                
-                endGame(game, winner, 'timeout');
-            }
-            break;
-        }
     }
 };
 
-export const handleCaptureAction = (game: types.LiveGameSession, action: types.ServerAction & { userId: string }, user: types.User): types.HandleActionResult | null => {
+export const handleCaptureAction = (game: LiveGameSession, action: ServerAction & { userId: string }, user: User): HandleActionResult | null => {
     const { type, payload } = action;
 
     switch (type) {
         case 'UPDATE_CAPTURE_BID':
-            if (game.gameStatus !== 'capture_bidding' || game.bids?.[user.id]) return { error: "Cannot bid now." };
+            if (game.gameStatus !== GameStatus.CaptureBidding || game.bids?.[user.id]) return { error: "Cannot bid now." };
             if (!game.bids) game.bids = {};
             game.bids[user.id] = payload.bid;
             return {};
         case 'CONFIRM_CAPTURE_REVEAL':
-            if (!['capture_reveal', 'capture_tiebreaker'].includes(game.gameStatus)) return { error: "Not in confirmation phase." };
+            if (![GameStatus.CaptureReveal, GameStatus.CaptureTiebreaker].includes(game.gameStatus)) return { error: "Not in confirmation phase." };
             if (!game.preGameConfirmations) game.preGameConfirmations = {};
             game.preGameConfirmations[user.id] = true;
             return {};

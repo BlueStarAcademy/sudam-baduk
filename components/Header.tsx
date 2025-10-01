@@ -1,10 +1,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { UserWithStatus } from '../types.js';
+import { UserWithStatus } from '../types/index.js';
 import Button from './Button.js';
 import Avatar from './Avatar.js';
-import { getMannerEffects } from '../services/effectService.js';
-import { AVATAR_POOL, BORDER_POOL } from '../constants.js';
+import { getMannerEffects } from '../utils/mannerUtils.js';
+import { AVATAR_POOL, BORDER_POOL } from '../constants/index.js';
 import { useAppContext } from '../hooks/useAppContext.js';
 
 const ResourceDisplay: React.FC<{ icon: React.ReactNode; value: string; className?: string }> = ({ icon, value, className }) => (
@@ -72,7 +72,7 @@ const Header: React.FC = () => {
                     <div className="flex items-center">
                         <ResourceDisplay icon="⚡" value={`${actionPoints.current}/${actionPoints.max}`} />
                         <ActionPointTimer user={currentUserWithStatus} />
-                        <button onClick={openShop} className="ml-1 w-6 h-6 flex-shrink-0 rounded-full bg-green-600 hover:bg-green-500 text-white font-bold flex items-center justify-center text-lg shadow-md transition-transform hover:scale-110 active:scale-95" title="행동력 구매">+</button>
+                        <button onClick={() => openShop('misc')} className="ml-1 w-6 h-6 flex-shrink-0 rounded-full bg-green-600 hover:bg-green-500 text-white font-bold flex items-center justify-center text-lg shadow-md transition-transform hover:scale-110 active:scale-95" title="행동력 구매">+</button>
                     </div>
                     <ResourceDisplay icon={<img src="/images/Gold.png" alt="골드" className="w-5 h-5 object-contain" />} value={gold.toLocaleString()} />
                     <ResourceDisplay icon={<img src="/images/Zem.png" alt="다이아" className="w-5 h-5 object-contain" />} value={diamonds.toLocaleString()} />

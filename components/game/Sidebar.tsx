@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Player, ChatMessage, GameProps, GameMode, User, UserWithStatus, LiveGameSession, ServerAction } from '../../types.js';
+import { Player, ChatMessage, GameProps, GameMode, User, UserWithStatus, LiveGameSession, ServerAction } from '../../types/index.js';
 import {
     GAME_CHAT_EMOJIS,
     GAME_CHAT_MESSAGES,
@@ -10,17 +10,21 @@ import {
     ALKKAGI_GAUGE_SPEEDS,
     CURLING_GAUGE_SPEEDS,
     SPECIAL_GAME_MODES
-} from '../../constants.js';
+} from '../../constants/index.js';
 import Button from '../Button.js';
 import Avatar from '../Avatar.js';
 import { containsProfanity } from '../../profanity.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
-
+import CurrencyPanel from './CurrencyPanel.js';
 
 interface SidebarProps extends GameProps {
-    onLeaveOrResign: () => void;
+    onLeaveOrResign?: () => void;
     isNoContestLeaveAvailable: boolean;
     onClose?: () => void;
+    onOpenSettings: () => void;
+    isPausable?: boolean;
+    isPaused?: boolean;
+    onPauseToggle?: () => void;
 }
 
 const GameInfoPanel: React.FC<{ session: LiveGameSession, onClose?: () => void }> = ({ session, onClose }) => {
@@ -304,39 +308,25 @@ const ChatPanel: React.FC<Omit<SidebarProps, 'onLeaveOrResign' | 'isNoContestLea
                 <h3 className="text-base font-bold border-b border-gray-700 pb-1 mb-2 text-yellow-300 flex-shrink-0">전체채팅</h3>
             ) : (
                 <div className="flex bg-gray-900/70 p-1 rounded-lg mb-2 flex-shrink-0">
-                    <button onClick={() => setActiveTab('game')} className={`flex-1 py-1.5 text-sm font-semibold rounded-md ${activeTab === 'game' ? 'bg-blue-600' : 'text-gray-400'}`}>대국실</button>
-                    <button onClick={() => setActiveTab('global')} className={`flex-1 py-1.5 text-sm font-semibold rounded-md ${activeTab === 'global' ? 'bg-blue-600' : 'text-gray-400'}`}>전체채팅</button>
+                    <button onClick={() => setActiveTab('game')} className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'game' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>대국실</button>
+                    <button onClick={() => setActiveTab('global')} className={`flex-1 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'global' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>전체채팅</button>
                 </div>
             )}
-            <div ref={chatBodyRef} className="flex-grow space-y-1 overflow-y-auto pr-2 mb-2 bg-gray-900/40 p-1.5 rounded-md min-h-0">
+            <div ref={chatBodyRef} className="flex-grow space-y-0.5 overflow-y-auto pr-2 mb-2 bg-gray-900/40 p-1.5 rounded-md min-h-0">
                 {activeChatMessages.map(msg => {
                     const isBotMessage = msg.system && !msg.actionInfo && msg.user.nickname === 'AI 보안관봇';
                     return (
                         <div key={msg.id} className="text-sm">
-                            {msg.actionInfo ? (
-                                <>
-                                    <span className="font-semibold text-gray-400 pr-2">{msg.user.nickname}:</span>
-                                    <span className="text-yellow-400">{msg.actionInfo.message}</span>
-                                    <span className="text-gray-400"> (매너 </span>
-                                    <span className={msg.actionInfo.scoreChange > 0 ? 'text-blue-400 font-bold' : 'text-red-400 font-bold'}>
-                                        {msg.actionInfo.scoreChange > 0 ? `+${msg.actionInfo.scoreChange}` : msg.actionInfo.scoreChange}
-                                    </span>
-                                    <span className="text-gray-400">)</span>
-                                </>
-                            ) : (
-                                <>
-                                    {msg.location && <span className="font-semibold text-gray-500 pr-1">{msg.location}</span>}
-                                    <span 
-                                        className={`font-semibold pr-2 ${msg.system ? 'text-yellow-400' : 'text-gray-400 cursor-pointer hover:underline'}`}
-                                        onClick={() => !msg.system && handleUserClick(msg.user.id)}
-                                        title={!msg.system ? `${msg.user.nickname} 프로필 보기 / 제재` : ''}
-                                    >
-                                        {msg.system ? (isBotMessage ? 'AI 보안관봇' : '시스템') : msg.user.nickname}:
-                                    </span>
-                                    {msg.text && <span className={isBotMessage ? 'text-yellow-400' : ''}>{msg.text}{isBotMessage && ' 🚓'}</span>}
-                                    {msg.emoji && <span className="text-xl">{msg.emoji}</span>}
-                                </>
-                            )}
+                            {msg.location && <span className="font-semibold text-gray-500 pr-1">{msg.location}</span>}
+                            <span 
+                                className={`font-semibold pr-2 ${msg.system ? 'text-yellow-400' : 'text-gray-400 cursor-pointer hover:underline'}`}
+                                onClick={() => !msg.system && handleUserClick(msg.user.id)}
+                                title={!msg.system ? `${msg.user.nickname} 프로필 보기 / 제재` : ''}
+                            >
+                                {msg.system ? (isBotMessage ? 'AI 보안관봇' : '시스템') : msg.user.nickname}:
+                            </span>
+                            {msg.text && <span className={isBotMessage ? 'text-yellow-400' : ''}>{msg.text}{isBotMessage && ' 🚓'}</span>}
+                            {msg.emoji && <span className="text-xl">{msg.emoji}</span>}
                         </div>
                     );
                 })}
@@ -345,16 +335,16 @@ const ChatPanel: React.FC<Omit<SidebarProps, 'onLeaveOrResign' | 'isNoContestLea
             {!isSpectator && (
                 <div className="relative flex-shrink-0">
                    {showQuickChat && (
-                       <div ref={quickChatRef} className="absolute bottom-full mb-2 w-full bg-gray-600 rounded-lg shadow-xl p-2 z-10 max-h-64 overflow-y-auto">
-                           <div className="grid grid-cols-5 gap-2 text-2xl mb-2 border-b border-gray-500 pb-2">
-                              {GAME_CHAT_EMOJIS.map(emoji => ( <button key={emoji} onClick={() => handleSend({ emoji })} className="w-full p-2 rounded-md hover:bg-blue-600 transition-colors text-center"> {emoji} </button> ))}
+                       <div ref={quickChatRef} className="absolute bottom-full mb-2 w-full bg-gray-600 rounded-lg shadow-xl p-1 z-10 max-h-64 overflow-y-auto">
+                           <div className="grid grid-cols-5 gap-1 text-2xl mb-1 border-b border-gray-500 pb-1">
+                              {GAME_CHAT_EMOJIS.map(emoji => ( <button key={emoji} onClick={() => handleSend({ emoji })} className="w-full p-1 rounded-md hover:bg-blue-600 transition-colors text-center"> {emoji} </button> ))}
                            </div>
-                           <ul className="space-y-1">
-                              {GAME_CHAT_MESSAGES.map(msg => ( <li key={msg}> <button onClick={() => handleSend({ text: msg })} className="w-full text-left text-sm p-2 rounded-md hover:bg-blue-600 transition-colors"> {msg} </button> </li> ))}
+                           <ul className="space-y-0.5">
+                              {GAME_CHAT_MESSAGES.map(msg => ( <li key={msg}> <button onClick={() => handleSend({ text: msg })} className="w-full text-left text-xs p-1 rounded-md hover:bg-blue-600 transition-colors"> {msg} </button> </li> ))}
                            </ul>
                        </div>
                    )}
-                   <form onSubmit={handleSendTextSubmit} className="flex gap-2">
+                   <form onSubmit={handleSendTextSubmit} className="flex gap-1">
                         <button type="button" onClick={() => setShowQuickChat(s => !s)} className="bg-gray-700 hover:bg-gray-600 text-white font-bold px-2.5 rounded-md transition-colors text-lg flex items-center justify-center" title="빠른 채팅" disabled={isInputDisabled}>
                             <span>🙂</span>
                         </button>
@@ -378,7 +368,7 @@ const ChatPanel: React.FC<Omit<SidebarProps, 'onLeaveOrResign' | 'isNoContestLea
 };
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
-    const { session, onLeaveOrResign, isNoContestLeaveAvailable, isSpectator } = props;
+    const { session, onLeaveOrResign, isNoContestLeaveAvailable, isSpectator, onOpenSettings, isPausable, isPaused, onPauseToggle } = props;
     const { gameStatus } = session;
 
     const isGameEnded = ['ended', 'no_contest', 'rematch_pending'].includes(gameStatus);
@@ -395,9 +385,21 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
                 <ChatPanel {...props} />
             </div>
             <div className="flex-shrink-0 pt-2">
-                <Button onClick={onLeaveOrResign} colorScheme={leaveButtonColor} className="w-full">
-                    {leaveButtonText}
-                </Button>
+                {isGameEnded && onLeaveOrResign ? (
+                    <Button onClick={onLeaveOrResign} colorScheme="gray" className="w-full">
+                        나가기
+                    </Button>
+                ) : isPausable ? (
+                    <Button onClick={onPauseToggle} colorScheme="yellow" className="w-full">
+                        {isPaused ? '대국 재개' : '일시정지'}
+                    </Button>
+                ) : (
+                    onLeaveOrResign && (
+                        <Button onClick={onLeaveOrResign} colorScheme={leaveButtonColor} className="w-full">
+                            {leaveButtonText}
+                        </Button>
+                    )
+                )}
             </div>
         </div>
     );

@@ -1,6 +1,11 @@
-import { AppState, User, UserCredentials, QuestLog, DailyQuestData, InventoryItem, CoreStat, GameMode, LeagueTier, WeeklyCompetitor, WeeklyQuestData, MonthlyQuestData } from '../types.js';
-import { randomUUID } from 'crypto';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, BOT_NAMES, AVATAR_POOL } from '../constants.js';
+
+import { type AppState, type User, type UserCredentials, type QuestLog, type DailyQuestData, type WeeklyCompetitor, type WeeklyQuestData, type MonthlyQuestData, type Guild, CoreStat, GameMode, LeagueTier, GuildMemberRole, GuildResearchId, type InventoryItem } from '../types/index.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/gameModes.js';
+import { BOT_NAMES } from '../constants/auth.js';
+import { AVATAR_POOL } from '../constants/ui.js';
+// FIX: Corrected import path for GUILD_MISSIONS_POOL.
+import { GUILD_MISSIONS_POOL, GUILD_INITIAL_MEMBER_LIMIT } from '../constants/index.js';
+import { defaultSettings } from '../constants/index.js';
 
 export const createDefaultBaseStats = (): Record<CoreStat, number> => ({
     [CoreStat.Concentration]: 100,
@@ -45,7 +50,7 @@ export const createDefaultInventory = (): InventoryItem[] => [];
 
 const allGameModes = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES].map(m => m.mode);
 export const defaultStats: User['stats'] = allGameModes.reduce((acc, mode) => {
-    acc[mode] = { wins: 0, losses: 0, rankingScore: 1200 };
+    acc[mode] = { wins: 0, losses: 0, rankingScore: 0 };
     return acc;
 }, {} as Record<GameMode, { wins: number; losses: number; rankingScore: number }>);
 
@@ -54,20 +59,22 @@ export const createInitialBotCompetitors = (newUser: Pick<User, 'league' | 'tour
     const botNames = [...BOT_NAMES].sort(() => 0.5 - Math.random());
     
     for (let i = 0; i < 15; i++) {
-        const botAvatar = AVATAR_POOL[Math.floor(Math.random() * AVATAR_POOL.length)];
+        const score = newUser.tournamentScore + Math.floor((Math.random() - 0.5) * 100);
         competitors.push({
             id: `bot-weekly-${i}-${Date.now()}`,
             nickname: botNames[i % botNames.length],
-            avatarId: botAvatar.id,
+            avatarId: 'bot_avatar',
             borderId: 'default',
             league: newUser.league,
-            initialScore: newUser.tournamentScore + Math.floor((Math.random() - 0.5) * 100) 
+            initialScore: score,
+            currentScore: score,
         });
     }
     return competitors;
 };
 
 export const createDefaultUser = (id: string, username: string, nickname: string, isAdmin = false): User => {
+    const now = Date.now();
     const user: User = {
         id,
         username,
@@ -82,10 +89,13 @@ export const createDefaultUser = (id: string, username: string, nickname: string
         inventory: createDefaultInventory(),
         inventorySlots: 40,
         equipment: {},
+        equipmentPresets: Array(5).fill(null).map((_, i) => ({ name: `프리셋 ${i + 1}`, equipment: {} })),
         actionPoints: { current: 30, max: 30 },
-        lastActionPointUpdate: Date.now(),
+        lastActionPointUpdate: now,
         actionPointPurchasesToday: 0,
         lastActionPointPurchaseDate: 0,
+        actionPointQuizzesToday: 0,
+        lastActionPointQuizDate: 0,
         dailyShopPurchases: {},
         gold: 500,
         diamonds: 10,
@@ -102,7 +112,7 @@ export const createDefaultUser = (id: string, username: string, nickname: string
         ownedBorders: ['default', 'simple_black'],
         previousSeasonTier: null,
         seasonHistory: {},
-        tournamentScore: 1200,
+        tournamentScore: 0,
         league: LeagueTier.Sprout,
         weeklyCompetitors: [],
         lastWeeklyCompetitorsUpdate: 0,
@@ -113,8 +123,38 @@ export const createDefaultUser = (id: string, username: string, nickname: string
         singlePlayerProgress: 0,
         bonusStatPoints: 0,
         singlePlayerMissions: {},
-        towerProgress: { highestFloor: 0, lastClearTimestamp: 0 },
+        towerProgress: {
+            highestFloor: 0,
+            lastClearTimestamp: 0
+        },
         claimedFirstClearRewards: [],
+        currencyLogs: [],
+        guildId: null,
+        guildApplications: [],
+        guildLeaveCooldownUntil: 0,
+        guildCoins: 0,
+        guildBossAttempts: 0,
+        lastGuildBossAttemptDate: 0,
+        lastLoginAt: now,
+        dailyDonations: { gold: 0, diamond: 0, date: 0 },
+        dailyMissionContribution: { amount: 0, date: 0 },
+        guildShopPurchases: {},
+        appSettings: defaultSettings,
+
+        // Tournament progress
+        lastNeighborhoodPlayedDate: undefined,
+        neighborhoodRewardClaimed: false,
+        lastNeighborhoodTournament: null,
+
+        lastNationalPlayedDate: undefined,
+        nationalRewardClaimed: false,
+        lastNationalTournament: null,
+        
+        lastWorldPlayedDate: undefined,
+        worldRewardClaimed: false,
+        lastWorldTournament: null,
+        dailyChampionshipMatchesPlayed: 0,
+        lastChampionshipMatchDate: 0,
     };
     
     const botCompetitors = createInitialBotCompetitors(user);
@@ -125,11 +165,11 @@ export const createDefaultUser = (id: string, username: string, nickname: string
             avatarId: user.avatarId,
             borderId: user.borderId,
             league: user.league,
-            initialScore: user.tournamentScore
+            initialScore: user.tournamentScore,
+            currentScore: user.tournamentScore,
         },
         ...botCompetitors
     ];
-    const now = Date.now();
     user.lastWeeklyCompetitorsUpdate = now;
     user.lastLeagueUpdate = now;
 
@@ -137,11 +177,11 @@ export const createDefaultUser = (id: string, username: string, nickname: string
 };
 
 
-export const getInitialState = (): Omit<AppState, 'liveGames' | 'negotiations' | 'userStatuses' | 'userConnections' | 'userLastChatMessage' | 'waitingRoomChats' | 'gameChats' | 'adminLogs' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'towerRankings'> => {
-    const adminUser = createDefaultUser(`user-admin-${randomUUID()}`, '푸른별바둑학원', '관리자', true);
-    const testUser1 = createDefaultUser(`user-test-${randomUUID()}`, '푸른별', '푸른별');
-    const testUser2 = createDefaultUser(`user-test-${randomUUID()}`, '노란별', '노란별');
-    const testUser3 = createDefaultUser(`user-test-${randomUUID()}`, '녹색별', '녹색별');
+export const getInitialState = (): Omit<AppState, 'liveGames' | 'negotiations' | 'userStatuses' | 'userConnections' | 'userLastChatMessage' | 'waitingRoomChats' | 'gameChats' | 'adminLogs' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'towerRankings' | 'userLastChatMessage'> => {
+    const adminUser = createDefaultUser(`user-admin-${Date.now()}`, '푸른별바둑학원', '관리자', true);
+    const testUser1 = createDefaultUser(`user-test-${Date.now()+1}`, '푸른별', '푸른별');
+    const testUser2 = createDefaultUser(`user-test-${Date.now()+2}`, '노란별', '노란별');
+    const testUser3 = createDefaultUser(`user-test-${Date.now()+3}`, '녹색별', '녹색별');
 
     return {
         users: {
@@ -156,5 +196,58 @@ export const getInitialState = (): Omit<AppState, 'liveGames' | 'negotiations' |
             '노란별': { passwordHash: '1217', userId: testUser2.id },
             '녹색별': { passwordHash: '1217', userId: testUser3.id },
         },
+        guilds: {},
     };
 }
+
+export const createDefaultGuild = (id: string, name: string, description: string, isPublic: boolean, creator: User): Guild => {
+    const now = Date.now();
+    return {
+        id,
+        name,
+        description,
+        isPublic,
+        icon: '/images/guild/icon1.png',
+        level: 1,
+        xp: 0,
+        researchPoints: 0,
+        members: [{
+            userId: creator.id,
+            nickname: creator.nickname,
+            role: GuildMemberRole.Master,
+            joinedAt: now,
+            contribution: 0,
+            weeklyContribution: 0,
+        }],
+        applicants: [],
+        weeklyMissions: GUILD_MISSIONS_POOL.map(m => ({
+            ...m,
+            id: `quest-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            progress: 0,
+            isCompleted: false,
+            claimedBy: [],
+        })),
+        missionProgress: {
+            checkIns: 0,
+            strategicWins: 0,
+            playfulWins: 0,
+            diamondsSpent: 0,
+            equipmentEnhancements: 0,
+            materialCrafts: 0,
+            equipmentSyntheses: 0,
+            championshipClaims: 0,
+            towerFloor50Conquerors: [],
+            towerFloor100Conquerors: [],
+            bossAttempts: 0
+        },
+        lastMissionReset: now,
+        lastWeeklyContributionReset: now,
+        chatHistory: [],
+        memberLimit: GUILD_INITIAL_MEMBER_LIMIT,
+        research: (Object.values(GuildResearchId) as GuildResearchId[]).reduce((acc, researchId) => {
+            (acc as any)[researchId] = { level: 0 };
+            return acc;
+        }, {} as Record<GuildResearchId, { level: number }>),
+        researchTask: null,
+    };
+};

@@ -1,5 +1,8 @@
 import React, { useMemo } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
+import { GuildMember, GuildMemberRole } from '../types/index.js';
+import { isSameDayKST } from '../utils/timeUtils.js';
+import { GUILD_CHECK_IN_MILESTONE_REWARDS } from '../constants/index.js';
 
 interface QuickAccessSidebarProps {
     mobile?: boolean;
@@ -9,7 +12,7 @@ interface QuickAccessSidebarProps {
 }
 
 const QuickAccessSidebar: React.FC<QuickAccessSidebarProps> = ({ mobile = false, compact = false, showOnlyWhenQuestCompleted = false, fillHeight = true }) => {
-    const { handlers, unreadMailCount, hasClaimableQuest } = useAppContext();
+    const { handlers, unreadMailCount, hasClaimableQuest, currentUserWithStatus, guilds } = useAppContext();
     
     if (showOnlyWhenQuestCompleted && !hasClaimableQuest) {
         return null;
@@ -17,12 +20,44 @@ const QuickAccessSidebar: React.FC<QuickAccessSidebarProps> = ({ mobile = false,
 
     const hasUnreadMail = unreadMailCount > 0;
 
+    const guildNotification = useMemo(() => {
+        if (!currentUserWithStatus?.guildId) return false;
+        const myGuild = guilds[currentUserWithStatus.guildId];
+        if (!myGuild) return false;
+        const myMemberInfo = myGuild.members.find(m => m.userId === currentUserWithStatus.id);
+        
+        // Check for pending applicants
+        if (myMemberInfo && (myMemberInfo.role === 'master' || myMemberInfo.role === 'vice')) {
+            if ((myGuild.applicants?.length ?? 0) > 0) {
+                return true;
+            }
+        }
+
+        // Check for claimable check-in rewards
+        const now = Date.now();
+        const myCheckInTimestamp = myGuild.checkIns ? myGuild.checkIns[currentUserWithStatus.id] : undefined;
+        const hasCheckedInToday = myGuild.checkIns && isSameDayKST(myCheckInTimestamp, now);
+
+        if (hasCheckedInToday) {
+            const todaysCheckIns = Object.values(myGuild.checkIns || {}).filter(ts => isSameDayKST(ts, now)).length;
+            const hasClaimableMilestone = GUILD_CHECK_IN_MILESTONE_REWARDS.some((milestone: { count: number; reward: { guildCoins: number; }; }, index: number) => {
+                const isAchieved = todaysCheckIns >= milestone.count;
+                const isClaimed = myGuild.dailyCheckInRewardsClaimed?.some((c: { userId: string; milestoneIndex: number; }) => c.userId === currentUserWithStatus.id && c.milestoneIndex === index);
+                return isAchieved && !isClaimed;
+            });
+            if (hasClaimableMilestone) return true;
+        }
+        
+        return false;
+    }, [currentUserWithStatus, guilds]);
+
     const allButtons = [
-        { label: '퀘스트', iconUrl: '/images/quest.png', handler: handlers.openQuests, disabled: false, notification: hasClaimableQuest },
-        { label: '기보', iconUrl: '/images/gibo.png', handler: () => alert('기보보기 기능은 구현 예정입니다.'), disabled: true, notification: false },
-        { label: '우편함', iconUrl: '/images/mail.png', handler: handlers.openMailbox, disabled: false, notification: hasUnreadMail, count: unreadMailCount },
-        { label: '상점', iconUrl: '/images/store.png', handler: handlers.openShop, disabled: false, notification: false },
-        { label: '가방', iconUrl: '/images/bag.png', handler: handlers.openInventory, disabled: false, notification: false },
+        { label: '퀘스트', iconUrl: '/images/quickmenu/quest.png', handler: handlers.openQuests, disabled: false, notification: hasClaimableQuest },
+        { label: '길드', iconUrl: '/images/quickmenu/guild.png', handler: () => window.location.hash = '#/guild', disabled: false, notification: guildNotification },
+        { label: '우편함', iconUrl: '/images/quickmenu/mail.png', handler: handlers.openMailbox, disabled: false, notification: hasUnreadMail, count: unreadMailCount },
+        { label: '상점', iconUrl: '/images/quickmenu/store.png', handler: () => handlers.openShop(), disabled: false, notification: false },
+        { label: '가방', iconUrl: '/images/quickmenu/bag.png', handler: () => handlers.openInventory(), disabled: false, notification: false },
+        { label: '도감', iconUrl: '/images/item/itembook.png', handler: handlers.openEncyclopedia, disabled: false, notification: false },
     ];
     
     const containerClass = mobile 

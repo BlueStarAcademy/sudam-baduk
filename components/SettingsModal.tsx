@@ -1,8 +1,10 @@
+
+
 import React, { useState } from 'react';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { useAppContext } from '../hooks/useAppContext.js';
-import { Theme, SoundCategory } from '../types.js';
+import { Theme, SoundCategory } from '../types/index.js';
 import ToggleSwitch from './ui/ToggleSwitch.js';
 import Slider from './ui/Slider.js';
 import ColorSwatch from './ui/ColorSwatch.js';
@@ -81,7 +83,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isTopmost }) => 
 
         const handleDeleteAccount = () => {
             if (window.confirm('정말로 회원 탈퇴를 하시겠습니까? 탈퇴 시 일주일간 같은 주민등록번호로 재가입이 불가능합니다. 모든 데이터는 영구적으로 삭제되며 이 작업은 되돌릴 수 없습니다.')) {
-                handlers.handleAction({ type: 'DELETE_ACCOUNT', payload: {} });
+                // FIX: Removed invalid 'payload' property from the action object.
+                handlers.handleAction({ type: 'DELETE_ACCOUNT' });
                 onClose();
             }
         };

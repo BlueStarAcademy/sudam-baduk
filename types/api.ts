@@ -1,59 +1,6 @@
-
-import {
-    User, LiveGameSession, Negotiation, KomiBid,
-    AdminLog, Announcement, OverrideAnnouncement, InventoryItem,
-    QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, TournamentState, UserWithStatus, TowerRank
-} from './entities.js';
-import { GameMode, RPSChoice, Point, Player, UserStatus, TournamentType } from './enums.js';
-
-export type ChatMessage = {
-  id: string;
-  user: { id: string, nickname: string };
-  text?: string;
-  emoji?: string;
-  system: boolean;
-  timestamp: number;
-  location?: string;
-  actionInfo?: {
-      message: string;
-      scoreChange: number;
-  };
-};
-
-export type HandleActionResult = { 
-    clientResponse?: any;
-    error?: string;
-};
-
-export interface AppState {
-    users: Record<string, User>;
-    userCredentials: Record<string, any>; // Not sent to client
-    liveGames: Record<string, LiveGameSession>;
-    userConnections: Record<string, number>;
-    userStatuses: Record<string, UserStatusInfo>;
-    negotiations: Record<string, Negotiation>;
-    waitingRoomChats: Record<string, ChatMessage[]>;
-    gameChats: Record<string, ChatMessage[]>;
-    userLastChatMessage: Record<string, number>;
-    adminLogs: AdminLog[];
-    gameModeAvailability: Partial<Record<GameMode, boolean>>;
-    announcements: Announcement[];
-    globalOverrideAnnouncement: OverrideAnnouncement | null;
-    announcementInterval: number;
-    towerRankings: TowerRank[];
-}
-
-export interface VolatileState {
-    userConnections: Record<string, number>;
-    userStatuses: Record<string, UserStatusInfo>;
-    negotiations: Record<string, Negotiation>;
-    waitingRoomChats: Record<string, ChatMessage[]>;
-    gameChats: Record<string, ChatMessage[]>;
-    userLastChatMessage: Record<string, number>;
-    userConsecutiveChatMessages?: Record<string, { content: string, count: number }>;
-    activeTournaments?: Record<string, TournamentState>;
-    activeTournamentViewers: Set<string>;
-}
+// FIX: Removed AppSettings from this import. It is not directly exported from entities.js and not directly used in this file.
+import { User, UserWithStatus, LiveGameSession, Negotiation, ChatMessage, Guild, TournamentState, TowerRank } from './entities.js';
+import { UserStatus, GameMode } from './enums.js';
 
 export interface UserStatusInfo {
     status: UserStatus;
@@ -62,177 +9,239 @@ export interface UserStatusInfo {
     spectatingGameId?: string;
 }
 
-export type ServerAction =
-    // Auth
-    | { type: 'REGISTER', payload: any }
-    | { type: 'LOGIN', payload: any }
-    | { type: 'LOGOUT', payload?: never }
-    // Social
-    | { type: 'SEND_CHAT_MESSAGE', payload: { channel: string; text?: string; emoji?: string, location?: string } }
-    | { type: 'SET_USER_STATUS', payload: { status: any } }
-    | { type: 'ENTER_WAITING_ROOM', payload: { mode: GameMode } }
-    | { type: 'LEAVE_WAITING_ROOM', payload?: never }
-    | { type: 'LEAVE_GAME_ROOM', payload: { gameId: string } }
-    | { type: 'SPECTATE_GAME', payload: { gameId: string } }
-    | { type: 'LEAVE_SPECTATING', payload?: { gameId?: string } }
-    // Negotiation
-    | { type: 'CHALLENGE_USER', payload: { opponentId: string; mode: GameMode } }
-    | { type: 'SEND_CHALLENGE', payload: { negotiationId: string; settings: any } }
-    | { type: 'UPDATE_NEGOTIATION', payload: { negotiationId: string; settings: any } }
-    | { type: 'ACCEPT_NEGOTIATION', payload: { negotiationId: string; settings: any } }
-    | { type: 'DECLINE_NEGOTIATION', payload: { negotiationId: string } }
-    | { type: 'START_AI_GAME', payload: { mode: GameMode, settings: any } }
-    | { type: 'REQUEST_REMATCH', payload: { opponentId: string, originalGameId: string } }
-    // Game
-    | { type: 'PLACE_STONE', payload: { gameId: string; x: number; y: number, isHidden?: boolean } }
-    | { type: 'PASS_TURN', payload: { gameId: string } }
-    | { type: 'RESIGN_GAME', payload: { gameId: string, andLeave?: boolean } }
-    | { type: 'LEAVE_AI_GAME', payload: { gameId: string } }
-    | { type: 'REQUEST_NO_CONTEST_LEAVE', payload: { gameId: string } }
-    | { type: 'USE_ACTION_BUTTON', payload: { gameId: string; buttonName: string } }
-    // Nigiri
-    | { type: 'NIGIRI_GUESS', payload: { gameId: string; guess: 1 | 2 } }
-    // Capture Go
-    | { type: 'UPDATE_CAPTURE_BID', payload: { gameId: string; bid: number } }
-    | { type: 'CONFIRM_CAPTURE_REVEAL', payload: { gameId: string } }
-    // Base Go
-    | { type: 'PLACE_BASE_STONE', payload: { gameId: string; x: number; y: number } }
-    | { type: 'PLACE_REMAINING_BASE_STONES_RANDOMLY', payload?: never }
-    | { type: 'UPDATE_KOMI_BID', payload: { gameId: string, bid: KomiBid } }
-    | { type: 'CONFIRM_BASE_REVEAL', payload: { gameId: string } }
-    // Hidden Go
-    | { type: 'START_HIDDEN_PLACEMENT', payload: { gameId: string } }
-    | { type: 'START_SCANNING', payload: { gameId: string } }
-    | { type: 'SCAN_BOARD', payload: { gameId: string, x: number, y: number } }
-    // Missile Go
-    | { type: 'START_MISSILE_SELECTION', payload: { gameId: string } }
-    | { type: 'LAUNCH_MISSILE', payload: { gameId: string, from: Point, direction: 'up' | 'down' | 'left' | 'right' } }
-    | { type: 'MISSILE_INVALID_SELECTION', payload: { gameId: string } }
-    // Omok
-    | { type: 'OMOK_PLACE_STONE', payload: { gameId: string, x: number, y: number } }
-    // Turn Preference (Alkkagi, Curling, Omok, Ttamok)
-    | { type: 'CHOOSE_TURN_PREFERENCE', payload: { gameId: string, choice: 'first' | 'second' } }
-    | { type: 'SUBMIT_RPS_CHOICE', payload: { gameId: string, choice: RPSChoice } }
-    // Dice Go
-    | { type: 'DICE_READY_FOR_TURN_ROLL', payload: { gameId: string } }
-    | { type: 'DICE_CHOOSE_TURN', payload: { gameId: string; choice: 'first' | 'second' } }
-    | { type: 'DICE_CONFIRM_START', payload: { gameId: string } }
-    | { type: 'DICE_ROLL', payload: { gameId: string; itemType?: 'odd' | 'even' } }
-    | { type: 'DICE_PLACE_STONE', payload: { gameId: string, x: number, y: number } }
-   // Thief Go
-    | { type: 'THIEF_UPDATE_ROLE_CHOICE', payload: { gameId: string; choice: 'thief' | 'police' } }
-    | { type: 'CONFIRM_THIEF_ROLE', payload: { gameId: string } }
-    | { type: 'THIEF_ROLL_DICE', payload: { gameId: string } }
-    | { type: 'THIEF_PLACE_STONE', payload: { gameId: string; x: number; y: number } }
-    // Alkkagi
-    | { type: 'CONFIRM_ALKKAGI_START', payload: { gameId: string } }
-    | { type: 'ALKKAGI_PLACE_STONE', payload: { gameId: string, point: Point } }
-    | { type: 'ALKKAGI_FLICK_STONE', payload: { gameId: string, stoneId: number, vx: number, vy: number } }
-    | { type: 'USE_ALKKAGI_ITEM', payload: { gameId: string, itemType: 'slow' | 'aimingLine' } }
-    // Curling
-    | { type: 'CONFIRM_CURLING_START', payload: { gameId: string } }
-    | { type: 'CURLING_FLICK_STONE', payload: { gameId: string, launchPosition: Point, velocity: Point } }
-    | { type: 'USE_CURLING_ITEM', payload: { gameId: string, itemType: 'slow' | 'aimingLine' } }
-    // Shared round end
-    | { type: 'CONFIRM_ROUND_END', payload: { gameId: string } }
-    // User Actions
-    | { type: 'UPDATE_AVATAR', payload: { avatarId: string } }
-    | { type: 'UPDATE_BORDER', payload: { borderId: string } }
-    | { type: 'CHANGE_NICKNAME', payload: { newNickname: string } }
-    | { type: 'UPDATE_MBTI', payload: { mbti: string, isMbtiPublic: boolean } }
-    | { type: 'RESET_STAT_POINTS', payload?: never }
-    | { type: 'CONFIRM_STAT_ALLOCATION', payload: { newStatPoints: any } }
-    | { type: 'RESET_SINGLE_STAT', payload: { mode: GameMode } }
-    | { type: 'RESET_STATS_CATEGORY', payload: { category: 'strategic' | 'playful' } }
-    | { type: 'CHANGE_PASSWORD', payload: { currentPassword: string, newPassword: string } }
-    | { type: 'DELETE_ACCOUNT', payload: {} }
-    // Inventory & Item Actions
-    | { type: 'USE_ITEM', payload: { itemId: string } }
-    | { type: 'USE_ITEM_BULK', payload: { itemName: string, quantity: number } }
-    | { type: 'TOGGLE_EQUIP_ITEM', payload: { itemId: string } }
-    | { type: 'SELL_ITEM', payload: { itemId: string } }
-    | { type: 'ENHANCE_ITEM', payload: { itemId: string } }
-    | { type: 'DISASSEMBLE_ITEM', payload: { itemIds: string[] } }
-    | { type: 'CRAFT_MATERIAL', payload: { materialName: string, craftType: 'upgrade' | 'downgrade', quantity: number } }
-    | { type: 'SYNTHESIZE_EQUIPMENT', payload: { itemIds: string[] } }
-    // Reward Actions
-    | { type: 'CLAIM_MAIL_ATTACHMENTS', payload: { mailId: string } }
-    | { type: 'CLAIM_ALL_MAIL_ATTACHMENTS', payload?: never }
-    | { type: 'DELETE_MAIL', payload: { mailId: string } }
-    | { type: 'DELETE_ALL_CLAIMED_MAIL', payload?: never }
-    | { type: 'MARK_MAIL_AS_READ', payload: { mailId: string } }
-    | { type: 'CLAIM_QUEST_REWARD', payload: { questId: string } }
-    | { type: 'CLAIM_ACTIVITY_MILESTONE', payload: { milestoneIndex: number, questType: 'daily' | 'weekly' | 'monthly' } }
-    // Shop
-    | { type: 'BUY_SHOP_ITEM', payload: { itemId: string } }
-    | { type: 'BUY_SHOP_ITEM_BULK', payload: { itemId: string, quantity: number } }
-    | { type: 'BUY_MATERIAL_BOX', payload: { itemId: string, quantity: number } }
-    | { type: 'PURCHASE_ACTION_POINTS', payload?: never }
-    | { type: 'EXPAND_INVENTORY', payload?: never }
-    | { type: 'BUY_BORDER', payload: { borderId: string } }
-    // Admin
-    | { type: 'ADMIN_APPLY_SANCTION', payload: { targetUserId: string; sanctionType: 'chat' | 'connection'; durationMinutes: number } }
-    | { type: 'ADMIN_LIFT_SANCTION', payload: { targetUserId: string; sanctionType: 'chat' | 'connection' } }
-    | { type: 'ADMIN_RESET_USER_DATA', payload: { targetUserId: string; resetType: 'stats' | 'full' } }
-    | { type: 'ADMIN_DELETE_USER', payload: { targetUserId: string } }
-    | { type: 'ADMIN_CREATE_USER', payload: { username: string, password: string, nickname: string } }
-    | { type: 'ADMIN_FORCE_LOGOUT', payload: { targetUserId: string } }
-    | { type: 'ADMIN_SEND_MAIL', payload: any }
-    | { type: 'ADMIN_GIVE_ACTION_POINTS', payload: { targetUserId: string; amount: number } }
-    | { type: 'ADMIN_REORDER_ANNOUNCEMENTS', payload: { announcements: Announcement[] } }
-    | { type: 'ADMIN_ADD_ANNOUNCEMENT', payload: { message: string } }
-    | { type: 'ADMIN_REMOVE_ANNOUNCEMENT', payload: { id: string } }
-    | { type: 'ADMIN_SET_ANNOUNCEMENT_INTERVAL', payload: { interval: number } }
-    | { type: 'ADMIN_SET_OVERRIDE_ANNOUNCEMENT', payload: { message: string } }
-    | { type: 'ADMIN_CLEAR_OVERRIDE_ANNOUNCEMENT', payload?: never }
-    | { type: 'ADMIN_TOGGLE_GAME_MODE', payload: { mode: GameMode; isAvailable: boolean } }
-    | { type: 'ADMIN_SET_GAME_DESCRIPTION', payload: { gameId: string, description: string } }
-    | { type: 'ADMIN_FORCE_DELETE_GAME', payload: { gameId: string } }
-    | { type: 'ADMIN_FORCE_WIN', payload: { gameId: string, winnerId: string } }
-    | { type: 'ADMIN_UPDATE_USER_DETAILS', payload: { targetUserId: string, updatedDetails: Partial<User> } }
-    // Tournament
-    | { type: 'START_TOURNAMENT_SESSION', payload: { type: TournamentType } }
-    | { type: 'START_TOURNAMENT_ROUND', payload: { type: TournamentType } }
-    | { type: 'CLEAR_TOURNAMENT_SESSION', payload: { type?: TournamentType } }
-    | { type: 'SAVE_TOURNAMENT_PROGRESS', payload: { type: TournamentType } }
-    | { type: 'FORFEIT_TOURNAMENT', payload: { type: TournamentType } }
-    | { type: 'SKIP_TOURNAMENT_END', payload: { type: TournamentType } }
-    | { type: 'CLAIM_TOURNAMENT_REWARD', payload: { tournamentType: TournamentType } }
-    | { type: 'ENTER_TOURNAMENT_VIEW', payload?: never }
-    | { type: 'LEAVE_TOURNAMENT_VIEW', payload?: never }
-    | { type: 'USE_CONDITION_POTION', payload: { tournamentType: TournamentType; matchId: string; itemName: string; } }
-    // Single Player
-    | { type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: string } }
-    | { type: 'SINGLE_PLAYER_REFRESH_PLACEMENT', payload: { gameId: string } }
-    | { type: 'START_SINGLE_PLAYER_MISSION', payload: { missionId: string } }
-    | { type: 'CLAIM_SINGLE_PLAYER_MISSION_REWARD', payload: { missionId: string } }
-    // Tower Challenge
-    | { type: 'START_TOWER_CHALLENGE_GAME', payload: { floor: number } }
-    | { type: 'TOWER_CHALLENGE_REFRESH_PLACEMENT', payload: { gameId: string } }
-    | { type: 'TOWER_CHALLENGE_ADD_STONES', payload: { gameId: string } };
+export interface AppState {
+    users: Record<string, User>;
+    userCredentials: Record<string, UserCredentials>;
+    userStatuses: Record<string, UserStatusInfo>;
+    liveGames: Record<string, LiveGameSession>;
+    negotiations: Record<string, Negotiation>;
+    waitingRoomChats: Record<string, ChatMessage[]>;
+    gameChats: Record<string, ChatMessage[]>;
+    adminLogs: any[]; // AdminLog type is in entities
+    announcements: any[]; // Announcement type is in entities
+    globalOverrideAnnouncement: any | null; // OverrideAnnouncement type is in entities
+    gameModeAvailability: Record<GameMode, boolean>;
+    announcementInterval: number;
+    guilds: Record<string, Guild>;
+    towerRankings: TowerRank[];
+    // Add userLastChatMessage to AppState
+    userLastChatMessage: Record<string, number>;
+}
+
+export interface VolatileState {
+    userStatuses: Record<string, UserStatusInfo>;
+    userConnections: Record<string, any>;
+    negotiations: Record<string, Negotiation>;
+    userLastChatMessage: Record<string, number>;
+    waitingRoomChats: Record<string, ChatMessage[]>;
+    gameChats: Record<string, ChatMessage[]>;
+    activeTournaments?: Record<string, TournamentState>;
+    activeTournamentViewers?: Set<string>;
+    userSessions: Record<string, string>; // userId -> sessionId
+}
+
+export type ServerActionType =
+  | 'LOGIN'
+  | 'REGISTER'
+  | 'LOGOUT'
+  | 'ENTER_WAITING_ROOM'
+  | 'LEAVE_WAITING_ROOM'
+  | 'CHALLENGE_USER'
+  | 'SEND_CHALLENGE'
+  | 'UPDATE_NEGOTIATION'
+  | 'ACCEPT_NEGOTIATION'
+  | 'DECLINE_NEGOTIATION'
+  | 'START_AI_GAME'
+  | 'LEAVE_AI_GAME'
+  | 'PLACE_STONE'
+  | 'PASS_TURN'
+  | 'RESIGN_GAME'
+  | 'SEND_CHAT_MESSAGE'
+  | 'SET_USER_STATUS'
+  | 'SPECTATE_GAME'
+  | 'LEAVE_SPECTATING'
+  | 'REQUEST_REMATCH'
+  | 'LEAVE_GAME_ROOM'
+  | 'NIGIRI_GUESS'
+  | 'UPDATE_CAPTURE_BID'
+  | 'CONFIRM_CAPTURE_REVEAL'
+  | 'PLACE_BASE_STONE'
+  | 'PLACE_REMAINING_BASE_STONES_RANDOMLY'
+  | 'UPDATE_KOMI_BID'
+  | 'CONFIRM_BASE_REVEAL'
+  | 'START_HIDDEN_PLACEMENT'
+  | 'START_SCANNING'
+  | 'SCAN_BOARD'
+  | 'START_MISSILE_SELECTION'
+  | 'LAUNCH_MISSILE'
+  | 'MISSILE_INVALID_SELECTION'
+  | 'REQUEST_NO_CONTEST_LEAVE'
+  | 'TOGGLE_EQUIP_ITEM'
+  | 'SELL_ITEM'
+  | 'USE_ITEM'
+  | 'USE_ITEM_BULK'
+  | 'ENHANCE_ITEM'
+  | 'DISASSEMBLE_ITEM'
+  | 'CRAFT_MATERIAL'
+  | 'SYNTHESIZE_EQUIPMENT'
+  | 'EXPAND_INVENTORY'
+  | 'BUY_SHOP_ITEM'
+  | 'BUY_MATERIAL_BOX'
+  | 'BUY_ACTION_POINTS'
+  | 'CLAIM_MAIL_ATTACHMENTS'
+  | 'CLAIM_ALL_MAIL_ATTACHMENTS'
+  | 'DELETE_MAIL'
+  | 'DELETE_ALL_CLAIMED_MAIL'
+  | 'MARK_MAIL_AS_READ'
+  | 'CLAIM_QUEST_REWARD'
+  | 'CLAIM_ACTIVITY_MILESTONE'
+  | 'UPDATE_AVATAR'
+  | 'UPDATE_BORDER'
+  | 'BUY_BORDER'
+  | 'CHANGE_NICKNAME'
+  | 'RESET_STAT_POINTS'
+  | 'CONFIRM_STAT_ALLOCATION'
+  | 'CHANGE_PASSWORD'
+  | 'DELETE_ACCOUNT'
+  | 'RESET_SINGLE_STAT'
+  | 'RESET_STATS_CATEGORY'
+  | 'USE_ACTION_BUTTON'
+  | 'CHOOSE_TURN_PREFERENCE'
+  | 'SUBMIT_RPS_CHOICE'
+  | 'DICE_READY_FOR_TURN_ROLL'
+  | 'DICE_CHOOSE_TURN'
+  | 'DICE_CONFIRM_START'
+  | 'DICE_ROLL'
+  | 'DICE_PLACE_STONE'
+  | 'THIEF_UPDATE_ROLE_CHOICE'
+  | 'CONFIRM_THIEF_ROLE'
+  | 'THIEF_ROLL_DICE'
+  | 'THIEF_PLACE_STONE'
+  | 'ALKKAGI_PLACE_STONE'
+  | 'ALKKAGI_FLICK_STONE'
+  | 'USE_ALKKAGI_ITEM'
+  | 'CONFIRM_ROUND_END'
+  | 'CONFIRM_ALKKAGI_START'
+  | 'CURLING_FLICK_STONE'
+  | 'USE_CURLING_ITEM'
+  | 'CONFIRM_CURLING_START'
+  | 'START_TOURNAMENT_SESSION'
+  | 'START_TOURNAMENT_ROUND'
+  | 'CLEAR_TOURNAMENT_SESSION'
+  | 'SAVE_TOURNAMENT_PROGRESS'
+  | 'FORFEIT_TOURNAMENT'
+  | 'SKIP_TOURNAMENT_END'
+  | 'RESIGN_TOURNAMENT_MATCH'
+  | 'USE_CONDITION_POTION'
+  | 'CLAIM_TOURNAMENT_REWARD'
+  | 'ENTER_TOURNAMENT_VIEW'
+  | 'LEAVE_TOURNAMENT_VIEW'
+  | 'UPDATE_MBTI'
+  | 'START_SINGLE_PLAYER_GAME'
+  | 'SINGLE_PLAYER_REFRESH_PLACEMENT'
+  | 'START_SINGLE_PLAYER_MISSION'
+  | 'CLAIM_SINGLE_PLAYER_MISSION_REWARD'
+  | 'CONFIRM_SP_INTRO'
+  | 'START_TOWER_CHALLENGE_GAME'
+  | 'TOWER_CHALLENGE_REFRESH_PLACEMENT'
+  | 'TOWER_CHALLENGE_ADD_STONES'
+  | 'TOWER_PURCHASE_ITEM'
+  | 'CLAIM_ACTION_POINT_QUIZ_REWARD'
+  | 'RESET_SINGLE_PLAYER_REWARDS'
+  | 'SAVE_EQUIPMENT_PRESET'
+  | 'LOAD_EQUIPMENT_PRESET'
+  | 'RENAME_EQUIPMENT_PRESET'
+  | 'PAUSE_GAME'
+  | 'RESUME_GAME'
+  // FIX: Add 'UPDATE_APP_SETTINGS' to ServerActionType to resolve error in gameActions.ts
+  | 'UPDATE_APP_SETTINGS'
+  | 'ADMIN_APPLY_SANCTION'
+  | 'ADMIN_LIFT_SANCTION'
+  | 'ADMIN_RESET_USER_DATA'
+  | 'ADMIN_DELETE_USER'
+  | 'ADMIN_CREATE_USER'
+  | 'ADMIN_FORCE_LOGOUT'
+  | 'ADMIN_SEND_MAIL'
+  | 'ADMIN_GIVE_ACTION_POINTS'
+  | 'ADMIN_REORDER_ANNOUNCEMENTS'
+  | 'ADMIN_ADD_ANNOUNCEMENT'
+  | 'ADMIN_REMOVE_ANNOUNCEMENT'
+  | 'ADMIN_SET_ANNOUNCEMENT_INTERVAL'
+  | 'ADMIN_SET_OVERRIDE_ANNOUNCEMENT'
+  | 'ADMIN_CLEAR_OVERRIDE_ANNOUNCEMENT'
+  | 'ADMIN_TOGGLE_GAME_MODE'
+  | 'ADMIN_SET_GAME_DESCRIPTION'
+  | 'ADMIN_FORCE_DELETE_GAME'
+  | 'ADMIN_FORCE_WIN'
+  | 'ADMIN_UPDATE_USER_DETAILS'
+  | 'ADMIN_UPDATE_GUILD_DETAILS'
+  | 'ADMIN_APPLY_GUILD_SANCTION'
+  | 'ADMIN_DELETE_GUILD'
+  | 'CREATE_GUILD'
+  | 'JOIN_GUILD'
+  | 'GUILD_CANCEL_APPLICATION'
+  | 'GUILD_ACCEPT_APPLICANT'
+  | 'GUILD_REJECT_APPLICANT'
+  | 'GUILD_LEAVE'
+  | 'GUILD_KICK_MEMBER'
+  | 'GUILD_PROMOTE_MEMBER'
+  | 'GUILD_DEMOTE_MEMBER'
+  | 'GUILD_UPDATE_ANNOUNCEMENT'
+  | 'GUILD_CHECK_IN'
+  | 'GUILD_CLAIM_CHECK_IN_REWARD'
+  | 'GUILD_UPDATE_PROFILE'
+  | 'GUILD_CLAIM_MISSION_REWARD'
+  | 'GUILD_DONATE_GOLD'
+  | 'GUILD_DONATE_DIAMOND'
+  | 'GUILD_START_RESEARCH'
+  | 'GUILD_BUY_SHOP_ITEM'
+  | 'SEND_GUILD_CHAT_MESSAGE'
+  | 'GUILD_DELETE_CHAT_MESSAGE'
+  | 'START_GUILD_BOSS_BATTLE'
+  | 'CLAIM_GUILD_BOSS_PERSONAL_REWARD'
+  | 'GUILD_TRANSFER_MASTERSHIP';
+  
+export interface ServerAction {
+    type: ServerActionType;
+    payload?: any;
+    userId?: string;
+    user?: User; // server-side
+}
+
+export interface HandleActionResult {
+    clientResponse?: any;
+    error?: string;
+}
 
 export interface GameProps {
     session: LiveGameSession;
+    // FIX: Update onAction to return a Promise, resolving type errors in components that await its result.
+    onAction: (action: ServerAction) => Promise<{ success: boolean; error?: string; [key: string]: any; } | undefined>;
     currentUser: UserWithStatus;
-    onAction: (action: ServerAction) => void;
-    isSpectator: boolean;
-    onlineUsers: UserWithStatus[];
-    onViewUser: (userId: string) => void;
-    activeNegotiation: Negotiation | null;
     waitingRoomChat: ChatMessage[];
     gameChat: ChatMessage[];
+    isSpectator: boolean;
+    onlineUsers: UserWithStatus[];
+    activeNegotiation: Negotiation | null;
     negotiations: Negotiation[];
+    onViewUser: (userId: string) => void;
 }
 
 export interface AdminProps {
     currentUser: UserWithStatus;
     allUsers: User[];
     liveGames: LiveGameSession[];
-    adminLogs: AdminLog[];
+    adminLogs: any[]; // AdminLog
     onAction: (action: ServerAction) => void;
     onBack: () => void;
-    gameModeAvailability: Partial<Record<GameMode, boolean>>;
-    announcements: Announcement[];
-    globalOverrideAnnouncement: OverrideAnnouncement | null;
+    gameModeAvailability: Record<GameMode, boolean>;
+    announcements: any[]; // Announcement
+    globalOverrideAnnouncement: any | null; // OverrideAnnouncement
     announcementInterval: number;
+    guilds: Record<string, Guild>;
+}
+
+export interface UserCredentials {
+    passwordHash: string;
+    userId: string;
 }

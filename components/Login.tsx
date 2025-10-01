@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
 import Button from './Button.js';
 import { useAppContext } from '../hooks/useAppContext.js';
 
 const Login: React.FC = () => {
-  const { setCurrentUserAndRoute } = useAppContext();
+  const { login } = useAppContext();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +38,7 @@ const Login: React.FC = () => {
       }
 
       const data = await response.json();
-      setCurrentUserAndRoute(data.user);
+      login(data.user, data.sessionId);
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Player, GameStatus, LiveGameSession } from '../types.js';
+import { Player, GameStatus, GameMode } from '../types/index.js';
+import type { LiveGameSession } from '../types/index.js';
 import { audioService } from '../services/audioService.js';
+import { PLAYFUL_GAME_MODES } from '../constants/gameModes.js';
 
-export const useClientTimer = (session: LiveGameSession) => {
+export const useClientTimer = (session: LiveGameSession, myPlayerEnum: Player) => {
     const {
         gameStatus,
         turnStartTime,
@@ -21,34 +23,41 @@ export const useClientTimer = (session: LiveGameSession) => {
             timerRef.current = null;
         }
 
-        // Set initial times from session
-        setClientTimes({ black: blackTimeLeft, white: whiteTimeLeft });
+        const isMyTurnNow = currentPlayer === myPlayerEnum;
 
-        // Only run timer if game is playing and there's a deadline
+        // Replace string literals with GameStatus enum members.
         const activeStatuses: GameStatus[] = [
-            'playing',
-            'alkkagi_playing',
-            'curling_playing',
-            'dice_rolling',
-            'dice_placing',
-            'thief_rolling',
-            'thief_placing',
+            GameStatus.Playing,
+            GameStatus.AlkkagiPlaying,
+            GameStatus.CurlingPlaying,
+            GameStatus.DiceRolling,
+            GameStatus.DicePlacing,
+            GameStatus.ThiefRolling,
+            GameStatus.ThiefPlacing,
         ];
         
-        if (activeStatuses.includes(gameStatus) && turnDeadline && turnStartTime) {
-            timerRef.current = window.setInterval(() => {
+        if (isMyTurnNow && activeStatuses.includes(gameStatus) && turnDeadline && turnStartTime) {
+            const updateTimer = () => {
                 const now = Date.now();
                 const remaining = Math.max(0, turnDeadline - now) / 1000;
                 
                 setClientTimes(prev => {
+                    const newTimes = { ...prev };
                     if (currentPlayer === Player.Black) {
-                        return { ...prev, black: remaining };
+                        newTimes.black = remaining;
                     } else if (currentPlayer === Player.White) {
-                        return { ...prev, white: remaining };
+                        newTimes.white = remaining;
                     }
-                    return prev;
+                    return newTimes;
                 });
-            }, 250);
+            };
+
+            updateTimer(); // Immediately set the correct time instead of waiting for the first interval
+            timerRef.current = window.setInterval(updateTimer, 250);
+
+        } else {
+            // Not my turn or not a timed state, just sync with server props
+            setClientTimes({ black: blackTimeLeft, white: whiteTimeLeft });
         }
 
         return () => {
@@ -60,10 +69,12 @@ export const useClientTimer = (session: LiveGameSession) => {
         gameStatus, 
         turnStartTime, 
         turnDeadline,
-        blackTimeLeft, // Update when server sends new time
-        whiteTimeLeft, // Update when server sends new time
+        blackTimeLeft,
+        whiteTimeLeft,
         currentPlayer,
+        myPlayerEnum
     ]);
 
-    return { clientTimes };
+    // FIX: Return the clientTimes object directly to fix type errors in consumers.
+    return clientTimes;
 };

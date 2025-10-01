@@ -1,164 +1,253 @@
-// --- Base Enums ---
-export enum Player {
-  None = 0,
-  Black = 1,
-  White = 2,
+export enum GameMode {
+    Standard = '클래식',
+    Capture = '따내기',
+    Speed = '스피드',
+    Base = '베이스',
+    Hidden = '히든',
+    Missile = '미사일',
+    Mix = '믹스룰',
+    Dice = '주사위',
+    Omok = '오목',
+    Ttamok = '따목',
+    Thief = '도둑과경찰',
+    Alkkagi = '알까기',
+    Curling = '바둑컬링',
 }
 
-export enum GameMode {
-  Standard = "클래식 바둑",
-  Capture = "따내기 바둑",
-  Speed = "스피드 바둑",
-  Base = "베이스 바둑",
-  Hidden = "히든 바둑",
-  Missile = "미사일 바둑",
-  Mix = "믹스룰 바둑",
-  Dice = "주사위 바둑",
-  Omok = "오목",
-  Ttamok = "따목",
-  Thief = "도둑과 경찰",
-  Alkkagi = "알까기",
-  Curling = "바둑 컬링",
+export enum Player {
+    None,
+    Black,
+    White,
+}
+
+export enum GameStatus {
+    Pending = 'pending',
+    Playing = 'playing',
+    Paused = 'paused',
+    Ended = 'ended',
+    NoContest = 'no_contest',
+    RematchPending = 'rematch_pending',
+    Scoring = 'scoring',
+    NigiriChoosing = 'nigiri_choosing',
+    NigiriGuessing = 'nigiri_guessing',
+    NigiriReveal = 'nigiri_reveal',
+    BasePlacement = 'base_placement',
+    KomiBidding = 'komi_bidding',
+    KomiBidReveal = 'komi_bid_reveal',
+    BaseGameStartConfirmation = 'base_game_start_confirmation',
+    CaptureBidding = 'capture_bidding',
+    CaptureReveal = 'capture_reveal',
+    CaptureTiebreaker = 'capture_tiebreaker',
+    HiddenPlacing = 'hidden_placing',
+    Scanning = 'scanning',
+    ScanningAnimating = 'scanning_animating',
+    HiddenRevealAnimating = 'hidden_reveal_animating',
+    HiddenFinalReveal = 'hidden_final_reveal',
+    MissileSelecting = 'missile_selecting',
+    MissileAnimating = 'missile_animating',
+    TurnPreferenceSelection = 'turn_preference_selection',
+    DiceRps = 'dice_rps',
+    DiceRpsReveal = 'dice_rps_reveal',
+    ThiefRps = 'thief_rps',
+    ThiefRpsReveal = 'thief_rps_reveal',
+    AlkkagiRps = 'alkkagi_rps',
+    AlkkagiRpsReveal = 'alkkagi_rps_reveal',
+    CurlingRps = 'curling_rps',
+    CurlingRpsReveal = 'curling_rps_reveal',
+    OmokRps = 'omok_rps',
+    OmokRpsReveal = 'omok_rps_reveal',
+    TtamokRps = 'ttamok_rps',
+    TtamokRpsReveal = 'ttamok_rps_reveal',
+    DiceTurnRolling = 'dice_turn_rolling',
+    DiceTurnRollingAnimating = 'dice_turn_rolling_animating',
+    DiceTurnChoice = 'dice_turn_choice',
+    DiceStartConfirmation = 'dice_start_confirmation',
+    DiceRolling = 'dice_rolling',
+    DiceRollingAnimating = 'dice_rolling_animating',
+    DicePlacing = 'dice_placing',
+    DiceRoundEnd = 'dice_round_end',
+    ThiefRoleSelection = 'thief_role_selection',
+    ThiefRoleConfirmed = 'thief_role_confirmed',
+    ThiefRolling = 'thief_rolling',
+    ThiefRollingAnimating = 'thief_rolling_animating',
+    ThiefPlacing = 'thief_placing',
+    ThiefRoundEnd = 'thief_round_end',
+    AlkkagiStartConfirmation = 'alkkagi_start_confirmation',
+    AlkkagiPlacement = 'alkkagi_placement',
+    AlkkagiSimultaneousPlacement = 'alkkagi_simultaneous_placement',
+    AlkkagiPlaying = 'alkkagi_playing',
+    AlkkagiAnimating = 'alkkagi_animating',
+    AlkkagiRoundEnd = 'alkkagi_round_end',
+    CurlingStartConfirmation = 'curling_start_confirmation',
+    CurlingPlaying = 'curling_playing',
+    CurlingAnimating = 'curling_animating',
+    CurlingRoundEnd = 'curling_round_end',
+    CurlingTiebreakerPreferenceSelection = 'curling_tiebreaker_preference_selection',
+    CurlingTiebreakerPlaying = 'curling_tiebreaker_playing',
+    CurlingTiebreakerRps = 'curling_tiebreaker_rps',
+    CurlingTiebreakerRpsReveal = 'curling_tiebreaker_rps_reveal',
+    AiHiddenThinking = 'ai_hidden_thinking',
+    SinglePlayerIntro = 'single_player_intro',
+}
+
+export enum WinReason {
+    Resign = 'resign',
+    Timeout = 'timeout',
+    Score = 'score',
+    CaptureLimit = 'capture_limit',
+    Disconnect = 'disconnect',
+    OmokWin = 'omok_win',
+    DiceWin = 'dice_win',
+    AlkkagiWin = 'alkkagi_win',
+    CurlingWin = 'curling_win',
+    TotalScore = 'total_score',
+    FoulLimit = 'foul_limit',
+    StoneLimitExceeded = 'stone_limit_exceeded',
+}
+
+export enum RPSChoice {
+    Rock = 'rock',
+    Paper = 'paper',
+    Scissors = 'scissors',
+}
+
+export enum ItemGrade {
+    Normal = 'normal',
+    Uncommon = 'uncommon',
+    Rare = 'rare',
+    Epic = 'epic',
+    Legendary = 'legendary',
+    Mythic = 'mythic',
+}
+
+export enum EquipmentSlot {
+    Fan = 'fan',
+    Board = 'board',
+    Top = 'top',
+    Bottom = 'bottom',
+    Bowl = 'bowl',
+    Stones = 'stones',
+}
+
+export enum CoreStat {
+    Concentration = '집중력',
+    ThinkingSpeed = '사고속도',
+    Judgment = '판단력',
+    Calculation = '계산력',
+    CombatPower = '전투력',
+    Stability = '안정감',
+}
+
+export enum SpecialStat {
+    ActionPointMax = 'ActionPointMax',
+    ActionPointRegen = 'ActionPointRegen',
+    StrategyXpBonus = 'StrategyXpBonus',
+    PlayfulXpBonus = 'PlayfulXpBonus',
+    GoldBonus = 'GoldBonus',
+    ItemDropRate = 'ItemDropRate',
+    MaterialDropRate = 'MaterialDropRate',
+    GuildBossDamage = 'GuildBossDamage',
+    GuildBossDamageReduction = 'GuildBossDamageReduction',
+    GuildBossHealIncrease = 'GuildBossHealIncrease',
+}
+
+export enum MythicStat {
+    MannerActionCooldown = 'MannerActionCooldown',
+    StrategicGoldBonus = 'StrategicGoldBonus',
+    PlayfulGoldBonus = 'PlayfulGoldBonus',
+    DiceGoOddBonus = 'DiceGoOddBonus',
+    AlkkagiSlowBonus = 'AlkkagiSlowBonus',
+    AlkkagiAimingBonus = 'AlkkagiAimingBonus',
+}
+
+export type ItemOptionType = CoreStat | SpecialStat | MythicStat;
+
+export enum UserStatus {
+    Online = 'online',
+    Waiting = 'waiting',
+    Resting = 'resting',
+    Negotiating = 'negotiating',
+    InGame = 'in-game',
+    Spectating = 'spectating',
+}
+
+export enum TournamentType {
+    Neighborhood = 'neighborhood',
+    National = 'national',
+    World = 'world',
 }
 
 export enum LeagueTier {
-    Sprout = '새싹',
-    Rookie = '루키',
-    Rising = '라이징',
-    Ace = '에이스',
-    Diamond = '다이아',
-    Master = '마스터',
-    Grandmaster = '그랜드마스터',
-    Challenger = '챌린저',
+    Sprout = '새싹 리그',
+    Rookie = '루키 리그',
+    Rising = '라이징 리그',
+    Ace = '에이스 리그',
+    Diamond = '다이아 리그',
+    Master = '마스터 리그',
+    Grandmaster = '그랜드마스터 리그',
+    Challenger = '챌린저 리그',
 }
 
-export type GameStatus =
-  | 'pending' // Legacy, for direct challenges
-  | 'negotiating'
-  // Pre-game phases
-  | 'nigiri_choosing'
-  | 'nigiri_guessing'
-  | 'nigiri_reveal'
-  | 'base_placement'
-  | 'komi_bidding'
-  | 'komi_bid_reveal'
-  | 'base_game_start_confirmation'
-  | 'capture_bidding'
-  | 'capture_reveal'
-  | 'capture_tiebreaker'
-  // Hidden Go Item Usage
-  | 'hidden_placing'
-  | 'scanning'
-  | 'scanning_animating' // New state for scan result animation
-  | 'hidden_reveal_animating' // For when a hidden stone contributes to a capture
-  | 'hidden_final_reveal'
-  // Missile Go
-  | 'missile_selecting'
-  | 'missile_animating'
-  // RPS Minigames for various modes
-  | 'dice_rps' | 'dice_rps_reveal'
-  | 'thief_rps' | 'thief_rps_reveal'
-  | 'alkkagi_rps' | 'alkkagi_rps_reveal'
-  | 'curling_rps' | 'curling_rps_reveal'
-  | 'omok_rps' | 'omok_rps_reveal'
-  | 'ttamok_rps' | 'ttamok_rps_reveal'
-  | 'curling_tiebreaker_rps' | 'curling_tiebreaker_rps_reveal'
-  // Role/Turn Selection
-  | 'turn_preference_selection' // Unified state for choosing turn
-  | 'alkkagi_turn_selection'
-  | 'curling_turn_selection'
-  | 'thief_role_selection'
-  | 'thief_role_confirmed'
-  | 'thief_role_dice_roll'
-  // Alkkagi phases
-  | 'alkkagi_placement'
-  | 'alkkagi_simultaneous_placement'
-  | 'alkkagi_playing'
-  | 'alkkagi_animating'
-  | 'alkkagi_scoring'
-  | 'alkkagi_round_end'
-  | 'alkkagi_start_confirmation'
-  // Curling phases
-  | 'curling_playing'
-  | 'curling_animating'
-  | 'curling_scoring'
-  | 'curling_round_end'
-  | 'curling_start_confirmation'
-  | 'curling_tiebreaker_preference_selection'
-  | 'curling_tiebreaker_playing'
-  // Dice Go phases
-  | 'dice_turn_rolling' // Players are rolling for turn order
-  | 'dice_turn_rolling_animating' // Animation for the turn roll
-  | 'dice_turn_choice'
-  | 'dice_start_confirmation' // Players confirm to start
-  | 'dice_rolling' // Main game turn: rolling dice
-  | 'dice_rolling_animating'
-  | 'dice_placing' // Main game turn: placing stones
-  | 'dice_round_end' // Round summary screen for dice go
-  // Thief Go phases
-  | 'thief_rolling'
-  | 'thief_rolling_animating'
-  | 'thief_placing'
-  | 'thief_round_end'
-  // Main phase
-  | 'playing'
-  // End-game phases
-  | 'scoring' // NEW: For strategic games awaiting analysis
-  | 'ended'
-  | 'rematch_pending'
-  | 'no_contest'
-  // Disconnected
-  | 'disconnected';
-
-
-export type UserStatus = 'online' | 'waiting' | 'resting' | 'negotiating' | 'in-game' | 'spectating';
-
-export type WinReason = 'resign' | 'timeout' | 'disconnect' | 'score' | 'capture_limit' | 'omok_win' | 'thief_captured' | 'police_win' | 'alkkagi_win' | 'curling_win' | 'total_score' | 'dice_win' | 'foul_limit' | 'stone_limit_exceeded';
-export type RPSChoice = 'rock' | 'paper' | 'scissors';
-export enum DiceGoVariant { Basic = 'basic' }
-export enum AlkkagiPlacementType { TurnByTurn = '교대 배치', Simultaneous = '일괄 배치' }
-export enum AlkkagiLayoutType { Normal = '일반배치', Battle = '전투배치' }
-export type EquipmentSlot = 'fan' | 'board' | 'top' | 'bottom' | 'bowl' | 'stones';
-export type InventoryItemType = 'equipment' | 'consumable' | 'material';
-export type ItemGrade = 'normal' | 'uncommon' | 'rare' | 'epic' | 'legendary' | 'mythic';
-export enum CoreStat {
-    Concentration = '집중력', ThinkingSpeed = '사고속도', Judgment = '판단력',
-    Calculation = '계산력', CombatPower = '전투력', Stability = '안정감',
-}
-export enum SpecialStat {
-    ActionPointMax = '행동력 최대치', ActionPointRegen = '행동력 회복속도',
-    StrategyXpBonus = '전략 경험치 추가획득', PlayfulXpBonus = '놀이 경험치 추가획득',
-    GoldBonus = '골드보상 추가', ItemDropRate = '장비상자 획득확률 증가', MaterialDropRate = '재료상자 획득확률 증가',
-}
-export enum MythicStat {
-    MannerActionCooldown = '매너 액션 버튼 생성시간 감소', StrategicGoldBonus = '전략 바둑 경기중 착수시 20%확률로 골드획득(10~50골드) 최대5회',
-    PlayfulGoldBonus = '놀이 바둑 경기중 60초마다 20%확률로 골드획득(10~50골드) 최대5회', DiceGoOddBonus = '주사위 홀/짝 보너스',
-    AlkkagiSlowBonus = '알까기 및 바둑컬링에서 슬로우 아이템 1개추가', AlkkagiAimingBonus = '알까기 및 바둑컬링에서 조준선 아이템 1개추가',
-}
-export type ItemOptionType = CoreStat | SpecialStat | MythicStat;
-
-// --- Tournament Enums ---
-export type TournamentType = 'neighborhood' | 'national' | 'world';
-
-export type TournamentSimulationStatus =
-  | 'idle'
-  | 'enrolled'
-  | 'bracket_ready'
-  | 'round_in_progress'
-  | 'round_complete'
-  | 'eliminated'
-  | 'complete'
-  | 'awaiting_start'
-  | 'awaiting_next_round';
 export enum SinglePlayerLevel {
     입문 = '입문',
     초급 = '초급',
     중급 = '중급',
     고급 = '고급',
-    유단자 = '유단자'
+    유단자 = '유단자',
 }
 
-// --- Game Primitives ---
-export type Point = { x: number; y: number; };
-export type Move = { player: Player; x: number; y: number; };
-export type BoardState = Player[][];
+export enum GameType {
+    Capture = 'capture',
+    Survival = 'survival',
+    Speed = 'speed',
+    Missile = 'missile',
+    Hidden = 'hidden',
+}
+
+export enum DiceGoVariant {
+    Basic = 'basic'
+}
+
+export enum AlkkagiPlacementType {
+    TurnByTurn = '턴제 배치',
+    Simultaneous = '일괄 배치',
+}
+
+export enum AlkkagiLayoutType {
+    Normal = '기본형',
+    Battle = '대결형',
+}
+
+export enum GuildMemberRole {
+    Master = 'master',
+    Vice = 'vice',
+    Member = 'member',
+}
+
+export type InventoryItemType = 'equipment' | 'consumable' | 'material';
+
+export enum GuildResearchId { 
+    // 길드 발전
+    member_limit_increase = 'member_limit_increase',
+    
+    // 보스전
+    boss_hp_increase = 'boss_hp_increase',
+    boss_skill_heal_block = 'boss_skill_heal_block',
+    boss_skill_regen = 'boss_skill_regen',
+    boss_skill_ignite = 'boss_skill_ignite',
+
+    // 능력치 증가
+    stat_concentration = 'stat_concentration',
+    stat_thinking_speed = 'stat_thinking_speed',
+    stat_judgment = 'stat_judgment',
+    stat_calculation = 'stat_calculation',
+    stat_combat_power = 'stat_combat_power',
+    stat_stability = 'stat_stability',
+    ap_regen_boost = 'ap_regen_boost',
+
+    // 보상 증가
+    reward_strategic_gold = 'reward_strategic_gold',
+    reward_playful_gold = 'reward_playful_gold',
+    reward_strategic_xp = 'reward_strategic_xp',
+    reward_playful_xp = 'reward_playful_xp',
+}

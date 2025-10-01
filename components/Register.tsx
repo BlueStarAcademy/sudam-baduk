@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import Button from './Button.js';
 import { containsProfanity } from '../profanity.js';
 import { useAppContext } from '../hooks/useAppContext.js';
 
 const Register: React.FC = () => {
-    const { setCurrentUserAndRoute } = useAppContext();
+    const { login } = useAppContext();
     const [username, setUsername] = useState('');
     const [nickname, setNickname] = useState('');
     const [password, setPassword] = useState('');
@@ -60,7 +59,7 @@ const Register: React.FC = () => {
             
             const data = await response.json();
             // After successful registration, automatically log the user in
-            setCurrentUserAndRoute(data.user);
+            login(data.user, data.sessionId);
         } catch (err: any) {
             setError(err.message);
         } finally {

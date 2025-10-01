@@ -1,95 +1,56 @@
 
-// FIX: Import missing types from the centralized types file.
-import { User, CoreStat, InventoryItem, SpecialStat, MythicStat, ItemOptionType } from '../types.js';
-import { ACTION_POINT_REGEN_INTERVAL_MS } from '../constants.js';
-
-export interface MannerEffects {
-    maxActionPoints: number;
-    actionPointRegenInterval: number;
-    goldBonusPercent: number;
-    itemDropRateBonus: number;
-    mannerActionButtonBonus: number;
-    rewardMultiplier: number;
-    enhancementSuccessRateBonus: number;
-}
-
-// This function was moved from mannerService to break a circular dependency
-export const getMannerEffects = (user: User): MannerEffects => {
-    const score = user.mannerScore ?? 200;
-    const effects: MannerEffects = {
-        maxActionPoints: 30,
-        actionPointRegenInterval: ACTION_POINT_REGEN_INTERVAL_MS,
-        goldBonusPercent: 0,
-        itemDropRateBonus: 0,
-        mannerActionButtonBonus: 0,
-        rewardMultiplier: 1,
-        enhancementSuccessRateBonus: 0,
-    };
-
-    // Apply cumulative positive effects
-    if (score >= 400) { // 좋음
-        effects.maxActionPoints += 10;
-    }
-    if (score >= 800) { // 매우 좋음
-        effects.goldBonusPercent += 10;
-    }
-    if (score >= 1200) { // 품격
-        effects.itemDropRateBonus += 10;
-    }
-    if (score >= 1600) { // 프로
-        effects.enhancementSuccessRateBonus += 10;
-    }
-    // 마스터 (2000+) is handled via mannerMasteryApplied flag for stat points
-
-    // Apply cumulative negative effects
-    if (score <= 199) { // 주의
-        effects.mannerActionButtonBonus += 1;
-    }
-    if (score <= 99) { // 나쁨
-        effects.rewardMultiplier *= 0.5;
-    }
-    if (score <= 49) { // 매우 나쁨
-        effects.actionPointRegenInterval = 20 * 60 * 1000; // 20 minutes
-    }
-    if (score <= 0) { // 최악
-        effects.maxActionPoints = Math.floor(effects.maxActionPoints * 0.1);
-    }
-    
-    return effects;
-};
+import type { User, Guild, MannerEffects } from '../types/index.js';
+import { CoreStat, SpecialStat, MythicStat, GuildResearchId } from '../types/index.js';
+import { GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index.js';
+import { getMannerEffects } from './manner.js';
 
 export interface CalculatedEffects extends MannerEffects {
+    maxActionPoints: number;
+    actionPointRegenInterval: number;
     coreStatBonuses: Record<CoreStat, { flat: number; percent: number }>;
     specialStatBonuses: Record<SpecialStat, { flat: number; percent: number }>;
-    mythicStatBonuses: Record<string, { flat: number; percent: number }>;
+    mythicStatBonuses: Record<MythicStat, { flat: number; percent: number; }>,
+    strategicGoldBonusPercent: number;
+    playfulGoldBonusPercent: number;
+    strategicXpBonusPercent: number;
+    playfulXpBonusPercent: number;
 }
 
-export const calculateUserEffects = (user: User): CalculatedEffects => {
-    // Start with manner effects
+const researchIdToCoreStat: Partial<Record<GuildResearchId, CoreStat>> = {
+    [GuildResearchId.stat_concentration]: CoreStat.Concentration,
+    [GuildResearchId.stat_thinking_speed]: CoreStat.ThinkingSpeed,
+    [GuildResearchId.stat_judgment]: CoreStat.Judgment,
+    [GuildResearchId.stat_calculation]: CoreStat.Calculation,
+    [GuildResearchId.stat_combat_power]: CoreStat.CombatPower,
+    [GuildResearchId.stat_stability]: CoreStat.Stability,
+};
+
+export const calculateUserEffects = (user: User, guild: Guild | null): CalculatedEffects => {
     const effects = getMannerEffects(user);
 
     const calculatedEffects: CalculatedEffects = {
         ...effects,
         coreStatBonuses: {} as Record<CoreStat, { flat: number; percent: number }>,
         specialStatBonuses: {} as Record<SpecialStat, { flat: number; percent: number }>,
-        mythicStatBonuses: {} as Record<string, { flat: number; percent: number; }>,
+        mythicStatBonuses: {} as Record<MythicStat, { flat: number; percent: number; }>,
+        strategicGoldBonusPercent: 0,
+        playfulGoldBonusPercent: 0,
+        strategicXpBonusPercent: 0,
+        playfulXpBonusPercent: 0,
     };
 
-    // Initialize bonus records
-    // FIX: Cast Object.values to CoreStat[] to ensure type safety when indexing.
     for (const key of Object.values(CoreStat) as CoreStat[]) {
         calculatedEffects.coreStatBonuses[key] = { flat: 0, percent: 0 };
     }
-    for (const key of Object.values(SpecialStat)) {
+    for (const key of Object.values(SpecialStat) as SpecialStat[]) {
         calculatedEffects.specialStatBonuses[key] = { flat: 0, percent: 0 };
     }
-    for (const key of Object.values(MythicStat)) {
+    for (const key of Object.values(MythicStat) as MythicStat[]) {
         calculatedEffects.mythicStatBonuses[key] = { flat: 0, percent: 0 };
     }
 
     const equippedItems = user.inventory.filter(i => i.isEquipped && i.type === 'equipment' && i.options);
 
-    // Add equipment effects
     for (const item of equippedItems) {
         const allOptions = [item.options!.main, ...item.options!.combatSubs, ...item.options!.specialSubs, ...item.options!.mythicSubs];
         for (const opt of allOptions) {
@@ -110,13 +71,36 @@ export const calculateUserEffects = (user: User): CalculatedEffects => {
                     calculatedEffects.specialStatBonuses[type as SpecialStat].flat += value;
                 }
             } else if (Object.values(MythicStat).includes(type as MythicStat)) {
-                // Mythic stats are generally flat values (e.g., +1 item)
                 calculatedEffects.mythicStatBonuses[type as MythicStat].flat += value;
             }
         }
     }
+
+    if (guild && guild.research) {
+        for (const researchId in guild.research) {
+            const id = researchId as GuildResearchId;
+            const data = guild.research[id];
+            const project = GUILD_RESEARCH_PROJECTS[id];
+            if (data && data.level > 0 && project) {
+                const totalEffect = project.baseEffect * data.level;
+                const coreStat = researchIdToCoreStat[id];
+                if (coreStat) {
+                    calculatedEffects.coreStatBonuses[coreStat].percent += totalEffect;
+                } else {
+                    switch (id) {
+                        case GuildResearchId.ap_regen_boost: calculatedEffects.specialStatBonuses[SpecialStat.ActionPointRegen].percent += totalEffect; break;
+                        case GuildResearchId.reward_strategic_gold: calculatedEffects.strategicGoldBonusPercent += totalEffect; break;
+                        case GuildResearchId.reward_playful_gold: calculatedEffects.playfulGoldBonusPercent += totalEffect; break;
+                        case GuildResearchId.reward_strategic_xp: calculatedEffects.strategicXpBonusPercent += totalEffect; break;
+                        case GuildResearchId.reward_playful_xp: calculatedEffects.playfulXpBonusPercent += totalEffect; break;
+                        case GuildResearchId.boss_hp_increase:
+                            break;
+                    }
+                }
+            }
+        }
+    }
     
-    // Update manner effects based on equipment bonuses
     calculatedEffects.maxActionPoints += calculatedEffects.specialStatBonuses[SpecialStat.ActionPointMax].flat;
     const regenBonusPercent = calculatedEffects.specialStatBonuses[SpecialStat.ActionPointRegen].percent;
     if (regenBonusPercent > 0) {
@@ -126,8 +110,8 @@ export const calculateUserEffects = (user: User): CalculatedEffects => {
     return calculatedEffects;
 };
 
-export const regenerateActionPoints = async (user: User): Promise<User> => {
-    const effects = calculateUserEffects(user);
+export const regenerateActionPoints = (user: User, guild: Guild | null): User => {
+    const effects = calculateUserEffects(user, guild);
     const now = Date.now();
     
     const calculatedMaxAP = effects.maxActionPoints;
@@ -158,6 +142,11 @@ export const regenerateActionPoints = async (user: User): Promise<User> => {
         return updatedUser;
     }
 
+    if (!effects.actionPointRegenInterval || effects.actionPointRegenInterval <= 0) {
+        console.error(`[AP Regen] Invalid regen interval for user ${user.id}: ${effects.actionPointRegenInterval}. Aborting AP regen.`);
+        return userModified ? updatedUser : user;
+    }
+    
     const elapsedMs = now - lastUpdate;
     const pointsToAdd = Math.floor(elapsedMs / effects.actionPointRegenInterval);
 

@@ -1,4 +1,6 @@
-import { ActionButton, GameMode } from '../types.js';
+
+import { GameMode } from '../types/index.js';
+import type { ActionButton, QuestReward } from '../types/index.js';
 
 // --- Action Point Costs ---
 export const STRATEGIC_ACTION_POINT_COST = 5;
@@ -65,3 +67,8 @@ export const NO_CONTEST_MOVE_THRESHOLD = 10;
 export const NO_CONTEST_TIME_THRESHOLD_SECONDS = 180;
 export const NO_CONTEST_MANNER_PENALTY = 20;
 export const NO_CONTEST_RANKING_PENALTY = 50;
+
+// Tournament Bot Score Gain
+// FIX: Export missing constants.
+export const MIN_DAILY_SCORE_GAIN = 0;
+export const MAX_DAILY_SCORE_GAIN = 50;

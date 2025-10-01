@@ -4,7 +4,7 @@ import DraggableWindow from './DraggableWindow.js';
 import { GAME_RULES } from '../gameRules.js';
 
 interface HelpModalProps {
-    mode: GameMode;
+    mode: GameMode | 'guild';
     onClose: () => void;
 }
 

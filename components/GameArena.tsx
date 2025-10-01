@@ -1,5 +1,5 @@
 import React from 'react';
-import { GameProps, Player, GameMode } from '../types.js';
+import { GameProps, Player, GameMode, Point } from '../types/index.js';
 
 // Import the new arena components
 import GoGameArena from './arenas/GoGameArena.js';
@@ -17,6 +17,10 @@ interface GameArenaProps extends GameProps {
     isMobile: boolean;
     myRevealedMoves: number[];
     showLastMoveMarker: boolean;
+    optimisticStone?: Point | null;
+    // FIX: Add missing props to pass down to child arenas.
+    setOptimisticStone: (stone: Point | null) => void;
+    setIsSubmittingMove: (isSubmitting: boolean) => void;
 }
 
 const GameArena: React.FC<GameArenaProps> = (props) => {

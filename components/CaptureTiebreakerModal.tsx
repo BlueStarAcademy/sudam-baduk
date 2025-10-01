@@ -1,5 +1,9 @@
+
+
 import React, { useState, useEffect } from 'react';
-import { LiveGameSession, Player, ServerAction, User } from '../types.js';
+// FIX: Separate enum and type imports.
+import { Player } from '../types/index.js';
+import type { LiveGameSession, ServerAction, User } from '../types/index.js';
 import Avatar from './Avatar.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
@@ -54,7 +58,7 @@ const CaptureTiebreakerModal: React.FC<CaptureTiebreakerModalProps> = ({ session
 
     const { title, description } = getTitleAndDescription();
 
-    const PlayerDisplay = ({ user, color, target }: { user: User, color: '흑' | '백', target: number | undefined }) => (
+    const PlayerDisplay: React.FC<{ user: User, color: '흑' | '백', target: number | undefined }> = ({ user, color, target }) => (
         <div className="flex flex-col items-center text-center p-4 bg-gray-900/50 rounded-lg border border-gray-700">
             <Avatar userId={user.id} userName={user.nickname} size={80} className={`border-4 ${color === '흑' ? 'border-gray-500' : 'border-gray-400'}`} />
             <p className="mt-3 text-xl font-bold">{user.nickname}</p>

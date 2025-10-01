@@ -1,216 +1,292 @@
-
-import { randomUUID } from 'crypto';
+import {
+    type VolatileState, type User, type HandleActionResult, type LiveGameSession,
+    GameStatus, Player, type Guild, GameMode, type Negotiation, UserStatus, type Point
+} from '../../types/index.js';
 import * as db from '../db.js';
-import * as types from '../../types.js';
 import { initializeGame } from '../gameModes.js';
-import { getAiUser } from '../aiPlayer.js';
-import * as effectService from '../effectService.js';
+import { getAiUser } from '../ai/index.js';
+import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../../constants/index.js';
+import { transitionToPlaying } from './shared.js';
+import * as effectService from '../services/effectService.js';
 import { getGoLogic } from '../goLogic.js';
-import { SINGLE_PLAYER_STAGES, TOWER_STAGES, SINGLE_PLAYER_MISSIONS } from '../../constants.js';
-import { updateQuestProgress } from '../questService.js';
+import * as currencyService from '../currencyService.js';
+import { gnuGoServiceManager } from '../services/gnuGoService.js';
 
-const areAnyStonesCaptured = (boardState: types.BoardState, boardSize: number): boolean => {
-    const logic = getGoLogic({ boardState, settings: { boardSize } } as types.LiveGameSession);
-    const blackGroups = logic.getAllGroups(types.Player.Black, boardState);
-    if (blackGroups.some(g => g.liberties === 0)) return true;
-    const whiteGroups = logic.getAllGroups(types.Player.White, boardState);
-    if (whiteGroups.some(g => g.liberties === 0)) return true;
-    return false;
-};
-
-const gameTypeToMode: Record<types.GameType, types.GameMode> = {
-    'capture': types.GameMode.Capture,
-    'survival': types.GameMode.Standard,
-    'speed': types.GameMode.Speed,
-    'missile': types.GameMode.Missile,
-    'hidden': types.GameMode.Hidden
-};
-
-export const handleSinglePlayerGameStart = async (volatileState: types.VolatileState, payload: any, user: types.User): Promise<types.HandleActionResult> => {
+export const handleSinglePlayerGameStart = async (
+    volatileState: VolatileState,
+    payload: { stageId: string },
+    user: User,
+    guilds: Record<string, Guild>
+): Promise<HandleActionResult> => {
     const { stageId } = payload;
     const stage = SINGLE_PLAYER_STAGES.find(s => s.id === stageId);
     if (!stage) {
         return { error: '유효하지 않은 스테이지입니다.' };
     }
 
-    const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stageId);
-    if (!user.isAdmin && (user.singlePlayerProgress ?? 0) < stageIndex) {
-        return { error: '아직 잠금 해제되지 않은 스테이지입니다.' };
+    if (user.actionPoints.current < stage.actionPointCost && !user.isAdmin) {
+        return { error: `액션 포인트가 부족합니다. (필요: ${stage.actionPointCost})` };
     }
-    
-    const now = Date.now();
+
     if (!user.isAdmin) {
-        const effects = effectService.calculateUserEffects(user);
+        const userGuild = user.guildId ? (guilds[user.guildId] ?? null) : null;
+        const effects = effectService.calculateUserEffects(user, userGuild);
         const maxAP = effects.maxActionPoints;
         const wasAtMax = user.actionPoints.current >= maxAP;
         
-        if (user.actionPoints.current < stage.actionPointCost) {
-            return { error: '행동력이 부족합니다.' };
-        }
-    
         user.actionPoints.current -= stage.actionPointCost;
+
         if (wasAtMax) {
-            user.lastActionPointUpdate = now;
+            user.lastActionPointUpdate = Date.now();
+        }
+    }
+    
+    await db.updateUser(user);
+
+    const aiUser = getAiUser(GameMode.Standard, stage.katagoLevel, stage.id);
+    
+    const isFischer = stage.timeControl.type === 'fischer';
+    const negotiation: Negotiation = {
+        id: `neg-sp-${globalThis.crypto.randomUUID()}`,
+        challenger: user,
+        opponent: aiUser,
+        mode: stage.missileCount ? GameMode.Missile : (stage.hiddenStoneCount ? GameMode.Hidden : GameMode.Standard),
+        settings: {
+            boardSize: stage.boardSize,
+            komi: 6.5,
+            timeLimit: stage.timeControl.mainTime,
+            byoyomiTime: isFischer ? 0 : stage.timeControl.byoyomiTime ?? 30,
+            byoyomiCount: isFischer ? 0 : (stage.timeControl.byoyomiCount || 3),
+            timeIncrement: isFischer ? stage.timeControl.increment : undefined,
+            player1Color: Player.Black,
+            aiDifficulty: stage.katagoLevel * 10,
+            missileCount: stage.missileCount,
+            hiddenStoneCount: stage.hiddenStoneCount,
+            scanCount: stage.scanCount,
+            timeControl: stage.timeControl,
+        },
+        proposerId: user.id,
+        status: 'accepted',
+        deadline: Date.now()
+    };
+    
+    const game = await initializeGame(negotiation, guilds);
+
+    // Override with single player specific properties
+    game.stageId = stageId;
+    game.gameType = stage.gameType;
+
+    const boardState = Array(stage.boardSize).fill(null).map(() => Array(stage.boardSize).fill(Player.None));
+    game.boardState = boardState;
+
+    const placeStonesRandomly = (count: number, player: Player, isPattern: boolean, avoidCenter = false) => {
+        let placed = 0;
+        let attempts = 0;
+        const patternStones = [];
+        const maxAttempts = stage.boardSize * stage.boardSize * 3; // Increased attempts
+
+        // A temporary game-like object for getGoLogic
+        const tempGameForLogic = { boardState, settings: { boardSize: stage.boardSize } } as LiveGameSession;
+        const logic = getGoLogic(tempGameForLogic);
+
+        while (placed < count && attempts < maxAttempts) {
+            attempts++;
+            const x = Math.floor(Math.random() * stage.boardSize);
+            const y = Math.floor(Math.random() * stage.boardSize);
+            if (avoidCenter && x === Math.floor(stage.boardSize / 2) && y === Math.floor(stage.boardSize / 2)) {
+                continue;
+            }
+            if (boardState[y][x] === Player.None) {
+                // Temporarily place the stone to check for liberties
+                boardState[y][x] = player;
+                const group = logic.findGroup(x, y, player, boardState);
+                
+                // Check if the placed stone has liberties.
+                if (group && group.liberties > 0) {
+                    // It's a valid placement, keep it.
+                    if (isPattern) {
+                        patternStones.push({ x, y });
+                    }
+                    placed++;
+                } else {
+                    // Invalid placement (no liberties), revert it.
+                    boardState[y][x] = Player.None;
+                }
+            }
+        }
+        if (placed < count) {
+            console.warn(`[SP Placement] Could only place ${placed}/${count} stones with liberties via random sampling. Trying exhaustive search.`);
+            // Fallback for very dense boards: iterate through all empty spots
+            const emptyPoints: Point[] = [];
+            for (let y = 0; y < stage.boardSize; y++) {
+                for (let x = 0; x < stage.boardSize; x++) {
+                    if (boardState[y][x] === Player.None) emptyPoints.push({ x, y });
+                }
+            }
+            emptyPoints.sort(() => Math.random() - 0.5); // Shuffle empty points
+
+            for (const point of emptyPoints) {
+                if (placed >= count) break;
+                if (avoidCenter && point.x === Math.floor(stage.boardSize / 2) && point.y === Math.floor(stage.boardSize / 2)) continue;
+                
+                boardState[point.y][point.x] = player;
+                const group = logic.findGroup(point.x, point.y, player, boardState);
+                if (group && group.liberties > 0) {
+                    if (isPattern) patternStones.push(point);
+                    placed++;
+                } else {
+                    boardState[point.y][point.x] = Player.None; // revert
+                }
+            }
+        }
+        return patternStones;
+    };
+    
+    if (stage.placements.centerBlackStoneChance && Math.random() * 100 < stage.placements.centerBlackStoneChance) {
+        const centerX = Math.floor(stage.boardSize / 2);
+        const centerY = Math.floor(stage.boardSize / 2);
+        if (boardState[centerY][centerX] === Player.None) {
+            boardState[centerY][centerX] = Player.Black;
         }
     }
 
-    const aiOpponent = getAiUser(types.GameMode.Standard, 1, stage.level);
-    aiOpponent.strategyLevel = stage.katagoLevel;
+    placeStonesRandomly(stage.placements.black, Player.Black, false, true);
+    placeStonesRandomly(stage.placements.white, Player.White, false, false);
+    game.blackPatternStones = placeStonesRandomly(stage.placements.blackPattern, Player.Black, true, true);
+    game.whitePatternStones = placeStonesRandomly(stage.placements.whitePattern, Player.White, true, false);
 
-    const mode = stage.gameType ? gameTypeToMode[stage.gameType] : types.GameMode.Standard;
-
-    const gameSettings: types.GameSettings = {
-        boardSize: stage.boardSize,
-        komi: 0.5,
-        timeLimit: stage.timeControl.mainTime,
-        byoyomiTime: stage.timeControl.type === 'byoyomi' ? stage.timeControl.byoyomiTime : 30,
-        byoyomiCount: stage.timeControl.type === 'byoyomi' ? stage.timeControl.byoyomiCount : 3,
-        timeIncrement: stage.timeControl.type === 'fischer' ? stage.timeControl.increment : 5,
-        aiDifficulty: stage.katagoLevel,
-        missileCount: stage.missileCount,
-        hiddenStoneCount: stage.hiddenStoneCount,
-        scanCount: stage.scanCount,
-        captureTarget: stage.targetScore?.black,
-    } as types.GameSettings;
+    game.blackStoneLimit = stage.blackStoneLimit;
+    game.whiteStoneLimit = stage.whiteStoneLimit;
+    game.autoEndTurnCount = stage.autoEndTurnCount;
     
-    const game: types.LiveGameSession = {
-        id: `game-sp-${randomUUID()}`,
-        mode: mode,
-        settings: gameSettings,
-        player1: user,
-        player2: aiOpponent,
-        isAiGame: true,
-        isSinglePlayer: true,
-        stageId: stageId,
-        boardState: Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(types.Player.None)),
-        moveHistory: [],
-        captures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 },
-        baseStoneCaptures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 },
-        hiddenStoneCaptures: { [types.Player.None]: 0, [types.Player.Black]: 0, [types.Player.White]: 0 },
-        winner: null,
-        winReason: null,
-        createdAt: now,
-        lastMove: null,
-        passCount: 0,
-        koInfo: null,
-        winningLine: null,
-        statsUpdated: false,
-        blackPlayerId: user.id,
-        whitePlayerId: aiOpponent.id,
-        currentPlayer: types.Player.Black,
-        gameStatus: 'playing',
-        blackTimeLeft: stage.timeControl.mainTime * 60,
-        whiteTimeLeft: stage.timeControl.mainTime * 60,
-        blackByoyomiPeriodsLeft: stage.timeControl.type === 'byoyomi' ? stage.timeControl.byoyomiCount : 0,
-        whiteByoyomiPeriodsLeft: stage.timeControl.type === 'byoyomi' ? stage.timeControl.byoyomiCount : 0,
-        disconnectionCounts: { [user.id]: 0, [aiOpponent.id]: 0 },
-        turnStartTime: now,
-        turnDeadline: now + stage.timeControl.mainTime * 60 * 1000,
-        gameType: stage.gameType,
-        autoEndTurnCount: stage.autoEndTurnCount,
-        whiteStoneLimit: stage.whiteStoneLimit,
-        whiteStonesPlaced: 0,
-        blackStonesPlaced: 0,
-        blackStoneLimit: stage.blackStoneLimit,
-        effectiveCaptureTargets: {
-            [types.Player.Black]: stage.targetScore?.black ?? 0,
-            [types.Player.White]: stage.targetScore?.white ?? 0,
-            [types.Player.None]: 0,
-        },
-        round: 1,
-        turnInRound: 1,
-        scores: { [user.id]: 0, [aiOpponent.id]: 0 },
-        currentActionButtons: { [user.id]: [], [aiOpponent.id]: [] },
-    };
-
-    let attempts = 0;
-    const MAX_PLACEMENT_ATTEMPTS = 10;
-    do {
-        game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(types.Player.None));
-        game.blackPatternStones = [];
-        game.whitePatternStones = [];
-        
-        const allPoints: types.Point[] = Array.from({ length: stage.boardSize * stage.boardSize }, (_, i) => ({ x: i % stage.boardSize, y: Math.floor(i / stage.boardSize) })).sort(() => 0.5 - Math.random());
-        
-        const placeStones = (count: number, player: types.Player, isPattern: boolean) => {
-            const key = player === types.Player.Black ? 'blackPatternStones' : 'whitePatternStones';
-            if (isPattern && !game[key]) game[key] = [];
-            for (let i = 0; i < count; i++) {
-                if (allPoints.length === 0) break;
-                const p = allPoints.pop()!;
-                game.boardState[p.y][p.x] = player;
-                if (isPattern) ((game as any)[key]! as types.Point[]).push(p);
-            }
+    if (stage.targetScore) {
+        game.effectiveCaptureTargets = {
+            [Player.None]: 0,
+            [Player.Black]: stage.targetScore.black,
+            [Player.White]: stage.targetScore.white,
         };
-        
-        placeStones(stage.placements.black, types.Player.Black, false);
-        placeStones(stage.placements.white, types.Player.White, false);
-        placeStones(stage.placements.blackPattern, types.Player.Black, true);
-        placeStones(stage.placements.whitePattern, types.Player.White, true);
-        
-        attempts++;
-        if (attempts >= MAX_PLACEMENT_ATTEMPTS) {
-            console.warn(`[Placement] Could not generate a stable board for stage ${stage.id} after ${MAX_PLACEMENT_ATTEMPTS} attempts. Using last attempt.`);
-            break;
-        }
-    } while (areAnyStonesCaptured(game.boardState, stage.boardSize));
+    }
+    
+    // All single player games should start with the intro modal.
+    game.gameStatus = GameStatus.SinglePlayerIntro;
+
+    // Add GnuGo instance creation for low-level AI
+    gnuGoServiceManager.create(game.id, game.player2.playfulLevel, game.settings.boardSize, game.settings.komi);
 
     await db.saveGame(game);
-    await db.updateUser(user);
+    
+    volatileState.userStatuses[user.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id };
 
-    volatileState.userStatuses[user.id] = { status: 'in-game', mode: game.mode, gameId: game.id };
+    return {};
+};
+
+export const handleSinglePlayerRefresh = async (game: LiveGameSession, user: User): Promise<HandleActionResult> => {
+    if (!game.isSinglePlayer || game.moveHistory.length > 0) {
+        return { error: '대국이 시작된 후에는 배치를 변경할 수 없습니다.' };
+    }
+
+    const refreshesUsed = game.singlePlayerPlacementRefreshesUsed || 0;
+    if (refreshesUsed >= 5) {
+        return { error: '새로고침 횟수를 모두 사용했습니다.' };
+    }
+
+    const costs = [0, 50, 100, 200, 300];
+    const cost = costs[refreshesUsed];
+    
+    if (user.gold < cost) {
+        return { error: `골드가 부족합니다. (필요: ${cost})` };
+    }
+
+    currencyService.spendGold(user, cost, `싱글플레이 새로고침 (${refreshesUsed + 1}회차)`);
+    game.singlePlayerPlacementRefreshesUsed = refreshesUsed + 1;
+
+    // Re-run placement logic
+    const stage = SINGLE_PLAYER_STAGES.find(s => s.id === game.stageId);
+    if (!stage) return { error: '스테이지 정보를 찾을 수 없습니다.' };
+    
+    const boardState = Array(stage.boardSize).fill(null).map(() => Array(stage.boardSize).fill(Player.None));
+    game.boardState = boardState;
+
+    const placeStonesRandomly = (count: number, player: Player, isPattern: boolean, avoidCenter = false) => {
+        let placed = 0;
+        let attempts = 0;
+        const patternStones = [];
+        const maxAttempts = stage.boardSize * stage.boardSize * 3;
+
+        const tempGameForLogic = { boardState, settings: { boardSize: stage.boardSize } } as LiveGameSession;
+        const logic = getGoLogic(tempGameForLogic);
+
+        while (placed < count && attempts < maxAttempts) {
+            attempts++;
+            const x = Math.floor(Math.random() * stage.boardSize);
+            const y = Math.floor(Math.random() * stage.boardSize);
+            if (avoidCenter && x === Math.floor(stage.boardSize / 2) && y === Math.floor(stage.boardSize / 2)) {
+                continue;
+            }
+            if (boardState[y][x] === Player.None) {
+                boardState[y][x] = player;
+                const group = logic.findGroup(x, y, player, boardState);
+                if (group && group.liberties > 0) {
+                    if (isPattern) patternStones.push({ x, y });
+                    placed++;
+                } else {
+                    boardState[y][x] = Player.None;
+                }
+            }
+        }
+
+        if (placed < count) {
+            console.warn(`[SP Refresh] Could only place ${placed}/${count} stones with liberties via random sampling. Trying exhaustive search.`);
+            const emptyPoints: Point[] = [];
+            for (let y = 0; y < stage.boardSize; y++) {
+                for (let x = 0; x < stage.boardSize; x++) {
+                    if (boardState[y][x] === Player.None) emptyPoints.push({ x, y });
+                }
+            }
+            emptyPoints.sort(() => Math.random() - 0.5);
+            for (const point of emptyPoints) {
+                if (placed >= count) break;
+                if (avoidCenter && point.x === Math.floor(stage.boardSize / 2) && point.y === Math.floor(stage.boardSize / 2)) continue;
+                boardState[point.y][point.x] = player;
+                const group = logic.findGroup(point.x, point.y, player, boardState);
+                if (group && group.liberties > 0) {
+                    if (isPattern) patternStones.push(point);
+                    placed++;
+                } else {
+                    boardState[point.y][point.x] = Player.None;
+                }
+            }
+        }
+        return patternStones;
+    };
+    
+    if (stage.placements.centerBlackStoneChance && Math.random() * 100 < stage.placements.centerBlackStoneChance) {
+        const centerX = Math.floor(stage.boardSize / 2);
+        const centerY = Math.floor(stage.boardSize / 2);
+        if (boardState[centerY][centerX] === Player.None) {
+            boardState[centerY][centerX] = Player.Black;
+        }
+    }
+
+    placeStonesRandomly(stage.placements.black, Player.Black, false, true);
+    placeStonesRandomly(stage.placements.white, Player.White, false, false);
+    game.blackPatternStones = placeStonesRandomly(stage.placements.blackPattern, Player.Black, true, true);
+    game.whitePatternStones = placeStonesRandomly(stage.placements.whitePattern, Player.White, true, false);
+
+    await db.updateUser(user);
+    await db.saveGame(game);
     return { clientResponse: { updatedUser: user } };
 };
 
-export const handleSinglePlayerRefresh = async (game: types.LiveGameSession, user: types.User): Promise<types.HandleActionResult> => {
-    if (game.moveHistory.length > 0) return { error: 'Game has already started.' };
-    const refreshesUsed = game.singlePlayerPlacementRefreshesUsed || 0;
-    if (refreshesUsed >= 5) return { error: 'No more refreshes available.' };
-    
-    const costs = [0, 50, 100, 200, 300];
-    const cost = costs[refreshesUsed];
-    if (user.gold < cost && !user.isAdmin) return { error: '골드가 부족합니다.' };
-    
-    if (!user.isAdmin) {
-        user.gold -= cost;
+
+export const handleConfirmSPIntro = async (gameId: string, user: User): Promise<HandleActionResult> => {
+    const game = await db.getLiveGame(gameId);
+    if (!game || game.player1.id !== user.id || game.gameStatus !== GameStatus.SinglePlayerIntro) {
+        return { error: 'Invalid action.' };
     }
-    game.singlePlayerPlacementRefreshesUsed = refreshesUsed + 1;
-
-    const stage = SINGLE_PLAYER_STAGES.find(s => s.id === game.stageId);
-    if (!stage) return { error: 'Stage not found.' };
-
-    let attempts = 0;
-    const MAX_PLACEMENT_ATTEMPTS = 10;
-    do {
-        game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(types.Player.None));
-        game.blackPatternStones = [];
-        game.whitePatternStones = [];
-
-        const allPoints: types.Point[] = Array.from({ length: stage.boardSize * stage.boardSize }, (_, i) => ({ x: i % stage.boardSize, y: Math.floor(i / stage.boardSize) })).sort(() => 0.5 - Math.random());
-        const placeStones = (count: number, player: types.Player, isPattern: boolean) => {
-            const key = player === types.Player.Black ? 'blackPatternStones' : 'whitePatternStones';
-            if (isPattern) game[key] = [];
-            for (let i = 0; i < count; i++) {
-                if (allPoints.length === 0) break;
-                const p = allPoints.pop()!;
-                game.boardState[p.y][p.x] = player;
-                if (isPattern) (game[key]! as types.Point[]).push(p);
-            }
-        };
-        
-        placeStones(stage.placements.black, types.Player.Black, false);
-        placeStones(stage.placements.white, types.Player.White, false);
-        placeStones(stage.placements.blackPattern, types.Player.Black, true);
-        placeStones(stage.placements.whitePattern, types.Player.White, true);
-        
-        attempts++;
-        if (attempts >= MAX_PLACEMENT_ATTEMPTS) {
-            console.warn(`[Placement] Could not generate a stable board for stage ${stage.id} after ${MAX_PLACEMENT_ATTEMPTS} attempts. Using last attempt.`);
-            break;
-        }
-    } while (areAnyStonesCaptured(game.boardState, stage.boardSize));
+    
+    transitionToPlaying(game, Date.now());
     
     await db.saveGame(game);
-    await db.updateUser(user);
-    return { clientResponse: { updatedUser: user } };
+    return {};
 };

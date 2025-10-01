@@ -1,10 +1,10 @@
-import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, Negotiation, GameMode, UserStatus, Player } from '../../types.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_POINT_COST, PLAYFUL_ACTION_POINT_COST, DEFAULT_GAME_SETTINGS } from '../../constants.js';
+import { type ServerAction, type User, type VolatileState, Negotiation, GameMode, UserStatus, Player, GameStatus as GameStatusEnum, Guild } from '../../types/index.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_POINT_COST, PLAYFUL_ACTION_POINT_COST, DEFAULT_GAME_SETTINGS } from '../../constants/index.js';
 import { initializeGame } from '../gameModes.js';
-import { aiUserId, getAiUser } from '../aiPlayer.js';
-import * as effectService from '../effectService.js';
+import * as effectService from '../../utils/statUtils.js';
+import { aiUserId, getAiUser } from '../ai/index.js';
+import { gnuGoServiceManager } from '../services/gnuGoService.js';
 
 
 type HandleActionResult = { 
@@ -22,7 +22,7 @@ const getActionPointCost = (mode: GameMode): number => {
     return STRATEGIC_ACTION_POINT_COST; // Default to strategic cost
 };
 
-export const handleNegotiationAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
+export const handleNegotiationAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User, guilds: Record<string, Guild>): Promise<HandleActionResult> => {
     const { type, payload } = action;
     const now = Date.now();
 
@@ -43,6 +43,8 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 delete volatileState.negotiations[existingDraftId];
             }
             
+            const cost = getActionPointCost(mode);
+
             // For real players, perform status checks
             if (opponentId !== aiUserId) {
                 const myStatus = volatileState.userStatuses[user.id];
@@ -52,10 +54,10 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                     return { error: '상대방이 오프라인 상태입니다.' };
                 }
                 
-                const canIChallenge = myStatus?.status === 'waiting';
+                const canIChallenge = myStatus?.status === UserStatus.Waiting;
                 if (!canIChallenge) return { error: '대국 신청은 대기실에서만 가능합니다.' };
                 
-                const canOpponentBeChallenged = opponentStatus?.status === 'waiting' || opponentStatus?.status === 'online';
+                const canOpponentBeChallenged = opponentStatus?.status === UserStatus.Waiting || opponentStatus?.status === UserStatus.Online;
                 if (!canOpponentBeChallenged) {
                     return { error: '상대방이 대국을 신청받을 수 있는 상태가 아닙니다.' };
                 }
@@ -67,17 +69,16 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                     return { error: '상대방은 현재 다른 대국 신청을 처리 중입니다.' };
                 }
 
-                if (opponent.actionPoints.current < getActionPointCost(mode) && !opponent.isAdmin) {
+                if (opponent.actionPoints.current < cost && !opponent.isAdmin) {
                     return { error: `상대방의 액션 포인트가 부족합니다.` };
                 }
             }
             
-            const cost = getActionPointCost(mode);
             if (user.actionPoints.current < cost && !user.isAdmin) {
                 return { error: `액션 포인트가 부족합니다. (필요: ${cost})` };
             }
         
-            const negotiationId = `neg-${randomUUID()}`;
+            const negotiationId = `neg-${globalThis.crypto.randomUUID()}`;
             const newNegotiation: Negotiation = {
                 id: negotiationId,
                 challenger: user,
@@ -91,8 +92,10 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             };
         
             volatileState.negotiations[negotiationId] = newNegotiation;
-            volatileState.userStatuses[user.id].status = 'negotiating';
-            return {};
+            const userStatusInfo = volatileState.userStatuses[user.id];
+            userStatusInfo.status = UserStatus.Negotiating;
+            
+            return { clientResponse: { newNegotiation, userStatusUpdate: userStatusInfo } };
         }
         case 'SEND_CHALLENGE': {
             const { negotiationId, settings } = payload;
@@ -116,8 +119,8 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             if (isOpponentAlreadyInNegotiation) {
                 delete volatileState.negotiations[negotiationId];
                 const challengerStatus = volatileState.userStatuses[user.id];
-                if (challengerStatus && challengerStatus.status === 'negotiating') {
-                    challengerStatus.status = 'waiting';
+                if (challengerStatus && challengerStatus.status === UserStatus.Negotiating) {
+                    challengerStatus.status = UserStatus.Waiting;
                 }
                 return { error: '상대방이 다른 대국 신청을 먼저 받았습니다. 잠시 후 다시 시도해주세요.' };
             }
@@ -142,7 +145,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             negotiation.deadline = now + 60000;
 
             if (negotiation.turnCount >= 10) {
-                volatileState.userStatuses[negotiation.challenger.id].status = 'waiting';
+                volatileState.userStatuses[negotiation.challenger.id].status = UserStatus.Waiting;
                 delete volatileState.negotiations[negotiationId];
                 return { error: 'Negotiation failed after too many turns.' };
             }
@@ -152,22 +155,44 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             const { negotiationId, settings } = payload;
             const negotiation = volatileState.negotiations[negotiationId];
             if (!negotiation || negotiation.proposerId !== user.id || negotiation.status !== 'pending') {
-                return { error: 'Cannot accept this negotiation now.' };
+                return { error: '만료되었거나 취소된 대국 신청입니다.' };
             }
-            
+        
             const challenger = await db.getUser(negotiation.challenger.id);
             const opponent = await db.getUser(negotiation.opponent.id);
-            if (!challenger || !opponent) return { error: "One of the players could not be found." };
-
-            const cost = getActionPointCost(negotiation.mode);
-            if ((challenger.actionPoints.current < cost && !challenger.isAdmin) || (opponent.actionPoints.current < cost && !opponent.isAdmin)) {
-                volatileState.userStatuses[challenger.id].status = 'waiting';
+            if (!challenger || !opponent) {
                 delete volatileState.negotiations[negotiationId];
-                return { error: 'One of the players does not have enough action points.' };
+                return { error: "대국 상대를 찾을 수 없습니다." };
             }
-
+        
+            const challengerStatus = volatileState.userStatuses[challenger.id];
+            if (!challengerStatus || challengerStatus.status !== UserStatus.Negotiating) {
+                delete volatileState.negotiations[negotiationId];
+                if (volatileState.userStatuses[user.id]) {
+                    volatileState.userStatuses[user.id].status = UserStatus.Waiting;
+                }
+                return { error: '대국 신청자가 자리를 비워 신청이 취소되었습니다.' };
+            }
+        
+            const cost = getActionPointCost(negotiation.mode);
+            if (opponent.actionPoints.current < cost && !opponent.isAdmin) {
+                return { error: `액션 포인트가 부족합니다. (필요: ${cost})` };
+            }
+            
+            if (challenger.actionPoints.current < cost && !challenger.isAdmin) {
+                delete volatileState.negotiations[negotiationId];
+                if (volatileState.userStatuses[challenger.id]) {
+                    volatileState.userStatuses[challenger.id].status = UserStatus.Waiting;
+                }
+                if (volatileState.userStatuses[user.id]) {
+                    volatileState.userStatuses[user.id].status = UserStatus.Waiting;
+                }
+                return { error: '상대방의 액션 포인트가 부족하여 대국이 취소되었습니다.' };
+            }
+        
             if (!challenger.isAdmin) {
-                const challengerEffects = effectService.calculateUserEffects(challenger);
+                const challengerGuild = challenger.guildId ? (guilds[challenger.guildId] ?? null) : null;
+                const challengerEffects = effectService.calculateUserEffects(challenger, challengerGuild);
                 const challengerMaxAP = challengerEffects.maxActionPoints;
                 const challengerWasAtMax = challenger.actionPoints.current >= challengerMaxAP;
                 challenger.actionPoints.current -= cost;
@@ -176,7 +201,8 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 }
             }
             if (!opponent.isAdmin) {
-                const opponentEffects = effectService.calculateUserEffects(opponent);
+                const opponentGuild = opponent.guildId ? (guilds[opponent.id] ?? null) : null;
+                const opponentEffects = effectService.calculateUserEffects(opponent, opponentGuild);
                 const opponentMaxAP = opponentEffects.maxActionPoints;
                 const opponentWasAtMax = opponent.actionPoints.current >= opponentMaxAP;
                 opponent.actionPoints.current -= cost;
@@ -184,21 +210,21 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                     opponent.lastActionPointUpdate = now;
                 }
             }
-
+        
             await db.updateUser(challenger);
             await db.updateUser(opponent);
-
+        
             negotiation.settings = settings;
-            const game = await initializeGame(negotiation);
+            const game = await initializeGame(negotiation, guilds);
             await db.saveGame(game);
             
-            volatileState.userStatuses[game.player1.id] = { status: 'in-game', mode: game.mode, gameId: game.id };
-            volatileState.userStatuses[game.player2.id] = { status: 'in-game', mode: game.mode, gameId: game.id };
+            volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id };
+            volatileState.userStatuses[game.player2.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id };
             
             if (negotiation.rematchOfGameId) {
                 const originalGame = await db.getLiveGame(negotiation.rematchOfGameId);
-                if (originalGame && originalGame.gameStatus === 'rematch_pending') {
-                    originalGame.gameStatus = 'ended';
+                if (originalGame && originalGame.gameStatus === GameStatusEnum.RematchPending) {
+                    originalGame.gameStatus = GameStatusEnum.Ended;
                     await db.saveGame(originalGame);
                 }
             }
@@ -207,13 +233,13 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             Object.values(volatileState.negotiations).forEach(negToCancel => {
                 if (negToCancel.id !== negotiationId && (playerIdsInGame.has(negToCancel.challenger.id) || playerIdsInGame.has(negToCancel.opponent.id))) {
                     const challengerId = negToCancel.challenger.id;
-                    if (volatileState.userStatuses[challengerId]?.status === 'negotiating') {
-                        volatileState.userStatuses[challengerId].status = 'waiting';
+                    if (volatileState.userStatuses[challengerId]?.status === UserStatus.Negotiating) {
+                        volatileState.userStatuses[challengerId].status = UserStatus.Waiting;
                     }
                     delete volatileState.negotiations[negToCancel.id];
                 }
             });
-
+        
             delete volatileState.negotiations[negotiationId];
             return {};
         }
@@ -229,21 +255,22 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
         
             if (rematchOfGameId) {
                 const originalGame = await db.getLiveGame(rematchOfGameId);
-                if (originalGame?.gameStatus === 'rematch_pending') {
-                    originalGame.gameStatus = 'ended';
+                if (originalGame?.gameStatus === GameStatusEnum.RematchPending) {
+                    originalGame.gameStatus = GameStatusEnum.Ended;
                     await db.saveGame(originalGame);
                 }
                 [challenger.id, opponent.id].forEach(id => {
                     const status = volatileState.userStatuses[id];
-                    if (status) {
-                        status.status = 'in-game';
-                        status.gameId = rematchOfGameId;
+                    if (status?.status === UserStatus.Negotiating) {
+                        status.status = UserStatus.Waiting;
+                        status.mode = mode;
+                        delete status.gameId;
                     }
                 });
             } else {
                 const challengerStatus = volatileState.userStatuses[challenger.id];
-                if (challengerStatus?.status === 'negotiating') {
-                    challengerStatus.status = 'waiting';
+                if (challengerStatus?.status === UserStatus.Negotiating) {
+                    challengerStatus.status = UserStatus.Waiting;
                     challengerStatus.mode = mode;
                     challengerStatus.gameId = undefined;
                 }
@@ -259,7 +286,8 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 return { error: `액션 포인트가 부족합니다. (필요: ${cost})` };
             }
             if (!user.isAdmin) {
-                const effects = effectService.calculateUserEffects(user);
+                const userGuild = user.guildId ? (guilds[user.guildId] ?? null) : null;
+                const effects = effectService.calculateUserEffects(user, userGuild);
                 const maxAP = effects.maxActionPoints;
                 const wasAtMax = user.actionPoints.current >= maxAP;
                 
@@ -270,18 +298,22 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             }
         
             const negotiation: Negotiation = {
-                id: `neg-ai-${randomUUID()}`,
+                id: `neg-ai-${globalThis.crypto.randomUUID()}`,
                 challenger: user,
-                opponent: getAiUser(mode),
+                opponent: getAiUser(mode, settings.aiDifficulty),
                 mode, settings,
                 proposerId: user.id,
                 status: 'pending', deadline: 0,
+                turnCount: 0,
             };
         
-            const game = await initializeGame(negotiation);
+            const game = await initializeGame(negotiation, guilds);
+            
+            gnuGoServiceManager.create(game.id, game.player2.playfulLevel, game.settings.boardSize, game.settings.komi);
+
             await db.saveGame(game);
             
-            volatileState.userStatuses[game.player1.id] = { status: 'in-game', mode: game.mode, gameId: game.id };
+            volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id };
             
             const draftNegId = Object.keys(volatileState.negotiations).find(id => {
                 const neg = volatileState.negotiations[id];
@@ -298,7 +330,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             if (!opponent) return { error: 'Opponent not found.' };
         
             const originalGame = await db.getLiveGame(originalGameId);
-            if (!originalGame || !['ended', 'no_contest', 'rematch_pending'].includes(originalGame.gameStatus)) {
+            if (!originalGame || ![GameStatusEnum.Ended, GameStatusEnum.NoContest, GameStatusEnum.RematchPending].includes(originalGame.gameStatus)) {
                 return { error: 'Cannot request a rematch for this game.' };
             }
         
@@ -306,10 +338,10 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 return { error: 'A rematch has already been requested.' };
             }
         
-            originalGame.gameStatus = 'rematch_pending';
+            originalGame.gameStatus = GameStatusEnum.RematchPending;
             await db.saveGame(originalGame);
         
-            const negotiationId = `neg-${randomUUID()}`;
+            const negotiationId = `neg-${globalThis.crypto.randomUUID()}`;
             const newNegotiation: Negotiation = {
                 id: negotiationId,
                 challenger: user,
@@ -326,11 +358,11 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             volatileState.negotiations[negotiationId] = newNegotiation;
         
             if (volatileState.userStatuses[user.id]) {
-                volatileState.userStatuses[user.id].status = 'negotiating';
+                volatileState.userStatuses[user.id].status = UserStatus.Negotiating;
                 volatileState.userStatuses[user.id].gameId = originalGameId;
             }
             if (volatileState.userStatuses[opponent.id]) {
-                volatileState.userStatuses[opponent.id].status = 'negotiating';
+                volatileState.userStatuses[opponent.id].status = UserStatus.Negotiating;
                 volatileState.userStatuses[opponent.id].gameId = originalGameId;
             }
         

@@ -1,410 +1,398 @@
 import * as db from './db.js';
-import * as types from '../types.js';
-import { RANKING_TIERS, SEASONAL_TIER_REWARDS, BORDER_POOL, LEAGUE_DATA, LEAGUE_WEEKLY_REWARDS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, TOWER_RANKING_REWARDS, BOT_NAMES, AVATAR_POOL } from '../constants.js';
+import { User, GameMode, LeagueTier, Mail, WeeklyCompetitor, Guild, QuestReward, GuildMemberRole, GuildMember, ChatMessage, GuildResearchId, UserStatus } from '../types/index.js';
+import { isDifferentWeekKST, getCurrentSeason, getPreviousSeason, isDifferentMonthKST, getKSTDate, isDifferentDayKST } from '../utils/timeUtils.js';
+import { LEAGUE_DATA, LEAGUE_WEEKLY_REWARDS, SEASONAL_TIER_REWARDS, RANKING_TIERS, BOT_NAMES, AVATAR_POOL, TOWER_RANKING_REWARDS, GUILD_BOSSES, SINGLE_PLAYER_MISSIONS, GUILD_RESEARCH_PROJECTS } from '../constants/index.js';
+import { createInitialBotCompetitors, defaultStats } from './initialData.js';
+import * as guildService from './guildService.js';
 import { randomUUID } from 'crypto';
-import { getKSTDate, getCurrentSeason, getPreviousSeason, SeasonInfo, isDifferentWeekKST } from '../utils/timeUtils.js';
-import { User, Mail, LeagueRewardTier } from '../types.js';
+import * as effectService from '../utils/statUtils.js';
 
-
-let lastSeasonProcessed: SeasonInfo | null = null;
-let lastTowerResetMonth: number | null = null;
-
-const processRewardsForSeason = async (season: SeasonInfo) => {
-    console.log(`[Scheduler] Processing rewards for ${season.name}...`);
-    const allGameModes = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES].map(m => m.mode);
-    const rewards = SEASONAL_TIER_REWARDS;
-
-    const allUsers = await db.getAllUsers();
-    const tierOrder = RANKING_TIERS.map(t => t.name);
-    const now = Date.now();
-
-    // Pre-calculate rankings for all modes to avoid repeated sorting
-    const rankingsByMode: Record<string, { user: types.User, rank: number }[]> = {};
-    for (const mode of allGameModes) {
-        const eligibleUsers = allUsers
-            .filter(u => u.stats?.[mode] && (u.stats[mode].wins + u.stats[mode].losses) >= 20)
-            .sort((a, b) => (b.stats![mode].rankingScore || 0) - (a.stats![mode].rankingScore || 0));
-        
-        rankingsByMode[mode] = eligibleUsers.map((user, index) => ({ user, rank: index + 1 }));
+export const performOneTimeReset = async () => {
+    const resetFlag = await db.getKV('oneTimeRankingScoreReset_20240722');
+    if (resetFlag) {
+        return;
     }
-
+    console.log('[RESET] Performing one-time ranking score reset for all users...');
+    const allUsers = await db.getAllUsers();
     for (const user of allUsers) {
-        let bestTierInfo: { tierName: string, mode: types.GameMode } | null = null;
-        let bestTierRank = Infinity;
-
-        // Find user's best tier across all modes
-        for (const mode of allGameModes) {
-            const modeRanking = rankingsByMode[mode];
-            const totalEligiblePlayers = modeRanking.length;
-            const userRankInfo = modeRanking.find(r => r.user.id === user.id);
-            
-            let currentTierName = '새싹'; // Default
-
-            if (userRankInfo) { // User was eligible and ranked
-                for (const tier of RANKING_TIERS) {
-                    if (tier.threshold(userRankInfo.rank, totalEligiblePlayers)) {
-                        currentTierName = tier.name;
-                        break;
-                    }
-                }
-            }
-            
-            // Store historical tier for this mode
-            if (!user.seasonHistory) user.seasonHistory = {};
-            if (!user.seasonHistory[season.name]) user.seasonHistory[season.name] = {};
-            user.seasonHistory[season.name][mode] = currentTierName;
-
-            // Check if this is the best tier so far
-            const currentTierIndex = tierOrder.indexOf(currentTierName);
-            if (currentTierIndex < bestTierRank) {
-                bestTierRank = currentTierIndex;
-                bestTierInfo = { tierName: currentTierName, mode };
-            }
-        }
-        
-        // If the user participated in any mode, they have a best tier
-        if (bestTierInfo) {
-            user.previousSeasonTier = bestTierInfo.tierName;
-
-            // 1. Grant border reward
-            const borderForTier = BORDER_POOL.find(b => b.unlockTier === bestTierInfo.tierName);
-            if (borderForTier) {
-                if (!user.ownedBorders) user.ownedBorders = ['default', 'simple_black']; // Ensure array exists
-                if (!user.ownedBorders.includes(borderForTier.id)) {
-                    user.ownedBorders.push(borderForTier.id);
-                }
-                user.borderId = borderForTier.id; // Also equip it for the new season
-            }
-            
-            // 2. Grant mail reward
-            const reward = rewards[bestTierInfo.tierName as keyof typeof rewards];
-            if (reward) {
-                const mailMessage = `${season.name} 최고 티어는 "${bestTierInfo.tierName}" 티어입니다.(${bestTierInfo.mode} 경기장)\n프로필의 테두리 아이템을 한 시즌동안 사용하실 수 있습니다.\n티어 보상 상품을 수령하세요.`;
-                
-                const mail: types.Mail = {
-                    id: `mail-season-${randomUUID()}`,
-                    from: 'System',
-                    title: `${season.name} 시즌 보상`,
-                    message: mailMessage,
-                    attachments: reward,
-                    receivedAt: now,
-                    expiresAt: now + 14 * 24 * 60 * 60 * 1000, // 14 days
-                    isRead: false,
-                    attachmentsClaimed: false,
-                };
-                if (!user.mail) user.mail = [];
-                user.mail.unshift(mail); // Add to the top
-            }
-        }
-        
-        // 3. Reset all game mode stats for the new season
         if (user.stats) {
-            for (const mode of allGameModes) {
-                if (user.stats[mode]) {
-                    user.stats[mode] = { wins: 0, losses: 0, rankingScore: 1200 };
-                }
+            for (const mode in user.stats) {
+                user.stats[mode as GameMode].rankingScore = 1200;
             }
+            await db.updateUser(user);
         }
-
-        // 4. Save the updated user
-        await db.updateUser(user);
-    } // End of user loop
-    
-    console.log(`[Scheduler] Finished processing rewards and resetting stats for ${season.name}.`);
+    }
+    await db.setKV('oneTimeRankingScoreReset_20240722', true);
+    console.log('[RESET] One-time ranking score reset complete.');
 };
 
-export const processRankingRewards = async (volatileState: types.VolatileState): Promise<void> => {
+export const processRankingRewards = async () => {
+    const lastRewardTime = await db.getKV<number>('lastSeasonalRewardTime');
     const now = Date.now();
-    const kstNow = getKSTDate(now);
-    
-    // Check if it's the start of a new season day
-    const isNewSeasonDay = 
-        (kstNow.getUTCMonth() === 0 && kstNow.getUTCDate() === 1) || // Jan 1
-        (kstNow.getUTCMonth() === 3 && kstNow.getUTCDate() === 1) || // Apr 1
-        (kstNow.getUTCMonth() === 6 && kstNow.getUTCDate() === 1) || // Jul 1
-        (kstNow.getUTCMonth() === 9 && kstNow.getUTCDate() === 1);   // Oct 1
+    const currentSeason = getCurrentSeason(now);
+    const previousSeason = getPreviousSeason(now);
 
-    if (!isNewSeasonDay || kstNow.getUTCHours() !== 0) { // Only run at midnight KST
+    // Check if rewards for the current season have already been processed
+    if (lastRewardTime) {
+        const lastRewardSeason = getCurrentSeason(lastRewardTime);
+        if (lastRewardSeason.name === currentSeason.name) {
+            return; // Already processed for this season
+        }
+    } else {
+        // If it's the very first run, just set the time and don't give rewards.
+        await db.setKV('lastSeasonalRewardTime', now);
         return;
     }
 
-    if (lastSeasonProcessed === null) {
-        const saved = await db.getKV<SeasonInfo>('lastSeasonProcessed');
-        if (saved) {
-            lastSeasonProcessed = saved;
-        } else {
-            // First time ever, set to previous season to prevent running on first boot
-            lastSeasonProcessed = getPreviousSeason(now);
-            await db.setKV('lastSeasonProcessed', lastSeasonProcessed);
-            return;
-        }
-    }
-    
-    const currentSeason = getCurrentSeason(now);
-    
-    // Check if the current season is different from the last one we processed
-    if (lastSeasonProcessed.name !== currentSeason.name) {
-        const previousSeason = getPreviousSeason(now);
-        await processRewardsForSeason(previousSeason);
-        
-        // Update the state to reflect that the new season has been processed
-        lastSeasonProcessed = currentSeason;
-        await db.setKV('lastSeasonProcessed', lastSeasonProcessed);
-    }
-};
-
-export const processMonthlyTowerReset = async (): Promise<void> => {
-    const now = Date.now();
-    const kstNow = getKSTDate(now);
-
-    if (kstNow.getUTCDate() !== 1 || kstNow.getUTCHours() !== 0) {
-        return; // Only run at midnight KST on the 1st of the month.
-    }
-
-    const currentMonth = kstNow.getUTCFullYear() * 100 + kstNow.getUTCMonth();
-    if (lastTowerResetMonth === null) {
-        const saved = await db.getKV<number>('lastTowerResetMonth');
-        if (saved) {
-            lastTowerResetMonth = saved;
-        } else {
-            lastTowerResetMonth = currentMonth;
-            await db.setKV('lastTowerResetMonth', lastTowerResetMonth);
-            return;
-        }
-    }
-
-    if (lastTowerResetMonth >= currentMonth) {
-        return; // Already processed for this month
-    }
-
-    console.log('[Scheduler] Processing monthly Tower of Challenge reset...');
+    console.log(`[Scheduler] Processing seasonal rewards for ${previousSeason.name}...`);
     const allUsers = await db.getAllUsers();
-    
-    // 1. Filter and rank users eligible for rewards (cleared floor 10+)
-    const rankedUsers = allUsers
-        .filter(u => u.towerProgress && u.towerProgress.highestFloor >= 10)
-        .sort((a, b) => {
-            if (b.towerProgress.highestFloor !== a.towerProgress.highestFloor) {
-                return b.towerProgress.highestFloor - a.towerProgress.highestFloor;
-            }
-            return a.towerProgress.lastClearTimestamp - b.towerProgress.lastClearTimestamp;
-        });
 
-    // 2. Distribute rewards to ranked users
-    for (let i = 0; i < rankedUsers.length; i++) {
-        const user = rankedUsers[i];
-        const rank = i + 1;
+    // Prepare a map of all users' scores for each mode to calculate ranks
+    const scoresByMode: Partial<Record<GameMode, { id: string, score: number }[]>> = {};
+    for (const mode of Object.values(GameMode)) {
+        scoresByMode[mode] = allUsers
+            .map(u => ({ id: u.id, score: u.stats?.[mode]?.rankingScore || 0 }))
+            .sort((a, b) => b.score - a.score);
+    }
+
+    const tierOrder = RANKING_TIERS.map(t => t.name);
+
+    for (const user of allUsers) {
+        let userModified = false;
+        const seasonHistory = user.seasonHistory || {};
+        seasonHistory[previousSeason.name] = {} as Record<GameMode, string>;
         
-        const rewardTier = TOWER_RANKING_REWARDS.find((r: LeagueRewardTier) => rank >= r.rankStart && rank <= r.rankEnd);
-        if (rewardTier) {
-            const mailMessage = `도전의 탑 월간 랭킹 ${rank}위를 달성하셨습니다! 보상이 지급되었습니다.`;
-            const mail: types.Mail = {
-                id: `mail-tower-${randomUUID()}`,
-                from: 'System',
-                title: `도전의 탑 월간 보상 (${rank}위)`,
-                message: mailMessage,
-                attachments: { 
-                    diamonds: rewardTier.diamonds, 
-                    items: rewardTier.items,
-                    strategyXp: rewardTier.strategyXp
-                },
+        let highestTierIndex = tierOrder.length - 1; // Start with the lowest tier ('새싹')
+
+        // Determine tier for each mode and find the highest one
+        for (const mode of Object.values(GameMode)) {
+            const userStats = user.stats?.[mode];
+            let tierName = '새싹';
+
+            if (userStats && (userStats.wins + userStats.losses >= 20)) {
+                const scoresForMode = scoresByMode[mode]!;
+                const rank = scoresForMode.findIndex(s => s.id === user.id) + 1;
+                const totalPlayers = scoresForMode.length;
+
+                const tier = RANKING_TIERS.find(t => t.threshold(userStats.rankingScore, rank, totalPlayers));
+                tierName = tier ? tier.name : '새싹';
+            }
+            
+            seasonHistory[previousSeason.name][mode] = tierName;
+            
+            const currentTierIndex = tierOrder.indexOf(tierName);
+            if (currentTierIndex !== -1 && currentTierIndex < highestTierIndex) {
+                highestTierIndex = currentTierIndex;
+            }
+        }
+        
+        const highestTierName = tierOrder[highestTierIndex];
+        const reward = SEASONAL_TIER_REWARDS[highestTierName];
+
+        if (reward) {
+            const mail: Mail = {
+                id: `mail-season-reward-${user.id}-${previousSeason.name}`,
+                from: '시스템',
+                title: `[${previousSeason.name}] 시즌 보상`,
+                message: `지난 시즌 달성하신 최고 티어 '${highestTierName}'에 대한 보상입니다. 이번 시즌도 화이팅!`,
+                attachments: reward,
                 receivedAt: now,
-                expiresAt: now + 30 * 24 * 60 * 60 * 1000, // 30 days
+                expiresAt: now + 30 * 24 * 60 * 60 * 1000,
                 isRead: false,
                 attachmentsClaimed: false,
             };
+            if (!user.mail) user.mail = [];
             user.mail.unshift(mail);
-            // The user object will be saved in the final loop
+            userModified = true;
+        }
+
+        // Update user profile with new season data
+        user.previousSeasonTier = highestTierName;
+        user.seasonHistory = seasonHistory;
+        user.stats = JSON.parse(JSON.stringify(defaultStats)); // Reset stats for the new season
+        userModified = true;
+
+        if (userModified) {
+            await db.updateUser(user);
         }
     }
 
-    // 3. Reset progress for ALL users who participated and save changes
-    for (const user of allUsers) {
-        let needsUpdate = false;
-        // Check if the user was in the ranked list (mail was added)
-        const wasRankedAndRewarded = rankedUsers.some(rankedUser => rankedUser.id === user.id);
+    await db.setKV('lastSeasonalRewardTime', now);
+    console.log(`[Scheduler] Seasonal rewards for ${previousSeason.name} processed successfully.`);
+};
 
-        if (user.towerProgress && user.towerProgress.highestFloor > 0) {
-            user.towerProgress = { highestFloor: 0, lastClearTimestamp: 0 };
-            needsUpdate = true;
-        }
+export const processWeeklyLeagueUpdates = async (user: User, allUsers: User[]): Promise<User> => {
+    const now = Date.now();
+    if (!user.lastLeagueUpdate || isDifferentWeekKST(user.lastLeagueUpdate, now)) {
+        if (user.lastLeagueUpdate) { // Don't give rewards on first-ever run for a user
+            let league = user.league;
+            if (!league || !Object.values(LeagueTier).includes(league)) {
+                console.warn(`[Scheduler] User ${user.id} has invalid league tier: "${league}". Resetting to Sprout.`);
+                user.league = LeagueTier.Sprout;
+                league = user.league;
+            }
 
-        // Save if progress was reset OR if they received reward mail
-        if (needsUpdate || wasRankedAndRewarded) {
-             await db.updateUser(user);
+            const myCompetitors = user.weeklyCompetitors || [];
+            
+            const sortedCompetitors = myCompetitors.map(c => {
+                const liveUser = allUsers.find(u => u.id === c.id);
+                const currentScore = liveUser ? liveUser.tournamentScore : c.currentScore;
+                return { ...c, currentScore };
+            }).sort((a, b) => b.currentScore - a.currentScore);
+            
+            const myRank = sortedCompetitors.findIndex(c => c.id === user.id) + 1;
+            
+            if (myRank > 0) {
+                const rewardTiers = LEAGUE_WEEKLY_REWARDS[user.league];
+                const myRewardTier = rewardTiers.find(t => myRank >= t.rankStart && myRank <= t.rankEnd);
+
+                if (myRewardTier) {
+                    const mailAttachments: QuestReward = {
+                        diamonds: myRewardTier.diamonds,
+                        items: myRewardTier.items,
+                    };
+                    if (myRewardTier.strategyXp) {
+                        mailAttachments.exp = { type: 'strategy', amount: myRewardTier.strategyXp };
+                    }
+                    const mail: Mail = {
+                        id: `mail-league-reward-${user.id}-${now}`,
+                        from: '시스템',
+                        title: `주간 경쟁 보상 (${league})`,
+                        message: `${league}에서 ${myRank}위를 달성하셨습니다.`,
+                        attachments: mailAttachments,
+                        receivedAt: now,
+                        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+                        isRead: false,
+                        attachmentsClaimed: false,
+                    };
+                    user.mail.unshift(mail);
+
+                    const leagueOrder = Object.values(LeagueTier);
+                    const currentTierIndex = leagueOrder.indexOf(league);
+                    if (myRewardTier.outcome === 'promote' && currentTierIndex < leagueOrder.length - 1) {
+                        user.league = leagueOrder[currentTierIndex + 1];
+                    } else if (myRewardTier.outcome === 'demote' && currentTierIndex > 0) {
+                        user.league = leagueOrder[currentTierIndex - 1];
+                    }
+                }
+            }
         }
+        
+        user.tournamentScore = 500;
+        user.weeklyCompetitors = createInitialBotCompetitors(user);
+        user.lastLeagueUpdate = now;
+        user.lastWeeklyCompetitorsUpdate = now;
+        return user;
+    }
+    return user;
+};
+
+export const updateWeeklyCompetitorsIfNeeded = async (user: User, allUsers: User[]): Promise<User> => {
+    const now = Date.now();
+    if (!user.lastWeeklyCompetitorsUpdate || isDifferentWeekKST(user.lastWeeklyCompetitorsUpdate, now)) {
+        user.weeklyCompetitors = createInitialBotCompetitors(user);
+        user.lastWeeklyCompetitorsUpdate = now;
+        return user;
     }
     
-    lastTowerResetMonth = currentMonth;
-    await db.setKV('lastTowerResetMonth', lastTowerResetMonth);
-    console.log('[Scheduler] Tower of Challenge reset complete.');
+    let updated = false;
+    user.weeklyCompetitors.forEach(c => {
+        if (!c.id.startsWith('bot-')) {
+            const realUser = allUsers.find(u => u.id === c.id);
+            if (realUser && realUser.tournamentScore !== c.currentScore) {
+                c.currentScore = realUser.tournamentScore;
+                updated = true;
+            }
+        }
+    });
+
+    return updated ? user : user;
+};
+
+export const processMonthlyTowerReset = async () => {
+    const now = Date.now();
+    const nowKST = getKSTDate(now);
+
+    if (nowKST.getUTCDate() !== 1) {
+        return;
+    }
+
+    const lastResetTime = await db.getKV<number>('lastTowerResetTime');
+    if (lastResetTime && !isDifferentMonthKST(lastResetTime, now)) {
+        return;
+    }
+    
+    const allUsers = await db.getAllUsers();
+    
+    const rewardSkipFlag = await db.getKV<boolean>('oneTimeTowerRewardSkip_20250915');
+
+    if (!rewardSkipFlag) {
+        console.log("[Scheduler] Performing one-time skip of monthly tower rewards.");
+        await db.setKV('oneTimeTowerRewardSkip_20250915', true);
+    } else {
+        console.log(`[Scheduler] Processing monthly tower ranking rewards...`);
+        const towerRankings = allUsers
+            .filter(u => u.towerProgress && u.towerProgress.highestFloor > 0)
+            .sort((a, b) => {
+                if (b.towerProgress!.highestFloor !== a.towerProgress!.highestFloor) {
+                    return b.towerProgress!.highestFloor - a.towerProgress!.highestFloor;
+                }
+                return a.towerProgress!.lastClearTimestamp - b.towerProgress!.lastClearTimestamp;
+            });
+            
+        for (let i = 0; i < towerRankings.length; i++) {
+            const user = towerRankings[i];
+            const rank = i + 1;
+            const rewardTier = TOWER_RANKING_REWARDS.find(t => rank >= t.rankStart && rank <= t.rankEnd);
+            
+            if (rewardTier) {
+                const mailAttachments: QuestReward = {
+                    diamonds: rewardTier.diamonds,
+                    items: rewardTier.items,
+                };
+                if (rewardTier.strategyXp) {
+                    mailAttachments.exp = { type: 'strategy', amount: rewardTier.strategyXp };
+                }
+                 const mail: Mail = {
+                    id: `mail-tower-reward-${user.id}-${now}`,
+                    from: '시스템',
+                    title: `도전의 탑 월간 랭킹 보상`,
+                    message: `지난달 도전의 탑에서 ${rank}위를 달성하셨습니다.`,
+                    attachments: mailAttachments,
+                    receivedAt: now,
+                    expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+                    isRead: false,
+                    attachmentsClaimed: false,
+                };
+                user.mail.unshift(mail);
+            }
+        }
+    }
+
+    console.log("[Scheduler] Resetting tower progress for all users.");
+    for (const user of allUsers) {
+        let userModified = false;
+        if (user.towerProgress && (user.towerProgress.highestFloor > 0 || user.towerProgress.lastClearTimestamp > 0)) {
+            user.towerProgress.highestFloor = 0;
+            user.towerProgress.lastClearTimestamp = 0;
+            userModified = true;
+        }
+        if (user.claimedFirstClearRewards?.some(id => id.startsWith('tower-'))) {
+            user.claimedFirstClearRewards = user.claimedFirstClearRewards.filter(id => !id.startsWith('tower-'));
+            userModified = true;
+        }
+        
+        if (userModified || user.mail.some(m => m.id.startsWith('mail-tower-reward-'))) {
+            await db.updateUser(user);
+        }
+    }
+
+    await db.setKV('lastTowerResetTime', now);
+    console.log("[Scheduler] Monthly tower reset process complete.");
+};
+
+export const processInactiveGuildMasters = async () => {
+    const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
+    const allUsers = await db.getAllUsers();
+    let guildsUpdated = false;
+
+    const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+
+    for (const guild of Object.values(guilds)) {
+        const master = guild.members.find(m => m.role === GuildMemberRole.Master);
+        if (!master) continue;
+
+        const masterUser = allUsers.find(u => u.id === master.userId);
+        if (!masterUser || (masterUser.lastLoginAt && masterUser.lastLoginAt > twoWeeksAgo)) {
+            continue;
+        }
+
+        let newMaster: GuildMember | null = null;
+        let oldMasterNickname = master.nickname;
+        
+        const eligibleVices = guild.members
+            .filter(m => m.role === GuildMemberRole.Vice)
+            .map(m => ({ member: m, user: allUsers.find(u => u.id === m.userId) }))
+            .filter(data => data.user && (data.user.lastLoginAt ?? 0) > twoWeeksAgo)
+            .sort((a, b) => (b.member.contribution || 0) - (a.member.contribution || 0));
+
+        if (eligibleVices.length > 0) {
+            newMaster = eligibleVices[0].member;
+        }
+
+        if (!newMaster) {
+            const eligibleMembers = guild.members
+                .filter(m => m.role === GuildMemberRole.Member)
+                .map(m => ({ member: m, user: allUsers.find(u => u.id === m.userId) }))
+                .filter(data => data.user && (data.user.lastLoginAt ?? 0) > twoWeeksAgo)
+                .sort((a, b) => (b.member.contribution || 0) - (a.member.contribution || 0));
+            
+            if (eligibleMembers.length > 0) {
+                newMaster = eligibleMembers[0].member;
+            }
+        }
+        
+        if (newMaster) {
+            master.role = GuildMemberRole.Member;
+            newMaster.role = GuildMemberRole.Master;
+            
+            const systemMessage: ChatMessage = {
+                id: `msg-guild-${randomUUID()}`,
+                user: { id: 'system', nickname: '시스템' },
+                system: true,
+                text: `길드장 [${oldMasterNickname}]님이 2주 이상 미접속하여, 길드장 권한이 [${newMaster.nickname}]님에게 자동으로 위임되었습니다.`,
+                timestamp: Date.now(),
+            };
+            if (!guild.chatHistory) guild.chatHistory = [];
+            guild.chatHistory.push(systemMessage);
+            if (guild.chatHistory.length > 100) guild.chatHistory.shift();
+
+            guildsUpdated = true;
+        }
+    }
+
+    if (guildsUpdated) {
+        await db.setKV('guilds', guilds);
+    }
 };
 
 
-export async function processWeeklyLeagueUpdates(user: types.User, allUsers: types.User[]): Promise<types.User> {
-    if (!isDifferentWeekKST(user.lastLeagueUpdate, Date.now())) {
-        return user; // Not a new week, no update needed
-    }
-
-    console.log(`[LeagueUpdate] Processing weekly update for ${user.nickname}`);
-
-    if (!user.weeklyCompetitors || user.weeklyCompetitors.length === 0) {
-        console.log(`[LeagueUpdate] No competitors found for ${user.nickname}. Skipping league update, but updating timestamp.`);
-        user.lastLeagueUpdate = Date.now();
-        return user;
-    }
+export const runScheduledTasks = async () => {
+    await processMonthlyTowerReset();
+    await processRankingRewards();
     
-    const competitorMap = new Map(allUsers.map(u => [u.id, u]));
-
-    const finalRankings = user.weeklyCompetitors.map(c => {
-        const liveData = competitorMap.get(c.id);
-        return {
-            id: c.id,
-            nickname: c.nickname,
-            finalScore: liveData ? liveData.tournamentScore : c.initialScore
-        };
-    }).sort((a, b) => b.finalScore - a.finalScore);
-    
-    const myRank = finalRankings.findIndex(c => c.id === user.id) + 1;
-    
-    if (myRank === 0) {
-        console.warn(`[LeagueUpdate] User ${user.nickname} not found in their own competitor list. Aborting update.`);
-        user.lastLeagueUpdate = Date.now();
-        return user;
-    }
-
-    const currentLeague = user.league;
-    const rewardTiers = LEAGUE_WEEKLY_REWARDS[currentLeague];
-    if (!rewardTiers) {
-        console.warn(`[LeagueUpdate] No reward tiers found for league: ${currentLeague}`);
-        user.lastLeagueUpdate = Date.now();
-        return user;
-    }
-
-    const myRewardTier = rewardTiers.find(tier => myRank >= tier.rankStart && myRank <= tier.rankEnd);
-    if (!myRewardTier) {
-        console.warn(`[LeagueUpdate] No reward tier found for rank ${myRank} in league ${currentLeague}`);
-        user.lastLeagueUpdate = Date.now();
-        return user;
-    }
-
-    const currentLeagueIndex = LEAGUE_DATA.findIndex(l => l.tier === currentLeague);
-    if (currentLeagueIndex === -1) {
-        console.warn(`[LeagueUpdate] User ${user.nickname} has an invalid league: ${user.league}. Resetting to Sprout.`);
-        user.league = types.LeagueTier.Sprout;
-    }
-
-    let newLeagueIndex = currentLeagueIndex;
-    let resultText = "";
-    
-    if (myRewardTier.outcome === 'promote') {
-        newLeagueIndex = Math.min(LEAGUE_DATA.length - 1, currentLeagueIndex + 1);
-        resultText = "승급";
-    } else if (myRewardTier.outcome === 'demote') {
-        newLeagueIndex = Math.max(0, currentLeagueIndex - 1);
-        resultText = "강등";
-    } else {
-        resultText = "잔류";
-    }
-    
-    const oldLeague = user.league;
-    const newLeague = LEAGUE_DATA[newLeagueIndex].tier;
-    
-    if (oldLeague !== newLeague) {
-        user.league = newLeague;
-    }
-
     const now = Date.now();
-    const kstNow = getKSTDate(now);
-    const year = kstNow.getUTCFullYear().toString().slice(-2);
-    const month = kstNow.getUTCMonth() + 1;
-    const week = Math.ceil(kstNow.getUTCDate() / 7);
+    const lastGuildResetTime = await db.getKV<number>('lastGuildWeeklyResetTime') || 0;
 
-    const mailTitle = `${year}년 ${month}월 ${week}주차 리그 정산 보상`;
-    const mailMessage = `
-${year}년 ${month}월 ${week}주차 주간 경쟁 결과, ${finalRankings.length}명 중 ${myRank}위를 기록하셨습니다.
-        
-- 이전 리그: ${oldLeague}
-- 현재 리그: ${newLeague}
-        
-결과: [${resultText}]
-
-보상이 지급되었습니다. 5일 이내에 수령해주세요.
-        
-새로운 주간 경쟁이 시작됩니다. 행운을 빕니다!
-    `.trim().replace(/^\s+/gm, '');
-
-    const newMail: types.Mail = {
-        id: `mail-league-${randomUUID()}`,
-        from: 'System',
-        title: mailTitle,
-        message: mailMessage,
-        attachments: { diamonds: myRewardTier.diamonds },
-        receivedAt: now,
-        expiresAt: now + 5 * 24 * 60 * 60 * 1000, // 5 days
-        isRead: false,
-        attachmentsClaimed: false,
-    };
-    user.mail.unshift(newMail);
-
-    user.lastLeagueUpdate = now;
-    
-    console.log(`[LeagueUpdate] ${user.nickname} ranked ${myRank}/${finalRankings.length}. Reward: ${myRewardTier.diamonds} diamonds. Result: ${resultText}. New league: ${newLeague}`);
-
-    return user;
-}
-
-export async function updateWeeklyCompetitorsIfNeeded(user: types.User, allUsers: types.User[]): Promise<types.User> {
-    const now = Date.now();
-    
-    // Check if an update is needed
-    const needsUpdate = isDifferentWeekKST(user.lastWeeklyCompetitorsUpdate, now) ||
-                        !user.weeklyCompetitors || 
-                        user.weeklyCompetitors.length === 0 || 
-                        !user.weeklyCompetitors.some(c => c.id === user.id);
-
-    if (!needsUpdate) {
-        return user; // No update needed
-    }
-
-    console.log(`[LeagueUpdate] Updating weekly competitors for ${user.nickname}`);
-
-    const potentialCompetitors = allUsers.filter(
-        u => u.id !== user.id && u.league === user.league
-    );
-
-    const shuffledCompetitors = potentialCompetitors.sort(() => 0.5 - Math.random());
-    const selectedCompetitors = shuffledCompetitors.slice(0, 15);
-
-    const botsToCreate = 15 - selectedCompetitors.length;
-    if (botsToCreate > 0) {
-        const botNames = [...BOT_NAMES].sort(() => 0.5 - Math.random());
-        for (let i = 0; i < botsToCreate; i++) {
-            const botAvatar = AVATAR_POOL[Math.floor(Math.random() * AVATAR_POOL.length)];
-            const bot: any = {
-                id: `bot-weekly-${i}-${Date.now()}`,
-                nickname: botNames[i % botNames.length],
-                avatarId: botAvatar.id,
-                borderId: 'default',
-                league: user.league,
-                tournamentScore: user.tournamentScore + Math.floor((Math.random() - 0.5) * 100)
-            };
-            selectedCompetitors.push(bot);
+    if (isDifferentWeekKST(lastGuildResetTime, now)) {
+        console.log('[Scheduler] Performing weekly guild resets...');
+        const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
+        for(const guild of Object.values(guilds)) {
+            guildService.resetWeeklyGuildMissions(guild, now);
+            guild.members.forEach(m => m.weeklyContribution = 0);
+            if (!guild.dailyCheckInRewardsClaimed) guild.dailyCheckInRewardsClaimed = [];
+            guild.dailyCheckInRewardsClaimed = [];
+            
+            if (guild.guildBossState) {
+                const currentBossIndex = GUILD_BOSSES.findIndex(b => b.id === guild.guildBossState!.currentBossId);
+                const nextBossIndex = (currentBossIndex + 1) % GUILD_BOSSES.length;
+                const nextBoss = GUILD_BOSSES[nextBossIndex];
+                
+                guild.guildBossState.currentBossId = nextBoss.id;
+                guild.guildBossState.currentBossHp = nextBoss.maxHp;
+                guild.guildBossState.totalDamageLog = {};
+                guild.guildBossState.lastReset = now;
+            } else {
+                const firstBoss = GUILD_BOSSES[0];
+                guild.guildBossState = {
+                    currentBossId: firstBoss.id,
+                    currentBossHp: firstBoss.maxHp,
+                    totalDamageLog: {},
+                    lastReset: now,
+                };
+            }
         }
+        await db.setKV('guilds', guilds);
+        await db.setKV('lastGuildWeeklyResetTime', now);
     }
-
-    const competitorList: types.WeeklyCompetitor[] = [user, ...selectedCompetitors].map(u => ({
-        id: u.id,
-        nickname: u.nickname,
-        avatarId: u.avatarId,
-        borderId: u.borderId,
-        league: u.league,
-        initialScore: u.tournamentScore
-    }));
-    
-    const updatedUser = JSON.parse(JSON.stringify(user));
-    updatedUser.weeklyCompetitors = competitorList;
-    updatedUser.lastWeeklyCompetitorsUpdate = now;
-
-    return updatedUser;
-}
+};

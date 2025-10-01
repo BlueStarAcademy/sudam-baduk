@@ -1,4 +1,4 @@
-import { GameMode, DiceGoVariant, GameSettings, Player, AlkkagiPlacementType, AlkkagiLayoutType } from '../types.js';
+import { GameMode, DiceGoVariant, GameSettings, Player, AlkkagiPlacementType, AlkkagiLayoutType } from '../types/index.js';
 
 // --- Negotiation Settings ---
 export const BOARD_SIZES = [19, 13, 9];
@@ -47,6 +47,13 @@ export const ALKKAGI_ROUNDS = [1, 2, 3] as const;
 export const CURLING_ROUNDS = [1, 2, 3] as const;
 export const CURLING_ITEM_COUNTS = [0, 1, 2, 3, 4, 5];
 
+export const AUTO_END_TURN_COUNTS: { [key: string]: number[] } = {
+    'small': [40, 50, 60], // <= 9
+    'medium': [60, 80, 100], // 11, 13
+    'large': [100, 120, 150], // 15, 17
+    'full': [150, 200, 250], // 19
+};
+
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   boardSize: 19,
   timeLimit: 10,
@@ -80,6 +87,7 @@ export const DEFAULT_GAME_SETTINGS: GameSettings = {
   komi: DEFAULT_KOMI,
   player1Color: Player.Black,
   aiDifficulty: 1,
+  autoEndTurnCount: 0,
 };
 
 // --- Dice Go Settings ---

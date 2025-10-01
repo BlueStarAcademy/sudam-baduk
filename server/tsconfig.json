@@ -3,5 +3,12 @@
   "compilerOptions": {
     "lib": ["ESNext"]
   },
-  "include": ["**/*.ts"]
+  "include": [
+    "**/*.ts",
+    "../utils/**/*.ts",
+    "../types/**/*.ts",
+    "../constants/**/*.ts",
+    "../profanity.ts",
+    "../assets.ts"
+  ]
 }

@@ -1,6 +1,4 @@
-
-
-import { GameMode } from './types.js';
+import { GameMode } from './types/index.js';
 
 type RuleSection = {
     subtitle: string;
@@ -12,7 +10,7 @@ type GameRule = {
     sections: RuleSection[];
 };
 
-export const GAME_RULES: Partial<Record<GameMode, GameRule>> = {
+export const GAME_RULES: Partial<Record<GameMode | 'guild', GameRule>> = {
     [GameMode.Standard]: {
         title: '클래식 바둑',
         sections: [
@@ -121,7 +119,7 @@ export const GAME_RULES: Partial<Record<GameMode, GameRule>> = {
             {
                 subtitle: '특수 규칙',
                 content: [
-                    '상대방의 베이스돌을 따내면, 일반 돌 1개와는 별개로 추가 보너스 점수(5점)를 획득합니다.',
+                    '상대방의 베이스돌을 따내면 보너스 점수(5점)를 획득합니다.',
                     '이 보너스 점수는 최종 집 계산 시 합산됩니다.',
                 ],
             },
@@ -147,7 +145,7 @@ export const GAME_RULES: Partial<Record<GameMode, GameRule>> = {
             {
                 subtitle: '특수 규칙',
                 content: [
-                    '상대방의 히든돌을 따내면 추가 보너스 점수(4점)를 획득합니다.',
+                    '상대방의 히든돌을 따내면 보너스 점수(5점)를 획득합니다.',
                     '자신의 히든돌이 상대에게 발각되거나, 내 히든돌이 포함된 대마가 잡히면 불리해질 수 있습니다.',
                 ],
             },
@@ -374,6 +372,37 @@ export const GAME_RULES: Partial<Record<GameMode, GameRule>> = {
                 content: [
                     '슬로우, 조준선 아이템은 대국 설정에 따라 매 경기마다 새로 지급됩니다.',
                     '사용한 아이템은 해당 경기에서만 소모되며, 다음 경기가 시작되면 다시 기본 개수로 채워집니다.',
+                ],
+            },
+        ],
+    },
+    'guild': {
+        title: '길드 이용 안내',
+        sections: [
+            {
+                subtitle: '길드란?',
+                content: [
+                    '다른 유저들과 함께 커뮤니티를 형성하고 협력하여 성장하는 콘텐츠입니다.',
+                    '길드 레벨을 올리고 연구를 진행하여 모든 길드원에게 적용되는 강력한 버프 효과를 얻을 수 있습니다.',
+                ],
+            },
+            {
+                subtitle: '주요 활동',
+                content: [
+                    '출석: 매일 출석하여 개인 보상(길드 코인)과 길드 기여도를 획득하세요. 길드원 전체의 출석 횟수에 따라 추가 보상이 지급됩니다.',
+                    '기부: 골드나 다이아를 기부하여 길드 경험치와 연구 포인트를 올리고, 개인 보상도 받을 수 있습니다.',
+                    '주간 임무: 매주 길드원 전체가 협력하여 달성하는 공동 목표입니다. 달성 시 모든 길드원이 보상을 받을 수 있습니다.',
+                    '길드 연구소: 기부로 모은 연구 포인트를 사용하여 능력치, 보상 증가 등 다양한 영구 버프를 활성화할 수 있습니다.',
+                    '길드 상점: 출석, 기부, 임무 등으로 얻은 길드 코인을 사용하여 특별한 아이템을 구매할 수 있습니다.',
+                    '길드 보스전: 길드원들과 협력하여 강력한 보스를 공략하는 레이드 콘텐츠입니다. 매일 정해진 횟수만큼 도전할 수 있습니다.',
+                ],
+            },
+            {
+                subtitle: '직책 및 권한',
+                content: [
+                    '길드장: 길드원 추방, 부길드장 임명/해임, 가입 신청 관리, 길드 정보 수정 등 모든 권한을 가집니다.',
+                    '부길드장: 길드원 추방, 가입 신청 관리, 길드 정보 수정 등 길드장 다음의 권한을 가집니다.',
+                    '길드원: 길드의 모든 콘텐츠에 참여할 수 있습니다.',
                 ],
             },
         ],

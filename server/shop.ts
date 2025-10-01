@@ -1,5 +1,4 @@
-import { randomUUID } from 'crypto';
-import { type InventoryItem, type ItemGrade, type EquipmentSlot, type ItemOptions, type ItemOption, CoreStat, SpecialStat, MythicStat, type ItemOptionType, type BorderInfo } from '../types.js';
+import { InventoryItem, ItemGrade, EquipmentSlot, ItemOptions, ItemOption, CoreStat, SpecialStat, MythicStat, ItemOptionType, BorderInfo } from '../types/index.js';
 import {
     EQUIPMENT_POOL,
     MATERIAL_ITEMS,
@@ -8,7 +7,7 @@ import {
     SUB_OPTION_POOLS,
     SPECIAL_STATS_DATA,
     MYTHIC_STATS_DATA,
-} from '../constants.js';
+} from '../constants/index.js';
 import { createItemInstancesFromReward } from '../utils/inventoryUtils.js';
 
 const getRandomInt = (min: number, max: number): number => {
@@ -29,7 +28,13 @@ export const generateItemOptions = (grade: ItemGrade, slot: EquipmentSlot, optio
     const slotDef = MAIN_STAT_DEFINITIONS[slot];
     const gradeDef = slotDef.options[grade];
     const mainStatType = pickRandom(gradeDef.stats);
-    const mainValue = gradeDef.value;
+    let mainValue = gradeDef.value;
+    const isDoubleMythic = options?.forceDoubleMythic;
+
+    if (grade === ItemGrade.Mythic && isDoubleMythic) {
+        mainValue = Math.floor(mainValue * 1.5);
+    }
+    
     const mainIsPercentage = slotDef.isPercentage;
     const main: ItemOption = {
         type: mainStatType,
@@ -88,7 +93,7 @@ export const generateItemOptions = (grade: ItemGrade, slot: EquipmentSlot, optio
     }
 
     const mythicSubs: ItemOption[] = [];
-    if (grade === 'mythic') {
+    if (grade === ItemGrade.Mythic) {
         const mythicCountRule = rules.mythicCount;
         const numMythicSubs = options?.forceDoubleMythic ? 2 : Array.isArray(mythicCountRule) ? getRandomInt(mythicCountRule[0], mythicCountRule[1]) : mythicCountRule;
         const mythicPool = Object.values(MythicStat);
@@ -115,12 +120,20 @@ export const generateItemOptions = (grade: ItemGrade, slot: EquipmentSlot, optio
 };
 
 
-export const createItemFromTemplate = (template: Omit<InventoryItem, 'id' | 'createdAt' | 'isEquipped' | 'level' | 'options' | 'quantity'>, options?: { forceDoubleMythic?: boolean }): InventoryItem => {
+export const createItemFromTemplate = (template: Omit<InventoryItem, 'id' | 'createdAt' | 'isEquipped' | 'level' | 'options' | 'quantity' | 'stars' | 'enhancementFails'>, options?: { forceDoubleMythic?: boolean }): InventoryItem => {
     const itemOptions = generateItemOptions(template.grade, template.slot!, options);
+    
+    let itemName = template.name;
+    let itemDescription = template.description || `상자에서 획득한 ${template.grade} 등급 아이템.`;
+    if (options?.forceDoubleMythic) {
+        itemName = `D.${template.name}`;
+        itemDescription = `신화 장비 3개를 합성하여 탄생한 궁극의 장비. 2개의 신화 옵션과 강화된 주옵션을 가집니다.`;
+    }
+
     return {
-        id: `item-${randomUUID()}`,
-        name: template.name,
-        description: template.description || `상자에서 획득한 ${template.grade} 등급 아이템.`,
+        id: `item-${globalThis.crypto.randomUUID()}`,
+        name: itemName,
+        description: itemDescription,
         type: 'equipment',
         slot: template.slot,
         level: 1,
@@ -136,7 +149,7 @@ export const createItemFromTemplate = (template: Omit<InventoryItem, 'id' | 'cre
 function openBoxWithLootTable(lootTable: { grade: ItemGrade; weight: number }[]): InventoryItem {
     const totalWeight = lootTable.reduce((sum, item) => sum + item.weight, 0);
     let random = Math.random() * totalWeight;
-    let selectedGrade: ItemGrade = 'normal';
+    let selectedGrade: ItemGrade = ItemGrade.Normal;
 
     for (const item of lootTable) {
         if (random < item.weight) {
@@ -151,12 +164,24 @@ function openBoxWithLootTable(lootTable: { grade: ItemGrade; weight: number }[])
     return createItemFromTemplate(template);
 }
 
-const EQUIPMENT_BOX_1_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'normal', weight: 70 }, { grade: 'uncommon', weight: 20 }, { grade: 'rare', weight: 10 }];
-const EQUIPMENT_BOX_2_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'normal', weight: 50 }, { grade: 'uncommon', weight: 35 }, { grade: 'rare', weight: 14 }, { grade: 'epic', weight: 1 }];
-const EQUIPMENT_BOX_3_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'uncommon', weight: 45 }, { grade: 'rare', weight: 35 }, { grade: 'epic', weight: 19.9 }, { grade: 'legendary', weight: 0.1 }];
-const EQUIPMENT_BOX_4_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'rare', weight: 50 }, { grade: 'epic', weight: 49 }, { grade: 'legendary', weight: 0.9 }, { grade: 'mythic', weight: 0.1 }];
-const EQUIPMENT_BOX_5_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'epic', weight: 85 }, { grade: 'legendary', weight: 14.5 }, { grade: 'mythic', weight: 0.5 }];
-const EQUIPMENT_BOX_6_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: 'legendary', weight: 95 }, { grade: 'mythic', weight: 5 }];
+const gradeOrder: ItemGrade[] = [ItemGrade.Normal, ItemGrade.Uncommon, ItemGrade.Rare, ItemGrade.Epic, ItemGrade.Legendary, ItemGrade.Mythic];
+
+export const openGuildGradeBox = (grade: ItemGrade): InventoryItem => {
+    const itemsOfSelectedGrade = EQUIPMENT_POOL.filter(item => item.grade === grade);
+    if (itemsOfSelectedGrade.length === 0) {
+        const lowerGrade = gradeOrder[gradeOrder.indexOf(grade) - 1] || ItemGrade.Normal;
+        return openGuildGradeBox(lowerGrade);
+    }
+    const template = itemsOfSelectedGrade[Math.floor(Math.random() * itemsOfSelectedGrade.length)];
+    return createItemFromTemplate(template);
+};
+
+const EQUIPMENT_BOX_1_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: ItemGrade.Normal, weight: 70 }, { grade: ItemGrade.Uncommon, weight: 20 }, { grade: ItemGrade.Rare, weight: 10 }];
+const EQUIPMENT_BOX_2_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: ItemGrade.Normal, weight: 50 }, { grade: ItemGrade.Uncommon, weight: 35 }, { grade: ItemGrade.Rare, weight: 14 }, { grade: ItemGrade.Epic, weight: 1 }];
+const EQUIPMENT_BOX_3_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: ItemGrade.Uncommon, weight: 45 }, { grade: ItemGrade.Rare, weight: 35 }, { grade: ItemGrade.Epic, weight: 19.9 }, { grade: ItemGrade.Legendary, weight: 0.1 }];
+const EQUIPMENT_BOX_4_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: ItemGrade.Rare, weight: 50 }, { grade: ItemGrade.Epic, weight: 49 }, { grade: ItemGrade.Legendary, weight: 0.9 }, { grade: ItemGrade.Mythic, weight: 0.1 }];
+const EQUIPMENT_BOX_5_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: ItemGrade.Epic, weight: 85 }, { grade: ItemGrade.Legendary, weight: 14.5 }, { grade: ItemGrade.Mythic, weight: 0.5 }];
+const EQUIPMENT_BOX_6_LOOT_TABLE: { grade: ItemGrade; weight: number }[] = [ { grade: ItemGrade.Legendary, weight: 95 }, { grade: ItemGrade.Mythic, weight: 5 }];
 
 export function openEquipmentBox1(): InventoryItem { return openBoxWithLootTable(EQUIPMENT_BOX_1_LOOT_TABLE); }
 export function openEquipmentBox2(): InventoryItem { return openBoxWithLootTable(EQUIPMENT_BOX_2_LOOT_TABLE); }
@@ -195,15 +220,17 @@ export function openMaterialBox(boxId: 'material_box_1' | 'material_box_2' | 'ma
     }
 
     return Object.entries(results).map(([name, quantity]) => {
-        const template = MATERIAL_ITEMS[name];
+        const template = MATERIAL_ITEMS[name as keyof typeof MATERIAL_ITEMS];
         return {
             ...template,
-            id: `item-${randomUUID()}`,
+            id: `item-${globalThis.crypto.randomUUID()}`,
             createdAt: Date.now(),
             quantity,
             isEquipped: false,
             level: 1,
             stars: 0,
+// FIX: Add missing 'options' property to created item object to satisfy InventoryItem type.
+            options: undefined,
         };
     });
 }
@@ -217,11 +244,16 @@ export const SHOP_ITEMS: { [key: string]: { type: 'equipment' | 'material' | 'co
     'equipment_box_6': { type: 'equipment', name: '장비 상자 VI', description: '전설~신화 등급 장비 획득', cost: { diamonds: 500 }, onPurchase: openEquipmentBox6, image: '/images/Box/EquipmentBox6.png' },
     'material_box_1': { type: 'material', name: '재료 상자 I', description: '하급 ~ 상급 강화석 5개 획득', cost: { gold: 500 }, onPurchase: () => openMaterialBox('material_box_1', 5), image: '/images/Box/ResourceBox1.png', dailyLimit: 10 },
     'material_box_2': { type: 'material', name: '재료 상자 II', description: '하급 ~ 상급 강화석 7개 획득', cost: { gold: 1000 }, onPurchase: () => openMaterialBox('material_box_2', 7), image: '/images/Box/ResourceBox2.png', dailyLimit: 6 },
-    'material_box_3': { type: 'material', name: '재료 상자 III', description: '하급 ~ 상급 강화석 10개 획득', cost: { gold: 3000 }, onPurchase: () => openMaterialBox('material_box_3', 10), image: '/images/Box/ResourceBox3.png', dailyLimit: 3 },
+    'material_box_3': { type: 'material', name: '재료 상자 III', description: '하급 ~ 상급 강화석 5개 획득', cost: { gold: 3000 }, onPurchase: () => openMaterialBox('material_box_3', 5), image: '/images/Box/ResourceBox3.png', dailyLimit: 3 },
     'material_box_4': { type: 'material', name: '재료 상자 IV', description: '중급 ~ 최상급 강화석 5개 획득', cost: { gold: 5000 }, onPurchase: () => openMaterialBox('material_box_4', 5), image: '/images/Box/ResourceBox4.png', dailyLimit: 3 },
     'material_box_5': { type: 'material', name: '재료 상자 V', description: '상급 ~ 신비의 강화석 5개 획득', cost: { gold: 10000 }, onPurchase: () => openMaterialBox('material_box_5', 5), image: '/images/Box/ResourceBox5.png', dailyLimit: 3 },
     'material_box_6': { type: 'material', name: '재료 상자 VI', description: '상급 ~ 신비의 강화석 5개 획득', cost: { diamonds: 100 }, onPurchase: () => openMaterialBox('material_box_6', 5), image: '/images/Box/ResourceBox6.png', dailyLimit: 3 },
-    'potion_small': { type: 'consumable', name: '컨디션물약(소)', description: '컨디션 1~5 회복', cost: { gold: 100 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '컨디션물약(소)', quantity: 1 }])[0], image: '/images/items/potion_small.png', weeklyLimit: 10 },
-    'potion_medium': { type: 'consumable', name: '컨디션물약(중)', description: '컨디션 5~10 회복', cost: { gold: 250 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '컨디션물약(중)', quantity: 1 }])[0], image: '/images/items/potion_medium.png', weeklyLimit: 5 },
-    'potion_large': { type: 'consumable', name: '컨디션물약(대)', description: '컨디션 10~20 회복', cost: { gold: 500 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '컨디션물약(대)', quantity: 1 }])[0], image: '/images/items/potion_large.png', weeklyLimit: 3 },
+    'potion_small': { type: 'consumable', name: '컨디션 물약(소)', description: '컨디션 1~5 회복', cost: { gold: 100 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '컨디션 물약(소)', quantity: 1 }])[0], image: '/images/use/con1.png', dailyLimit: 5 },
+    'potion_medium': { type: 'consumable', name: '컨디션 물약(중)', description: '컨디션 5~10 회복', cost: { gold: 250 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '컨디션 물약(중)', quantity: 1 }])[0], image: '/images/use/con2.png', dailyLimit: 3 },
+    'potion_large': { type: 'consumable', name: '컨디션 물약(대)', description: '컨디션 10~20 회복', cost: { gold: 500 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '컨디션 물약(대)', quantity: 1 }])[0], image: '/images/use/con3.png', dailyLimit: 1 },
+    'reset_ticket': { type: 'consumable', name: '싱글플레이 최초보상 초기화권', description: '싱글플레이 진행도는 유지하고, 최초 클리어 보상 기록만 초기화합니다.', cost: { diamonds: 200 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '싱글플레이 최초보상 초기화권', quantity: 1 }])[0], image: '/images/use/reset.png', weeklyLimit: 1 },
+    'gold_bundle_1': { type: 'consumable', name: '골드 꾸러미1', description: '10 ~ 500 골드 획득', cost: { diamonds: 10 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '골드 꾸러미1', quantity: 1 }])[0], image: '/images/Box/GoldBox1.png', dailyLimit: 10 },
+    'gold_bundle_2': { type: 'consumable', name: '골드 꾸러미2', description: '100 ~ 1,000 골드 획득', cost: { diamonds: 20 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '골드 꾸러미2', quantity: 1 }])[0], image: '/images/Box/GoldBox2.png', dailyLimit: 5 },
+    'gold_bundle_3': { type: 'consumable', name: '골드 꾸러미3', description: '500 ~ 3,000 골드 획득', cost: { diamonds: 30 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '골드 꾸러미3', quantity: 1 }])[0], image: '/images/Box/GoldBox3.png', dailyLimit: 3 },
+    'gold_bundle_4': { type: 'consumable', name: '골드 꾸러미4', description: '1,000 ~ 10,000 골드 획득', cost: { diamonds: 40 }, onPurchase: () => createItemInstancesFromReward([{ itemId: '골드 꾸러미4', quantity: 1 }])[0], image: '/images/Box/GoldBox4.png', dailyLimit: 1 },
 };

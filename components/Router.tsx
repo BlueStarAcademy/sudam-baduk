@@ -1,4 +1,7 @@
 
+
+
+
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
 
@@ -13,6 +16,9 @@ import Admin from './Admin.js';
 import TournamentLobby from './TournamentLobby.js';
 import SinglePlayerLobby from './SinglePlayerLobby.js';
 import TowerChallengeLobby from './TowerChallengeLobby.js';
+import Guild from './Guild.js';
+// FIX: Changed to default import to match named export from GuildBoss.tsx
+import GuildBoss from './guild/GuildBoss.js';
 
 const Router: React.FC = () => {
     const { currentRoute, currentUser, activeGame } = useAppContext();
@@ -29,7 +35,7 @@ const Router: React.FC = () => {
         // The logic in useApp hook will handle the redirect, we can show a loading state here
         return <div className="flex items-center justify-center h-full">재접속 중...</div>;
     }
-
+    
     switch (currentRoute.view) {
         case 'profile':
             return <Profile />;
@@ -47,10 +53,15 @@ const Router: React.FC = () => {
              if (currentRoute.params.id && activeGame && activeGame.id === currentRoute.params.id) {
                 return <Game session={activeGame} />;
             }
-            // Fallback if game ID is missing or doesn't match active game
-            console.warn("Router: Mismatch between route and active game. Redirecting to profile.");
-            window.location.hash = '#/profile';
-            return null;
+            // Instead of redirecting here, we show a loading state.
+            // The useEffect in useApp.ts is responsible for the actual redirect logic.
+            // This prevents a race condition where this component redirects to /profile
+            // before useApp.ts can redirect to the correct waiting room.
+            return <div className="flex items-center justify-center h-full">대국 종료 중...</div>;
+        case 'guild':
+            return <Guild />;
+        case 'guildboss':
+            return <GuildBoss />;
         case 'admin':
             return <Admin />;
         case 'tournament':

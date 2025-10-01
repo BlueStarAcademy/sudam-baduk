@@ -1,6 +1,8 @@
+
 import { Database } from 'sqlite';
 import { getDb, initializeAndGetDb } from './db/connection.js';
-import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode } from '../types.js';
+// FIX: Corrected import path for types.
+import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank } from '../types/index.js';
 import { getInitialState } from './initialData.js';
 
 // --- Initialization and Seeding ---
@@ -126,7 +128,7 @@ export const deleteGame = async (id: string): Promise<void> => {
 
 
 // --- Full State Retrieval (for client sync) ---
-export const getAllData = async (): Promise<Pick<AppState, 'users' | 'userCredentials' | 'liveGames' | 'adminLogs' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval'>> => {
+export const getAllData = async (): Promise<Pick<AppState, 'users' | 'userCredentials' | 'liveGames' | 'adminLogs' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'guilds' | 'towerRankings'>> => {
     const db = await getDb();
     const userRepository = await import('./repositories/userRepository.js');
     const gameRepository = await import('./repositories/gameRepository.js');
@@ -138,9 +140,24 @@ export const getAllData = async (): Promise<Pick<AppState, 'users' | 'userCreden
     const adminLogs = await kvRepository.getKV<AdminLog[]>(db, 'adminLogs') || [];
     const announcements = await kvRepository.getKV<Announcement[]>(db, 'announcements') || [];
     const globalOverrideAnnouncement = await kvRepository.getKV<OverrideAnnouncement | null>(db, 'globalOverrideAnnouncement');
-    const gameModeAvailability = await kvRepository.getKV<Record<GameMode, boolean>>(db, 'gameModeAvailability') || {};
+    const gameModeAvailability = await kvRepository.getKV<Record<GameMode, boolean>>(db, 'gameModeAvailability') || {} as Record<GameMode, boolean>;
     const announcementInterval = await kvRepository.getKV<number>(db, 'announcementInterval') || 3;
+    const guilds = await kvRepository.getKV<Record<string, Guild>>(db, 'guilds') || {};
     
+    const towerRankings = users
+        .filter(u => u.towerProgress && u.towerProgress.highestFloor > 0)
+        .sort((a, b) => {
+            if (b.towerProgress!.highestFloor !== a.towerProgress!.highestFloor) {
+                return b.towerProgress!.highestFloor - a.towerProgress!.highestFloor;
+            }
+            return a.towerProgress!.lastClearTimestamp - b.towerProgress!.lastClearTimestamp;
+        })
+        .map((user, index): TowerRank => ({
+            rank: index + 1,
+            user: user,
+            floor: user.towerProgress.highestFloor,
+        }));
+
     return {
         users: users.reduce((acc: Record<string, User>, user: User) => { acc[user.id] = user; return acc; }, {}),
         userCredentials: {}, // Never send credentials to client
@@ -150,5 +167,7 @@ export const getAllData = async (): Promise<Pick<AppState, 'users' | 'userCreden
         globalOverrideAnnouncement,
         gameModeAvailability,
         announcementInterval,
+        guilds,
+        towerRankings,
     };
 };

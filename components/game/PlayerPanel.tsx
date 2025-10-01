@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
-import { Player, GameProps, GameMode, User, AlkkagiPlacementType, GameSettings, GameStatus, UserWithStatus } from '../../types.js';
+import { Player, GameProps, GameMode, User, AlkkagiPlacementType, GameSettings, GameStatus, UserWithStatus } from '../../types/index.js';
 import Avatar from '../Avatar.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ALKKAGI_TURN_TIME_LIMIT, CURLING_TURN_TIME_LIMIT, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, aiUserId, AVATAR_POOL, BORDER_POOL, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
+// FIX: Add CURLING_TURN_TIME_LIMIT, DICE_GO_MAIN_ROLL_TIME, DICE_GO_MAIN_PLACE_TIME to imports.
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, aiUserId, AVATAR_POOL, BORDER_POOL, PLAYFUL_MODE_FOUL_LIMIT, CURLING_TURN_TIME_LIMIT, DICE_GO_MAIN_ROLL_TIME, DICE_GO_MAIN_PLACE_TIME } from '../../constants/index.js';
 import TurnCounterPanel from './TurnCounterPanel.js';
 
 const formatTime = (seconds: number) => {
@@ -54,47 +55,47 @@ const CapturedStones: React.FC<{ count: number; target?: number; panelType: 'bla
 };
 
 
-const TimeBar: React.FC<{ timeLeft: number; totalTime: number; byoyomiTime: number; byoyomiPeriods: number; totalByoyomi: number; isActive: boolean; isInByoyomi: boolean; isFoulMode?: boolean; isLeft: boolean; }> = ({ timeLeft, totalTime, byoyomiTime, byoyomiPeriods, totalByoyomi, isActive, isInByoyomi, isFoulMode = false, isLeft }) => {
+const TimeBar: React.FC<{
+    timeLeft: number; totalTime: number; byoyomiTime: number; byoyomiPeriods: number;
+    totalByoyomi: number; isActive: boolean; isInByoyomi: boolean; isFoulMode?: boolean; isLeft: boolean; timeTextClasses: string;
+}> = ({ timeLeft, totalTime, byoyomiTime, byoyomiPeriods, totalByoyomi, isActive, isInByoyomi, isFoulMode = false, isLeft, timeTextClasses }) => {
     const percent = useMemo(() => {
+        if (isInByoyomi && !isActive) return 100;
         if (isFoulMode) {
              const turnTime = totalTime > 0 ? totalTime : byoyomiTime;
              return turnTime > 0 ? (timeLeft / turnTime) * 100 : 0;
         }
         if (isInByoyomi) return byoyomiTime > 0 ? (timeLeft / byoyomiTime) * 100 : 0;
         return totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
-    }, [timeLeft, totalTime, byoyomiTime, isInByoyomi, isFoulMode]);
+    }, [timeLeft, totalTime, byoyomiTime, isInByoyomi, isFoulMode, isActive]);
     
-    const iconPositionClass = isLeft ? 'right-1' : 'left-1';
-    const iconJustifyClass = isLeft ? 'justify-end' : 'justify-start';
-
     return (
-        <div className="w-full relative">
-            {/* The bar track */}
+        <div className={`w-full flex flex-col gap-1 ${isLeft ? 'items-start' : 'items-end'}`}>
             <div className={`w-full h-1.5 rounded-full transition-colors ${isInByoyomi || isFoulMode ? 'bg-red-900/70' : 'bg-gray-700'}`}>
-                {/* The bar fill */}
                 <div
                     className={`h-1.5 rounded-full ${isInByoyomi || isFoulMode ? 'bg-red-500' : 'bg-blue-500'} ${isActive && timeLeft < 5 ? 'animate-pulse' : ''}`}
-                    style={{ width: `${Math.min(100, percent)}%`, transition: 'width 0.2s linear' }}
+                    style={{ width: `${Math.min(100, percent)}%`, transition: 'width 0.5s ease-out' }}
                 />
             </div>
-            
-            {/* The icons positioned on top of the track */}
-            {(totalByoyomi > 0 || isFoulMode) && (
-                <div className={`absolute ${iconPositionClass} top-1/2 -translate-y-1/2 flex items-center ${iconJustifyClass} gap-1 sm:gap-1.5`}>
-                    {isFoulMode ? (
-                        <div className="flex items-center gap-0.5">
-                            {Array.from({ length: byoyomiPeriods }).map((_, i) => (
-                                <span key={i} className="text-base leading-none" title={`${byoyomiPeriods} fouls remaining`}>⏰</span>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-1 text-yellow-300">
-                            <span className="text-base">⏰</span>
-                            <span className="text-sm font-bold">{byoyomiPeriods}</span>
-                        </div>
-                    )}
-                </div>
-            )}
+            <div className="flex items-center gap-2">
+                {(totalByoyomi > 0 || isFoulMode) && (
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                        {isFoulMode ? (
+                            <div className="flex items-center gap-0.5">
+                                {Array.from({ length: byoyomiPeriods }).map((_, i) => (
+                                    <img key={i} src="/images/timer.png" alt="foul" className="w-5 h-5" title={`${byoyomiPeriods} fouls remaining`} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-1 text-yellow-300">
+                                <img src="/images/timer.png" alt="timer" className="w-5 h-5" />
+                                <span className="text-sm font-bold">{Math.max(0, byoyomiPeriods)}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+                <span className={`font-mono font-bold ${isInByoyomi || (isFoulMode && timeLeft < 10) ? 'text-red-400' : timeTextClasses} text-[clamp(1rem,3.5vmin,1.25rem)]`}>{formatTime(timeLeft)}</span>
+            </div>
         </div>
     );
 };
@@ -123,9 +124,17 @@ const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
 
     const effectiveByoyomiTime = isFoulMode ? totalTime : byoyomiTime;
 
-    const levelToDisplay = isAiPlayer ? session.settings.aiDifficulty : (isStrategic ? user.strategyLevel : user.playfulLevel);
-    const levelLabel = isAiPlayer ? 'AI' : (isStrategic ? '전략' : '놀이');
-    const levelText = `${levelLabel} Lv.${levelToDisplay}`;
+    const { displayName, displayLevel } = useMemo(() => {
+        if (isTowerChallenge && isAiPlayer) {
+            const match = user.nickname.match(/(.*) Lv\.(\d+)/);
+            if (match) {
+                return { displayName: match[1].trim(), displayLevel: `Lv.${match[2]}` };
+            }
+        }
+        const level = isStrategic ? user.strategyLevel : user.playfulLevel;
+        const label = isAiPlayer ? 'AI' : (isStrategic ? '전략' : '놀이');
+        return { displayName: user.nickname, displayLevel: `${label} Lv.${level}` };
+    }, [isTowerChallenge, isAiPlayer, user, isStrategic]);
 
     const orderClass = isLeft ? 'flex-row' : 'flex-row-reverse';
     const textAlignClass = isLeft ? 'text-left' : 'text-right';
@@ -135,7 +144,8 @@ const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
     const isWinner = (winner === Player.Black && blackPlayerId === user.id) || (winner === Player.White && whitePlayerId === user.id);
     const isLoser = (winner === Player.Black || winner === Player.White) && !isWinner;
     
-    const isInByoyomi = !isFoulMode && mainTimeLeft <= 0 && totalByoyomi > 0;
+    const isFischer = mode === GameMode.Speed || (mode === GameMode.Mix && !!session.settings.mixedModes?.includes(GameMode.Speed));
+    const isInByoyomi = !isFoulMode && mainTimeLeft <= 0 && totalByoyomi > 0 && !isFischer;
     
     const foulLimit = PLAYFUL_MODE_FOUL_LIMIT;
     const effectiveTotalByoyomi = isFoulMode ? foulLimit : totalByoyomi;
@@ -200,11 +210,11 @@ const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
                          <div className={`flex items-baseline gap-2 ${justifyClass}`}>
                             {!isLeft && isGameEnded && isWinner && <span className="text-2xl font-black text-blue-400">승</span>}
                             {!isLeft && isGameEnded && isLoser && <span className="text-2xl font-black text-red-400">패</span>}
-                            <h2 className={`font-bold text-[clamp(0.8rem,3vmin,1.125rem)] leading-tight whitespace-nowrap ${finalNameClass}`}>{user.nickname} {isAiPlayer && '🤖'} {role && `(${role})`}</h2>
+                            <h2 className={`font-bold text-[clamp(0.8rem,3vmin,1.125rem)] leading-tight whitespace-nowrap ${finalNameClass}`}>{displayName} {isAiPlayer && '🤖'} {role && `(${role})`}</h2>
                             {isLeft && isGameEnded && isWinner && <span className="text-2xl font-black text-blue-400">승</span>}
                             {isLeft && isGameEnded && isLoser && <span className="text-2xl font-black text-red-400">패</span>}
                         </div>
-                        <p className={`text-[clamp(0.6rem,2vmin,0.75rem)] ${levelTextClasses}`}>{levelText}</p>
+                        <p className={`text-[clamp(0.6rem,2vmin,0.75rem)] ${levelTextClasses}`}>{displayLevel}</p>
                          {isCurling && (
                             <div className={`flex items-center gap-3 text-xs mt-1 ${justifyClass} ${levelTextClasses}`}>
                                 <span>{session.curlingRound || 1}/{session.settings.curlingRounds || 3}R</span>
@@ -214,10 +224,7 @@ const SinglePlayerPanel: React.FC<SinglePlayerPanelProps> = (props) => {
                     </div>
                 </div>
                 <div className="mt-1">
-                    <TimeBar timeLeft={timeLeft} totalTime={totalTime} byoyomiTime={effectiveByoyomiTime} byoyomiPeriods={effectiveByoyomiPeriodsLeft} totalByoyomi={effectiveTotalByoyomi} isActive={isActive && !isGameEnded} isInByoyomi={isInByoyomi} isFoulMode={isFoulMode} isLeft={isLeft} />
-                    <div className={`flex items-center mt-0.5 ${justifyClass}`}>
-                        <span className={`font-mono font-bold ${isInByoyomi || (isFoulMode && timeLeft < 10) ? 'text-red-400' : timeTextClasses} text-[clamp(1rem,3.5vmin,1.25rem)]`}>{formatTime(timeLeft)}</span>
-                    </div>
+                    <TimeBar timeLeft={timeLeft} totalTime={totalTime} byoyomiTime={effectiveByoyomiTime} byoyomiPeriods={effectiveByoyomiPeriodsLeft} totalByoyomi={effectiveTotalByoyomi} isActive={isActive && !isGameEnded} isInByoyomi={isInByoyomi} isFoulMode={isFoulMode} isLeft={isLeft} timeTextClasses={timeTextClasses} />
                 </div>
             </div>
             <CapturedStones count={score} target={captureTarget} panelType={panelType} mode={mode} />
@@ -230,6 +237,7 @@ interface PlayerPanelProps extends GameProps {
   isSinglePlayer?: boolean;
   isTowerChallenge?: boolean;
   middleComponent?: React.ReactNode;
+  onOpenSettings?: () => void;
 }
 
 const getTurnDuration = (mode: GameMode, gameStatus: GameStatus, settings: GameSettings): number => {
@@ -252,11 +260,11 @@ const getTurnDuration = (mode: GameMode, gameStatus: GameStatus, settings: GameS
         case GameMode.Dice:
             if (gameStatus === 'dice_rolling') return DICE_GO_MAIN_ROLL_TIME;
             if (gameStatus === 'dice_placing') return DICE_GO_MAIN_PLACE_TIME;
-            return DICE_GO_MAIN_ROLL_TIME; // Default for dice
+            return DICE_GO_MAIN_ROLL_TIME;
         case GameMode.Thief:
              if (gameStatus === 'thief_rolling') return DICE_GO_MAIN_ROLL_TIME;
              if (gameStatus === 'thief_placing') return DICE_GO_MAIN_PLACE_TIME;
-             return DICE_GO_MAIN_ROLL_TIME; // Default for thief
+             return DICE_GO_MAIN_ROLL_TIME;
         default:
             return settings.timeLimit * 60;
     }
@@ -264,7 +272,7 @@ const getTurnDuration = (mode: GameMode, gameStatus: GameStatus, settings: GameS
 
 
 const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
-    const { session, clientTimes, isSinglePlayer, isTowerChallenge, middleComponent } = props;
+    const { session, clientTimes, isSinglePlayer, isTowerChallenge, middleComponent, onOpenSettings } = props;
     const { player1, player2, blackPlayerId, whitePlayerId, captures, mode, settings, effectiveCaptureTargets, scores, currentPlayer } = session;
     
     const isScoreMode = [GameMode.Dice, GameMode.Thief, GameMode.Curling].includes(mode);
@@ -319,48 +327,59 @@ const PlayerPanel: React.FC<PlayerPanelProps> = (props) => {
     const turnDuration = getTurnDuration(mode, session.gameStatus, settings);
 
     return (
-        <div className="flex justify-center items-stretch gap-2 flex-shrink-0 h-full">
-            <SinglePlayerPanel
-                user={leftPlayerUser}
-                playerEnum={leftPlayerEnum}
-                score={leftPlayerScore}
-                isActive={isLeftPlayerActive}
-                timeLeft={leftPlayerTime}
-                totalTime={turnDuration}
-                mainTimeLeft={leftPlayerMainTime}
-                byoyomiPeriodsLeft={leftPlayerByoyomi}
-                totalByoyomi={settings.byoyomiCount}
-                byoyomiTime={settings.byoyomiTime}
-                isLeft={true}
-                session={session}
-                captureTarget={getCaptureTargetForPlayer(leftPlayerEnum)}
-                role={leftPlayerRole}
-                isAiPlayer={isLeftAi}
-                mode={mode}
-                isSinglePlayer={isSinglePlayer}
-                isTowerChallenge={isTowerChallenge}
-            />
-            {middleComponent}
-             <SinglePlayerPanel
-                user={rightPlayerUser}
-                playerEnum={rightPlayerEnum}
-                score={rightPlayerScore}
-                isActive={isRightPlayerActive}
-                timeLeft={rightPlayerTime}
-                totalTime={turnDuration}
-                mainTimeLeft={rightPlayerMainTime}
-                byoyomiPeriodsLeft={rightPlayerByoyomi}
-                totalByoyomi={settings.byoyomiCount}
-                byoyomiTime={settings.byoyomiTime}
-                isLeft={false}
-                session={session}
-                captureTarget={getCaptureTargetForPlayer(rightPlayerEnum)}
-                role={rightPlayerRole}
-                isAiPlayer={isRightAi}
-                mode={mode}
-                isSinglePlayer={isSinglePlayer}
-                isTowerChallenge={isTowerChallenge}
-            />
+        <div className="relative">
+            <div className="flex justify-center items-stretch gap-2 flex-shrink-0 h-full">
+                <SinglePlayerPanel
+                    user={leftPlayerUser}
+                    playerEnum={leftPlayerEnum}
+                    score={leftPlayerScore}
+                    isActive={isLeftPlayerActive}
+                    timeLeft={leftPlayerTime}
+                    totalTime={turnDuration}
+                    mainTimeLeft={leftPlayerMainTime}
+                    byoyomiPeriodsLeft={leftPlayerByoyomi}
+                    totalByoyomi={settings.byoyomiCount}
+                    byoyomiTime={settings.byoyomiTime}
+                    isLeft={true}
+                    session={session}
+                    captureTarget={getCaptureTargetForPlayer(leftPlayerEnum)}
+                    role={leftPlayerRole}
+                    isAiPlayer={isLeftAi}
+                    mode={mode}
+                    isSinglePlayer={isSinglePlayer}
+                    isTowerChallenge={isTowerChallenge}
+                />
+                {middleComponent}
+                 <SinglePlayerPanel
+                    user={rightPlayerUser}
+                    playerEnum={rightPlayerEnum}
+                    score={rightPlayerScore}
+                    isActive={isRightPlayerActive}
+                    timeLeft={rightPlayerTime}
+                    totalTime={turnDuration}
+                    mainTimeLeft={rightPlayerMainTime}
+                    byoyomiPeriodsLeft={rightPlayerByoyomi}
+                    totalByoyomi={settings.byoyomiCount}
+                    byoyomiTime={settings.byoyomiTime}
+                    isLeft={false}
+                    session={session}
+                    captureTarget={getCaptureTargetForPlayer(rightPlayerEnum)}
+                    role={rightPlayerRole}
+                    isAiPlayer={isRightAi}
+                    mode={mode}
+                    isSinglePlayer={isSinglePlayer}
+                    isTowerChallenge={isTowerChallenge}
+                />
+            </div>
+            {onOpenSettings && (
+                <button
+                    onClick={onOpenSettings}
+                    className="absolute top-1 right-1 z-10 p-1.5 rounded-lg text-lg hover:bg-secondary/50 transition-colors"
+                    title="설정"
+                >
+                    ⚙️
+                </button>
+            )}
         </div>
     );
 };

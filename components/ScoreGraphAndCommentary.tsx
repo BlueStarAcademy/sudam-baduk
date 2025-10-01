@@ -67,29 +67,87 @@ const parseCommentary = (commentaryLine: CommentaryLine, p1Nickname?: string, p2
     
     return (
         <div>
-            {baseText}
+            <span>
+                {baseText}
+                {isRandomEvent && randomEventDetails && (
+                    <span className="font-bold text-yellow-400 ml-1">
+                        (+{randomEventDetails.score_change.toFixed(1).replace('.0', '')}집)
+                    </span>
+                )}
+            </span>
             {randomEventDetails && <RandomEventDetails details={randomEventDetails} p1Nickname={p1Nickname} p2Nickname={p2Nickname} />}
         </div>
     );
 };
 
-const SimulationProgressBar: React.FC<{ timeElapsed: number; totalDuration: number }> = ({ timeElapsed, totalDuration }) => {
+export const SimulationProgressBar: React.FC<{ timeElapsed: number; totalDuration: number }> = ({ timeElapsed, totalDuration }) => {
     const progress = (timeElapsed / totalDuration) * 100;
-    const earlyStage = Math.min(progress, (40 / 140) * 100);
-    const midStage = Math.min(Math.max(0, progress - (40 / 140) * 100), (60 / 140) * 100);
-    const endStage = Math.min(Math.max(0, progress - (100 / 140) * 100), (40 / 140) * 100);
+    const earlyDuration = 20;
+    const midDuration = 30;
+    const endDuration = 20;
+
+    const earlyPercent = (earlyDuration / totalDuration) * 100;
+    const midPercent = (midDuration / totalDuration) * 100;
+    const endPercent = (endDuration / totalDuration) * 100;
+
+    const earlyStage = Math.min(progress, earlyPercent);
+    const midStage = Math.min(Math.max(0, progress - earlyPercent), midPercent);
+    const endStage = Math.min(Math.max(0, progress - earlyPercent - midPercent), endPercent);
 
     return (
         <div>
             <div className="w-full bg-gray-900 rounded-full h-2 flex border border-gray-600">
                 <div className="bg-green-500 h-full rounded-l-full" style={{ width: `${earlyStage}%` }} title="초반전"></div>
                 <div className="bg-yellow-500 h-full" style={{ width: `${midStage}%` }} title="중반전"></div>
-                <div className="bg-red-500 h-full rounded-r-full" style={{ width: `${endStage}%` }} title="끝내기"></div>
+                <div className="bg-red-500 h-full rounded-r-full" style={{ width: `${endStage}%` }} title="종반"></div>
             </div>
             <div className="flex text-xs text-gray-400 mt-1">
-                <div style={{ width: `${(40/140)*100}%` }}>초반</div>
-                <div style={{ width: `${(60/140)*100}%` }} className="text-center">중반</div>
-                <div style={{ width: `${(40/140)*100}%` }} className="text-right">종반</div>
+                <div style={{ width: `${earlyPercent}%` }}>초반</div>
+                <div style={{ width: `${midPercent}%` }} className="text-center">중반</div>
+                <div style={{ width: `${endPercent}%` }} className="text-right">종반</div>
+            </div>
+        </div>
+    );
+};
+
+export const ScoreGraph: React.FC<{ p1Percent: number; p2Percent: number; p1Nickname?: string; p2Nickname?: string }> = ({ p1Percent, p2Percent, p1Nickname, p2Nickname }) => {
+    return (
+        <div>
+            {p1Nickname && p2Nickname && (
+                <div className="flex justify-between text-xs px-1 mb-1 font-bold">
+                    <span className="truncate max-w-[45%]">흑: {p1Nickname}</span>
+                    <span className="truncate max-w-[45%] text-right">백: {p2Nickname}</span>
+                </div>
+            )}
+            <div className="flex w-full h-3 bg-gray-700 rounded-full overflow-hidden border-2 border-black/30 relative">
+                <div className="bg-black transition-all duration-500 ease-in-out" style={{ width: `${p1Percent}%` }}></div>
+                <div className="bg-white transition-all duration-500 ease-in-out" style={{ width: `${p2Percent}%` }}></div>
+                <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-gray-400/50" title="중앙"></div>
+            </div>
+        </div>
+    );
+};
+
+export const CommentaryPanel: React.FC<{ commentary: CommentaryLine[], isSimulating: boolean, p1Nickname?: string, p2Nickname?: string }> = ({ commentary, isSimulating, p1Nickname, p2Nickname }) => {
+    const commentaryContainerRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (commentaryContainerRef.current) {
+            commentaryContainerRef.current.scrollTop = commentaryContainerRef.current.scrollHeight;
+        }
+    }, [commentary]);
+    
+    return (
+        <div className="h-full flex flex-col min-h-0">
+            <h4 className="text-center font-bold text-sm mb-2 text-gray-400 py-1 flex-shrink-0">
+                실시간 중계
+                {isSimulating && <span className="ml-2 text-yellow-400 animate-pulse">경기 진행 중...</span>}
+            </h4>
+            <div ref={commentaryContainerRef} className="flex-grow overflow-y-auto space-y-2 text-sm text-gray-300 bg-gray-800/50 p-3 rounded-md min-h-0">
+                {commentary.length > 0 ? (
+                    commentary.slice(-30).map((line, index) => <div key={`${index}-${line.text}`} className="animate-fade-in">{parseCommentary(line, p1Nickname, p2Nickname)}</div>)
+                ) : (
+                    <p className="text-gray-500 text-center h-full flex items-center justify-center">경기 시작 대기 중...</p>
+                )}
             </div>
         </div>
     );
@@ -119,21 +177,11 @@ const ScoreGraphAndCommentary: React.FC<ScoreGraphAndCommentaryProps> = ({ comme
                     <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-0.5 bg-gray-400/50" title="중앙"></div>
                 </div>
                  <div className="mt-2">
-                    <SimulationProgressBar timeElapsed={timeElapsed} totalDuration={140} />
+                    <SimulationProgressBar timeElapsed={timeElapsed} totalDuration={70} />
                 </div>
             </div>
             <div className="flex-grow flex flex-col px-4 pb-4 min-h-0">
-                <h4 className="text-center font-bold text-sm mb-2 text-gray-400 flex-shrink-0">
-                    실시간 중계
-                    {isSimulating && <span className="ml-2 text-yellow-400 animate-pulse">경기 진행 중...</span>}
-                </h4>
-                <div ref={commentaryContainerRef} className="overflow-y-auto space-y-2 text-sm text-gray-300 bg-gray-800/50 p-3 rounded-md h-56">
-                    {commentary.length > 0 ? (
-                        commentary.slice(-30).map((line, index) => <p key={`${index}-${line.text}`} className="animate-fade-in">{parseCommentary(line, p1Nickname, p2Nickname)}</p>)
-                    ) : (
-                        <p className="text-gray-500 text-center">경기 시작 대기 중...</p>
-                    )}
-                </div>
+                <CommentaryPanel commentary={commentary} isSimulating={isSimulating} p1Nickname={p1Nickname} p2Nickname={p2Nickname}/>
             </div>
         </div>
     );

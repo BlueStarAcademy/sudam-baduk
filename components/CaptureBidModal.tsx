@@ -1,6 +1,8 @@
 
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { LiveGameSession, User, ServerAction } from '../types.js';
+// FIX: Use `import type` for interfaces to prevent type/value confusion.
+import type { LiveGameSession, User, ServerAction } from '../types/index.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
 

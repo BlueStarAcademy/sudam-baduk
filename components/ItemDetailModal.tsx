@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { InventoryItem, ItemGrade, ItemOption } from '../types.js';
 import DraggableWindow from './DraggableWindow.js';
@@ -59,12 +58,12 @@ const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, isOwnedByCurren
                     <h3 className={`text-2xl font-bold ${starInfo.colorClass}`}>{item.name}</h3>
                     {item.stars > 0 && <span className={`text-xl font-bold ${starInfo.colorClass}`}>{starInfo.text}</span>}
                 </div>
-                <div className="flex items-baseline justify-center gap-4 mb-4 text-sm">
-                    <p className="text-gray-400">[{styles.name}]</p>
+                <p className="text-sm text-center mb-4">
+                    <span className={`font-bold ${styles.color}`}>[{styles.name}]</span>
                     {item.options?.main && (
-                        <p className="font-semibold text-yellow-300">{item.options.main.display}</p>
+                        <span className="font-semibold text-yellow-300 ml-2">{item.options.main.display}</span>
                     )}
-                </div>
+                </p>
                 
                 <div className="w-full text-sm text-left space-y-3 bg-gray-900/50 p-3 rounded-lg">
                     {item.options?.combatSubs && item.options.combatSubs.length > 0 && (

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
 import Button from './Button.js';
-import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType } from '../types.js';
+import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType, InventoryItem, SinglePlayerStageInfo } from '../types.js';
 import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../constants.js';
 
 const LEVEL_DATA: { id: SinglePlayerLevel; name: string; unlockRequirement: number; image: string; }[] = [
@@ -45,7 +45,8 @@ const StageListItem: React.FC<{
     isCurrent: boolean;
     onAction: (action: ServerAction) => void;
     currentUser: UserWithStatus;
-}> = ({ stage, isLocked, isCleared, isCurrent, onAction, currentUser }) => {
+    refProp: React.Ref<HTMLLIElement>;
+}> = ({ stage, isLocked, isCleared, isCurrent, onAction, currentUser, refProp }) => {
     
     const handleStageClick = (stageId: string) => {
         onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId } });
@@ -64,18 +65,21 @@ const StageListItem: React.FC<{
     
     const gameTypeDisplay = stage.gameType ? gameTypeKorean[stage.gameType] : '클래식';
     
-    const renderRewardItem = (reward: { itemId: string, quantity: number }, index: number) => {
-        const itemTemplate = CONSUMABLE_ITEMS.find(ci => ci.name === reward.itemId);
-        if (!itemTemplate) return null;
+    const renderRewardItem = (reward: InventoryItem | { itemId: string; quantity: number }, index: number) => {
+        const itemName = 'itemId' in reward ? reward.itemId : reward.name;
+        const quantity = 'quantity' in reward ? reward.quantity : 1;
+        const itemTemplate = CONSUMABLE_ITEMS.find(ci => ci.name === itemName);
+        if (!itemTemplate?.image) return null;
+        const title = `${itemName} x${quantity}`;
         return (
-            <div key={index} className="flex items-center" title={`${reward.itemId} x${reward.quantity}`}>
-                <img src={itemTemplate.image!} alt={reward.itemId} className="w-5 h-5 object-contain" />
+            <div key={index} className="flex items-center" title={title}>
+                <img src={itemTemplate.image} alt={itemName} className="w-5 h-5 object-contain" />
             </div>
         );
     };
 
     return (
-        <div className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-all duration-200 ${
+        <li ref={refProp} className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-all duration-200 ${
             isLocked ? 'bg-secondary/30 opacity-60' : `bg-secondary/60 ${borderClass} hover:bg-tertiary/60`
         }`}>
             {/* Stage Icon */}
@@ -86,7 +90,11 @@ const StageListItem: React.FC<{
                     <>
                         <span className="text-[10px] text-tertiary">스테이지</span>
                         <span className="font-bold text-lg text-primary -my-1">{stage.name.replace('스테이지 ', '')}</span>
-                        <span className="text-[10px] text-highlight font-semibold">{gameTypeDisplay}</span>
+                        <div className="flex items-center gap-1 text-[10px] text-highlight font-semibold">
+                            {stage.missileCount && <span title={`미사일 ${stage.missileCount}개`}>🚀{stage.missileCount}</span>}
+                            {stage.hiddenStoneCount && <span title={`히든 ${stage.hiddenStoneCount}개`}>❓{stage.hiddenStoneCount}</span>}
+                            {stage.scanCount && <span title={`스캔 ${stage.scanCount}개`}>🔍{stage.scanCount}</span>}
+                        </div>
                     </>
                 )}
             </div>
@@ -94,9 +102,10 @@ const StageListItem: React.FC<{
             {/* Main Info */}
             <div className="flex-1 flex flex-col justify-center gap-1 text-xs text-secondary min-w-0">
                 <div className="flex items-center justify-between whitespace-nowrap gap-2">
-                    <div className="flex items-center gap-1" title={`AI 레벨 ${stage.katagoLevel}`}>
+                    <div className="flex items-center gap-2" title={`AI 레벨 ${stage.katagoLevel}`}>
                         <span className="text-base">🤖</span>
                         <span className="font-semibold">Lv.{stage.katagoLevel}</span>
+                        <span className="font-bold text-tertiary">({gameTypeDisplay})</span>
                     </div>
                     {hasTargetScore ? (
                         <div className="flex items-center gap-1" title={`목표 점수 흑 ${stage.targetScore!.black} / 백 ${stage.targetScore!.white}`}>
@@ -110,11 +119,12 @@ const StageListItem: React.FC<{
                         </div>
                     ) : null}
                 </div>
-                <div className="flex items-center justify-between whitespace-nowrap gap-2">
+                <div className="flex items-center justify-center gap-4 bg-tertiary/40 p-1 rounded-md">
                     <div className="flex items-center gap-2">
                         <StoneDisplay baseSrc="/images/single/Black.png" count={stage.placements.black} title={`흑돌 ${stage.placements.black}개`} />
                         <StoneDisplay baseSrc="/images/single/Black.png" patternSrc="/images/single/BlackDouble.png" count={stage.placements.blackPattern} title={`흑 문양돌 ${stage.placements.blackPattern}개`} />
                     </div>
+                    <div className="w-px h-4 bg-color self-stretch"></div>
                     <div className="flex items-center gap-2">
                         <StoneDisplay baseSrc="/images/single/White.png" count={stage.placements.white} title={`백돌 ${stage.placements.white}개`} />
                         <StoneDisplay baseSrc="/images/single/White.png" patternSrc="/images/single/WhiteDouble.png" count={stage.placements.whitePattern} title={`백 문양돌 ${stage.placements.whitePattern}개`} />
@@ -133,12 +143,18 @@ const StageListItem: React.FC<{
                                 {rewards.gold}
                             </span>
                         }
-                        {rewards.exp > 0 &&
-                             <span className="flex items-center gap-0.5 text-xs" title={`경험치 ${rewards.exp}`}>
-                                <span className="text-sm">⭐</span> {rewards.exp}
+                        {(rewards.exp?.amount ?? 0) > 0 &&
+                             <span className="flex items-center gap-0.5 text-xs" title={`경험치 ${rewards.exp!.amount}`}>
+                                <span className="text-sm">⭐</span> {rewards.exp!.amount}
                             </span>
                         }
                         {rewards.items?.map(renderRewardItem)}
+                        {rewards.bonus && 
+                            <span className="flex items-center gap-0.5" title={`보너스 스탯 ${rewards.bonus.replace('스탯', '')}`}>
+                                <img src="/images/icons/stat_point.png" alt="Stat Point" className="w-4 h-4" />
+                                {rewards.bonus.replace('스탯', '')}
+                            </span>
+                        }
                     </div>
                 </div>
                 <Button 
@@ -150,7 +166,7 @@ const StageListItem: React.FC<{
                     {isLocked ? '🔒 잠김' : `입장 (⚡${stage.actionPointCost})`}
                 </Button>
             </div>
-        </div>
+        </li>
     );
 };
 
@@ -206,23 +222,19 @@ const MissionCard: React.FC<{
         if (!isStarted) {
             return { displayAmount: 0, timeToNextReward: 0 };
         }
-
+        
         const productionIntervalMs = mission.productionRateMinutes * 60 * 1000;
         if (productionIntervalMs <= 0) {
             return { displayAmount: accumulatedAmount, timeToNextReward: 0 };
         }
-        
-        const currentAmount = accumulatedAmount;
 
         let nextRewardTime = 0;
-        if (currentAmount < mission.maxCapacity) {
-            const now = Date.now();
-            const elapsedMs = now - lastCollectionTime;
-            nextRewardTime = productionIntervalMs - (elapsedMs % productionIntervalMs);
+        if (accumulatedAmount < mission.maxCapacity) {
+            const elapsedMsSinceLastTick = Date.now() - lastCollectionTime;
+            nextRewardTime = productionIntervalMs - (elapsedMsSinceLastTick % productionIntervalMs);
         }
         
-        return { displayAmount: currentAmount, timeToNextReward: nextRewardTime };
-
+        return { displayAmount: accumulatedAmount, timeToNextReward: nextRewardTime };
     }, [isStarted, lastCollectionTime, accumulatedAmount, mission.productionRateMinutes, mission.maxCapacity, tick]);
 
 
@@ -270,16 +282,16 @@ const MissionCard: React.FC<{
                     <div className="w-full bg-tertiary rounded-full h-3 relative overflow-hidden border border-black/20">
                         <div className="bg-green-500 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
                         <span className="absolute inset-0 text-[10px] font-bold text-white flex items-center justify-center" style={{ textShadow: '1px 1px 1px black' }}>
-                            {displayAmount.toLocaleString()}/{mission.maxCapacity.toLocaleString()}
+                            {Math.floor(displayAmount).toLocaleString()}/{mission.maxCapacity.toLocaleString()}
                         </span>
                     </div>
                     <Button
                         onClick={onClaim}
-                        disabled={displayAmount < 1}
+                        disabled={Math.floor(displayAmount) < 1}
                         colorScheme="green"
                         className="w-full !py-1 !text-xs"
                     >
-                        수령하기 ({displayAmount.toLocaleString()})
+                        수령하기 ({Math.floor(displayAmount).toLocaleString()})
                     </Button>
                 </div>
             ) : (
@@ -345,7 +357,7 @@ const StageList: React.FC<{
 }> = ({ activeLevelData, userProgress, currentUserWithStatus, handlers }) => {
     
     const stagesForLevel = useMemo(() => {
-        return SINGLE_PLAYER_STAGES.filter(stage => stage.level === activeLevelData.id);
+        return SINGLE_PLAYER_STAGES.filter((stage: SinglePlayerStageInfo) => stage.level === activeLevelData.id);
     }, [activeLevelData.id]);
 
     const { clearedInLevel, stagesInLevel } = useMemo(() => {
@@ -355,6 +367,21 @@ const StageList: React.FC<{
         const cleared = Math.max(0, Math.min(stagesInThisLevel, userProgress - unlockRequirement));
         return { clearedInLevel: cleared, stagesInLevel: stagesInThisLevel };
     }, [activeLevelData, userProgress, stagesForLevel]);
+
+    const scrollContainerRef = useRef<HTMLUListElement>(null);
+    const stageRefs = useRef<Map<string, HTMLLIElement | null>>(new Map());
+
+    useEffect(() => {
+        const currentStage = SINGLE_PLAYER_STAGES[userProgress];
+        if (currentStage && currentStage.level === activeLevelData.id) {
+            const targetElement = stageRefs.current.get(currentStage.id);
+            if (targetElement && scrollContainerRef.current) {
+                setTimeout(() => {
+                    targetElement.scrollIntoView({ behavior: 'auto', block: 'center' });
+                }, 100);
+            }
+        }
+    }, [userProgress, activeLevelData.id]);
 
     const getUnlockMessage = (requirement: number): string => {
         if (requirement <= 20) return "입문반 20 스테이지를 모두 클리어해야 열립니다.";
@@ -379,9 +406,9 @@ const StageList: React.FC<{
                 </div>
             )}
             
-            <div className="flex-grow overflow-y-auto space-y-2 pr-2">
-                {stagesForLevel.map(stage => {
-                    const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
+            <ul ref={scrollContainerRef} className="flex-grow overflow-y-auto space-y-2 pr-2">
+                {stagesForLevel.map((stage: SinglePlayerStageInfo) => {
+                    const stageIndex = SINGLE_PLAYER_STAGES.findIndex((s: SinglePlayerStageInfo) => s.id === stage.id);
                     const isLocked = !currentUserWithStatus.isAdmin && userProgress < stageIndex;
                     const isCleared = userProgress > stageIndex;
                     const isCurrent = userProgress === stageIndex;
@@ -393,11 +420,12 @@ const StageList: React.FC<{
                             isCleared={isCleared}
                             isCurrent={isCurrent}
                             onAction={handlers.handleAction}
-                            currentUser={currentUserWithStatus}
+                            currentUser={currentUserWithStatus!}
+                            refProp={(el) => { stageRefs.current.set(stage.id, el); }}
                         />
                     );
                 })}
-            </div>
+            </ul>
         </div>
     );
 };

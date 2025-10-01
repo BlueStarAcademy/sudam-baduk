@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import DraggableWindow from '../DraggableWindow.js';
-import { AnalysisResult, LiveGameSession, GameMode } from '../../types.js';
+// FIX: Added BoardState to the import to correctly type the boardState prop.
+import { AnalysisResult, LiveGameSession, GameMode, Point, Player, BoardState } from '../../types/index.js';
 
 interface WindowProps {
     session: LiveGameSession;
@@ -130,5 +131,70 @@ export const HintWindow: React.FC<WindowProps> = ({ session, result, onClose }) 
                 ))}
             </ul>
         </DraggableWindow>
+    );
+};
+
+export const OwnershipOverlay: React.FC<{
+    ownershipMap: number[][];
+    // FIX: Changed type from Point[][] to BoardState (Player[][]) to fix type mismatch.
+    boardState: BoardState;
+    deadStones: Point[];
+    toSvgCoords: (p: Point) => { cx: number; cy: number };
+    cellSize: number;
+}> = ({ ownershipMap, boardState, deadStones, toSvgCoords, cellSize }) => {
+    const territoryMarkers = ownershipMap.map((row, y) => row.map((value, x) => {
+        const player = boardState[y]?.[x];
+        if (player !== Player.None) return null; // Only draw territory on empty points
+
+        const { cx, cy } = toSvgCoords({ x, y });
+        
+        const absValue = Math.abs(value);
+        const prob = absValue / 10;
+
+        if (prob < 0.3) return null;
+
+        const size = cellSize * prob * 0.675;
+        const opacity = prob * 0.7;
+        const fill = value > 0 ? `rgba(0, 0, 0, ${opacity})` : `rgba(255, 255, 255, ${opacity})`;
+
+        return (
+            <rect
+                key={`territory-${x}-${y}`}
+                x={cx - size / 2}
+                y={cy - size / 2}
+                width={size}
+                height={size}
+                fill={fill}
+                rx={size * 0.3}
+            />
+        );
+    }));
+
+    const deadStoneMarkers = deadStones.map(stone => {
+        const player = boardState[stone.y]?.[stone.x];
+        if (player === Player.None) return null;
+        
+        const { cx, cy } = toSvgCoords({ x: stone.x, y: stone.y });
+        const size = cellSize * 0.5;
+        const fill = player === Player.Black ? 'white' : 'black';
+        
+        return (
+            <rect
+                key={`dead-${stone.x}-${stone.y}`}
+                x={cx - size / 2}
+                y={cy - size / 2}
+                width={size}
+                height={size}
+                fill={fill}
+                opacity={0.8}
+            />
+        );
+    });
+
+    return (
+        <g style={{ pointerEvents: 'none' }} className="animate-fade-in">
+            {territoryMarkers}
+            {deadStoneMarkers}
+        </g>
     );
 };

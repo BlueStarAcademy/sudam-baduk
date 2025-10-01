@@ -1,17 +1,34 @@
 const KST_OFFSET = 9 * 60 * 60 * 1000;
 
-export type SeasonInfo = {
+export interface SeasonInfo {
     year: number;
     season: 1 | 2 | 3 | 4;
     name: string; // e.g., '25-1시즌'
-};
+}
 
 export const getKSTDate = (date: Date | number = Date.now()): Date => {
     const utc = typeof date === 'number' ? date : date.getTime();
     return new Date(utc + KST_OFFSET);
 };
 
-export const isSameDayKST = (ts1: number | undefined, ts2: number): boolean => {
+export const getTimeUntilNextMondayKST = (): number => {
+    const nowKST = getKSTDate(); // uses current time by default
+    const currentDay = nowKST.getUTCDay(); // 0=Sun, 1=Mon
+
+    // Days to add to reach next Monday.
+    // If today is Monday (1), we want to reach next Monday, so add 7.
+    // If today is Sunday (0), we want to reach tomorrow, so add 1.
+    const daysToAdd = currentDay === 1 ? 7 : (8 - currentDay) % 7;
+    
+    const nextMonday = new Date(nowKST);
+    nextMonday.setUTCDate(nowKST.getUTCDate() + daysToAdd);
+    nextMonday.setUTCHours(0, 0, 0, 0);
+
+    return nextMonday.getTime() - nowKST.getTime();
+};
+
+
+export const isSameDayKST = (ts1: number | undefined | null, ts2: number): boolean => {
     if (!ts1 || ts1 === 0) return false;
     const d1 = getKSTDate(ts1);
     const d2 = getKSTDate(ts2);
@@ -20,12 +37,12 @@ export const isSameDayKST = (ts1: number | undefined, ts2: number): boolean => {
            d1.getUTCDate() === d2.getUTCDate();
 };
 
-export const isDifferentDayKST = (ts1: number | undefined, ts2: number): boolean => {
+export const isDifferentDayKST = (ts1: number | undefined | null, ts2: number): boolean => {
     if (!ts1 || ts1 === 0) return true;
     return !isSameDayKST(ts1, ts2);
 };
 
-export const isDifferentWeekKST = (ts1: number | undefined, ts2: number): boolean => {
+export const isDifferentWeekKST = (ts1: number | undefined | null, ts2: number): boolean => {
     if (!ts1 || ts1 === 0) return true; // Treat no previous update as a new week
 
     const d1 = getKSTDate(ts1);
@@ -52,7 +69,7 @@ export const isDifferentWeekKST = (ts1: number | undefined, ts2: number): boolea
     return monday1.getTime() !== monday2.getTime();
 };
 
-export const isDifferentMonthKST = (ts1: number | undefined, ts2: number): boolean => {
+export const isDifferentMonthKST = (ts1: number | undefined | null, ts2: number): boolean => {
     if (!ts1 || ts1 === 0) return true;
     const d1 = getKSTDate(ts1);
     const d2 = getKSTDate(ts2);
@@ -97,4 +114,60 @@ export const getPreviousSeason = (date: Date | number = Date.now()): SeasonInfo 
 
     const shortYear = prevYear.toString().slice(-2);
     return { year: prevYear, season: prevSeason, name: `${shortYear}-${prevSeason}시즌` };
+};
+
+export const formatTimeAgo = (timestamp: number | undefined | null): string => {
+    if (!timestamp) return '오래 전';
+    const now = Date.now();
+    const seconds = Math.floor((now - timestamp) / 1000);
+
+    let interval = seconds / 31536000;
+    if (interval > 1) return `${Math.floor(interval)}년 전`;
+    interval = seconds / 2592000;
+    if (interval > 1) return `${Math.floor(interval)}달 전`;
+    interval = seconds / 86400;
+    if (interval > 1) return `${Math.floor(interval)}일 전`;
+    interval = seconds / 3600;
+    if (interval > 1) return `${Math.floor(interval)}시간 전`;
+    interval = seconds / 60;
+    if (interval > 1) return `${Math.floor(interval)}분 전`;
+    return '방금 전';
+};
+
+export const formatDateTimeKST = (timestamp: number): string => {
+    if (!timestamp) return '';
+    const d = getKSTDate(timestamp);
+    const year = d.getUTCFullYear();
+    const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const hours = String(d.getUTCHours()).padStart(2, '0');
+    const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
+export const formatLastLogin = (timestamp: number | undefined | null): string => {
+    if (!timestamp || timestamp === 0) return '오래 전';
+
+    const kstNow = getKSTDate();
+    const kstLastLogin = getKSTDate(timestamp);
+    
+    const startOfTodayKST = new Date(kstNow);
+    startOfTodayKST.setUTCHours(0, 0, 0, 0);
+
+    const startOfLoginDayKST = new Date(kstLastLogin);
+    startOfLoginDayKST.setUTCHours(0, 0, 0, 0);
+
+    if (startOfTodayKST.getTime() === startOfLoginDayKST.getTime()) {
+        return '오늘';
+    }
+
+    const diffTime = startOfTodayKST.getTime() - startOfLoginDayKST.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 30) {
+        return `${diffDays}일 전`;
+    }
+
+    const diffMonths = Math.floor(diffDays / 30);
+    return `${diffMonths}달 전`;
 };

@@ -30,7 +30,7 @@ interface GameModalsProps extends GameProps {
     confirmModalType: 'resign' | null;
     onHideConfirmModal: () => void;
     showResultModal: boolean;
-    onCloseResults: () => void;
+    onCloseResults: (cleanupAndRedirect?: boolean) => void;
 }
 
 const GameModals: React.FC<GameModalsProps> = (props) => {
@@ -51,47 +51,46 @@ const GameModals: React.FC<GameModalsProps> = (props) => {
         }
         
         const playerOnlyStates: GameStatus[] = [
-            'nigiri_choosing', 'nigiri_guessing',
-            'base_placement',
-            'komi_bidding',
-            'capture_bidding',
-            'dice_rps', 'thief_rps', 'alkkagi_rps', 'curling_rps', 'omok_rps', 'ttamok_rps',
-            'turn_preference_selection',
-            'thief_role_selection',
-            'alkkagi_simultaneous_placement',
-            'dice_turn_rolling',
-            
+            GameStatus.NigiriChoosing, GameStatus.NigiriGuessing,
+            GameStatus.BasePlacement,
+            GameStatus.KomiBidding,
+            GameStatus.CaptureBidding,
+            GameStatus.DiceRps, GameStatus.ThiefRps, GameStatus.AlkkagiRps, GameStatus.CurlingRps, GameStatus.OmokRps, GameStatus.TtamokRps,
+            GameStatus.TurnPreferenceSelection,
+            GameStatus.ThiefRoleSelection,
+            GameStatus.AlkkagiSimultaneousPlacement,
+            GameStatus.DiceTurnRolling,
         ];
 
         if (isSpectator && playerOnlyStates.includes(gameStatus)) {
             return null;
         }
         
-        const rpsStates: GameStatus[] = ['dice_rps', 'dice_rps_reveal', 'thief_rps', 'thief_rps_reveal', 'alkkagi_rps', 'alkkagi_rps_reveal', 'curling_rps', 'curling_rps_reveal', 'omok_rps', 'omok_rps_reveal', 'ttamok_rps', 'ttamok_rps_reveal'];
+        const rpsStates: GameStatus[] = [GameStatus.DiceRps, GameStatus.DiceRpsReveal, GameStatus.ThiefRps, GameStatus.ThiefRpsReveal, GameStatus.AlkkagiRps, GameStatus.AlkkagiRpsReveal, GameStatus.CurlingRps, GameStatus.CurlingRpsReveal, GameStatus.OmokRps, GameStatus.OmokRpsReveal, GameStatus.TtamokRps, GameStatus.TtamokRpsReveal];
         
-        if (gameStatus === 'thief_role_selection') return <ThiefRoleSelection session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'dice_turn_rolling' || gameStatus === 'dice_turn_rolling_animating' || gameStatus === 'dice_turn_choice') return <DiceGoTurnSelectionModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'dice_start_confirmation') return <DiceGoStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'turn_preference_selection') return <TurnPreferenceSelection session={session} currentUser={currentUser} onAction={onAction} tiebreaker={session.turnSelectionTiebreaker} />;
-        if (['nigiri_choosing', 'nigiri_guessing', 'nigiri_reveal'].includes(gameStatus)) return <NigiriModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'capture_bidding') return <CaptureBidModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (['capture_tiebreaker', 'capture_reveal'].includes(gameStatus)) return <CaptureTiebreakerModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'base_placement') return <BasePlacementModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (['komi_bidding', 'komi_bid_reveal'].includes(gameStatus)) return <KomiBiddingPanel session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'base_game_start_confirmation') return <BaseStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.ThiefRoleSelection) return <ThiefRoleSelection session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.DiceTurnRolling || gameStatus === GameStatus.DiceTurnRollingAnimating || gameStatus === GameStatus.DiceTurnChoice) return <DiceGoTurnSelectionModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.DiceStartConfirmation) return <DiceGoStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.TurnPreferenceSelection) return <TurnPreferenceSelection session={session} currentUser={currentUser} onAction={onAction} tiebreaker={session.turnSelectionTiebreaker} />;
+        if ([GameStatus.NigiriChoosing, GameStatus.NigiriGuessing, GameStatus.NigiriReveal].includes(gameStatus)) return <NigiriModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.CaptureBidding) return <CaptureBidModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if ([GameStatus.CaptureTiebreaker, GameStatus.CaptureReveal].includes(gameStatus)) return <CaptureTiebreakerModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.BasePlacement) return <BasePlacementModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if ([GameStatus.KomiBidding, GameStatus.KomiBidReveal].includes(gameStatus)) return <KomiBiddingPanel session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.BaseGameStartConfirmation) return <BaseStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
         if (rpsStates.includes(gameStatus)) return <RPSMinigame session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'alkkagi_start_confirmation') return <AlkkagiStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'curling_start_confirmation') return <CurlingStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'thief_role_confirmed') return <ThiefRoleConfirmedModal session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'thief_round_end') return <ThiefRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'curling_round_end') return <CurlingRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'alkkagi_round_end') return <AlkkagiRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'dice_round_end') return <DiceRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
-        if (gameStatus === 'alkkagi_simultaneous_placement') return <AlkkagiPlacementModal session={session} currentUser={currentUser} />;
+        if (gameStatus === GameStatus.AlkkagiStartConfirmation) return <AlkkagiStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.CurlingStartConfirmation) return <CurlingStartConfirmationModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.ThiefRoleConfirmed) return <ThiefRoleConfirmedModal session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.ThiefRoundEnd) return <ThiefRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.CurlingRoundEnd) return <CurlingRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.AlkkagiRoundEnd) return <AlkkagiRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.DiceRoundEnd) return <DiceRoundSummary session={session} currentUser={currentUser} onAction={onAction} />;
+        if (gameStatus === GameStatus.AlkkagiSimultaneousPlacement) return <AlkkagiPlacementModal session={session} currentUser={currentUser} />;
         
         if (showResultModal) {
-            if (gameStatus === 'ended') return <GameSummaryModal session={session} currentUser={currentUser} onConfirm={onCloseResults} />;
-            if (gameStatus === 'no_contest') return <NoContestModal session={session} currentUser={currentUser} onConfirm={onCloseResults} />
+            if (gameStatus === GameStatus.Ended) return <GameSummaryModal session={session} currentUser={currentUser} onConfirm={() => onCloseResults()} />;
+            if (gameStatus === GameStatus.NoContest) return <NoContestModal session={session} currentUser={currentUser} onConfirm={() => onCloseResults()} />
         }
         return null;
     };
@@ -99,9 +98,9 @@ const GameModals: React.FC<GameModalsProps> = (props) => {
     const confirmModalContent = {
         resign: {
             title: "기권 확인",
-            message: "정말로 기권하시겠습니까? 기권패로 처리됩니다.",
+            message: "정말로 기권하시겠습니까? 기권패로 처리되며 즉시 대기실로 이동합니다.",
             confirmText: "기권",
-            onConfirm: () => onAction({ type: 'RESIGN_GAME', payload: { gameId } }),
+            onConfirm: () => onAction({ type: 'RESIGN_GAME', payload: { gameId, andLeave: true } }),
         },
     };
 

@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
-import { InventoryItem, InventoryItemType, EquipmentSlot, ItemGrade, MythicStat } from '../../types.js';
+import { InventoryItem, InventoryItemType, EquipmentSlot, ItemGrade, MythicStat } from '../../types/index.js';
 import { EQUIPMENT_POOL, MATERIAL_ITEMS, CONSUMABLE_ITEMS, GRADE_SUB_OPTION_RULES, MAIN_STAT_DEFINITIONS, SUB_OPTION_POOLS, SPECIAL_STATS_DATA, MYTHIC_STATS_DATA, GRADE_LEVEL_REQUIREMENTS } from '../../constants.js';
 import DraggableWindow from '../DraggableWindow.js';
 
@@ -8,9 +9,10 @@ interface EncyclopediaModalProps {
     isTopmost?: boolean;
 }
 
+// FIX: Made 'description' optional to match 'InventoryItem' type.
 type EncyclopediaItem = {
     name: string;
-    description: string;
+    description?: string;
     type: InventoryItemType;
     slot: EquipmentSlot | null;
     image: string | null;
@@ -42,8 +44,16 @@ const EncyclopediaModal: React.FC<EncyclopediaModalProps> = ({ onClose, isTopmos
 
     const [mainTab, setMainTab] = useState<MainTab>('equipment');
     
-    const equipmentSlots: EquipmentSlot[] = ['fan', 'board', 'top', 'bottom', 'bowl', 'stones'];
-    const slotNames: Record<EquipmentSlot, string> = { fan: '부채', board: '바둑판', top: '상의', bottom: '하의', bowl: '바둑통', stones: '바둑돌' };
+    // FIX: Used EquipmentSlot enum members instead of string literals.
+    const equipmentSlots: EquipmentSlot[] = [EquipmentSlot.Fan, EquipmentSlot.Board, EquipmentSlot.Top, EquipmentSlot.Bottom, EquipmentSlot.Bowl, EquipmentSlot.Stones];
+    const slotNames: Record<EquipmentSlot, string> = { 
+        [EquipmentSlot.Fan]: '부채', 
+        [EquipmentSlot.Board]: '바둑판', 
+        [EquipmentSlot.Top]: '상의', 
+        [EquipmentSlot.Bottom]: '하의', 
+        [EquipmentSlot.Bowl]: '바둑통', 
+        [EquipmentSlot.Stones]: '바둑돌' 
+    };
     const consumableCategories: { id: ConsumableCategory; name: string }[] = [
         { id: '장비상자', name: '장비상자' },
         { id: '재료상자', name: '재료상자' },
@@ -59,7 +69,8 @@ const EncyclopediaModal: React.FC<EncyclopediaModalProps> = ({ onClose, isTopmos
         mythic: { name: '신화', color: 'text-orange-400' },
     };
 
-    const [activeEquipmentSlot, setActiveEquipmentSlot] = useState<EquipmentSlot>('fan');
+    // FIX: Used EquipmentSlot enum member for initial state.
+    const [activeEquipmentSlot, setActiveEquipmentSlot] = useState<EquipmentSlot>(EquipmentSlot.Fan);
     const [selectedItem, setSelectedItem] = useState<EncyclopediaItem | null>(null);
     const [activeConsumableCategory, setActiveConsumableCategory] = useState<ConsumableCategory>('장비상자');
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LiveGameSession, User, ServerAction } from '../types.js';
 import Button from './Button.js';
@@ -11,10 +10,10 @@ interface ThiefRoleSelectionProps {
 }
 
 const ThiefRoleSelection: React.FC<ThiefRoleSelectionProps> = (props) => {
-    const { session, currentUser } = props;
-    const { player1, player2, roleChoices } = session;
+    const { session, currentUser, onAction } = props;
+    const { player1, player2, roleChoices, turnChoiceDeadline } = session;
     const [localChoice, setLocalChoice] = useState<'thief' | 'police' | null>(null);
-    const [countdown, setCountdown] = useState(10);
+    const [countdown, setCountdown] = useState(30);
 
     const latestProps = useRef(props);
     useEffect(() => {
@@ -36,21 +35,18 @@ const ThiefRoleSelection: React.FC<ThiefRoleSelectionProps> = (props) => {
     }, []);
 
     useEffect(() => {
-        if (myRoleChoice || localChoice) return;
+        if (myRoleChoice || localChoice || !turnChoiceDeadline) return;
 
         const timerId = setInterval(() => {
-            setCountdown(prev => {
-                if (prev <= 1) {
-                    clearInterval(timerId);
-                    // Server handles timeout, no client action needed
-                    return 0;
-                }
-                return prev - 1;
-            });
+            const remaining = Math.max(0, Math.ceil((turnChoiceDeadline - Date.now()) / 1000));
+            setCountdown(remaining);
+            if (remaining <= 0) {
+                clearInterval(timerId);
+            }
         }, 1000);
 
         return () => clearInterval(timerId);
-    }, [myRoleChoice, localChoice, handleChoice]);
+    }, [myRoleChoice, localChoice, turnChoiceDeadline]);
 
 
     const renderContent = () => {
@@ -71,7 +67,7 @@ const ThiefRoleSelection: React.FC<ThiefRoleSelectionProps> = (props) => {
                 <p className="text-gray-300 mb-6">원하는 역할을 선택하세요. 역할이 겹치면 가위바위보로 결정됩니다.</p>
                  <div className="my-4 text-center">
                     <div className="w-full bg-gray-700 rounded-full h-2.5 mb-2 overflow-hidden">
-                        <div className="bg-yellow-400 h-2.5 rounded-full" style={{ width: `${countdown * 10}%`, transition: 'width 1s linear' }}></div>
+                        <div className="bg-yellow-400 h-2.5 rounded-full" style={{ width: `${(countdown / 30) * 100}%`, transition: 'width 1s linear' }}></div>
                     </div>
                     <div className="text-5xl font-mono text-yellow-300">{countdown}</div>
                 </div>

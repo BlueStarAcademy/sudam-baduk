@@ -1,15 +1,13 @@
-
-
-import * as types from '../../types.js';
+import { type LiveGameSession, type Point, type DiceRoundSummary, Player, type Negotiation, type VolatileState, type ServerAction, type HandleActionResult, type User, GameMode, MythicStat, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
-import { getGoLogic, processMove } from '../goLogic.js';
-import { handleSharedAction, updateSharedGameState } from './shared.js';
-import { DICE_GO_INITIAL_WHITE_STONES_BY_ROUND, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_TURN_CHOICE_TIME, DICE_GO_TURN_ROLL_TIME, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants.js';
-import * as effectService from '../../services/effectService.js';
-import { endGame } from '../summaryService.js';
-import { aiUserId } from '../aiPlayer.js';
+import { getGoLogic, processMove } from '../../utils/goLogic.js';
+import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';
+import { aiUserId } from '../ai/index.js';
+import { DICE_GO_INITIAL_WHITE_STONES_BY_ROUND, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_TURN_CHOICE_TIME, DICE_GO_TURN_ROLL_TIME, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
+import * as effectService from '../services/effectService.js';
+import { endGame, processGameSummary } from '../summaryService.js';
 
-export function finishPlacingTurn(game: types.LiveGameSession, playerId: string) {
+export function finishPlacingTurn(game: LiveGameSession, playerId: string) {
     const now = Date.now();
     const humanPlayerId = game.player1.id === aiUserId ? game.player2.id : game.player1.id;
     const aiPlayerId = game.player1.id === aiUserId ? game.player1.id : game.player2.id;
@@ -20,7 +18,7 @@ export function finishPlacingTurn(game: types.LiveGameSession, playerId: string)
     game.scores[playerId] = (game.scores[playerId] || 0) + totalCapturesThisTurn;
     game.stonesToPlace = 0;
     
-    const whiteStonesLeft = game.boardState.flat().filter(s => s === types.Player.White).length;
+    const whiteStonesLeft = game.boardState.flat().filter(s => s === Player.White).length;
 
     if (whiteStonesLeft === 0) {
         if (totalCapturesThisTurn > 0) { // Check if the last action was a capture
@@ -45,13 +43,13 @@ export function finishPlacingTurn(game: types.LiveGameSession, playerId: string)
             const p2Score = game.scores[game.player2.id] || 0;
             if (p1Score !== p2Score) {
                 const winnerId = p1Score > p2Score ? game.player1.id : game.player2.id;
-                const winnerEnum = winnerId === game.blackPlayerId ? types.Player.Black : (winnerId === game.whitePlayerId ? types.Player.White : types.Player.None);
-                endGame(game, winnerEnum, 'dice_win');
+                const winnerEnum = winnerId === game.blackPlayerId ? Player.Black : (winnerId === game.whitePlayerId ? Player.White : Player.None);
+                endGame(game, winnerEnum, WinReason.DiceWin);
                 return;
             }
         }
         
-        const roundSummary: types.DiceRoundSummary = {
+        const roundSummary: DiceRoundSummary = {
             round: game.round,
             scores: { ...game.scores }
         };
@@ -71,18 +69,18 @@ export function finishPlacingTurn(game: types.LiveGameSession, playerId: string)
             });
         }
         game.diceRoundSummary = roundSummary;
-        game.gameStatus = 'dice_round_end';
+        game.gameStatus = GameStatus.DiceRoundEnd;
         game.revealEndTime = now + 20000;
         if (!game.roundEndConfirmations) game.roundEndConfirmations = {};
-        if (game.isAiGame) game.roundEndConfirmations[aiUserId] = now;
+        if (game.isAiGame) (game.roundEndConfirmations as any)[aiUserId] = now;
 
     } else {
         game.lastTurnStones = game.stonesPlacedThisTurn;
         game.stonesPlacedThisTurn = [];
         game.lastMove = null;
 
-        game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-        game.gameStatus = 'dice_rolling';
+        game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+        game.gameStatus = GameStatus.DiceRolling;
         game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
         game.turnStartTime = now;
     }
@@ -92,549 +90,347 @@ export function finishPlacingTurn(game: types.LiveGameSession, playerId: string)
 }
 
 
-const handleTimeoutFoul = (game: types.LiveGameSession, timedOutPlayerId: string, now: number): boolean => {
-    if (!game.timeoutFouls) game.timeoutFouls = {};
+const handleTimeoutFoul = (game: LiveGameSession, timedOutPlayerId: string, now: number): boolean => {
+    if (!game.timeoutFouls) {
+        game.timeoutFouls = {};
+    }
     game.timeoutFouls[timedOutPlayerId] = (game.timeoutFouls[timedOutPlayerId] || 0) + 1;
-    game.foulInfo = { message: '시간 초과 파울!', expiry: now + 4000 };
+    
+    const foulPlayer = game.player1.id === timedOutPlayerId ? game.player1 : game.player2;
+    game.foulInfo = { message: `${foulPlayer.nickname}님의 타임오버 파울!`, expiry: now + 4000 };
 
     if (game.timeoutFouls[timedOutPlayerId] >= PLAYFUL_MODE_FOUL_LIMIT) {
         const winnerId = game.player1.id === timedOutPlayerId ? game.player2.id : game.player1.id;
-        const winnerEnum = winnerId === game.blackPlayerId ? types.Player.Black : types.Player.White;
-        endGame(game, winnerEnum, 'foul_limit');
+        const winnerEnum = winnerId === game.blackPlayerId ? Player.Black : Player.White;
+        endGame(game, winnerEnum, WinReason.FoulLimit);
         return true; // Game ended
     }
     return false; // Game continues
 };
 
 
-export const initializeDiceGo = (game: types.LiveGameSession, neg: types.Negotiation, now: number) => {
+const placeRandomWhiteStones = (game: LiveGameSession, count: number) => {
+    const { boardSize } = game.settings;
+    let placed = 0;
+    let attempts = 0;
+    while(placed < count && attempts < boardSize * boardSize) {
+        const x = Math.floor(Math.random() * boardSize);
+        const y = Math.floor(Math.random() * boardSize);
+        if (game.boardState[y][x] === Player.None) {
+            game.boardState[y][x] = Player.White;
+            placed++;
+        }
+        attempts++;
+    }
+};
+
+export const initializeDiceGo = (game: LiveGameSession, neg: Negotiation, now: number, p1Guild: Guild | null, p2Guild: Guild | null) => {
     const p1 = game.player1;
     const p2 = game.player2;
-
-    game.blackPlayerId = null;
-    game.whitePlayerId = null;
     
-    const initialStoneCount = DICE_GO_INITIAL_WHITE_STONES_BY_ROUND[0];
-    const { boardSize } = game.settings;
-    const tempBoard = game.boardState;
-
-    const getNeighbors = (x: number, y: number) => {
-        const neighbors = [];
-        if (x > 0) neighbors.push({ x: x - 1, y });
-        if (x < boardSize - 1) neighbors.push({ x: x + 1, y });
-        if (y > 0) neighbors.push({ x, y: y - 1 });
-        if (y < boardSize - 1) neighbors.push({ x, y: y + 1 });
-        return neighbors;
-    };
-
-    const findGroupSize = (startX: number, startY: number) => {
-        const q: types.Point[] = [{ x: startX, y: startY }];
-        const visited = new Set([`${startX},${startY}`]);
-        let size = 0;
-        while (q.length > 0) {
-            const { x, y } = q.shift()!;
-            size++;
-            for (const n of getNeighbors(x, y)) {
-                const key = `${n.x},${n.y}`;
-                if (tempBoard[n.y][n.x] === types.Player.White && !visited.has(key)) {
-                    visited.add(key);
-                    q.push(n);
-                }
-            }
-        }
-        return size;
-    };
-
-    let stonesPlaced = 0;
-    while (stonesPlaced < initialStoneCount) {
-        let placed = false;
-        let attempts = 0;
-        
-        while (!placed && attempts < 200) {
-            attempts++;
-            const shouldExtend = stonesPlaced > 0 && Math.random() < 0.8; 
-
-            if (shouldExtend) {
-                const existingStones: types.Point[] = [];
-                for(let y=0; y<boardSize; y++) for(let x=0; x<boardSize; x++) if(tempBoard[y][x] === types.Player.White) existingStones.push({x,y});
-
-                if (existingStones.length === 0) {
-                    continue;
-                }
-                const randomExistingStone = existingStones[Math.floor(Math.random() * existingStones.length)];
-                const neighbors = getNeighbors(randomExistingStone.x, randomExistingStone.y);
-                const shuffledNeighbors = neighbors.sort(() => 0.5 - Math.random());
-
-                for (const n of shuffledNeighbors) {
-                    if (tempBoard[n.y][n.x] === types.Player.None) {
-                        tempBoard[n.y][n.x] = types.Player.White;
-                        if (findGroupSize(n.x, n.y) <= 5) {
-                            stonesPlaced++;
-                            placed = true;
-                            break;
-                        } else {
-                            tempBoard[n.y][n.x] = types.Player.None; // backtrack
-                        }
-                    }
-                }
-            } else { // Start new cluster
-                const x = Math.floor(Math.random() * boardSize);
-                const y = Math.floor(Math.random() * boardSize);
-                if (tempBoard[y][x] === types.Player.None) {
-                    tempBoard[y][x] = types.Player.White;
-                    stonesPlaced++;
-                    placed = true;
-                }
-            }
-        }
-        if (attempts >= 200) {
-            let x: number, y: number;
-            do {
-                x = Math.floor(Math.random() * boardSize);
-                y = Math.floor(Math.random() * boardSize);
-            } while (tempBoard[y][x] !== types.Player.None);
-            tempBoard[y][x] = types.Player.White;
-            stonesPlaced++;
-        }
-    }
-    
-    const p1Effects = effectService.calculateUserEffects(p1);
-    const p2Effects = effectService.calculateUserEffects(p2);
-    const p1MythicBonus = p1Effects.mythicStatBonuses[types.MythicStat.DiceGoOddBonus]?.flat || 0;
-    const p2MythicBonus = p2Effects.mythicStatBonuses[types.MythicStat.DiceGoOddBonus]?.flat || 0;
-
-    game.diceGoItemUses = {
-        [p1.id]: { odd: (game.settings.oddDiceCount || 0) + p1MythicBonus, even: (game.settings.evenDiceCount || 0) + p1MythicBonus },
-        [p2.id]: { odd: (game.settings.oddDiceCount || 0) + p2MythicBonus, even: (game.settings.evenDiceCount || 0) + p2MythicBonus }
-    };
-    
-    game.scores = { [p1.id]: 0, [p2.id]: 0 };
     game.round = 1;
+    game.scores = { [p1.id]: 0, [p2.id]: 0 };
+    game.turnInRound = 1;
+    game.isDeathmatch = false;
+    game.diceCapturesThisTurn = 0;
+    game.diceLastCaptureStones = [];
+    game.diceRollHistory = { [p1.id]: [], [p2.id]: [] };
 
+    const p1Effects = effectService.calculateUserEffects(p1, p1Guild);
+    const p2Effects = effectService.calculateUserEffects(p2, p2Guild);
+    
+    game.diceGoItemUses = {
+        [p1.id]: { odd: (game.settings.oddDiceCount || 0) + (p1Effects.mythicStatBonuses[MythicStat.DiceGoOddBonus]?.flat || 0), even: game.settings.evenDiceCount || 0 },
+        [p2.id]: { odd: (game.settings.oddDiceCount || 0) + (p2Effects.mythicStatBonuses[MythicStat.DiceGoOddBonus]?.flat || 0), even: game.settings.evenDiceCount || 0 }
+    };
+
+    placeRandomWhiteStones(game, DICE_GO_INITIAL_WHITE_STONES_BY_ROUND[0]);
+    
     if (game.isAiGame) {
-        const humanPlayerColor = neg.settings.player1Color || types.Player.Black;
-        if (humanPlayerColor === types.Player.Black) {
-            game.blackPlayerId = game.player1.id;
-            game.whitePlayerId = game.player2.id;
-        } else {
-            game.whitePlayerId = game.player1.id;
-            game.blackPlayerId = game.player2.id;
-        }
-        
-        game.currentPlayer = types.Player.Black;
-        game.gameStatus = 'dice_rolling';
+        const humanGoesFirst = Math.random() < 0.5;
+        game.blackPlayerId = humanGoesFirst ? p1.id : p2.id;
+        game.whitePlayerId = humanGoesFirst ? p2.id : p1.id;
+        game.currentPlayer = Player.Black;
+        game.gameStatus = GameStatus.DiceRolling;
         game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
         game.turnStartTime = now;
     } else {
-        game.gameStatus = 'dice_turn_rolling';
-        game.turnOrderRolls = { [p1.id]: null, [p2.id]: null };
+        game.gameStatus = GameStatus.DiceTurnRolling;
         game.turnOrderRollReady = { [p1.id]: false, [p2.id]: false };
-        game.turnOrderRollTies = 0;
+        game.turnOrderRolls = { [p1.id]: null, [p2.id]: null };
         game.turnOrderRollDeadline = now + DICE_GO_TURN_ROLL_TIME * 1000;
-        game.diceRollHistory = { [p1.id]: [], [p2.id]: [] };
     }
 };
 
-export const updateDiceGoState = (game: types.LiveGameSession, now: number) => {
+export const updateDiceGoState = (game: LiveGameSession, now: number) => {
+    if(updateSharedGameState(game, now)) return;
+
     const p1Id = game.player1.id;
     const p2Id = game.player2.id;
     
-    switch (game.gameStatus) {
-        case 'dice_turn_rolling':
-            if (game.isAiGame) {
-                const aiPlayerId = game.player1.id === aiUserId 
-                    ? game.player1.id 
-                    : (game.player2.id === aiUserId ? game.player2.id : null);
-                
-                if (aiPlayerId && game.turnOrderRollReady && !game.turnOrderRollReady[aiPlayerId]) {
-                    game.turnOrderRollReady[aiPlayerId] = true;
-                }
-            }
-
+    switch(game.gameStatus) {
+        case GameStatus.DiceTurnRolling:
             if (game.turnOrderRollDeadline && now > game.turnOrderRollDeadline) {
-                if (!game.turnOrderRollReady?.[p1Id]) game.turnOrderRollReady![p1Id] = true;
-                if (!game.turnOrderRollReady?.[p2Id]) game.turnOrderRollReady![p2Id] = true;
+                if (!game.turnOrderRollReady![p1Id]) game.turnOrderRollReady![p1Id] = true;
+                if (!game.turnOrderRollReady![p2Id]) game.turnOrderRollReady![p2Id] = true;
             }
-            if (game.turnOrderRollReady?.[p1Id] && game.turnOrderRollReady?.[p2Id]) {
+            if (game.turnOrderRollReady![p1Id] && game.turnOrderRollReady![p2Id]) {
                 const p1Roll = Math.floor(Math.random() * 6) + 1;
                 const p2Roll = Math.floor(Math.random() * 6) + 1;
-                game.animation = { type: 'dice_roll_turn', p1Roll, p2Roll, startTime: now, duration: 2000 };
-                game.gameStatus = 'dice_turn_rolling_animating';
-                game.turnOrderRollDeadline = undefined;
+                game.turnOrderRolls = { [p1Id]: p1Roll, [p2Id]: p2Roll };
+                game.animation = { type: 'dice_roll_turn', p1Roll, p2Roll, startTime: now, duration: 1500 };
+                game.gameStatus = GameStatus.DiceTurnRollingAnimating;
+                game.turnOrderAnimationEndTime = now + 1500;
+                game.turnDeadline = undefined;
             }
             break;
-        case 'dice_turn_rolling_animating':
-            if (game.animation && game.animation.type === 'dice_roll_turn' && now > game.animation.startTime + game.animation.duration) {
-                const { p1Roll, p2Roll } = game.animation;
-                game.turnOrderRolls = { [p1Id]: p1Roll, [p2Id]: p2Roll };
-                if (p1Roll === p2Roll) {
-                    game.turnOrderRollTies = (game.turnOrderRollTies || 0) + 1;
-                    if (game.turnOrderRollTies >= 3) {
-                        // Force a winner
-                        const winnerId = Math.random() < 0.5 ? p1Id : p2Id;
-                        game.turnChooserId = winnerId;
-                        game.gameStatus = 'dice_turn_choice';
-                        game.turnChoiceDeadline = now + DICE_GO_TURN_CHOICE_TIME * 1000;
-                        game.turnOrderRollTies = 0; // Reset for next potential game
-                    } else {
-                        // Re-roll
-                        game.gameStatus = 'dice_turn_rolling';
-                        game.turnOrderRollResult = 'tie';
-                        game.turnOrderRollReady = { [p1Id]: false, [p2Id]: false };
-                        game.turnOrderRollDeadline = now + DICE_GO_TURN_ROLL_TIME * 1000;
+        case GameStatus.DiceTurnRollingAnimating:
+            if (game.turnOrderAnimationEndTime && now > game.turnOrderAnimationEndTime) {
+                const p1Roll = game.turnOrderRolls![p1Id]!;
+                const p2Roll = game.turnOrderRolls![p2Id]!;
+                if (p1Roll !== p2Roll) {
+                    game.turnChooserId = p1Roll > p2Roll ? p1Id : p2Id;
+                    game.gameStatus = GameStatus.DiceTurnChoice;
+                    game.turnChoiceDeadline = now + DICE_GO_TURN_CHOICE_TIME * 1000;
+                    if(game.isAiGame && game.turnChooserId === aiUserId) {
+                        game.turnChoices = { [p1Id]: null, [p2Id]: null };
+                        (game.turnChoices as any)[aiUserId] = 'first';
                     }
                 } else {
-                    game.turnChooserId = p1Roll > p2Roll ? p1Id : p2Id;
-                    game.gameStatus = 'dice_turn_choice';
-                    game.turnChoiceDeadline = now + DICE_GO_TURN_CHOICE_TIME * 1000;
-                    game.turnOrderRollTies = 0; // Reset on non-tie
+                    game.turnOrderRollResult = 'tie';
+                    game.turnOrderRollReady = { [p1Id]: false, [p2Id]: false };
+                    game.turnOrderRolls = { [p1Id]: null, [p2Id]: null };
+                    game.turnOrderRollDeadline = now + 3000 + DICE_GO_TURN_ROLL_TIME * 1000;
+                    game.revealEndTime = now + 3000;
+                    game.turnOrderRollTies = (game.turnOrderRollTies || 0) + 1;
                 }
                 game.animation = null;
+                game.turnOrderAnimationEndTime = undefined;
             }
             break;
-        case 'dice_turn_choice': {
-            if (game.isAiGame && game.turnChooserId === aiUserId) {
-                const choice = Math.random() < 0.5 ? 'first' : 'second';
-                const humanId = game.player1.id === aiUserId ? game.player2.id : game.player1.id;
-
-                if (choice === 'first') {
-                    game.blackPlayerId = aiUserId;
-                    game.whitePlayerId = humanId;
-                } else {
-                    game.whitePlayerId = aiUserId;
-                    game.blackPlayerId = humanId;
-                }
-                game.gameStatus = 'dice_start_confirmation';
-                game.revealEndTime = now + 10000;
-                if (!game.preGameConfirmations) game.preGameConfirmations = {};
-                game.preGameConfirmations[aiUserId] = true;
-                break;
-            }
-        
+        case GameStatus.DiceTurnChoice:
             if (game.turnChoiceDeadline && now > game.turnChoiceDeadline) {
-                if (!game.turnChooserId) {
-                    console.warn(`[DiceGo] Timed out in 'dice_turn_choice' but turnChooserId was not set. Game ID: ${game.id}. Randomly assigning chooser.`);
-                    game.turnChooserId = Math.random() < 0.5 ? p1Id : p2Id;
+                const choices = ['first', 'second'] as const;
+                if (!game.turnChoices![game.turnChooserId!]) {
+                    (game.turnChoices as any)[game.turnChooserId!] = choices[Math.floor(Math.random() * 2)];
                 }
-                
-                const choice = Math.random() < 0.5 ? 'first' : 'second';
-                const chooserId = game.turnChooserId;
-                const otherId = chooserId === p1Id ? p2Id : p1Id;
-    
-                if (choice === 'first') {
-                    game.blackPlayerId = chooserId;
-                    game.whitePlayerId = otherId;
-                } else {
-                    game.whitePlayerId = chooserId;
-                    game.blackPlayerId = otherId;
-                }
-                
-                game.gameStatus = 'dice_start_confirmation';
-                game.revealEndTime = now + 10000;
+            }
+             if (game.turnChoices![p1Id] || game.turnChoices![p2Id]) {
+                 const chooserChoice = game.turnChoices![p1Id] || game.turnChoices![p2Id];
+                 const chooserId = game.turnChooserId!;
+                 const otherId = chooserId === p1Id ? p2Id : p1Id;
+
+                 game.blackPlayerId = chooserChoice === 'first' ? chooserId : otherId;
+                 game.whitePlayerId = chooserChoice === 'first' ? otherId : chooserId;
+                 
+                 game.gameStatus = GameStatus.DiceStartConfirmation;
+                 game.revealEndTime = now + 10000;
+                 game.preGameConfirmations = { [p1Id]: false, [p2Id]: false };
+                 if(game.isAiGame) (game.preGameConfirmations as any)[aiUserId] = true;
             }
             break;
-        }
-        case 'dice_start_confirmation':
-            if ((game.preGameConfirmations?.[p1Id] && game.preGameConfirmations?.[p2Id]) || (game.revealEndTime && now > game.revealEndTime)) {
-                game.gameStatus = 'dice_rolling';
-                game.currentPlayer = types.Player.Black;
+        case GameStatus.DiceStartConfirmation: {
+            const bothConfirmed = game.preGameConfirmations?.[p1Id] && game.preGameConfirmations?.[p2Id];
+            const deadlinePassed = game.revealEndTime && now > game.revealEndTime;
+            if (bothConfirmed || deadlinePassed) {
+                game.gameStatus = GameStatus.DiceRolling;
+                game.currentPlayer = Player.Black;
                 game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
                 game.turnStartTime = now;
             }
             break;
-        case 'dice_rolling_animating':
-            if (game.animation && game.animation.type === 'dice_roll_main' && now > game.animation.startTime + game.animation.duration) {
+        }
+        case GameStatus.DiceRolling:
+        case GameStatus.DicePlacing:
+            if (game.turnDeadline && now > game.turnDeadline) {
+                const timedOutPlayerId = game.currentPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+                const gameEnded = handlePlayfulTimeoutFoul(game, timedOutPlayerId, now);
+                if (gameEnded) return;
+
+                if (game.gameStatus === GameStatus.DicePlacing) {
+                     finishPlacingTurn(game, timedOutPlayerId);
+                } else {
+                     game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+                     game.gameStatus = GameStatus.DiceRolling;
+                     game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
+                     game.turnStartTime = now;
+                }
+            }
+            break;
+        case GameStatus.DiceRollingAnimating:
+            if (game.animation?.type === 'dice_roll_main' && now > game.animation.startTime + game.animation.duration) {
                 game.dice = game.animation.dice;
                 game.animation = null;
-
-                if (game.stonesToPlace === -1) { // Overshot
-                    const overshotPlayerId = game.currentPlayer === types.Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
-                    const overshotPlayer = game.player1.id === overshotPlayerId ? game.player1 : game.player2;
-                    game.foulInfo = { message: `${overshotPlayer.nickname}님의 오버샷! 턴이 넘어갑니다.`, expiry: now + 4000 };
-                    game.currentPlayer = game.currentPlayer === types.Player.Black ? types.Player.White : types.Player.Black;
-                    game.gameStatus = 'dice_rolling';
-                    game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
-                    game.turnStartTime = now;
-                    game.stonesToPlace = 0;
-                } else {
-                    game.gameStatus = 'dice_placing';
-                    game.turnDeadline = now + DICE_GO_MAIN_PLACE_TIME * 1000;
-                    game.turnStartTime = now;
-                    game.diceCapturesThisTurn = 0;
-                    game.diceLastCaptureStones = [];
-                    game.stonesPlacedThisTurn = [];
-                    
-                    const logic = getGoLogic(game);
-                    const allWhiteLiberties = logic.getAllLibertiesOfPlayer(types.Player.White, game.boardState);
-                    const whiteStoneCount = game.boardState.flat().filter(s => s === types.Player.White).length;
-
-                    if (whiteStoneCount > 0) {
-                        game.lastWhiteGroupInfo = { size: whiteStoneCount, liberties: allWhiteLiberties.length };
-                    } else {
-                        game.lastWhiteGroupInfo = null;
-                    }
-                }
+                game.gameStatus = GameStatus.DicePlacing;
+                game.turnDeadline = now + DICE_GO_MAIN_PLACE_TIME * 1000;
+                game.turnStartTime = now;
             }
             break;
-        case 'dice_rolling': {
-            if (game.turnDeadline && now > game.turnDeadline) {
-                const timedOutPlayerId = game.currentPlayer === types.Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
-                const gameEnded = handleTimeoutFoul(game, timedOutPlayerId, now);
-                if (gameEnded) return;
-
-                const dice1 = Math.floor(Math.random() * 6) + 1;
-                const logic = getGoLogic(game);
-                const liberties = logic.getAllLibertiesOfPlayer(types.Player.White, game.boardState);
-                const isOvershot = liberties.length > 0 && dice1 > liberties.length;
+        case GameStatus.DiceRoundEnd:
+            if ((game.roundEndConfirmations?.[p1Id] && game.roundEndConfirmations?.[p2Id]) || (game.revealEndTime && now > game.revealEndTime)) {
+                const p1Score = game.scores[p1Id] || 0;
+                const p2Score = game.scores[p2Id] || 0;
+                const totalRounds = game.settings.diceGoRounds ?? 3;
                 
-                game.animation = { type: 'dice_roll_main', dice: { dice1, dice2: 0, dice3: 0 }, startTime: now, duration: 1500 };
-                game.gameStatus = 'dice_rolling_animating';
-                game.turnDeadline = undefined;
-                game.turnStartTime = undefined;
-                game.dice = undefined;
-    
-                game.stonesToPlace = isOvershot ? -1 : dice1;
-                if (game.diceRollHistory) game.diceRollHistory[timedOutPlayerId].push(dice1);
-            }
-            break;
-        }
-        case 'dice_placing':
-             if (game.turnDeadline && now > game.turnDeadline) {
-                const timedOutPlayerId = game.currentPlayer === types.Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
-                const gameEnded = handleTimeoutFoul(game, timedOutPlayerId, now);
-                if (gameEnded) return;
-
-                let stonesToPlace = game.stonesToPlace || 0;
-                let tempBoardState = JSON.parse(JSON.stringify(game.boardState));
-                let totalCapturesThisTurn = 0;
-                let lastCaptureStones: types.Point[] = [];
-        
-                while (stonesToPlace > 0) {
-                    const logicForLiberty = getGoLogic({ ...game, boardState: tempBoardState });
-                    const liberties = logicForLiberty.getAllLibertiesOfPlayer(types.Player.White, tempBoardState);
-                    if (liberties.length === 0) break;
-                    
-                    const move = liberties[Math.floor(Math.random() * liberties.length)];
-                    const result = processMove(tempBoardState, { ...move, player: types.Player.Black }, game.koInfo, game.moveHistory.length, { ignoreSuicide: true });
-        
-                    if (result.isValid) {
-                        tempBoardState = result.newBoardState;
-                        if (result.capturedStones.length > 0) {
-                            totalCapturesThisTurn += result.capturedStones.length;
-                            lastCaptureStones = result.capturedStones;
-                        }
-                    } else {
-                        console.error(`Dice Go Timeout random placement failed. Liberty: ${JSON.stringify(move)}, Reason: ${result.reason}`);
-                        break;
-                    }
-                    stonesToPlace--;
-                }
-                game.boardState = tempBoardState;
-                game.diceCapturesThisTurn = totalCapturesThisTurn;
-                game.diceLastCaptureStones = lastCaptureStones;
-                finishPlacingTurn(game, timedOutPlayerId);
-            }
-            break;
-        case 'dice_round_end':
-            if (game.isAiGame) {
-                if (!game.roundEndConfirmations) game.roundEndConfirmations = {};
-                game.roundEndConfirmations[aiUserId] = now;
-            }
-            const bothConfirmed = game.roundEndConfirmations?.[p1Id] && game.roundEndConfirmations?.[p2Id];
-            if ((game.revealEndTime && now > game.revealEndTime) || bothConfirmed) {
-                const totalRounds = game.settings.diceGoRounds || 3;
-                if (game.round >= totalRounds && !game.isDeathmatch) {
-                    const p1Score = game.scores[p1Id] || 0;
-                    const p2Score = game.scores[p2Id] || 0;
-                    if (p1Score === p2Score) { // Tie, start deathmatch
-                        game.round++;
-                        game.isDeathmatch = true;
-                        game.boardState = Array(game.settings.boardSize).fill(0).map(() => Array(game.settings.boardSize).fill(types.Player.None));
-                        const center = Math.floor(game.settings.boardSize / 2);
-                        game.boardState[center][center] = types.Player.White;
-                        game.gameStatus = 'dice_rolling';
-                        game.currentPlayer = types.Player.Black;
-                        game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
-                        game.turnStartTime = now;
-                        game.diceRoundSummary = undefined;
-                        game.roundEndConfirmations = {};
-                        game.lastWhiteGroupInfo = null;
-                        return;
-                    } else {
+                if (game.round >= totalRounds) {
+                     if (p1Score !== p2Score) {
                         const winnerId = p1Score > p2Score ? p1Id : p2Id;
-                        const winnerEnum = winnerId === game.blackPlayerId ? types.Player.Black : (winnerId === game.whitePlayerId ? types.Player.White : types.Player.None);
-                        endGame(game, winnerEnum, 'dice_win');
+                        const winnerEnum = winnerId === game.blackPlayerId ? Player.Black : Player.White;
+                        endGame(game, winnerEnum, WinReason.DiceWin);
                         return;
-                    }
-                } else {
-                    game.round++;
+                     }
                 }
-
-                // Start next round
-                game.boardState = Array(game.settings.boardSize).fill(0).map(() => Array(game.settings.boardSize).fill(types.Player.None));
-                const initialStoneCount = DICE_GO_INITIAL_WHITE_STONES_BY_ROUND[game.round - 1];
-                const occupied = new Set<string>();
-                for (let i = 0; i < initialStoneCount; i++) {
-                    let x: number, y: number, key: string;
-                    do {
-                        x = Math.floor(Math.random() * game.settings.boardSize);
-                        y = Math.floor(Math.random() * game.settings.boardSize);
-                        key = `${x},${y}`;
-                    } while (occupied.has(key));
-                    game.boardState[y][x] = types.Player.White;
-                    occupied.add(key);
-                }
-                game.gameStatus = 'dice_rolling';
-                game.currentPlayer = types.Player.Black; // Black (first player) always starts the round
+                
+                game.round++;
+                game.isDeathmatch = game.round > totalRounds;
+                game.turnInRound = 1;
+                game.boardState = Array(game.settings.boardSize).fill(0).map(() => Array(game.settings.boardSize).fill(Player.None));
+                placeRandomWhiteStones(game, DICE_GO_INITIAL_WHITE_STONES_BY_ROUND[game.round - 1]);
+                
+                // Swap who goes first
+                game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+                game.gameStatus = GameStatus.DiceRolling;
                 game.turnDeadline = now + DICE_GO_MAIN_ROLL_TIME * 1000;
                 game.turnStartTime = now;
-                game.diceRoundSummary = undefined;
-                game.roundEndConfirmations = {};
-                game.lastWhiteGroupInfo = null; // Clear info for the new round
             }
             break;
     }
 };
 
-export const handleDiceGoAction = async (volatileState: types.VolatileState, game: types.LiveGameSession, action: types.ServerAction & { userId: string }, user: types.User): Promise<types.HandleActionResult | undefined> => {
+export const handleDiceGoAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const { type, payload } = action;
     const now = Date.now();
-    
-    const myPlayerEnum = user.id === game.blackPlayerId ? types.Player.Black : (user.id === game.whitePlayerId ? types.Player.White : types.Player.None);
+    const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
-    const p1Id = game.player1.id;
     
-    // Delegate shared actions first
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
-    if (sharedResult) {
-        await db.saveGame(game);
-        return sharedResult;
-    }
+    if(sharedResult) return sharedResult;
 
     switch(type) {
-        case 'DICE_READY_FOR_TURN_ROLL': {
-            if (game.gameStatus !== 'dice_turn_rolling') return { error: 'Not in turn rolling phase.' };
+        case 'DICE_READY_FOR_TURN_ROLL':
+            if (game.gameStatus !== GameStatus.DiceTurnRolling) return { error: 'Not in turn roll phase.' };
             if (!game.turnOrderRollReady) game.turnOrderRollReady = {};
             game.turnOrderRollReady[user.id] = true;
-            await db.saveGame(game);
             return {};
-        }
-        case 'DICE_CHOOSE_TURN': {
-            if (game.gameStatus !== 'dice_turn_choice' || user.id !== game.turnChooserId) return { error: 'Not your turn to choose.' };
-            const { choice } = payload as { choice: 'first' | 'second' };
-            const chooserId = game.turnChooserId;
-            if (!chooserId) return { error: 'Chooser not set.' };
-            const otherId = chooserId === p1Id ? game.player2.id : p1Id;
-
-            if (choice === 'first') {
-                game.blackPlayerId = chooserId;
-                game.whitePlayerId = otherId;
-            } else {
-                game.whitePlayerId = chooserId;
-                game.blackPlayerId = otherId;
-            }
-            game.gameStatus = 'dice_start_confirmation';
-            game.revealEndTime = now + 10000;
+        case 'DICE_CHOOSE_TURN':
+            if (game.gameStatus !== GameStatus.DiceTurnChoice || game.turnChooserId !== user.id) return { error: 'Not your turn to choose.' };
+            if (!game.turnChoices) game.turnChoices = {};
+            (game.turnChoices as any)[user.id] = payload.choice;
             return {};
-        }
-        case 'DICE_CONFIRM_START': {
-             if (game.gameStatus !== 'dice_start_confirmation') return { error: "Not in confirmation phase." };
-             if (!game.preGameConfirmations) game.preGameConfirmations = {};
-             game.preGameConfirmations[user.id] = true;
-             await db.saveGame(game);
-             return {};
-        }
+        case 'DICE_CONFIRM_START':
+            if (game.gameStatus !== GameStatus.DiceStartConfirmation) return { error: "Not in confirmation phase." };
+            if (!game.preGameConfirmations) game.preGameConfirmations = {};
+            game.preGameConfirmations[user.id] = true;
+            return {};
         case 'DICE_ROLL': {
-            if (game.gameStatus !== 'dice_rolling' || !isMyTurn) return { error: 'Not your turn to roll.' };
-            const { itemType } = payload as { itemType?: 'odd' | 'even' };
-            let dice1: number;
+            if (!isMyTurn || game.gameStatus !== GameStatus.DiceRolling) return { error: "Not your turn to roll." };
             
-            if (itemType) {
-                if (!game.diceGoItemUses || !game.diceGoItemUses[user.id] || game.diceGoItemUses[user.id][itemType] <= 0) {
-                    return { error: '아이템이 없습니다.' };
+            let diceRoll: number;
+            if (payload.itemType) {
+                const itemKey = payload.itemType as 'odd' | 'even';
+                if (!game.diceGoItemUses || !(game.diceGoItemUses as any)[user.id] || (game.diceGoItemUses as any)[user.id][itemKey] <= 0) {
+                    return { error: "아이템이 없습니다." };
                 }
-                game.diceGoItemUses[user.id][itemType]--;
-                const oddNumbers = [1, 3, 5];
-                const evenNumbers = [2, 4, 6];
-                const pool = itemType === 'odd' ? oddNumbers : evenNumbers;
-                dice1 = pool[Math.floor(Math.random() * pool.length)];
+                (game.diceGoItemUses as any)[user.id][itemKey]--;
+
+                if (itemKey === 'odd') {
+                    diceRoll = [1, 3, 5][Math.floor(Math.random() * 3)];
+                } else {
+                    diceRoll = [2, 4, 6][Math.floor(Math.random() * 3)];
+                }
             } else {
-                dice1 = Math.floor(Math.random() * 6) + 1;
+                diceRoll = Math.floor(Math.random() * 6) + 1;
             }
 
-            const logic = getGoLogic(game);
-            const liberties = logic.getAllLibertiesOfPlayer(types.Player.White, game.boardState);
-            const isOvershot = liberties.length > 0 && dice1 > liberties.length;
-            
-            game.animation = { type: 'dice_roll_main', dice: { dice1, dice2: 0, dice3: 0 }, startTime: now, duration: 1500 };
-            game.gameStatus = 'dice_rolling_animating';
+            const goLogic = getGoLogic(game);
+            const liberties = goLogic.getAllLibertiesOfPlayer(Player.White, game.boardState);
+            const isOvershot = liberties.length > 0 && diceRoll > liberties.length;
+
+            game.stonesToPlace = isOvershot ? -1 : diceRoll;
+            game.animation = { type: 'dice_roll_main', dice: { dice1: diceRoll, dice2: 0, dice3: 0 }, startTime: now, duration: 1500 };
+            game.gameStatus = GameStatus.DiceRollingAnimating;
             game.turnDeadline = undefined;
-            game.turnStartTime = undefined;
-            game.dice = undefined;
-    
-            game.stonesToPlace = isOvershot ? -1 : dice1;
-            if (game.diceRollHistory) game.diceRollHistory[user.id].push(dice1);
-            await db.saveGame(game);
+            if(!game.diceRollHistory) game.diceRollHistory = {};
+            if(!(game.diceRollHistory as any)[user.id]) (game.diceRollHistory as any)[user.id] = [];
+            (game.diceRollHistory as any)[user.id].push(diceRoll);
+
             return {};
         }
         case 'DICE_PLACE_STONE': {
-            if (game.gameStatus !== 'dice_placing' || !isMyTurn) return { error: '상대방의 차례입니다.' };
-            if ((game.stonesToPlace ?? 0) <= 0) return { error: 'No stones left to place.' };
-
-            const { x, y } = payload;
-            const logic = getGoLogic(game);
-            const liberties = logic.getAllLibertiesOfPlayer(types.Player.White, game.boardState);
+            if (!isMyTurn || game.gameStatus !== GameStatus.DicePlacing) return { error: "Not your turn to place."};
+            if ((game.stonesToPlace ?? 0) <= 0) return { error: "No stones left to place."};
             
-            const anyWhiteStones = game.boardState.flat().some(s => s === types.Player.White);
-
-            if (anyWhiteStones && liberties.length > 0 && !liberties.some(p => p.x === x && p.y === y)) {
-                return { error: '백돌의 활로에만 착수할 수 있습니다.' };
+            const { x, y } = payload;
+            const goLogic = getGoLogic(game);
+            const liberties = goLogic.getAllLibertiesOfPlayer(Player.White, game.boardState);
+            
+            if (liberties.length > 0 && !liberties.some(p => p.x === x && p.y === y)) {
+                return { error: '백돌의 활로에만 놓을 수 있습니다.' };
             }
-
-            const move = { x, y, player: types.Player.Black };
+            
+            const move = { x, y, player: Player.Black }; // In Dice Go, players only place black stones
             const result = processMove(game.boardState, move, game.koInfo, game.moveHistory.length, { ignoreSuicide: true });
 
             if (!result.isValid) return { error: `Invalid move: ${result.reason}` };
-            
-            if (!game.stonesPlacedThisTurn) game.stonesPlacedThisTurn = [];
+
+            game.boardState = result.newBoardState;
+            game.koInfo = result.newKoInfo;
+            if(!game.stonesPlacedThisTurn) game.stonesPlacedThisTurn = [];
             game.stonesPlacedThisTurn.push({x, y});
 
-            game.diceCapturesThisTurn = (game.diceCapturesThisTurn || 0) + result.capturedStones.length;
             if (result.capturedStones.length > 0) {
+                game.diceCapturesThisTurn = (game.diceCapturesThisTurn || 0) + result.capturedStones.length;
                 game.diceLastCaptureStones = result.capturedStones;
             }
 
-            game.boardState = result.newBoardState;
-            game.lastMove = { x, y };
-            
             game.stonesToPlace = (game.stonesToPlace ?? 1) - 1;
 
-            const logicForWhiteGroup = getGoLogic(game);
-            const whiteStonesLeft = game.boardState.flat().filter(s => s === types.Player.White).length;
-            const remainingLiberties = whiteStonesLeft > 0 ? logicForWhiteGroup.getAllLibertiesOfPlayer(types.Player.White, game.boardState).length : 0;
-            
-            if (whiteStonesLeft > 0) {
-                game.lastWhiteGroupInfo = { size: whiteStonesLeft, liberties: remainingLiberties };
-            } else {
-                game.lastWhiteGroupInfo = null;
-            }
-
-            if (whiteStonesLeft === 0 || game.stonesToPlace <= 0 || remainingLiberties === 0) {
-                if (remainingLiberties === 0 && game.stonesToPlace > 0) {
-                     game.foulInfo = { message: `놓을 곳이 없어 턴이 종료됩니다.`, expiry: now + 4000 };
-                }
+            if (game.stonesToPlace === 0) {
                 finishPlacingTurn(game, user.id);
             }
-
-            await db.saveGame(game);
             return {};
         }
-        case 'CONFIRM_ROUND_END': {
-            if (game.gameStatus !== 'dice_round_end') return { error: "Not in round end confirmation phase." };
+        case 'CONFIRM_ROUND_END':
+            if (game.gameStatus !== GameStatus.DiceRoundEnd) return { error: "라운드 종료 확인 단계가 아닙니다."};
             if (!game.roundEndConfirmations) game.roundEndConfirmations = {};
             game.roundEndConfirmations[user.id] = now;
-            await db.saveGame(game);
             return {};
+    }
+    
+    return null;
+};
+
+export const makeDiceGoAiMove = async (game: LiveGameSession): Promise<void> => {
+    const aiId = game.player2.id;
+    if (game.currentPlayer !== (game.whitePlayerId === aiId ? Player.White : Player.Black)) return;
+
+    if (game.gameStatus === GameStatus.DiceRolling) {
+        const diceRoll = Math.floor(Math.random() * 6) + 1;
+        const logic = getGoLogic(game);
+        const liberties = logic.getAllLibertiesOfPlayer(Player.White, game.boardState);
+        game.stonesToPlace = liberties.length > 0 && diceRoll > liberties.length ? -1 : diceRoll;
+        game.animation = { type: 'dice_roll_main', dice: { dice1: diceRoll, dice2: 0, dice3: 0 }, startTime: Date.now(), duration: 1500 };
+        game.gameStatus = GameStatus.DiceRollingAnimating;
+    } else if (game.gameStatus === GameStatus.DicePlacing) {
+        if ((game.stonesToPlace ?? 0) <= 0) {
+            finishPlacingTurn(game, aiId);
+            return;
         }
+
+        const logic = getGoLogic(game);
+        const liberties = logic.getAllLibertiesOfPlayer(Player.White, game.boardState);
+        if (liberties.length > 0) {
+            const move = liberties[Math.floor(Math.random() * liberties.length)];
+            const result = processMove(game.boardState, { ...move, player: game.currentPlayer }, game.koInfo, game.moveHistory.length, { ignoreSuicide: true });
+            if (result.isValid) {
+                game.boardState = result.newBoardState;
+                game.koInfo = result.newKoInfo;
+                if (result.capturedStones.length > 0) {
+                    game.diceCapturesThisTurn = (game.diceCapturesThisTurn || 0) + result.capturedStones.length;
+                    game.diceLastCaptureStones = result.capturedStones;
+                }
+            }
+        }
+        game.stonesToPlace = (game.stonesToPlace ?? 1) - 1;
     }
 };

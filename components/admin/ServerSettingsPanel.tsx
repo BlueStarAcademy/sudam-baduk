@@ -1,16 +1,12 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-// FIX: Import missing types from the barrel file.
-import { ServerAction, GameMode, Announcement, OverrideAnnouncement } from '../../types.js';
+// FIX: Separate enum and type imports.
+import { GameMode } from '../../types/index.js';
+import type { ServerAction, Announcement, OverrideAnnouncement, AdminProps } from '../../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/gameModes.js';
 import Button from '../Button.js';
 
-interface ServerSettingsPanelProps {
-    gameModeAvailability: Partial<Record<GameMode, boolean>>;
-    announcements: Announcement[];
-    globalOverrideAnnouncement: OverrideAnnouncement | null;
-    announcementInterval: number;
-    onAction: (action: ServerAction) => void;
-    onBack: () => void;
+interface ServerSettingsPanelProps extends Pick<AdminProps, 'gameModeAvailability' | 'announcements' | 'globalOverrideAnnouncement' | 'announcementInterval' | 'onAction' | 'onBack'> {
 }
 
 const ServerSettingsPanel: React.FC<ServerSettingsPanelProps> = (props) => {

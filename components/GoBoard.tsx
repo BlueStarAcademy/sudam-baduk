@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { BoardState, Point, Player, GameStatus, Move, AnalysisResult, LiveGameSession, User, AnimationData, GameMode, RecommendedMove, ServerAction } from '../types.js';
+import { BoardState, Point, Player, GameStatus, Move, AnalysisResult, LiveGameSession, User, AnimationData, GameMode, RecommendedMove, ServerAction } from '../types/index.js';
 import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG } from '../assets.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
+import { OwnershipOverlay, HintWindow } from './game/AnalysisWindows.js';
 
-// FIX: Define the missing findMoveIndexAt helper function.
 const findMoveIndexAt = (session: Pick<LiveGameSession, 'moveHistory'>, x: number, y: number): number => {
     if (!session.moveHistory) return -1;
     // Search backwards to find the most recent move at this position,
@@ -18,7 +18,7 @@ const findMoveIndexAt = (session: Pick<LiveGameSession, 'moveHistory'>, x: numbe
 };
 
 const AnimatedBonusText: React.FC<{
-    animation: Extract<AnimationData, { type: 'bonus_text' }>;
+    animation: AnimationData;
     toSvgCoords: (p: Point) => { cx: number; cy: number };
     cellSize: number;
 }> = ({ animation, toSvgCoords, cellSize }) => {
@@ -46,57 +46,9 @@ const AnimatedBonusText: React.FC<{
     );
 };
 
-const OwnershipOverlay: React.FC<{
-    ownershipMap: number[][];
-    boardState: BoardState;
-    deadStones: Point[];
-    toSvgCoords: (p: Point) => { cx: number; cy: number };
-    cellSize: number;
-}> = ({ ownershipMap, boardState, deadStones, toSvgCoords, cellSize }) => {
-    const deadStoneSet = useMemo(() => new Set(deadStones.map(p => `${p.x},${p.y}`)), [deadStones]);
-
-    return (
-        <g style={{ pointerEvents: 'none' }} className="animate-fade-in">
-            {ownershipMap.map((row, y) => row.map((value, x) => {
-                const player = boardState[y]?.[x];
-                const isDead = deadStoneSet.has(`${x},${y}`);
-
-                // 살아있는 돌 위에는 마커를 표시하지 않음
-                if (player !== Player.None && !isDead) {
-                    return null;
-                }
-
-                // value is from -10 to 10. Corresponds to -1.0 to 1.0 probability.
-                const { cx, cy } = toSvgCoords({ x, y });
-                const absValue = Math.abs(value);
-                const prob = absValue / 10; // Probability from 0 to 1
-
-                if (prob < 0.3) return null; // Don't render low probabilities to reduce clutter
-
-                const size = cellSize * prob * 0.9; // Max size is 90% of the cell for better visual separation
-                const opacity = prob * 0.7;
-                const fill = value > 0 ? `rgba(0, 0, 0, ${opacity})` : `rgba(255, 255, 255, ${opacity})`;
-
-                return (
-                    <rect
-                        key={`${x}-${y}`}
-                        x={cx - size / 2}
-                        y={cy - size / 2}
-                        width={size}
-                        height={size}
-                        fill={fill}
-                        rx={size * 0.3} // Add rounding to the corners for a softer look
-                    />
-                );
-            }))}
-        </g>
-    );
-};
-
-
 // --- Animated Components ---
 const AnimatedMissileStone: React.FC<{
-    animation: Extract<AnimationData, { type: 'missile' }>;
+    animation: AnimationData;
     stone_radius: number;
     toSvgCoords: (p: Point) => { cx: number; cy: number };
 }> = ({ animation, stone_radius, toSvgCoords }) => {
@@ -145,7 +97,7 @@ const AnimatedMissileStone: React.FC<{
 };
 
 const AnimatedHiddenMissile: React.FC<{
-    animation: Extract<AnimationData, { type: 'hidden_missile' }>;
+    animation: AnimationData;
     stone_radius: number;
     toSvgCoords: (p: Point) => { cx: number; cy: number };
 }> = ({ animation, stone_radius, toSvgCoords }) => {
@@ -198,7 +150,7 @@ const AnimatedHiddenMissile: React.FC<{
 };
 
 const AnimatedScanMarker: React.FC<{
-    animation: Extract<AnimationData, { type: 'scan' }>;
+    animation: AnimationData;
     toSvgCoords: (p: Point) => { cx: number; cy: number };
     stone_radius: number;
 }> = ({ animation, toSvgCoords, stone_radius }) => {
@@ -284,6 +236,7 @@ const Stone: React.FC<{ player: Player, cx: number, cy: number, isLastMove?: boo
                 fill={player === Player.Black ? "#111827" : "#f5f2e8"}
                 stroke={strokeColor}
                 strokeWidth={strokeWidth}
+                className={isPending ? 'animate-pulse' : ''}
             />
             {player === Player.White && <circle cx={cx} cy={cy} r={radius} fill="url(#clam_grain)" />}
             <circle cx={cx} cy={cy} r={radius} fill={player === Player.Black ? 'url(#slate_highlight)' : 'url(#clamshell_highlight)'} />
@@ -369,6 +322,8 @@ interface GoBoardProps {
   isItemModeActive: boolean;
   sgf?: string;
   isMobile?: boolean;
+  optimisticStone: Point | null;
+  isBiddingPhase?: boolean;
 }
 
 const GoBoard: React.FC<GoBoardProps> = (props) => {
@@ -378,7 +333,7 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
         myPlayerEnum, gameStatus, highlightedPoints, highlightStyle = 'circle', myRevealedStones, allRevealedStones, newlyRevealed, isSpectator,
         analysisResult, showTerritoryOverlay = false, showHintOverlay = false, currentUser, blackPlayerNickname, whitePlayerNickname,
         currentPlayer, isItemModeActive, animation, mode, mixedModes, justCaptured, permanentlyRevealedStones, onAction, gameId,
-        showLastMoveMarker, blackPatternStones, whitePatternStones
+        showLastMoveMarker, blackPatternStones, whitePatternStones, optimisticStone, isBiddingPhase
     } = props;
     const [hoverPos, setHoverPos] = useState<Point | null>(null);
     const [selectedMissileStone, setSelectedMissileStone] = useState<Point | null>(null);
@@ -423,10 +378,10 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
         return [];
     }, [safeBoardSize]);
 
-    const toSvgCoords = (p: Point) => ({
+    const toSvgCoords = useCallback((p: Point) => ({
       cx: padding + p.x * cell_size,
       cy: padding + p.y * cell_size,
-    });
+    }), [padding, cell_size]);
     
     const getBoardCoordinates = (e: React.MouseEvent<SVGSVGElement> | React.PointerEvent<SVGSVGElement>): Point | null => {
         const svg = svgRef.current;
@@ -487,6 +442,11 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
     };
     
     const handleBoardPointerUp = (e: React.PointerEvent<SVGSVGElement>) => {
+        if (e.button === 2) { // Right-click
+            e.preventDefault();
+            return;
+        }
+
         (e.target as SVGSVGElement).releasePointerCapture(e.pointerId);
         const boardPos = getBoardCoordinates(e);
 
@@ -522,9 +482,9 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
     };
 
     const myBaseStonesForPlacement = useMemo(() => {
-        if (gameStatus !== 'base_placement') return null;
+        if (!isBiddingPhase) return null;
         return myPlayerEnum === Player.Black ? baseStones_p1 : baseStones_p2;
-    }, [gameStatus, myPlayerEnum, baseStones_p1, baseStones_p2]);
+    }, [isBiddingPhase, myPlayerEnum, baseStones_p1, baseStones_p2]);
 
 
     const isOpponentHiddenStoneAtPos = (pos: Point): boolean => {
@@ -548,6 +508,23 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
         isOpponentHiddenStoneAtPos(hoverPos)
     );
     
+    const optimisticStoneRender = useMemo(() => {
+        if (!optimisticStone || boardState[optimisticStone.y]?.[optimisticStone.x] !== Player.None) {
+            return null;
+        }
+        const { cx, cy } = toSvgCoords(optimisticStone);
+        return (
+            <Stone
+                player={stoneColor}
+                cx={cx}
+                cy={cy}
+                radius={stone_radius}
+                isPending
+            />
+        );
+    }, [optimisticStone, boardState, stoneColor, toSvgCoords, stone_radius]);
+
+
     const renderMissileLaunchPreview = () => {
         if (gameStatus !== 'missile_selecting' || !selectedMissileStone || !onMissileLaunch) return null;
 
@@ -620,7 +597,7 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
             <svg
                 ref={svgRef}
                 viewBox={`0 0 ${boardSizePx} ${boardSizePx}`}
-                className="w-full h-full touch-none"
+                className={`w-full h-full touch-none ${isBoardDisabled ? 'cursor-not-allowed' : ''}`}
                 onPointerDown={handleBoardPointerDown}
                 onPointerMove={handleBoardPointerMove}
                 onPointerUp={handleBoardPointerUp}
@@ -670,16 +647,6 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
                 ))}
                 {starPoints.map((p, i) => <circle key={i} {...toSvgCoords(p)} r={safeBoardSize > 9 ? 6 : 4} fill="#54432a" />)}
                 
-                {showTerritoryOverlay && analysisResult?.ownershipMap && analysisResult?.deadStones && (
-                     <OwnershipOverlay 
-                        ownershipMap={analysisResult.ownershipMap} 
-                        boardState={boardState}
-                        deadStones={analysisResult.deadStones}
-                        toSvgCoords={toSvgCoords} 
-                        cellSize={cell_size} 
-                     />
-                )}
-
                 {boardState.map((row, y) => row.map((player, x) => {
                     if (player === Player.None) return null;
                     const { cx, cy } = toSvgCoords({ x, y });
@@ -719,6 +686,17 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
                     
                     return <Stone key={`${x}-${y}`} player={player} cx={cx} cy={cy} isLastMove={isLast} isKnownHidden={isKnownHidden} isBaseStone={isBaseStone} isPatternStone={isPatternStone} isNewlyRevealed={isNewlyRevealedForAnim} animationClass={isNewlyRevealedForAnim ? 'sparkle-animation' : ''} isSelectedMissile={isSelectedMissileForRender} isHoverSelectableMissile={isHoverSelectableMissile} radius={stone_radius} isFaint={isFaint} />;
                 }))}
+                
+                {showTerritoryOverlay && analysisResult?.ownershipMap && analysisResult?.deadStones && (
+                     <OwnershipOverlay
+                        ownershipMap={analysisResult.ownershipMap}
+                        boardState={boardState}
+                        deadStones={analysisResult.deadStones}
+                        toSvgCoords={toSvgCoords}
+                        cellSize={cell_size}
+                     />
+                )}
+
                 {myBaseStonesForPlacement?.map((stone, i) => {
                     const { cx, cy } = toSvgCoords(stone);
                     return (
@@ -727,6 +705,7 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
                         </g>
                     );
                 })}
+                {optimisticStoneRender}
                 {winningLine && winningLine.length > 0 && ( <path d={`M ${toSvgCoords(winningLine[0]).cx} ${toSvgCoords(winningLine[0]).cy} L ${toSvgCoords(winningLine[winningLine.length - 1]).cx} ${toSvgCoords(winningLine[winningLine.length - 1]).cy}`} stroke="rgba(239, 68, 68, 0.8)" strokeWidth="10" strokeLinecap="round" className="animate-fade-in" /> )}
                 
                 {highlightedPoints && highlightedPoints.map((p, i) => {
@@ -766,7 +745,7 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
                         {animation.type === 'missile' && <AnimatedMissileStone animation={animation} stone_radius={stone_radius} toSvgCoords={toSvgCoords} />}
                         {animation.type === 'hidden_missile' && animation.player === myPlayerEnum && !isSpectator && <AnimatedHiddenMissile animation={animation} stone_radius={stone_radius} toSvgCoords={toSvgCoords} />}
                         {animation.type === 'scan' && !isSpectator && animation.playerId === currentUser.id && <AnimatedScanMarker animation={animation} toSvgCoords={toSvgCoords} stone_radius={stone_radius} />}
-                        {animation.type === 'hidden_reveal' && animation.stones.map((s, i) => ( <Stone key={`reveal-${i}`} player={s.player} cx={toSvgCoords(s.point).cx} cy={toSvgCoords(s.point).cy} isKnownHidden animationClass="sparkle-animation" radius={stone_radius} /> ))}
+                        {animation.type === 'hidden_reveal' && animation.stones.map((s: any, i: number) => ( <Stone key={`reveal-${i}`} player={s.player} cx={toSvgCoords(s.point).cx} cy={toSvgCoords(s.point).cy} isKnownHidden animationClass="sparkle-animation" radius={stone_radius} /> ))}
                         {animation.type === 'bonus_text' && <AnimatedBonusText animation={animation} toSvgCoords={toSvgCoords} cellSize={cell_size} />}
                     </>
                 )}

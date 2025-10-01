@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { GameMode, LiveGameSession, ServerAction, GameProps, Player, User, Point, GameStatus, AppSettings } from '../../types.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants.js';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { GameMode, LiveGameSession, ServerAction, GameProps, Player, User, Point, GameStatus, AppSettings } from '../../types/index.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/index.js';
 import Button from '../Button.js';
 import Dice from '../Dice.js';
 import { audioService } from '../../services/audioService.js';
@@ -37,13 +37,16 @@ interface ActionButtonsPanelProps {
 }
 
 const ACTIVE_GAME_STATUSES: GameStatus[] = [
-    'playing',
-    'alkkagi_playing',
-    'curling_playing',
-    'dice_rolling',
-    'dice_placing',
-    'thief_rolling',
-    'thief_placing',
+    GameStatus.Playing,
+    GameStatus.HiddenPlacing,
+    GameStatus.Scanning,
+    GameStatus.MissileSelecting,
+    GameStatus.AlkkagiPlaying,
+    GameStatus.CurlingPlaying,
+    GameStatus.DiceRolling,
+    GameStatus.DicePlacing,
+    GameStatus.ThiefRolling,
+    GameStatus.ThiefPlacing,
 ];
 
 const ActionButtonsPanel: React.FC<ActionButtonsPanelProps> = ({ session, isSpectator, onAction, currentUser }) => {
@@ -67,7 +70,7 @@ const ActionButtonsPanel: React.FC<ActionButtonsPanelProps> = ({ session, isSpec
         return () => clearInterval(interval);
     }, [session.actionButtonCooldownDeadline, currentUser.id]);
 
-    const isGameEnded = ['ended', 'no_contest', 'rematch_pending'].includes(gameStatus);
+    const isGameEnded = [GameStatus.Ended, GameStatus.NoContest, GameStatus.RematchPending].includes(gameStatus);
     const canUseActions = SPECIAL_GAME_MODES.some(m => m.mode === mode) || PLAYFUL_GAME_MODES.some(m => m.mode === mode);
 
     if (isGameEnded || isSpectator || !canUseActions) {
@@ -109,10 +112,10 @@ const ActionButtonsPanel: React.FC<ActionButtonsPanelProps> = ({ session, isSpec
 const DicePanel: React.FC<{ session: LiveGameSession, isMyTurn: boolean, onAction: (a: ServerAction) => void, currentUser: User }> = ({ session, isMyTurn, onAction, currentUser }) => {
     const { id: gameId, gameStatus } = session;
 
-    const isRolling = gameStatus === 'dice_rolling_animating';
+    const isRolling = gameStatus === GameStatus.DiceRollingAnimating;
     
     const handleRoll = (itemType?: 'odd' | 'even') => {
-        if (isMyTurn && gameStatus === 'dice_rolling') {
+        if (isMyTurn && gameStatus === GameStatus.DiceRolling) {
             audioService.rollDice(1);
             onAction({ type: 'DICE_ROLL', payload: { gameId, itemType } });
         }
@@ -121,7 +124,7 @@ const DicePanel: React.FC<{ session: LiveGameSession, isMyTurn: boolean, onActio
     const myItemUses = session.diceGoItemUses?.[currentUser.id];
     const oddCount = myItemUses?.odd ?? 0;
     const evenCount = myItemUses?.even ?? 0;
-    const canRoll = isMyTurn && gameStatus === 'dice_rolling';
+    const canRoll = isMyTurn && gameStatus === GameStatus.DiceRolling;
     
     const diceValue = isRolling ? null : session.dice?.dice1;
 
@@ -177,8 +180,10 @@ const AlkkagiItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
 
     const isSlowActive = myActiveItems.includes('slow');
     const isAimActive = myActiveItems.includes('aimingLine');
-    const canUse = isMyTurn && gameStatus === 'alkkagi_playing';
-    const buttonClasses = "whitespace-nowrap text-[clamp(0.6rem,2.2vmin,0.875rem)] px-[clamp(0.4rem,1.8vmin,0.75rem)] py-[clamp(0.3rem,1.2vmin,0.625rem)]";
+    const canUse = isMyTurn && gameStatus === GameStatus.AlkkagiPlaying;
+    const buttonClasses = "!p-1 flex flex-col items-center justify-center h-full w-14 relative";
+    const iconClass = "w-6 h-6 object-contain";
+    const textClass = "text-[10px] font-semibold mt-1";
 
     const totalRounds = session.settings.alkkagiRounds || 1;
     if (totalRounds <= 1) {
@@ -191,7 +196,9 @@ const AlkkagiItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
                     className={buttonClasses}
                     title={`파워 게이지 속도를 50% 감소시킵니다. 남은 개수: ${slowCount}`}
                 >
-                    슬로우 ({slowCount})
+                    <img src="/images/button/slow.png" alt="슬로우" className={iconClass} />
+                    <span className={textClass}>슬로우</span>
+                    <span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{slowCount}</span>
                 </Button>
                 <Button
                     onClick={() => useItem('aimingLine')}
@@ -200,7 +207,9 @@ const AlkkagiItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
                     className={buttonClasses}
                     title={`조준선 길이를 1000% 증가시킵니다. 남은 개수: ${aimCount}`}
                 >
-                    조준선 ({aimCount})
+                    <img src="/images/button/target.png" alt="조준선" className={iconClass} />
+                    <span className={textClass}>조준선</span>
+                    <span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{aimCount}</span>
                 </Button>
             </div>
         );
@@ -224,7 +233,9 @@ const AlkkagiItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
                     className={buttonClasses}
                     title={`파워 게이지 속도를 50% 감소시킵니다. 남은 개수: ${slowCount}`}
                 >
-                    슬로우 ({slowCount})
+                    <img src="/images/button/slow.png" alt="슬로우" className={iconClass} />
+                    <span className={textClass}>슬로우</span>
+                    <span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{slowCount}</span>
                 </Button>
                 <Button
                     onClick={() => useItem('aimingLine')}
@@ -233,7 +244,9 @@ const AlkkagiItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
                     className={buttonClasses}
                     title={`조준선 길이를 1000% 증가시킵니다. 남은 개수: ${aimCount}`}
                 >
-                    조준선 ({aimCount})
+                    <img src="/images/button/target.png" alt="조준선" className={iconClass} />
+                    <span className={textClass}>조준선</span>
+                    <span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{aimCount}</span>
                 </Button>
             </div>
         </div>
@@ -266,7 +279,7 @@ const ThiefPanel: React.FC<ThiefPanelProps> = ({ session, isMyTurn, onAction, cu
     const diceCount = currentPlayerRole === 'thief' ? 1 : 2;
 
     const handleRoll = () => {
-        if (isMyTurn && gameStatus === 'thief_rolling') {
+        if (isMyTurn && gameStatus === GameStatus.ThiefRolling) {
             audioService.rollDice(diceCount);
             onAction({ type: 'THIEF_ROLL_DICE', payload: { gameId } });
         }
@@ -284,7 +297,7 @@ const ThiefPanel: React.FC<ThiefPanelProps> = ({ session, isMyTurn, onAction, cu
                         isRolling={isRolling}
                         size={48}
                         onClick={handleRoll}
-                        disabled={!isMyTurn || gameStatus !== 'thief_rolling'}
+                        disabled={!isMyTurn || gameStatus !== GameStatus.ThiefRolling}
                     />
                 );
             })}
@@ -306,8 +319,10 @@ const CurlingItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
 
     const isSlowActive = myActiveItems.includes('slow');
     const isAimActive = myActiveItems.includes('aimingLine');
-    const canUse = isMyTurn && gameStatus === 'curling_playing';
-    const buttonClasses = "whitespace-nowrap text-[clamp(0.6rem,2.2vmin,0.875rem)] px-[clamp(0.4rem,1.8vmin,0.75rem)] py-[clamp(0.3rem,1.2vmin,0.625rem)]";
+    const canUse = isMyTurn && gameStatus === GameStatus.CurlingPlaying;
+    const buttonClasses = "!p-1 flex flex-col items-center justify-center h-full w-14 relative";
+    const iconClass = "w-6 h-6 object-contain";
+    const textClass = "text-[10px] font-semibold mt-1";
 
     return (
         <div className="flex items-center justify-center gap-2">
@@ -318,7 +333,9 @@ const CurlingItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
                 className={buttonClasses}
                 title={`파워 게이지 속도를 50% 감소시킵니다. 남은 개수: ${slowCount}`}
             >
-                슬로우 ({slowCount})
+                <img src="/images/button/slow.png" alt="슬로우" className={iconClass} />
+                <span className={textClass}>슬로우</span>
+                <span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{slowCount}</span>
             </Button>
             <Button
                 onClick={() => useItem('aimingLine')}
@@ -327,7 +344,9 @@ const CurlingItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
                 className={buttonClasses}
                 title={`조준선 길이를 1000% 증가시킵니다. 남은 개수: ${aimCount}`}
             >
-                조준선 ({aimCount})
+                <img src="/images/button/target.png" alt="조준선" className={iconClass} />
+                <span className={textClass}>조준선</span>
+                <span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{aimCount}</span>
             </Button>
         </div>
     );
@@ -377,7 +396,9 @@ const GameControls: React.FC<GameControlsProps> = (props) => {
         });
     }, [session.hiddenMoves, session.moveHistory, session.boardState, session.permanentlyRevealedStones, opponentPlayerEnum]);
     
-    const buttonClasses = "whitespace-nowrap text-[clamp(0.6rem,2.2vmin,0.875rem)] px-[clamp(0.4rem,1.8vmin,0.75rem)] py-[clamp(0.2rem,0.8vmin,0.4rem)]";
+    const buttonClasses = "!p-1 flex flex-col items-center justify-center h-full w-14 relative";
+    const iconClass = "w-6 h-6 object-contain";
+    const textClass = "text-[10px] font-semibold mt-1";
 
     const renderItemButtons = () => {
         const isHiddenMode = mode === GameMode.Hidden || (mode === GameMode.Mix && (session.settings.mixedModes || []).includes(GameMode.Hidden));
@@ -388,7 +409,7 @@ const GameControls: React.FC<GameControlsProps> = (props) => {
         const myMissilesLeft = currentUser.id === p1Id ? session.missiles_p1 : session.missiles_p2;
         const hiddenLeft = (session.settings.hiddenStoneCount || 0) - myHiddenUsed;
         
-        return ( <> {isHiddenMode && <Button onClick={() => handleUseItem('hidden')} disabled={!isMyTurn || isSpectator || gameStatus !== 'playing' || hiddenLeft <= 0} colorScheme="purple" className={buttonClasses}>히든 ({hiddenLeft})</Button>} {isHiddenMode && <Button onClick={() => handleUseItem('scan')} disabled={!isMyTurn || isSpectator || gameStatus !== 'playing' || (myScansLeft ?? 0) <= 0 || !canScan} colorScheme="purple" className={buttonClasses}>스캔 ({myScansLeft ?? 0})</Button>} {isMissileMode && <Button onClick={() => handleUseItem('missile')} disabled={!isMyTurn || isSpectator || gameStatus !== 'playing' || (myMissilesLeft ?? 0) <= 0} colorScheme="orange" className={buttonClasses}>미사일 ({myMissilesLeft ?? 0})</Button>} </> );
+        return ( <> {isHiddenMode && <Button onClick={() => handleUseItem('hidden')} disabled={!isMyTurn || isSpectator || gameStatus !== 'playing' || hiddenLeft <= 0} colorScheme="purple" className={`${buttonClasses} relative`}><img src="/images/button/hidden.png" alt="히든" className={iconClass} /><span className={textClass}>히든</span><span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{hiddenLeft}</span></Button>} {isHiddenMode && <Button onClick={() => handleUseItem('scan')} disabled={!isMyTurn || isSpectator || gameStatus !== 'playing' || (myScansLeft ?? 0) <= 0 || !canScan} colorScheme="purple" className={`${buttonClasses} relative`}><img src="/images/button/scan.png" alt="스캔" className={iconClass} /><span className={textClass}>스캔</span><span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{myScansLeft ?? 0}</span></Button>} {isMissileMode && <Button onClick={() => handleUseItem('missile')} disabled={!isMyTurn || isSpectator || gameStatus !== 'playing' || (myMissilesLeft ?? 0) <= 0} colorScheme="orange" className={`${buttonClasses} relative`}><img src="/images/button/missile.png" alt="미사일" className={iconClass} /><span className={textClass}>미사일</span><span className="absolute top-0 right-0 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{myMissilesLeft ?? 0}</span></Button>} </> );
     };
 
     const hasItems = (mode === GameMode.Hidden || mode === GameMode.Missile) || (mode === GameMode.Mix && (session.settings.mixedModes || []).some(m => [GameMode.Hidden, GameMode.Missile].includes(m)));
@@ -423,11 +444,11 @@ const GameControls: React.FC<GameControlsProps> = (props) => {
                     <h3 className="text-xs font-bold text-gray-300 whitespace-nowrap">대국 기능</h3>
                     <div className="flex items-center justify-center gap-2 flex-wrap flex-grow">
                         {isGameEnded ? (
-                            <Button onClick={() => setShowResultModal(true)} colorScheme="yellow" className={buttonClasses}>결과 보기</Button>
+                            <Button onClick={() => setShowResultModal(true)} colorScheme="yellow" className="!text-sm !py-2">결과 보기</Button>
                         ) : (
                             <>
-                                {isStrategic && mode !== GameMode.Capture && <Button onClick={handlePass} disabled={!isMyTurn || isSpectator || isPreGame} colorScheme="blue" className={buttonClasses}>통과</Button>}
-                                <Button onClick={handleResign} disabled={isSpectator || session.isAiGame || isPreGame} colorScheme="red" className={buttonClasses}>기권</Button>
+                                {isStrategic && mode !== GameMode.Capture && !session.isAiGame && <Button onClick={handlePass} disabled={!isMyTurn || isSpectator || isPreGame} colorScheme="blue" className={buttonClasses}><img src="/images/button/pass.png" alt="통과" className={iconClass} /><span className={textClass}>통과</span></Button>}
+                                <Button onClick={handleResign} disabled={isSpectator || session.isAiGame || isPreGame} colorScheme="red" className={buttonClasses}><img src="/images/button/giveup.png" alt="기권" className={iconClass} /><span className={textClass}>기권</span></Button>
                             </>
                         )}
                     </div>
@@ -463,7 +484,7 @@ const GameControls: React.FC<GameControlsProps> = (props) => {
                                 }
                             }}
                             colorScheme="purple"
-                            className={buttonClasses}
+                            className="!text-xs !py-1 !px-2"
                         >
                             {player1.nickname} 기권승
                         </Button>
@@ -474,7 +495,7 @@ const GameControls: React.FC<GameControlsProps> = (props) => {
                                  }
                             }}
                             colorScheme="purple"
-                            className={buttonClasses}
+                            className="!text-xs !py-1 !px-2"
                         >
                             {player2.nickname} 기권승
                         </Button>

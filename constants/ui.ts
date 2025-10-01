@@ -1,6 +1,9 @@
-import { AvatarInfo, BorderInfo, GameMode, ShopBorderItem } from '../types.js';
+// constants/ui.ts
+import { GameMode } from '../types/index.js';
+import type { AvatarInfo, BorderInfo, ShopBorderItem } from '../types/index.js';
 
 export const AVATAR_POOL: AvatarInfo[] = [
+    { id: 'bot_avatar', name: 'AI 봇', url: '/images/single/bot.png', requiredLevel: 1, type: 'any' },
     { id: 'profile_1', name: '기본 아바타 1', url: '/images/profiles/profile1.png', requiredLevel: 1, type: 'any' },
     { id: 'profile_2', name: '기본 아바타 2', url: '/images/profiles/profile2.png', requiredLevel: 1, type: 'any' },
     { id: 'profile_3', name: '기본 아바타 3', url: '/images/profiles/profile3.png', requiredLevel: 1, type: 'any' },
@@ -41,42 +44,42 @@ export const AVATAR_POOL: AvatarInfo[] = [
 ];
 
 export const BORDER_POOL: BorderInfo[] = [
-    { id: 'default', name: '심플 화이트', url: '#FFFFFF', description: '기본으로 제공되는 흰색 테두리입니다.' },
-    { id: 'simple_black', name: '심플 블랙', url: '#000000', description: '기본으로 제공되는 세련된 검은색 테두리입니다.' },
-    { id: 'red', name: '레드', url: '#ef4444', description: '전략/놀이 레벨 합 3 이상 사용 가능.', requiredLevelSum: 3 },
-    { id: 'orange', name: '오렌지', url: '#f97316', description: '전략/놀이 레벨 합 4 이상 사용 가능.', requiredLevelSum: 4 },
-    { id: 'yellow', name: '옐로우', url: '#eab308', description: '전략/놀이 레벨 합 5 이상 사용 가능.', requiredLevelSum: 5 },
-    { id: 'green', name: '그린', url: '#22c55e', description: '전략/놀이 레벨 합 6 이상 사용 가능.', requiredLevelSum: 6 },
-    { id: 'blue', name: '블루', url: '#3b82f6', description: '전략/놀이 레벨 합 7 이상 사용 가능.', requiredLevelSum: 7 },
-    { id: 'indigo', name: '인디고', url: '#6366f1', description: '전략/놀이 레벨 합 8 이상 사용 가능.', requiredLevelSum: 8 },
-    { id: 'purple', name: '퍼플', url: '#8b5cf6', description: '전략/놀이 레벨 합 9 이상 사용 가능.', requiredLevelSum: 9 },
-    { id: 'rainbow', name: '레인보우', url: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)', description: '전략/놀이 레벨 합 10 이상 사용 가능.', requiredLevelSum: 10 },
-    { id: 'bronze_reward', name: '브론즈 보상', url: '/images/tire/Round1.png', description: '지난 시즌 브론즈 티어 달성 보상입니다.', unlockTier: '브론즈' },
-    { id: 'silver_reward', name: '실버 보상', url: '/images/tire/Round2.png', description: '지난 시즌 실버 티어 달성 보상입니다.', unlockTier: '실버' },
-    { id: 'gold_reward', name: '골드 보상', url: '/images/tire/Round3.png', description: '지난 시즌 골드 티어 달성 보상입니다.', unlockTier: '골드' },
-    { id: 'platinum_reward', name: '플래티넘 보상', url: '/images/tire/Round4.png', description: '지난 시즌 플래티넘 티어 달성 보상입니다.', unlockTier: '플래티넘' },
-    { id: 'diamond_reward', name: '다이아 보상', url: '/images/tire/Round5.png', description: '지난 시즌 다이아 티어 달성 보상입니다.', unlockTier: '다이아' },
-    { id: 'master_reward', name: '마스터 보상', url: '/images/tire/Round6.png', description: '지난 시즌 마스터 티어 달성 보상입니다.', unlockTier: '마스터' },
-    { id: 'challenger_reward', name: '챌린저 보상', url: '/images/tire/Round7.png', description: '지난 시즌 챌린저 티어 달성 보상입니다.', unlockTier: '챌린저' },
-    { id: 'tier_ring_1', name: '브론즈심플', url: '/images/tire/Ring1.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
-    { id: 'tier_ring_2', name: '실버심플', url: '/images/tire/Ring2.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
-    { id: 'tier_ring_3', name: '골드심플', url: '/images/tire/Ring3.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
-    { id: 'tier_ring_4', name: '플레티넘심플', url: '/images/tire/Ring4.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
-    { id: 'tier_ring_5', name: '프리미엄1', url: '/images/tire/Ring5.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
-    { id: 'tier_ring_6', name: '프리미엄2', url: '/images/tire/Ring6.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
-    { id: 'tier_ring_7', name: '챌린저잡기', url: '/images/tire/Ring7.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
-    { id: 'tier_ring_8', name: 'VIP', url: '/images/tire/Ring8.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
+    { id: 'default', name: '심플 화이트', url: '#FFFFFF', type: 'basic', description: '기본으로 제공되는 흰색 테두리입니다.' },
+    { id: 'simple_black', name: '심플 블랙', url: '#000000', type: 'basic', description: '기본으로 제공되는 세련된 검은색 테두리입니다.' },
+    { id: 'red', name: '레드', url: '#ef4444', type: 'level', description: '전략/놀이 레벨 합 3 이상 사용 가능.', requiredLevelSum: 3 },
+    { id: 'orange', name: '오렌지', url: '#f97316', type: 'level', description: '전략/놀이 레벨 합 4 이상 사용 가능.', requiredLevelSum: 4 },
+    { id: 'yellow', name: '옐로우', url: '#eab308', type: 'level', description: '전략/놀이 레벨 합 5 이상 사용 가능.', requiredLevelSum: 5 },
+    { id: 'green', name: '그린', url: '#22c55e', type: 'level', description: '전략/놀이 레벨 합 6 이상 사용 가능.', requiredLevelSum: 6 },
+    { id: 'blue', name: '블루', url: '#3b82f6', type: 'level', description: '전략/놀이 레벨 합 7 이상 사용 가능.', requiredLevelSum: 7 },
+    { id: 'indigo', name: '인디고', url: '#6366f1', type: 'level', description: '전략/놀이 레벨 합 8 이상 사용 가능.', requiredLevelSum: 8 },
+    { id: 'purple', name: '퍼플', url: '#8b5cf6', type: 'level', description: '전략/놀이 레벨 합 9 이상 사용 가능.', requiredLevelSum: 9 },
+    { id: 'rainbow', name: '레인보우', url: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)', type: 'level', description: '전략/놀이 레벨 합 10 이상 사용 가능.', requiredLevelSum: 10 },
+    { id: 'bronze_reward', name: '브론즈 보상', url: '/images/tire/Round1.png', type: 'seasonal', description: '지난 시즌 브론즈 티어 달성 보상입니다.', unlockTier: '브론즈' },
+    { id: 'silver_reward', name: '실버 보상', url: '/images/tire/Round2.png', type: 'seasonal', description: '지난 시즌 실버 티어 달성 보상입니다.', unlockTier: '실버' },
+    { id: 'gold_reward', name: '골드 보상', url: '/images/tire/Round3.png', type: 'seasonal', description: '지난 시즌 골드 티어 달성 보상입니다.', unlockTier: '골드' },
+    { id: 'platinum_reward', name: '플래티넘 보상', url: '/images/tire/Round4.png', type: 'seasonal', description: '지난 시즌 플래티넘 티어 달성 보상입니다.', unlockTier: '플래티넘' },
+    { id: 'diamond_reward', name: '다이아 보상', url: '/images/tire/Round5.png', type: 'seasonal', description: '지난 시즌 다이아 티어 달성 보상입니다.', unlockTier: '다이아' },
+    { id: 'master_reward', name: '마스터 보상', url: '/images/tire/Round6.png', type: 'seasonal', description: '지난 시즌 마스터 티어 달성 보상입니다.', unlockTier: '마스터' },
+    { id: 'challenger_reward', name: '챌린저 보상', url: '/images/tire/Round7.png', type: 'seasonal', description: '지난 시즌 챌린저 티어 달성 보상입니다.', unlockTier: '챌린저' },
+    { id: 'tier_ring_1', name: '브론즈심플', url: '/images/tire/Ring1.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
+    { id: 'tier_ring_2', name: '실버심플', url: '/images/tire/Ring2.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
+    { id: 'tier_ring_3', name: '골드심플', url: '/images/tire/Ring3.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
+    { id: 'tier_ring_4', name: '플레티넘심플', url: '/images/tire/Ring4.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
+    { id: 'tier_ring_5', name: '프리미엄1', url: '/images/tire/Ring5.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
+    { id: 'tier_ring_6', name: '프리미엄2', url: '/images/tire/Ring6.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
+    { id: 'tier_ring_7', name: '챌린저잡기', url: '/images/tire/Ring7.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
+    { id: 'tier_ring_8', name: 'VIP', url: '/images/tire/Ring8.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.' },
 ];
 
 export const SHOP_BORDER_ITEMS: ShopBorderItem[] = [
-    { id: 'tier_ring_1', name: '브론즈심플', url: '/images/tire/Ring1.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { gold: 10000 } },
-    { id: 'tier_ring_2', name: '실버심플', url: '/images/tire/Ring2.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { gold: 15000 } },
-    { id: 'tier_ring_3', name: '골드심플', url: '/images/tire/Ring3.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { gold: 30000 } },
-    { id: 'tier_ring_4', name: '플레티넘심플', url: '/images/tire/Ring4.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 200 } },
-    { id: 'tier_ring_5', name: '프리미엄1', url: '/images/tire/Ring5.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 1000 } },
-    { id: 'tier_ring_6', name: '프리미엄2', url: '/images/tire/Ring6.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 1000 } },
-    { id: 'tier_ring_7', name: '챌린저잡기', url: '/images/tire/Ring7.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 1000 } },
-    { id: 'tier_ring_8', name: 'VIP', url: '/images/tire/Ring8.png', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 2000 } },
+    { id: 'tier_ring_1', name: '브론즈심플', url: '/images/tire/Ring1.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { gold: 10000 } },
+    { id: 'tier_ring_2', name: '실버심플', url: '/images/tire/Ring2.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { gold: 15000 } },
+    { id: 'tier_ring_3', name: '골드심플', url: '/images/tire/Ring3.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { gold: 30000 } },
+    { id: 'tier_ring_4', name: '플레티넘심플', url: '/images/tire/Ring4.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 200 } },
+    { id: 'tier_ring_5', name: '프리미엄1', url: '/images/tire/Ring5.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 1000 } },
+    { id: 'tier_ring_6', name: '프리미엄2', url: '/images/tire/Ring6.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 1000 } },
+    { id: 'tier_ring_7', name: '챌린저잡기', url: '/images/tire/Ring7.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 1000 } },
+    { id: 'tier_ring_8', name: 'VIP', url: '/images/tire/Ring8.png', type: 'shop', description: '프로필 편집에서 구매 가능한 티어 링입니다.', price: { diamonds: 2000 } },
 ];
 
 export const RANDOM_DESCRIPTIONS: Partial<Record<GameMode, string[]>> = {

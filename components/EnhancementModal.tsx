@@ -106,28 +106,37 @@ const EnhancementResultDisplay: React.FC<{ outcome: EnhancementModalProps['enhan
 
 const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, onClose, onAction, enhancementOutcome, onOutcomeConfirm, isTopmost }) => {
     const [isEnhancing, setIsEnhancing] = useState(false);
-    
+    const [displayItem, setDisplayItem] = useState(item);
+
     useEffect(() => {
+        setDisplayItem(item);
         setIsEnhancing(false);
     }, [item]);
 
-    const costs = ENHANCEMENT_COSTS[item.grade]?.[item.stars];
-    const baseSuccessRate = ENHANCEMENT_SUCCESS_RATES[item.stars];
-    const failBonusRate = ENHANCEMENT_FAIL_BONUS_RATES[item.grade] || 0.5;
-    const failBonus = (item.enhancementFails || 0) * failBonusRate;
+    useEffect(() => {
+        if (enhancementOutcome) {
+            setIsEnhancing(false);
+            setDisplayItem(enhancementOutcome.itemAfter);
+        }
+    }, [enhancementOutcome]);
+
+    const costInfo = ENHANCEMENT_COSTS[displayItem.grade]?.[displayItem.stars];
+    const baseSuccessRate = ENHANCEMENT_SUCCESS_RATES[displayItem.stars];
+    const failBonusRate = ENHANCEMENT_FAIL_BONUS_RATES[displayItem.grade] || 0.5;
+    const failBonus = (displayItem.enhancementFails || 0) * failBonusRate;
 
     const userLevelSum = currentUser.strategyLevel + currentUser.playfulLevel;
-    const nextStars = item.stars + 1;
+    const nextStars = displayItem.stars + 1;
 
     const levelRequirement = useMemo(() => {
         if (nextStars === 4 || nextStars === 7 || nextStars === 10) {
-            const reqs = ENHANCEMENT_LEVEL_REQUIREMENTS[item.grade];
+            const reqs = ENHANCEMENT_LEVEL_REQUIREMENTS[displayItem.grade];
             if (reqs) {
                 return reqs[nextStars as 4 | 7 | 10];
             }
         }
         return 0;
-    }, [nextStars, item.grade]);
+    }, [nextStars, displayItem.grade]);
     const meetsLevelRequirement = userLevelSum >= levelRequirement;
 
     const userMaterials = useMemo(() => {
@@ -141,21 +150,22 @@ const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, 
     }, [currentUser.inventory]);
 
     const canEnhance = useMemo(() => {
-        if (!costs) return false;
+        if (!costInfo) return false;
         if (levelRequirement > 0 && !meetsLevelRequirement) return false;
-        return costs.every(cost => userMaterials[cost.name] >= cost.amount);
-    }, [costs, userMaterials, levelRequirement, meetsLevelRequirement]);
+        if (currentUser.gold < costInfo.gold) return false;
+        return costInfo.materials.every(cost => userMaterials[cost.name] >= cost.amount);
+    }, [costInfo, userMaterials, levelRequirement, meetsLevelRequirement, currentUser.gold]);
 
     const handleEnhanceClick = () => {
         if (!canEnhance || isEnhancing) return;
         setIsEnhancing(true);
-        onAction({ type: 'ENHANCE_ITEM', payload: { itemId: item.id } });
+        onAction({ type: 'ENHANCE_ITEM', payload: { itemId: displayItem.id } });
     };
 
     const { mainOptionPreview, subOptionPreview } = useMemo(() => {
-        if (!item.options || item.stars >= 10) return { mainOptionPreview: '최대 강화', subOptionPreview: '' };
+        if (!displayItem.options || displayItem.stars >= 10) return { mainOptionPreview: '최대 강화', subOptionPreview: '' };
 
-        const { main, combatSubs } = item.options;
+        const { main, combatSubs } = displayItem.options;
         const mainBaseValue = main.baseValue;
 
         if (!mainBaseValue) {
@@ -163,7 +173,7 @@ const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, 
         }
         
         let increaseMultiplier = 1;
-        if ([3, 6, 9].includes(item.stars)) {
+        if ([3, 6, 9].includes(displayItem.stars)) {
             increaseMultiplier = 2;
         }
         const increaseAmount = mainBaseValue * increaseMultiplier;
@@ -176,19 +186,22 @@ const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, 
         const subOptionPreview = combatSubs.length < 4 ? '신규 전투 부옵션 1개 추가' : '기존 전투 부옵션 1개 강화';
         
         return { mainOptionPreview, subOptionPreview };
-    }, [item]);
+    }, [displayItem]);
     
-    const starInfoCurrent = getStarDisplayInfo(item.stars);
-    const starInfoNext = item.stars < 10 ? getStarDisplayInfo(item.stars + 1) : null;
+    const starInfoCurrent = getStarDisplayInfo(displayItem.stars);
+    const starInfoNext = displayItem.stars < 10 ? getStarDisplayInfo(displayItem.stars + 1) : null;
 
     const buttonText = useMemo(() => {
         if (isEnhancing) return '강화 중...';
-        if (item.stars >= 10) return '최대 강화';
+        if (displayItem.stars >= 10) return '최대 강화';
         if (levelRequirement > 0 && !meetsLevelRequirement) return `레벨 부족 (합 ${levelRequirement} 필요)`;
-        if (!costs) return '강화 정보 없음'; // Should not happen
-        if (!canEnhance) return '재료 부족';
-        return `강화하기 (+${item.stars + 1})`;
-    }, [isEnhancing, item.stars, levelRequirement, meetsLevelRequirement, costs, canEnhance]);
+        if (!costInfo) return '강화 정보 없음'; // Should not happen
+        if (!canEnhance) {
+            if(currentUser.gold < costInfo.gold) return '골드 부족';
+            return '재료 부족';
+        }
+        return `강화하기 (+${displayItem.stars + 1})`;
+    }, [isEnhancing, displayItem.stars, levelRequirement, meetsLevelRequirement, costInfo, canEnhance, currentUser.gold]);
 
     return (
         <DraggableWindow title="장비 강화" onClose={onClose} windowId={`enhancement-${item.id}`} initialWidth={750} isTopmost={isTopmost}>
@@ -198,20 +211,20 @@ const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, 
                 <div className="flex flex-row gap-6">
                     <div className="w-1/2 flex flex-col items-center gap-4 bg-gray-900/40 p-4 rounded-lg">
                         <div className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-lg flex-shrink-0">
-                            <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-lg" />
-                            {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-4" />}
+                            <img src={gradeBackgrounds[displayItem.grade]} alt={displayItem.grade} className="absolute inset-0 w-full h-full object-cover rounded-lg" />
+                            {displayItem.image && <img src={displayItem.image} alt={displayItem.name} className="relative w-full h-full object-contain p-4" />}
                         </div>
                         <div className="flex items-baseline justify-center gap-1">
-                            <h3 className={`text-lg sm:text-xl font-bold ${starInfoCurrent.colorClass}`}>{item.name}</h3>
-                            {item.stars > 0 && <span className={`text-lg sm:text-xl font-bold ${starInfoCurrent.colorClass}`}>{starInfoCurrent.text}</span>}
+                            <h3 className={`text-lg sm:text-xl font-bold ${starInfoCurrent.colorClass}`}>{displayItem.name}</h3>
+                            {displayItem.stars > 0 && <span className={`text-lg sm:text-xl font-bold ${starInfoCurrent.colorClass}`}>{starInfoCurrent.text}</span>}
                         </div>
                         <div className="w-full text-left space-y-2 bg-gray-800/50 p-3 rounded-md overflow-y-auto flex-grow">
-                            {item.options && (
+                            {displayItem.options && (
                                 <>
-                                    <OptionSection title="주옵션" options={[item.options.main]} color="text-yellow-300" />
-                                    <OptionSection title="전투 부옵션" options={item.options.combatSubs} color="text-blue-300" />
-                                    <OptionSection title="특수 부옵션" options={item.options.specialSubs} color="text-green-300" />
-                                    <OptionSection title="신화 부옵션" options={item.options.mythicSubs} color="text-red-400" />
+                                    <OptionSection title="주옵션" options={[displayItem.options.main]} color="text-yellow-300" />
+                                    <OptionSection title="전투 부옵션" options={displayItem.options.combatSubs} color="text-blue-300" />
+                                    <OptionSection title="특수 부옵션" options={displayItem.options.specialSubs} color="text-green-300" />
+                                    <OptionSection title="신화 부옵션" options={displayItem.options.mythicSubs} color="text-red-400" />
                                 </>
                             )}
                         </div>
@@ -235,20 +248,20 @@ const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, 
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-400">부옵션:</span>
-                                    <span className="font-mono text-white">{item.stars < 10 ? subOptionPreview : ''}</span>
+                                    <span className="font-mono text-white">{displayItem.stars < 10 ? subOptionPreview : ''}</span>
                                 </div>
                             </div>
                         </div>
                         <div className="bg-gray-900/50 p-3 rounded-lg">
                             <h4 className="font-semibold text-center mb-2">필요 재료</h4>
                             <div className="space-y-1 text-sm">
-                                {costs?.map(cost => {
+                                {costInfo?.materials.map(cost => {
                                     const userHas = userMaterials[cost.name] || 0;
                                     const hasEnough = userHas >= cost.amount;
                                     return (
                                         <div key={cost.name} className="flex justify-between items-center">
                                             <span className="flex items-center gap-2">
-                                                <img src={MATERIAL_ITEMS[cost.name].image!} alt={cost.name} className="w-6 h-6" />
+                                                <img src={MATERIAL_ITEMS[cost.name as keyof typeof MATERIAL_ITEMS].image!} alt={cost.name} className="w-6 h-6" />
                                                 {cost.name}
                                             </span>
                                             <span className={`font-mono ${hasEnough ? 'text-green-400' : 'text-red-400'}`}>
@@ -257,6 +270,17 @@ const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, 
                                         </div>
                                     );
                                 })}
+                                {costInfo && costInfo.gold > 0 && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="flex items-center gap-2">
+                                            <img src="/images/Gold.png" alt="골드" className="w-6 h-6" />
+                                            골드
+                                        </span>
+                                        <span className={`font-mono ${currentUser.gold >= costInfo.gold ? 'text-green-400' : 'text-red-400'}`}>
+                                            {currentUser.gold.toLocaleString()} / {costInfo.gold.toLocaleString()}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="bg-gray-900/50 p-3 rounded-lg text-center flex-grow flex flex-col justify-center">
@@ -268,7 +292,7 @@ const EnhancementModal: React.FC<EnhancementModalProps> = ({ item, currentUser, 
                         </div>
                         <Button
                             onClick={handleEnhanceClick}
-                            disabled={!canEnhance || isEnhancing || item.stars >= 10}
+                            disabled={!canEnhance || isEnhancing || displayItem.stars >= 10}
                             colorScheme="yellow"
                             className="w-full py-3 mt-auto"
                         >

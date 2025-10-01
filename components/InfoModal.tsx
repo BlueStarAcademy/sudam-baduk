@@ -7,17 +7,19 @@ interface InfoModalProps {
     isTopmost?: boolean;
 }
 
-type InfoTab = 'game' | 'level' | 'ranking' | 'equipment' | 'manner';
+type InfoTab = 'game' | 'level' | 'ranking' | 'equipment' | 'manner' | 'guild' | 'sp';
 
 const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
     const [activeTab, setActiveTab] = useState<InfoTab>('game');
 
     const tabs: { id: InfoTab; label: string }[] = [
-        { id: 'game', label: '게임방법' },
-        { id: 'level', label: '레벨' },
-        { id: 'ranking', label: '랭킹시스템' },
+        { id: 'game', label: '게임 모드' },
+        { id: 'level', label: '레벨/스탯' },
+        { id: 'ranking', label: '랭킹' },
         { id: 'equipment', label: '장비' },
-        { id: 'manner', label: '매너등급' },
+        { id: 'manner', label: '매너' },
+        { id: 'guild', label: '길드' },
+        { id: 'sp', label: '싱글/타워' },
     ];
 
     const renderContent = () => {
@@ -27,7 +29,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
                     <div className="space-y-4">
                         <div>
                             <h3 className="font-bold text-lg text-blue-300">전략 바둑</h3>
-                            <p className="text-sm">클래식 바둑, 따내기 바둑 등 전통적인 규칙을 기반으로 한 모드입니다. 수읽기와 전략을 통해 승리를 쟁취하세요. 각 게임의 자세한 규칙은 대기실의 '?' 버튼을 눌러 확인할 수 있습니다.</p>
+                            <p className="text-sm">클래식, 따내기, 히든 바둑 등 전통적인 규칙을 기반으로 한 모드입니다. 수읽기와 전략을 통해 승리를 쟁취하세요. 각 게임의 자세한 규칙은 대기실의 '?' 버튼을 눌러 확인할 수 있습니다.</p>
                         </div>
                         <div>
                             <h3 className="font-bold text-lg text-yellow-300">놀이 바둑</h3>
@@ -35,7 +37,15 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
                         </div>
                          <div>
                             <h3 className="font-bold text-lg text-purple-300">자동대국 챔피언십</h3>
-                            <p className="text-sm">AI 시뮬레이션으로 진행되는 자동 대회입니다. 자신의 능력치와 장비 세팅으로 가상의 선수들과 실력을 겨루고, 결과에 따라 보상을 획득할 수 있습니다. 매일 다른 종류의 대회에 참가할 수 있습니다.</p>
+                            <p className="text-sm">AI 시뮬레이션으로 진행되는 자동 대회입니다. 자신의 능력치와 장비 세팅으로 가상의 선수들과 실력을 겨루고, 결과에 따라 보상을 획득하며 주간 경쟁 랭킹을 올릴 수 있습니다.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg text-green-300">싱글플레이 / 도전의 탑</h3>
+                            <p className="text-sm">다양한 조건이 걸린 스테이지를 AI 상대로 클리어해나가는 1인용 콘텐츠입니다. 싱글플레이는 바둑의 기초를, 도전의 탑은 고난도 챌린지를 제공합니다.</p>
+                        </div>
+                         <div>
+                            <h3 className="font-bold text-lg text-red-300">길드 보스전</h3>
+                            <p className="text-sm">길드원들과 협력하여 강력한 보스를 공략하는 레이드 콘텐츠입니다. 보스에게 입힌 피해량에 따라 개인 보상을, 보스 처치 시 모든 길드원이 보상을 받습니다.</p>
                         </div>
                     </div>
                 );
@@ -48,7 +58,11 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
                         </div>
                         <div>
                             <h3 className="font-bold text-lg text-green-300">스탯 포인트</h3>
-                            <p className="text-sm">전략 레벨과 놀이 레벨이 오를 때마다 각각 2포인트씩 보너스 스탯 포인트를 획득합니다. 프로필 화면의 '포인트 분배' 버튼을 눌러 6가지 핵심 능력치에 투자하고, 자동대국 챔피언십에서 더 좋은 성적을 거두세요.</p>
+                            <ul className="list-disc list-inside text-sm space-y-1 pl-2">
+                                <li>전략 레벨과 놀이 레벨이 1 오를 때마다 각각 <strong className="text-yellow-300">2포인트</strong>씩 보너스 스탯 포인트를 획득합니다.</li>
+                                <li>프로필 화면의 '포인트 분배' 버튼을 눌러 6가지 핵심 능력치에 투자할 수 있습니다.</li>
+                                <li>이 능력치들은 자동대국 챔피언십과 길드 보스전에서 캐릭터의 성능을 결정합니다.</li>
+                            </ul>
                         </div>
                     </div>
                 );
@@ -56,17 +70,21 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
                 return (
                     <div className="space-y-4">
                         <div>
-                            <h3 className="font-bold text-lg text-gray-200">랭킹 점수</h3>
-                            <p className="text-sm">각 게임 모드마다 랭킹 점수가 존재하며, 승리하면 오르고 패배하면 떨어집니다. 이 점수를 기준으로 랭킹이 매겨집니다.</p>
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-lg text-purple-300">시즌 제도</h3>
-                            <ul className="list-disc list-inside text-sm space-y-1 pl-2">
-                                <li>시즌은 3개월 단위로 진행됩니다 (1분기, 2분기, 3분기, 4분기).</li>
+                            <h3 className="font-bold text-lg text-purple-300">시즌 랭킹 (게임 모드별)</h3>
+                             <ul className="list-disc list-inside text-sm space-y-1 pl-2">
+                                <li>시즌은 3개월 단위로 진행됩니다 (1/4분기, 2/4분기 등).</li>
                                 <li>시즌 동안 각 게임 모드별로 <strong className="text-yellow-300">최소 20경기</strong>를 플레이해야 해당 모드의 랭킹 티어를 받을 자격이 주어집니다. (배치 경기)</li>
                                 <li>20경기를 채우지 못한 모드는 시즌 종료 시 '새싹' 티어로 마감됩니다.</li>
-                                <li>시즌 종료 시, 배치 경기를 완료한 플레이어들을 대상으로 랭킹 순위에 따라 티어가 결정되고 보상이 우편으로 지급됩니다.</li>
-                                <li>새 시즌이 시작되면 모든 게임 모드의 전적(승/패)과 랭킹 점수가 초기화되며, 다시 20경기의 배치 경기가 필요합니다.</li>
+                                <li>시즌 종료 시, 배치 경기를 완료한 플레이어들을 대상으로 랭킹 점수와 순위에 따라 티어가 결정되고 보상이 우편으로 지급됩니다.</li>
+                                <li>새 시즌이 시작되면 모든 게임 모드의 전적(승/패)과 랭킹 점수가 초기화됩니다.</li>
+                            </ul>
+                        </div>
+                         <div>
+                            <h3 className="font-bold text-lg text-cyan-300">주간 경쟁 (챔피언십)</h3>
+                            <ul className="list-disc list-inside text-sm space-y-1 pl-2">
+                                <li>매주 월요일, 챔피언십 리그와 티어에 따라 15명의 경쟁 상대가 배정됩니다.</li>
+                                <li>일주일간 자동대국 챔피언십에 참여하여 랭킹 점수를 획득하고, 경쟁자들 사이에서 순위를 높여야 합니다.</li>
+                                <li>일주일이 지나면 순위에 따라 상위 리그로 승급, 잔류, 또는 하위 리그로 강등되며, 결과에 따라 다이아 보상이 지급됩니다.</li>
                             </ul>
                         </div>
                     </div>
@@ -76,16 +94,19 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
                      <div className="space-y-4">
                         <div>
                             <h3 className="font-bold text-lg text-gray-200">장비 시스템</h3>
-                            <p className="text-sm">부채, 바둑판, 의상 등 6가지 종류의 장비를 장착하여 캐릭터의 능력치를 강화할 수 있습니다. 장비는 일반, 고급, 희귀, 에픽, 전설, 신화 등급으로 나뉩니다. 등급이 높을수록 더 강력한 옵션을 가집니다.</p>
+                            <p className="text-sm">부채, 바둑판 등 6가지 종류의 장비를 장착하여 캐릭터의 능력치를 강화할 수 있습니다. 장비는 일반, 고급, 희귀, 에픽, 전설, 신화 등급으로 나뉩니다.</p>
                         </div>
                         <div>
                             <h3 className="font-bold text-lg text-cyan-300">강화</h3>
-                            {/* FIX: Updated maximum enhancement level from 5 stars to 10 to match game constants. */}
-                            <p className="text-sm">재료를 사용하여 장비의 별 등급(★)을 최대 10성까지 높일 수 있습니다. 강화에 성공하면 장비의 주옵션이 크게 상승하고, 부옵션이 추가되거나 기존 부옵션 중 하나가 랜덤하게 강화됩니다.</p>
+                            <p className="text-sm">재료를 사용하여 장비의 별 등급(★)을 최대 10성까지 높일 수 있습니다. 강화 성공 시 주옵션이 상승하고, 부옵션이 추가되거나 기존 부옵션이 랜덤하게 강화됩니다. +4, +7, +10 강화 시에는 주옵션이 2배로 상승합니다.</p>
                         </div>
                         <div>
                             <h3 className="font-bold text-lg text-orange-300">분해</h3>
-                            <p className="text-sm">사용하지 않는 장비를 분해하여 강화에 필요한 재료 아이템을 획득할 수 있습니다. 분해 시 '대박'이 발생하면 2배의 재료를 얻을 수 있습니다.</p>
+                            <p className="text-sm">사용하지 않는 장비를 분해하여 강화 재료를 획득할 수 있습니다. 분해 시 '대박'이 발생하면 2배의 재료를 얻습니다.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg text-purple-300">합성</h3>
+                            <p className="text-sm">같은 등급의 장비 3개를 합성하여 새로운 장비 1개를 획득합니다. 낮은 확률로 한 등급 높은 장비를 얻을 수 있습니다. 신화 등급 장비 3개를 합성하면 일정 확률로 '더블 신화 옵션'을 가진 특별한 장비가 등장합니다.</p>
                         </div>
                     </div>
                 );
@@ -110,6 +131,38 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
                                 <li><span className="text-red-500 font-semibold">매우 나쁨 (1점 ~ 49점):</span> 행동력 회복 속도 감소 (20분에 1)</li>
                                 <li><span className="text-red-700 font-semibold">최악 (0점):</span> 최대 행동력 10%로 감소</li>
                             </ul>
+                        </div>
+                    </div>
+                );
+            case 'guild':
+                 return (
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="font-bold text-lg text-gray-200">길드</h3>
+                            <p className="text-sm">다른 유저들과 함께 길드를 만들고 성장시키는 커뮤니티 콘텐츠입니다. 길드원들과 협력하여 다양한 혜택을 누릴 수 있습니다.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg text-green-300">주요 활동</h3>
+                            <ul className="list-disc list-inside text-sm space-y-2 pl-2">
+                                <li><strong>출석 및 기부:</strong> 매일 출석하고 재화를 기부하여 길드 경험치, 연구 포인트, 그리고 개인 보상인 길드 코인을 획득할 수 있습니다.</li>
+                                <li><strong>주간 임무:</strong> 길드원 전체가 협력하여 달성하는 주간 목표입니다. 달성 시 모든 길드원이 보상을 받을 수 있습니다.</li>
+                                <li><strong>길드 연구소:</strong> 기부로 모은 연구 포인트를 사용하여 길드원 전체에게 적용되는 강력한 버프 효과를 연구할 수 있습니다.</li>
+                                <li><strong>길드 상점:</strong> 길드 코인을 사용하여 특별한 장비 상자, 강화 재료, 소모품 등을 구매할 수 있습니다.</li>
+                                <li><strong>길드 보스전:</strong> 매일 정해진 횟수만큼 강력한 보스에게 도전하여, 입힌 피해량에 따라 개인 보상을 받고 보스 처치 시 길드 전체 보상을 획득하는 레이드 콘텐츠입니다.</li>
+                            </ul>
+                        </div>
+                    </div>
+                 );
+            case 'sp':
+                return (
+                    <div className="space-y-4">
+                        <div>
+                            <h3 className="font-bold text-lg text-green-300">싱글플레이</h3>
+                            <p className="text-sm">바둑 용어와 전략을 배우며 단계별로 구성된 AI 스테이지를 클리어하는 1인용 콘텐츠입니다. 스테이지 최초 클리어 시 푸짐한 보상을 얻을 수 있으며, 반복 클리어도 가능합니다. 또한, '수련 과제'를 통해 시간이 지나면 자동으로 재화를 획득할 수 있습니다.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg text-red-300">도전의 탑</h3>
+                            <p className="text-sm">총 100층으로 구성된 고난도 챌린지 모드입니다. 각 층마다 까다로운 조건을 가진 AI를 상대로 승리하여 탑을 오르고, 최초 클리어 보상을 획득하세요. 매월 1일, 랭킹이 초기화되고 지난달의 최종 순위에 따라 특별 보상이 지급됩니다.</p>
                         </div>
                     </div>
                 );

@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+
+
+
+
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { LiveGameSession, User, Player, KomiBid, ServerAction, Point } from '../types.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
 import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG } from '../assets.js';
-import { DEFAULT_KOMI } from '../constants.js';
+import { DEFAULT_KOMI, aiUserId } from '../constants/index.js';
+import Slider from './ui/Slider.js';
 
 interface KomiBiddingPanelProps {
     session: LiveGameSession;
@@ -63,9 +68,10 @@ const AdjustButton: React.FC<{ amount: number; onAdjust: (amount: number) => voi
 
 const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
     const { session, currentUser, onAction } = props;
-    const { id: gameId, player1, player2, komiBids, komiBiddingDeadline, gameStatus, komiBiddingRound } = session;
-    const [selectedColor, setSelectedColor] = useState<Player>(Player.Black);
-    const [komiValue, setKomiValue] = useState<number>(0);
+    const { id: gameId, player1, player2, komiBids, komiBiddingDeadline, gameStatus, komiBiddingRound, isAiGame } = session;
+    // FIX: Changed the type of 'selectedColor' to be more specific, preventing assignment of Player.None and resolving a type error.
+    const [selectedColor, setSelectedColor] = useState<Player.Black | Player.White>(Player.Black);
+    const [komiValue, setKomiValue] = useState<number>(6.5);
     const [timer, setTimer] = useState(30);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -79,23 +85,27 @@ const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
     const opponentBid = opponent ? komiBids?.[opponent.id] : undefined;
     
     const handleBidSubmit = useCallback(() => {
-        const { session: currentSession, onAction: currentOnAction, currentUser } = latestProps.current;
+        const { onAction: currentOnAction, session: currentSession, currentUser } = latestProps.current;
         const myCurrentBid = currentSession.komiBids?.[currentUser.id];
+        
         if (myCurrentBid || isSubmitting) return;
-        if (selectedColor === Player.None) return;
 
         setIsSubmitting(true);
-        const bid: KomiBid = { color: selectedColor, komi: komiValue };
-        currentOnAction({type: 'UPDATE_KOMI_BID', payload: { gameId: currentSession.id, bid }});
-        setTimeout(() => setIsSubmitting(false), 5000);
-    }, [isSubmitting, selectedColor, komiValue]);
+        if (isAiGame) {
+             const bid: KomiBid = { color: selectedColor, komi: komiValue };
+             currentOnAction({ type: 'UPDATE_KOMI_BID', payload: { gameId: currentSession.id, bid } });
+        } else {
+            const bid: KomiBid = { color: selectedColor, komi: komiValue };
+            currentOnAction({type: 'UPDATE_KOMI_BID', payload: { gameId, bid }});
+        }
+
+        setTimeout(() => setIsSubmitting(false), 5000); // Failsafe
+    }, [isSubmitting, selectedColor, komiValue, gameId, isAiGame]);
     
      useEffect(() => {
-        // Reset the form only when the bidding round changes.
-        // This prevents the user's input from being wiped when the opponent submits their bid.
         setSelectedColor(Player.Black);
-        setKomiValue(0);
-    }, [komiBiddingRound]);
+        setKomiValue(isAiGame ? 6.5 : 0);
+    }, [komiBiddingRound, isAiGame]);
 
     useEffect(() => {
         if (myBid || !komiBiddingDeadline) {
@@ -103,17 +113,15 @@ const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
             return;
         }
         const intervalId = setInterval(() => {
-            const remaining = Math.max(0, Math.ceil((komiBiddingDeadline - Date.now()) / 1000));
-            setTimer(remaining);
-            if (remaining <= 0) {
-                // Auto-submit on timeout is handled server-side, but we can trigger it for responsiveness
-                handleBidSubmit();
-            }
+             const remaining = Math.max(0, Math.ceil((komiBiddingDeadline - Date.now()) / 1000));
+             setTimer(remaining);
+             if (remaining <= 0 && !isAiGame) {
+                 clearInterval(intervalId);
+             }
         }, 1000);
         return () => clearInterval(intervalId);
-    }, [myBid, komiBiddingDeadline, handleBidSubmit]);
+    }, [myBid, komiBiddingDeadline, isAiGame]);
 
-    // Simplified adjustKomi without useCallback, as it's now stable
     const adjustKomi = (amount: number) => {
         setKomiValue(prev => Math.max(0, Math.min(100, prev + amount)));
     };
@@ -132,7 +140,7 @@ const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
         }
         let resultText = '';
         const isTie = myBid.color === opponentBid.color && myBid.komi === opponentBid.komi;
-
+        
         if (myBid.color !== opponentBid.color) {
             resultText = `서로 다른 색을 선택하여, 각자 원하는 색으로 시작합니다. (덤 0.5집)`;
         } else {
@@ -164,12 +172,11 @@ const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
         )
     };
 
-
     if (gameStatus === 'komi_bid_reveal') {
         return <DraggableWindow title="덤 설정 결과" windowId="komi-bidding">{renderBidResult()}</DraggableWindow>;
     }
     
-    if (myBid) {
+    if (myBid && !isAiGame) {
         return (
              <DraggableWindow title="덤 설정" windowId="komi-bidding">
                 <div className="text-center">
@@ -182,11 +189,45 @@ const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
              </DraggableWindow>
         )
     }
+
+    if(isAiGame) {
+        return (
+            <DraggableWindow title={`AI 대국 설정`} windowId="komi-bidding" initialWidth={650}>
+                <div className="flex gap-4">
+                     <div className="w-1/2 flex flex-col">
+                        <p className="text-center text-sm text-gray-400 mb-2">배치 결과</p>
+                        <div className="aspect-square">
+                            <MiniGoBoard session={session} />
+                        </div>
+                    </div>
+                    <div className="w-1/2 flex flex-col justify-between">
+                         <div className="text-center">
+                            <p className="text-xs text-gray-400 mb-2">원하는 돌 색과 덤을 설정하고 대국을 시작하세요.</p>
+                            <div className="flex justify-center gap-4 my-4">
+                                <Button onClick={() => setSelectedColor(Player.Black)} colorScheme={selectedColor === Player.Black ? 'accent' : 'gray'} className="w-24">흑</Button>
+                                <Button onClick={() => setSelectedColor(Player.White)} colorScheme={selectedColor === Player.White ? 'accent' : 'gray'} className="w-24">백</Button>
+                            </div>
+                            <div>
+                                <label className="block text-sm text-gray-300 mb-2">백 덤 설정</label>
+                                 <Slider
+                                    value={komiValue}
+                                    min={0.5}
+                                    max={50.5}
+                                    step={1}
+                                    onChange={(v) => setKomiValue(v)}
+                                />
+                                <div className="bg-gray-900/70 p-2 rounded-lg text-2xl font-bold text-yellow-300 mt-2">{komiValue}집</div>
+                            </div>
+                         </div>
+                         <Button onClick={handleBidSubmit} disabled={isSubmitting} className="w-full mt-auto">대국 시작</Button>
+                    </div>
+                </div>
+            </DraggableWindow>
+        );
+    }
     
     const baseKomi = 0.5;
-
     const renderDescription = () => {
-        // This calculation is for display only. The final logic is on the server.
         if (selectedColor === Player.Black) {
             const finalKomi = komiValue + baseKomi;
             return `흑을 잡고, 백에게 덤 ${finalKomi}집을 줍니다.`;
@@ -221,8 +262,8 @@ const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
                         <div className="text-3xl font-mono font-bold text-center text-white">{timer}</div>
 
                         <div className="flex justify-center gap-4 my-4">
-                            <Button onClick={() => setSelectedColor(Player.Black)} disabled={buttonsDisabled} colorScheme={selectedColor === Player.Black ? 'blue' : 'gray'} className="w-24">흑</Button>
-                            <Button onClick={() => setSelectedColor(Player.White)} disabled={buttonsDisabled} colorScheme={selectedColor === Player.White ? 'blue' : 'gray'} className="w-24">백</Button>
+                            <Button onClick={() => setSelectedColor(Player.Black)} disabled={buttonsDisabled} colorScheme={selectedColor === Player.Black ? 'accent' : 'gray'} className="w-24">흑</Button>
+                            <Button onClick={() => setSelectedColor(Player.White)} disabled={buttonsDisabled} colorScheme={selectedColor === Player.White ? 'accent' : 'gray'} className="w-24">백</Button>
                         </div>
                         
                         <div>
@@ -250,4 +291,4 @@ const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
     );
 };
 
-export default KomiBiddingPanel;
+export default React.memo(KomiBiddingPanel);

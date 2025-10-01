@@ -1,83 +1,275 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { User, LiveGameSession, UserWithStatus, ServerAction, GameMode, Negotiation, ChatMessage, UserStatus, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank } from '../types.js';
+// FIX: Separate type and value imports
+import { GameMode, UserStatus, ShopTab, InventoryTab } from '../types/index.js';
+import type { User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult } from '../types/index.js';
 import { audioService } from '../services/audioService.js';
 import { stableStringify, parseHash } from '../utils/appUtils.js';
 import { 
     DAILY_MILESTONE_THRESHOLDS,
     WEEKLY_MILESTONE_THRESHOLDS,
-    MONTHLY_MILESTONE_THRESHOLDS
-} from '../constants.js';
-import { defaultSettings, SETTINGS_STORAGE_KEY } from './useAppSettings.js';
+    MONTHLY_MILESTONE_THRESHOLDS,
+    SLUG_BY_GAME_MODE,
+    SINGLE_PLAYER_MISSIONS
+} from '../constants/index.js';
+import { defaultSettings } from './useAppSettings.js';
 
+function usePrevious<T>(value: T): T | undefined {
+    const ref = useRef<T | undefined>(undefined);
+    useEffect(() => {
+        ref.current = value;
+    }, [value]);
+    return ref.current;
+}
 
 export const useApp = () => {
     // --- State Management ---
-    const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
+    const [sessionId, setSessionId] = useState<string | null>(null);
+
+    useEffect(() => {
         try {
-            const stored = sessionStorage.getItem('currentUser');
-            if (stored) {
-                return JSON.parse(stored);
+            if (!sessionStorage.getItem('sessionIsActive')) {
+                localStorage.removeItem('sessionData');
+                sessionStorage.setItem('sessionIsActive', 'true');
+                return;
             }
-        } catch (e) { console.error('Failed to parse user from sessionStorage', e); }
-        return null;
-    });
+            const stored = localStorage.getItem('sessionData');
+            if (stored) {
+                const { user, sessionId: sid } = JSON.parse(stored);
+                setCurrentUser(user);
+                setSessionId(sid);
+            }
+        } catch (e) {
+            console.error('Failed to initialize session from storage', e);
+            localStorage.removeItem('sessionData');
+            sessionStorage.removeItem('sessionIsActive');
+        }
+    }, []);
 
     const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => parseHash(window.location.hash));
     const currentRouteRef = useRef(currentRoute);
     const [error, setError] = useState<string | null>(null);
+    const [successToast, setSuccessToast] = useState<string | null>(null);
     const isLoggingOut = useRef(false);
+    const isExitingGame = useRef(false);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     
     // --- App Settings State ---
     const [settings, setSettings] = useState<AppSettings>(() => {
         try {
-            const storedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY);
+            const storedSettings = localStorage.getItem('appSettings');
             if (storedSettings) {
-                let parsed = JSON.parse(storedSettings);
-                // Migration for old settings structure
-                if (typeof parsed.theme === 'string') {
-                    parsed = {
-                        ...defaultSettings,
-                        graphics: {
-                            theme: parsed.theme,
-                            panelColor: undefined,
-                            textColor: undefined,
-                        },
-                        sound: parsed.sound || defaultSettings.sound,
-                        features: parsed.features || defaultSettings.features,
-                    };
-                }
-                // Deep merge to ensure new settings from code are not overwritten by old localStorage data
+                const parsed = JSON.parse(storedSettings);
+                // Deep merge with defaults to ensure all keys are present
                 return {
-                    ...defaultSettings,
-                    ...parsed,
                     graphics: { ...defaultSettings.graphics, ...(parsed.graphics || {}) },
                     sound: { ...defaultSettings.sound, ...(parsed.sound || {}) },
                     features: { ...defaultSettings.features, ...(parsed.features || {}) },
                 };
             }
-        } catch (error) { console.error('Error reading settings from localStorage', error); }
+        } catch (e) { console.error('Failed to load settings from localStorage', e); }
         return defaultSettings;
     });
 
     useEffect(() => {
-        try {
-            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-        } catch (error) { console.error('Error saving settings to localStorage', error); }
+        const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
+        window.addEventListener('resize', checkIsMobile);
+        return () => window.removeEventListener('resize', checkIsMobile);
+    }, []);
+    
+    const handleLogout = useCallback(async () => {
+        if (isLoggingOut.current) return;
+        isLoggingOut.current = true;
         
-        // Apply custom colors if they exist
-        const root = document.documentElement;
-        if (settings.graphics.panelColor) {
-            root.style.setProperty('--custom-panel-bg', settings.graphics.panelColor);
-        } else {
-            root.style.removeProperty('--custom-panel-bg');
-        }
-        if (settings.graphics.textColor) {
-            root.style.setProperty('--custom-text-color', settings.graphics.textColor);
-        } else {
-            root.style.removeProperty('--custom-text-color');
+        // Inform server of logout (fire and forget is fine)
+        handleAction({ type: 'LOGOUT' });
+
+        // Reset client-side state
+        setCurrentUser(null);
+        setSessionId(null);
+        
+        isLoggingOut.current = false;
+        // Redirect to login page
+        window.location.hash = '';
+    }, []);
+    
+    const handleAction = useCallback(async (action: ServerAction): Promise<{success: boolean, error?: string, [key: string]: any} | undefined> => {
+        if (
+            action.type.startsWith('LEAVE_') || 
+            action.type.startsWith('RESIGN_') ||
+            action.type === 'REQUEST_NO_CONTEST_LEAVE'
+        ) {
+            isExitingGame.current = true;
+            // Failsafe timeout to prevent getting stuck
+            setTimeout(() => { isExitingGame.current = false; }, 3000);
         }
 
+        if (action.type === 'CLEAR_TOURNAMENT_SESSION') {
+            setCurrentUser(prev => {
+                if (!prev) return null;
+                return {
+                    ...prev,
+                    lastNeighborhoodTournament: null,
+                    lastNationalTournament: null,
+                    lastWorldTournament: null,
+                };
+            });
+        }
+        if (action.type === 'TOGGLE_EQUIP_ITEM') {
+            setCurrentUser(prevUser => {
+                if (!prevUser) return null;
+                const { itemId } = action.payload;
+                const itemToToggle = prevUser.inventory.find(i => i.id === itemId);
+    
+                if (!itemToToggle || itemToToggle.type !== 'equipment' || !itemToToggle.slot) {
+                    return prevUser;
+                }
+    
+                const slotToUpdate = itemToToggle.slot;
+                const isEquipping = !itemToToggle.isEquipped;
+                
+                const newEquipment = { ...prevUser.equipment };
+                if (isEquipping) {
+                    newEquipment[slotToUpdate] = itemToToggle.id;
+                } else {
+                    delete newEquipment[slotToUpdate];
+                }
+    
+                const newInventory = prevUser.inventory.map(item => {
+                    if (item.id === itemId) return { ...item, isEquipped: isEquipping };
+                    if (isEquipping && item.slot === slotToUpdate && item.id !== itemId) return { ...item, isEquipped: false };
+                    return item;
+                });
+                
+                return { ...prevUser, inventory: newInventory, equipment: newEquipment };
+            });
+        }
+
+        try {
+            audioService.initialize();
+            const res = await fetch('/api/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...action, userId: currentUser?.id, sessionId }),
+            });
+
+            if (!res.ok) {
+                if (res.status === 401) {
+                    showError('다른 기기에서 로그인하여 세션이 만료되었습니다. 다시 로그인해주세요.');
+                    if (!isLoggingOut.current) {
+                        handleLogout();
+                    }
+                    return { success: false, error: 'Session expired' };
+                }
+
+                const errorData = await res.json();
+                showError(errorData.message || 'An unknown error occurred.');
+                 if (action.type === 'TOGGLE_EQUIP_ITEM' || action.type === 'USE_ITEM') {
+                    setCurrentUser(prevUser => prevUser ? { ...prevUser } : null);
+                 }
+                return { success: false, error: errorData.message || 'An unknown error occurred.' };
+            } else {
+                const result = await res.json();
+                
+                if (result.successMessage) {
+                    setSuccessToast(result.successMessage);
+                    setTimeout(() => setSuccessToast(null), 3000);
+                }
+
+                // --- Start of new admin action response handling ---
+                if (result.updatedUserDetail) {
+                    const updatedUser = result.updatedUserDetail;
+                    setUsersMap(currentMap => ({
+                        ...currentMap,
+                        [updatedUser.id]: updatedUser
+                    }));
+                    if (currentUser?.id === updatedUser.id) {
+                        setCurrentUser(updatedUser);
+                    }
+                }
+                if (result.deletedUserId) {
+                    const deletedId = result.deletedUserId;
+                    setUsersMap(currentMap => {
+                        const newMap = { ...currentMap };
+                        delete newMap[deletedId];
+                        return newMap;
+                    });
+                }
+                
+                 if (result.newNegotiation) {
+                    setNegotiations(negs => ({ ...negs, [result.newNegotiation.id]: result.newNegotiation }));
+                }
+                if (result.userStatusUpdate && currentUser) {
+                    setOnlineUsers(users => users.map(u => 
+                        u.id === currentUser.id ? { ...u, ...result.userStatusUpdate } : u
+                    ));
+                }
+
+                if (result.updatedUser) {
+                    setCurrentUser(result.updatedUser);
+                }
+                if (result.guilds) {
+                    setGuilds(result.guilds);
+                }
+                 if (result.obtainedItemsBulk) {
+                    setLastUsedItemResult(result.obtainedItemsBulk);
+                 }
+                 if (result.rewardSummary) setRewardSummary(result.rewardSummary);
+                if (result.claimAllSummary) {
+                    setClaimAllSummary(result.claimAllSummary);
+                    setIsClaimAllSummaryOpen(true);
+                }
+                if (result.disassemblyResult) { 
+                    setDisassemblyResult(result.disassemblyResult);
+                    if (result.disassemblyResult.jackpot) audioService.disassemblyJackpot();
+                }
+                if (result.craftResult) {
+                    setCraftResult(result.craftResult);
+                }
+                if (result.synthesisResult) {
+                    setSynthesisResult(result.synthesisResult);
+                }
+                if (result.enhancementOutcome) {
+                    const { message, success, itemBefore, itemAfter } = result.enhancementOutcome;
+                    setEnhancementResult({ message, success });
+                    setEnhancementOutcome({ message, success, itemBefore, itemAfter });
+                    if (success) {
+                        audioService.enhancementSuccess();
+                    } else {
+                        audioService.enhancementFail();
+                    }
+                }
+                if (result.enhancementAnimationTarget) setEnhancementAnimationTarget(result.enhancementAnimationTarget);
+                if (result.guildBossBattleResult) {
+                    const bossName = action.payload?.bossName || '보스'; // Get bossName from payload
+                    setGuildBossBattleResult({ ...result.guildBossBattleResult, bossName });
+                }
+                if (result.donationResult) {
+                    setGuildDonationAnimation(result.donationResult);
+                    setTimeout(() => setGuildDonationAnimation(null), 2500);
+                }
+                 return result;
+            }
+        } catch (err: any) {
+            showError(err.message);
+            return { success: false, error: err.message };
+        }
+    }, [currentUser?.id, sessionId, handleLogout]);
+    
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            try {
+                localStorage.setItem('appSettings', JSON.stringify(settings));
+            } catch (e) {
+                console.error('Failed to save settings to localStorage', e);
+            }
+        }, 1000); // Debounce save
+
+        return () => {
+            clearTimeout(handler);
+        };
     }, [settings]);
+
 
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', settings.graphics.theme);
@@ -128,18 +320,22 @@ export const useApp = () => {
     const [waitingRoomChats, setWaitingRoomChats] = useState<Record<string, ChatMessage[]>>({});
     const [gameChats, setGameChats] = useState<Record<string, ChatMessage[]>>({});
     const [adminLogs, setAdminLogs] = useState<AdminLog[]>([]);
-    const [gameModeAvailability, setGameModeAvailability] = useState<Partial<Record<GameMode, boolean>>>({});
+    const [gameModeAvailability, setGameModeAvailability] = useState<Record<GameMode, boolean>>({} as Record<GameMode, boolean>);
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [globalOverrideAnnouncement, setGlobalOverrideAnnouncement] = useState<OverrideAnnouncement | null>(null);
     const [announcementInterval, setAnnouncementInterval] = useState(3);
     const [towerRankings, setTowerRankings] = useState<TowerRank[]>([]);
+    const [guilds, setGuilds] = useState<Record<string, Guild>>({});
     
     // --- UI Modals & Toasts ---
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+    const [inventoryInitialTab, setInventoryInitialTab] = useState<InventoryTab>('all');
     const [isMailboxOpen, setIsMailboxOpen] = useState(false);
     const [isQuestsOpen, setIsQuestsOpen] = useState(false);
     const [isShopOpen, setIsShopOpen] = useState(false);
+    const [shopInitialTab, setShopInitialTab] = useState<ShopTab>('equipment');
+    const [isActionPointQuizOpen, setIsActionPointQuizOpen] = useState(false);
     const [lastUsedItemResult, setLastUsedItemResult] = useState<InventoryItem[] | null>(null);
     const [disassemblyResult, setDisassemblyResult] = useState<{ gained: { name: string, amount: number }[], jackpot: boolean } | null>(null);
     const [craftResult, setCraftResult] = useState<{ gained: { name: string; amount: number }[]; used: { name: string; amount: number }[]; craftType: 'upgrade' | 'downgrade'; } | null>(null);
@@ -161,6 +357,13 @@ export const useApp = () => {
     const exitToastTimer = useRef<number | null>(null);
     const [isProfileEditModalOpen, setIsProfileEditModalOpen] = useState(false);
     const [moderatingUser, setModeratingUser] = useState<UserWithStatus | null>(null);
+    const [isTowerRewardInfoOpen, setIsTowerRewardInfoOpen] = useState(false);
+    const [levelUpInfo, setLevelUpInfo] = useState<{ type: 'strategy' | 'playful', newLevel: number } | null>(null);
+    const [isGuildEffectsModalOpen, setIsGuildEffectsModalOpen] = useState(false);
+    const [guildBossBattleResult, setGuildBossBattleResult] = useState<(GuildBossBattleResult & { bossName: string }) | null>(null);
+    const [guildDonationAnimation, setGuildDonationAnimation] = useState<{ coins: number; research: number } | null>(null);
+    const [isEquipmentEffectsModalOpen, setIsEquipmentEffectsModalOpen] = useState(false);
+    const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
 
     // --- Derived State ---
     const allUsers = useMemo(() => Object.values(usersMap), [usersMap]);
@@ -168,7 +371,7 @@ export const useApp = () => {
     const currentUserWithStatus: UserWithStatus | null = useMemo(() => {
         if (!currentUser) return null;
         const statusInfo = onlineUsers.find(u => u.id === currentUser.id);
-        return { ...currentUser, ...(statusInfo || { status: 'online' as UserStatus }) };
+        return { ...currentUser, ...(statusInfo || { status: UserStatus.Online }) };
     }, [currentUser, onlineUsers]);
 
     const activeGame = useMemo(() => {
@@ -214,6 +417,40 @@ export const useApp = () => {
                checkMilestones(weekly, WEEKLY_MILESTONE_THRESHOLDS) ||
                checkMilestones(monthly, MONTHLY_MILESTONE_THRESHOLDS);
     }, [currentUser?.quests]);
+
+    const hasUnclaimedTournamentReward = useMemo(() => {
+        if (!currentUserWithStatus) return false;
+        const { 
+            lastNeighborhoodTournament, neighborhoodRewardClaimed,
+            lastNationalTournament, nationalRewardClaimed,
+            lastWorldTournament, worldRewardClaimed 
+        } = currentUserWithStatus;
+
+        const checkReward = (state: TournamentState | null | undefined, claimed: boolean | undefined) => {
+            if (!state) return false;
+            return (state.status === 'complete' || state.status === 'eliminated') && !claimed;
+        };
+
+        return checkReward(lastNeighborhoodTournament, neighborhoodRewardClaimed) ||
+               checkReward(lastNationalTournament, nationalRewardClaimed) ||
+               checkReward(lastWorldTournament, worldRewardClaimed);
+    }, [currentUserWithStatus]);
+
+    const hasFullMissionReward = useMemo(() => {
+        if (!currentUserWithStatus?.singlePlayerMissions) return false;
+        
+        for (const missionId in currentUserWithStatus.singlePlayerMissions) {
+            const missionState = currentUserWithStatus.singlePlayerMissions[missionId];
+            const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
+            
+            if (missionState && missionInfo && missionState.isStarted) {
+                if (missionState.accumulatedAmount >= missionInfo.maxCapacity) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }, [currentUserWithStatus?.singlePlayerMissions]);
     
     const showError = (message: string) => {
         let displayMessage = message;
@@ -226,138 +463,64 @@ export const useApp = () => {
         setTimeout(() => setError(null), 5000);
     };
     
+    const login = useCallback((user: User, sid: string) => {
+        setCurrentUser(user);
+        setSessionId(sid);
+        window.location.hash = '#/profile';
+    }, []);
+
     useEffect(() => {
-        if (currentUser) {
-            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-        } else {
-            sessionStorage.removeItem('currentUser');
-        }
-    }, [currentUser]);
-
-    // --- Action Handler ---
-    const handleAction = useCallback(async (action: ServerAction): Promise<{success: boolean, error?: string} | undefined> => {
-        if (action.type === 'CLEAR_TOURNAMENT_SESSION') {
-            setCurrentUser(prev => {
-                if (!prev) return null;
-                return {
-                    ...prev,
-                    lastNeighborhoodTournament: null,
-                    lastNationalTournament: null,
-                    lastWorldTournament: null,
-                };
-            });
-        }
-        if (action.type === 'TOGGLE_EQUIP_ITEM') {
-            setCurrentUser(prevUser => {
-                if (!prevUser) return null;
-                const { itemId } = action.payload;
-                const itemToToggle = prevUser.inventory.find(i => i.id === itemId);
-    
-                if (!itemToToggle || itemToToggle.type !== 'equipment' || !itemToToggle.slot) {
-                    return prevUser;
-                }
-    
-                const slotToUpdate = itemToToggle.slot;
-                const isEquipping = !itemToToggle.isEquipped;
-                
-                const newEquipment = { ...prevUser.equipment };
-                if (isEquipping) {
-                    newEquipment[slotToUpdate] = itemToToggle.id;
-                } else {
-                    delete newEquipment[slotToUpdate];
-                }
-    
-                const newInventory = prevUser.inventory.map(item => {
-                    if (item.id === itemId) return { ...item, isEquipped: isEquipping };
-                    if (isEquipping && item.slot === slotToUpdate && item.id !== itemId) return { ...item, isEquipped: false };
-                    return item;
-                });
-                
-                return { ...prevUser, inventory: newInventory, equipment: newEquipment };
-            });
-        }
-
-        try {
-            audioService.initialize();
-            const res = await fetch('/api/action', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...action, userId: currentUser?.id }),
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json();
-                showError(errorData.message || 'An unknown error occurred.');
-                 if (action.type === 'TOGGLE_EQUIP_ITEM' || action.type === 'USE_ITEM') {
-                    setCurrentUser(prevUser => prevUser ? { ...prevUser } : null);
-                 }
-                return { success: false, error: errorData.message || 'An unknown error occurred.' };
-            } else {
-                const result = await res.json();
-                if (result.updatedUser) {
-                    setCurrentUser(result.updatedUser);
-                }
-                 if (result.obtainedItemsBulk) setLastUsedItemResult(result.obtainedItemsBulk);
-                 if (result.rewardSummary) setRewardSummary(result.rewardSummary);
-                if (result.claimAllSummary) {
-                    setClaimAllSummary(result.claimAllSummary);
-                    setIsClaimAllSummaryOpen(true);
-                }
-                if (result.disassemblyResult) { 
-                    setDisassemblyResult(result.disassemblyResult);
-                    if (result.disassemblyResult.jackpot) audioService.disassemblyJackpot();
-                }
-                if (result.craftResult) {
-                    setCraftResult(result.craftResult);
-                }
-                if (result.synthesisResult) {
-                    setSynthesisResult(result.synthesisResult);
-                }
-                if (result.enhancementOutcome) {
-                    const { message, success, itemBefore, itemAfter } = result.enhancementOutcome;
-                    setEnhancementResult({ message, success });
-                    setEnhancementOutcome({ message, success, itemBefore, itemAfter });
-                    if (success) {
-                        audioService.enhancementSuccess();
-                    } else {
-                        audioService.enhancementFail();
-                    }
-                }
-                if (result.enhancementAnimationTarget) setEnhancementAnimationTarget(result.enhancementAnimationTarget);
-                 return { success: true };
+        if (currentUser && sessionId) {
+            localStorage.setItem('sessionData', JSON.stringify({ user: currentUser, sessionId }));
+            if (!sessionStorage.getItem('sessionIsActive')) {
+                sessionStorage.setItem('sessionIsActive', 'true');
             }
-        } catch (err: any) {
-            showError(err.message);
-            return { success: false, error: err.message };
+        } else {
+            localStorage.removeItem('sessionData');
+            sessionStorage.removeItem('sessionIsActive');
         }
-    }, [currentUser?.id, enhancingItem]);
+    }, [currentUser, sessionId]);
 
-    const handleLogout = useCallback(() => {
-        if (!currentUser) return;
-        isLoggingOut.current = true;
-        handleAction({ type: 'LOGOUT' });
-        setCurrentUser(null);
-        window.location.hash = '';
-    }, [currentUser, handleAction]);
+    const openShop = useCallback((tab: ShopTab = 'equipment') => {
+        setShopInitialTab(tab);
+        setIsShopOpen(true);
+    }, []);
+
+    const openInventory = useCallback((tab: InventoryTab = 'all') => {
+        setInventoryInitialTab(tab);
+        setIsInventoryOpen(true);
+    }, []);
     
     // --- State Polling ---
     useEffect(() => {
-        if (!currentUser?.id) return;
+        if (!currentUser?.id || !sessionId) return;
+        let isCancelled = false;
+    
         const poll = async () => {
-            if (isLoggingOut.current) return;
+            if (isLoggingOut.current || isCancelled) return;
+    
             try {
                 const response = await fetch('/api/state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ userId: currentUser.id }),
+                    body: JSON.stringify({ userId: currentUser.id, sessionId }),
                 });
-                if (isLoggingOut.current) return;
+    
+                if (isLoggingOut.current || isCancelled) return;
+    
                 if (!response.ok) {
-                    if (response.status === 401) { setCurrentUser(null); window.location.hash = ''; }
+                    if (response.status === 401) {
+                        showError('다른 기기에서 로그인하여 세션이 만료되었습니다. 다시 로그인해주세요.');
+                        if (!isLoggingOut.current) { // Prevent multiple logout calls
+                            handleLogout();
+                        }
+                        return; // Stop this poll cycle
+                    }
                     throw new Error('Failed to fetch state');
                 }
-                const data: AppState = await response.json();
-                if (isLoggingOut.current) return;
+    
+                const data: AppState & { guilds?: Record<string, Guild> } = await response.json();
+                if (isLoggingOut.current || isCancelled) return;
                 
                 const updateStateIfChanged = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, newData: T) => {
                     setter(currentData => stableStringify(currentData) !== stableStringify(newData) ? newData : currentData);
@@ -376,9 +539,9 @@ export const useApp = () => {
                 updateStateIfChanged(setAnnouncements, data.announcements);
                 updateStateIfChanged(setGlobalOverrideAnnouncement, data.globalOverrideAnnouncement);
                 updateStateIfChanged(setAnnouncementInterval, data.announcementInterval);
-                updateStateIfChanged(setTowerRankings, data.towerRankings);
+                updateStateIfChanged(setTowerRankings, data.towerRankings || []);
+                updateStateIfChanged(setGuilds, data.guilds || {});
     
-                // FIX: Filter out users who are not in the main user map to prevent spreading undefined.
                 const onlineStatuses = Object.entries(data.userStatuses)
                     .map(([id, statusInfo]) => {
                         const user = data.users[id];
@@ -387,13 +550,19 @@ export const useApp = () => {
                     })
                     .filter((u): u is UserWithStatus => u !== null);
                 updateStateIfChanged(setOnlineUsers, onlineStatuses);
-            } catch (err) { console.error("Polling error:", err); }
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
         };
     
         poll();
         const interval = setInterval(poll, 1000);
-        return () => clearInterval(interval);
-    }, [currentUser?.id]);
+    
+        return () => {
+            isCancelled = true;
+            clearInterval(interval);
+        };
+    }, [currentUser?.id, sessionId, handleLogout]);
 
     // --- Navigation Logic ---
     const initialRedirectHandled = useRef(false);
@@ -425,17 +594,19 @@ export const useApp = () => {
     }, [currentUser, handleLogout, showExitToast]);
 
     useEffect(() => {
+        if (!activeGame) {
+            isExitingGame.current = false;
+        }
+
         if (!currentUser) {
             initialRedirectHandled.current = false;
             if (window.location.hash && window.location.hash !== '#/register') window.location.hash = '';
             return;
         }
-        const currentHash = window.location.hash;
         
         if (!initialRedirectHandled.current) {
             initialRedirectHandled.current = true;
-    
-            if (currentHash === '' || currentHash === '#/') {
+            if (window.location.hash === '' || window.location.hash === '#/') {
                 if (activeGame) {
                     window.location.hash = `#/game/${activeGame.id}`;
                     return;
@@ -445,25 +616,33 @@ export const useApp = () => {
             }
         }
         
-        const isGamePage = currentHash.startsWith('#/game/');
+        const isGamePage = currentRoute.view === 'game';
 
-        if (activeGame && !isGamePage) {
+        if (activeGame && (!isGamePage || currentRoute.params.id !== activeGame.id) && !isExitingGame.current) {
+            console.warn("Router: Mismatch between route and active game state. Redirecting to game.");
             window.location.hash = `#/game/${activeGame.id}`;
         } else if (!activeGame && isGamePage) {
-            const redirect = sessionStorage.getItem('postGameRedirect');
-            sessionStorage.removeItem('postGameRedirect');
-
-            let targetHash = redirect || '#/profile';
+            const postGameRedirect = sessionStorage.getItem('postGameRedirect');
+            let targetHash = postGameRedirect;
             
-            if (!redirect && currentUserWithStatus?.status === 'waiting' && currentUserWithStatus?.mode) {
-                targetHash = `#/waiting/${encodeURIComponent(currentUserWithStatus.mode)}`;
+            if (targetHash) {
+                sessionStorage.removeItem('postGameRedirect');
+            } else if (currentUserWithStatus?.status === 'waiting' && currentUserWithStatus?.mode) {
+                const slug = SLUG_BY_GAME_MODE.get(currentUserWithStatus.mode);
+                if (slug) {
+                    targetHash = `#/waiting/${slug}`;
+                }
+            }
+            
+            if (!targetHash) {
+                 targetHash = '#/profile';
             }
 
-            if (currentHash !== targetHash) {
+            if (window.location.hash !== targetHash) {
                 window.location.hash = targetHash;
             }
         }
-    }, [currentUser, activeGame, currentUserWithStatus]);
+    }, [currentUser, activeGame, currentRoute, currentUserWithStatus]);
     
     // --- Misc UseEffects ---
     useEffect(() => {
@@ -493,10 +672,65 @@ export const useApp = () => {
             });
         }
     }, [enhancementOutcome]);
+    const prevUser = usePrevious(currentUser);
+    useEffect(() => {
+        if (prevUser && currentUser && !levelUpInfo) {
+            if (currentUser.strategyLevel > prevUser.strategyLevel) {
+                setLevelUpInfo({ type: 'strategy', newLevel: currentUser.strategyLevel });
+                audioService.levelUp();
+            } else if (currentUser.playfulLevel > prevUser.playfulLevel) {
+                setLevelUpInfo({ type: 'playful', newLevel: currentUser.playfulLevel });
+                audioService.levelUp();
+            }
+        }
+    }, [currentUser, prevUser, levelUpInfo]);
+
+    const activeModalIds = useMemo(() => {
+        const ids: string[] = [];
+        if (activeNegotiation) ids.push('negotiation');
+        if (isSettingsModalOpen) ids.push('settings');
+        if (isInventoryOpen) ids.push('inventory');
+        if (isMailboxOpen) ids.push('mailbox');
+        if (isQuestsOpen) ids.push('quests');
+        if (rewardSummary) ids.push('rewardSummary');
+        if (isClaimAllSummaryOpen) ids.push('claimAllSummary');
+        if (isShopOpen) ids.push('shop');
+        if (isActionPointQuizOpen) ids.push('actionPointQuiz');
+        if (lastUsedItemResult) ids.push('itemObtained');
+        if (disassemblyResult) ids.push('disassemblyResult');
+        if (craftResult) ids.push('craftResult');
+        if (synthesisResult) ids.push('synthesisResult');
+        if (viewingUser) ids.push('viewingUser');
+        if (isInfoModalOpen) ids.push('infoModal');
+        if (isEncyclopediaOpen) ids.push('encyclopedia');
+        if (isStatAllocationModalOpen) ids.push('statAllocation');
+        if (isProfileEditModalOpen) ids.push('profileEdit');
+        if (pastRankingsInfo) ids.push('pastRankings');
+        if (moderatingUser) ids.push('moderatingUser');
+        if (viewingItem) ids.push('viewingItem');
+        if (enhancingItem) ids.push('enhancingItem');
+        if (isTowerRewardInfoOpen) ids.push('towerRewardInfo');
+        if (isGuildEffectsModalOpen) ids.push('guildEffects');
+        if (isEquipmentEffectsModalOpen) ids.push('equipmentEffects');
+        if (isPresetModalOpen) ids.push('preset');
+        if (levelUpInfo) ids.push('levelUp');
+        if (guildBossBattleResult) ids.push('guildBossBattleResult');
+        return ids;
+    }, [
+        activeNegotiation, isSettingsModalOpen, isInventoryOpen, isMailboxOpen, isQuestsOpen,
+        rewardSummary, isClaimAllSummaryOpen, isShopOpen, isActionPointQuizOpen, lastUsedItemResult,
+        disassemblyResult, craftResult, synthesisResult, viewingUser, isInfoModalOpen,
+        isEncyclopediaOpen, isStatAllocationModalOpen, isProfileEditModalOpen, pastRankingsInfo,
+        moderatingUser, viewingItem, enhancingItem, isTowerRewardInfoOpen, isGuildEffectsModalOpen,
+        isEquipmentEffectsModalOpen, isPresetModalOpen, levelUpInfo, guildBossBattleResult
+    ]);
 
     const handleEnterWaitingRoom = (mode: GameMode) => {
-        handleAction({ type: 'ENTER_WAITING_ROOM', payload: { mode } });
-        window.location.hash = `#/waiting/${encodeURIComponent(mode)}`;
+        handlers.handleAction({ type: 'ENTER_WAITING_ROOM', payload: { mode } });
+        const slug = SLUG_BY_GAME_MODE.get(mode);
+        if (slug) {
+            window.location.hash = `#/waiting/${slug}`;
+        }
     };
     
     const handleViewUser = useCallback((userId: string) => {
@@ -505,7 +739,7 @@ export const useApp = () => {
             const statusInfo = onlineUsers.find(u => u.id === userId);
             const finalUser: UserWithStatus = {
                 ...userToView,
-                status: statusInfo?.status || 'online',
+                status: statusInfo?.status || UserStatus.Online,
                 mode: statusInfo?.mode,
                 gameId: statusInfo?.gameId,
                 spectatingGameId: statusInfo?.spectatingGameId,
@@ -520,7 +754,7 @@ export const useApp = () => {
             const statusInfo = onlineUsers.find(u => u.id === userId);
             const finalUser: UserWithStatus = {
                 ...userToView,
-                status: statusInfo?.status || 'online',
+                status: statusInfo?.status || UserStatus.Online,
                 mode: statusInfo?.mode,
                 gameId: statusInfo?.gameId,
                 spectatingGameId: statusInfo?.spectatingGameId,
@@ -531,11 +765,6 @@ export const useApp = () => {
 
     const closeModerationModal = useCallback(() => setModeratingUser(null), []);
 
-    const setCurrentUserAndRoute = useCallback((user: User) => {
-        setCurrentUser(user);
-        window.location.hash = '#/profile';
-    }, []);
-    
     const openEnhancingItem = useCallback((item: InventoryItem) => {
         setEnhancingItem(item);
     }, []);
@@ -582,12 +811,79 @@ export const useApp = () => {
 
     const closeSynthesisResult = useCallback(() => setSynthesisResult(null), []);
 
+    const openTowerRewardInfoModal = useCallback(() => setIsTowerRewardInfoOpen(true), []);
+    const closeTowerRewardInfoModal = useCallback(() => setIsTowerRewardInfoOpen(false), []);
+    const closeLevelUpModal = useCallback(() => setLevelUpInfo(null), []);
+    const closeGuildBossBattleResultModal = useCallback(() => setGuildBossBattleResult(null), []);
+
+    const setPostGameRedirect = useCallback((path: string) => {
+        sessionStorage.setItem('postGameRedirect', path);
+    }, []);
+    
+    const openGuildEffectsModal = useCallback(() => setIsGuildEffectsModalOpen(true), []);
+    const closeGuildEffectsModal = useCallback(() => setIsGuildEffectsModalOpen(false), []);
+
+    const handlers = {
+        handleAction, handleLogout, handleEnterWaitingRoom,
+        openInventory,
+        openSettingsModal: () => setIsSettingsModalOpen(true),
+        closeSettingsModal: () => setIsSettingsModalOpen(false),
+        closeInventory: () => setIsInventoryOpen(false),
+        openMailbox: () => setIsMailboxOpen(true),
+        closeMailbox: () => setIsMailboxOpen(false),
+        openQuests: () => setIsQuestsOpen(true),
+        closeQuests: () => setIsQuestsOpen(false),
+        openShop,
+        closeShop: () => setIsShopOpen(false),
+        openActionPointQuiz: () => setIsActionPointQuizOpen(true),
+        closeActionPointQuiz: () => setIsActionPointQuizOpen(false),
+        closeItemObtained: () => setLastUsedItemResult(null),
+        closeDisassemblyResult: () => setDisassemblyResult(null),
+        closeCraftResult: () => setCraftResult(null),
+        closeSynthesisResult,
+        closeRewardSummary: () => setRewardSummary(null),
+        closeClaimAllSummary,
+        openViewingUser: handleViewUser,
+        closeViewingUser: () => setViewingUser(null),
+        openInfoModal: () => setIsInfoModalOpen(true),
+        closeInfoModal: () => setIsInfoModalOpen(false),
+        openEncyclopedia: () => setIsEncyclopediaOpen(true),
+        closeEncyclopedia: () => setIsEncyclopediaOpen(false),
+        openStatAllocationModal: () => setIsStatAllocationModalOpen(true),
+        closeStatAllocationModal: () => setIsStatAllocationModalOpen(false),
+        openProfileEditModal: () => setIsProfileEditModalOpen(true),
+        closeProfileEditModal: () => setIsProfileEditModalOpen(false),
+        openPastRankings: (info: { user: UserWithStatus; mode: GameMode; }) => setPastRankingsInfo(info),
+        closePastRankings: () => setPastRankingsInfo(null),
+        openViewingItem,
+        closeViewingItem: () => setViewingItem(null),
+        openEnhancingItem,
+        openEnhancementFromDetail,
+        closeEnhancementModal,
+        clearEnhancementOutcome,
+        clearEnhancementAnimation: () => setEnhancementAnimationTarget(null),
+        openModerationModal,
+        closeModerationModal,
+        openTowerRewardInfoModal,
+        closeTowerRewardInfoModal,
+        closeLevelUpModal,
+        setPostGameRedirect,
+        openGuildEffectsModal,
+        closeGuildEffectsModal,
+        closeGuildBossBattleResultModal,
+        openEquipmentEffectsModal: () => setIsEquipmentEffectsModalOpen(true),
+        closeEquipmentEffectsModal: () => setIsEquipmentEffectsModalOpen(false),
+        openPresetModal: () => setIsPresetModalOpen(true),
+        closePresetModal: () => setIsPresetModalOpen(false),
+    };
+
     return {
         currentUser,
-        setCurrentUserAndRoute,
+        login,
         currentUserWithStatus,
         currentRoute,
         error,
+        successToast,
         allUsers,
         onlineUsers,
         liveGames,
@@ -600,6 +896,7 @@ export const useApp = () => {
         globalOverrideAnnouncement,
         announcementInterval,
         towerRankings,
+        guilds,
         activeGame,
         activeNegotiation,
         showExitToast,
@@ -607,6 +904,8 @@ export const useApp = () => {
         enhancementOutcome,
         unreadMailCount,
         hasClaimableQuest,
+        hasUnclaimedTournamentReward,
+        hasFullMissionReward,
         settings,
         updateTheme,
         updateSoundSetting,
@@ -615,53 +914,22 @@ export const useApp = () => {
         updateTextColor,
         resetGraphicsToDefault,
         modals: {
-            isSettingsModalOpen, isInventoryOpen, isMailboxOpen, isQuestsOpen, isShopOpen, lastUsedItemResult,
+            isSettingsModalOpen, isInventoryOpen, inventoryInitialTab, isMailboxOpen, isQuestsOpen, isShopOpen, isActionPointQuizOpen, lastUsedItemResult,
             disassemblyResult, craftResult, synthesisResult, rewardSummary, viewingUser, isInfoModalOpen, isEncyclopediaOpen, isStatAllocationModalOpen, enhancementAnimationTarget,
             pastRankingsInfo, enhancingItem, viewingItem, isProfileEditModalOpen, moderatingUser,
             isClaimAllSummaryOpen,
             claimAllSummary,
+            isTowerRewardInfoOpen,
+            levelUpInfo,
+            shopInitialTab,
+            isGuildEffectsModalOpen,
+            isEquipmentEffectsModalOpen,
+            isPresetModalOpen,
+            guildBossBattleResult,
+            activeModalIds,
         },
-        handlers: {
-            handleAction,
-            handleLogout,
-            handleEnterWaitingRoom,
-            openSettingsModal: () => setIsSettingsModalOpen(true),
-            closeSettingsModal: () => setIsSettingsModalOpen(false),
-            openInventory: () => setIsInventoryOpen(true),
-            closeInventory: () => setIsInventoryOpen(false),
-            openMailbox: () => setIsMailboxOpen(true),
-            closeMailbox: () => setIsMailboxOpen(false),
-            openQuests: () => setIsQuestsOpen(true),
-            closeQuests: () => setIsQuestsOpen(false),
-            openShop: () => setIsShopOpen(true),
-            closeShop: () => setIsShopOpen(false),
-            closeItemObtained: () => setLastUsedItemResult(null),
-            closeDisassemblyResult: () => setDisassemblyResult(null),
-            closeCraftResult: () => setCraftResult(null),
-            closeSynthesisResult,
-            closeRewardSummary: () => setRewardSummary(null),
-            closeClaimAllSummary,
-            openViewingUser: handleViewUser,
-            closeViewingUser: () => setViewingUser(null),
-            openInfoModal: () => setIsInfoModalOpen(true),
-            closeInfoModal: () => setIsInfoModalOpen(false),
-            openEncyclopedia: () => setIsEncyclopediaOpen(true),
-            closeEncyclopedia: () => setIsEncyclopediaOpen(false),
-            openStatAllocationModal: () => setIsStatAllocationModalOpen(true),
-            closeStatAllocationModal: () => setIsStatAllocationModalOpen(false),
-            openProfileEditModal: () => setIsProfileEditModalOpen(true),
-            closeProfileEditModal: () => setIsProfileEditModalOpen(false),
-            openPastRankings: (info: { user: UserWithStatus; mode: GameMode; }) => setPastRankingsInfo(info),
-            closePastRankings: () => setPastRankingsInfo(null),
-            openViewingItem,
-            closeViewingItem: () => setViewingItem(null),
-            openEnhancingItem,
-            openEnhancementFromDetail,
-            closeEnhancementModal,
-            clearEnhancementOutcome,
-            clearEnhancementAnimation: () => setEnhancementAnimationTarget(null),
-            openModerationModal,
-            closeModerationModal,
-        },
+        handlers,
+        guildDonationAnimation,
+        isMobile,
     };
 };

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { UserWithStatus, GameMode } from '../../types.js';
 import DraggableWindow from '../DraggableWindow.js';
@@ -21,6 +22,7 @@ const PastRankingsModal: React.FC<PastRankingsModalProps> = ({ info, onClose, is
                 {seasonNames.length > 0 ? (
                     <ul className="space-y-2">
                         {seasonNames.map(seasonName => {
+                            // FIX: Add null check for history[seasonName]
                             const tier = history[seasonName]?.[mode];
                             const tierInfo = RANKING_TIERS.find(t => t.name === tier);
                             return (

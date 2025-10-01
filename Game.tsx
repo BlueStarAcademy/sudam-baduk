@@ -1,5 +1,7 @@
+
 import React from 'react';
-import { LiveGameSession } from './types.js';
+// Correctly import LiveGameSession from the types barrel file.
+import { LiveGameSession } from './types/index.js';
 import { useAppContext } from './hooks/useAppContext.js';
 import SinglePlayerArena from './components/arenas/SinglePlayerArena.js';
 import TowerChallengeArena from './components/arenas/TowerChallengeArena.js';

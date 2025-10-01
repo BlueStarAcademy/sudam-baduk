@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { UserWithStatus, ServerAction } from '../types.js';
+// FIX: Use `import type` for interfaces to prevent type/value confusion.
+import type { UserWithStatus, ServerAction } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import Avatar from './Avatar.js';

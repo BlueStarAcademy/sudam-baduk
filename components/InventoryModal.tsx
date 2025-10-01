@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { UserWithStatus, InventoryItem, ServerAction, InventoryItemType, EquipmentSlot, ItemGrade, ItemOption, CoreStat, SpecialStat, MythicStat } from '../types.js';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { UserWithStatus, InventoryItem, ServerAction, InventoryItemType, EquipmentSlot, ItemGrade, ItemOption, CoreStat, SpecialStat, MythicStat, InventoryTab } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { emptySlotImages, ENHANCEMENT_COSTS, MATERIAL_ITEMS, GRADE_LEVEL_REQUIREMENTS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SYNTHESIS_COSTS, slotNames } from '../constants.js';
@@ -13,9 +13,9 @@ interface InventoryModalProps {
     enhancementAnimationTarget: { itemId: string; stars: number } | null;
     onAnimationComplete: () => void;
     isTopmost?: boolean;
+    initialTab?: InventoryTab;
 }
 
-type Tab = 'all' | 'equipment' | 'consumable' | 'material';
 type SortKey = 'createdAt' | 'type' | 'grade';
 
 const MAX_INVENTORY_SIZE = 100;
@@ -67,10 +67,12 @@ const renderStarDisplay = (stars: number) => {
 
     let starImage = '';
     let numberColor = '';
+    let starImageClass = '';
 
     if (stars >= 10) {
         starImage = '/images/equipments/Star4.png';
         numberColor = "prism-text-effect";
+        starImageClass = "prism-image-effect";
     } else if (stars >= 7) {
         starImage = '/images/equipments/Star3.png';
         numberColor = "text-purple-400";
@@ -84,7 +86,7 @@ const renderStarDisplay = (stars: number) => {
 
     return (
         <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 bg-black/40 rounded-br-md px-1 py-0.5 z-10" style={{ textShadow: '1px 1px 2px black' }}>
-            <img src={starImage} alt="star" className="w-3 h-3" />
+            <img src={starImage} alt="star" className={`w-3 h-3 ${starImageClass}`} />
             <span className={`font-bold text-xs leading-none ${numberColor}`}>{stars}</span>
         </div>
     );
@@ -92,6 +94,9 @@ const renderStarDisplay = (stars: number) => {
 
 const calculateSellPrice = (item: InventoryItem): number => {
     if (item.type === 'equipment') {
+        if (item.isEquipped) {
+            return 0;
+        }
         const basePrice = ITEM_SELL_PRICES[item.grade] || 0;
         const enhancementMultiplier = Math.pow(1.2, item.stars);
         return Math.floor(basePrice * enhancementMultiplier);
@@ -117,15 +122,14 @@ const OptionSection: React.FC<{ title: string; options: ItemOption[]; color: str
 
 const renderOptions = (item: InventoryItem) => {
     if (!item.options) return null;
-    const { main, combatSubs, specialSubs, mythicSubs } = item.options;
+    const { combatSubs, specialSubs, mythicSubs } = item.options;
     return (
         <div className="w-full text-xs text-left space-y-2">
-            <OptionSection title="주옵션" options={[main]} color="text-yellow-300" />
             <OptionSection title="전투 부옵션" options={combatSubs} color="text-blue-300" />
             <OptionSection title="특수 부옵션" options={specialSubs} color="text-green-300" />
             <OptionSection title="신화 부옵션" options={mythicSubs} color="text-red-400" />
         </div>
-    );
+    )
 };
 
 const OptionSectionWithComparison: React.FC<{
@@ -175,7 +179,7 @@ interface ItemDisplayCardProps {
     title: string; 
     slot?: EquipmentSlot | null; 
     currentUser: UserWithStatus; 
-    activeTab: Tab; 
+    activeTab: InventoryTab; 
     isLarge?: boolean;
     comparisonItem?: InventoryItem | null | undefined;
 }
@@ -184,13 +188,11 @@ const ItemDisplayCard: React.FC<ItemDisplayCardProps> = ({ item, title, slot, cu
     const renderItemDetails = () => {
         if (!item) return null;
         if (comparisonItem && item.type === 'equipment' && item.options) {
-            const { main, combatSubs, specialSubs, mythicSubs } = item.options;
+            const { combatSubs, specialSubs, mythicSubs } = item.options;
             const comparisonOptions = comparisonItem.options;
-            const mainComparisonOptions = comparisonOptions ? [comparisonOptions.main] : [];
 
             return (
-                <div className="w-full text-xs text-left space-y-2">
-                    <OptionSectionWithComparison title="주옵션" color="text-yellow-300" currentOptions={[main]} comparisonOptions={mainComparisonOptions} />
+                <div className="w-full text-left space-y-2 text-[clamp(0.6rem,1.2vh,0.75rem)]">
                     <OptionSectionWithComparison title="전투 부옵션" color="text-blue-300" currentOptions={combatSubs} comparisonOptions={comparisonOptions?.combatSubs} />
                     <OptionSectionWithComparison title="특수 부옵션" color="text-green-300" currentOptions={specialSubs} comparisonOptions={comparisonOptions?.specialSubs} />
                     <OptionSectionWithComparison title="신화 부옵션" color="text-red-400" currentOptions={mythicSubs} comparisonOptions={comparisonOptions?.mythicSubs} />
@@ -201,18 +203,18 @@ const ItemDisplayCard: React.FC<ItemDisplayCardProps> = ({ item, title, slot, cu
     };
 
     if (!item) {
-        if (title === '현재 장착') { // 'currently equipped' pane should always be for equipment
+        if (title === '현재 장착') {
             return (
                 <div className="bg-secondary/50 rounded-lg p-3 flex flex-col h-full items-center justify-center text-center">
-                    <h3 className="font-bold text-tertiary mb-1 text-base">{title}</h3>
-                    <div className="w-20 h-20 bg-tertiary rounded-lg flex items-center justify-center text-tertiary mb-1 text-sm">
+                    <h3 className="font-bold text-tertiary mb-1 text-[clamp(0.8rem,1.5vh,1rem)]">{title}</h3>
+                    <div className="bg-tertiary rounded-lg flex items-center justify-center text-tertiary mb-1 text-sm w-[clamp(4rem,12vh,6rem)] h-[clamp(4rem,12vh,6rem)]">
                         {slot ? 
                             <img src={emptySlotImages[slot]} alt={`${slot} slot`} className="w-full h-full object-contain p-2" />
                             :
                             <img src="/images/BlankEquipmentsSlot.png" alt="empty slot" className="w-full h-full object-contain p-2" />
                         }
                     </div>
-                    <p className="text-tertiary text-sm">장착된 아이템이 없습니다.</p>
+                    <p className="text-tertiary text-xs">장착된 아이템이 없습니다.</p>
                 </div>
             );
         }
@@ -230,7 +232,7 @@ const ItemDisplayCard: React.FC<ItemDisplayCardProps> = ({ item, title, slot, cu
         return (
             <div className={`bg-secondary/50 rounded-lg p-3 flex flex-col h-full items-center justify-center text-center ${isLarge ? 'flex-1' : ''}`}>
                 <h3 className="font-bold text-tertiary mb-1 text-base">{title}</h3>
-                <div className="w-20 h-20 bg-tertiary rounded-lg flex items-center justify-center text-tertiary mb-1 text-sm">
+                <div className="bg-tertiary rounded-lg flex items-center justify-center text-tertiary mb-1 text-sm w-[clamp(4.5rem,14vh,6.5rem)] h-[clamp(4.5rem,14vh,6.5rem)]">
                     {emptyIcon}
                 </div>
                 <p className="text-tertiary text-sm">{emptyText}</p>
@@ -243,13 +245,13 @@ const ItemDisplayCard: React.FC<ItemDisplayCardProps> = ({ item, title, slot, cu
     if (item.type === 'material' || item.type === 'consumable') {
         return (
             <div className={`bg-secondary/50 rounded-lg p-3 flex flex-col h-full items-center text-center ${isLarge ? 'flex-1' : ''}`}>
-                <h3 className="font-bold text-tertiary mb-1 text-base flex-shrink-0">{title}</h3>
-                <div className="relative w-24 h-24 rounded-lg flex items-center justify-center my-2 flex-shrink-0">
+                <h3 className="font-bold text-tertiary mb-1 text-[clamp(0.8rem,1.5vh,1rem)] flex-shrink-0">{title}</h3>
+                <div className="relative rounded-lg flex items-center justify-center my-2 flex-shrink-0 w-[clamp(5rem,15vh,7rem)] h-[clamp(5rem,15vh,7rem)]">
                     <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-lg" />
                     {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-4"/>}
                 </div>
                 <div className="flex items-baseline justify-center gap-1">
-                    <h4 className={`text-xl font-bold ${styles.color}`}>{item.name}</h4>
+                    <h4 className={`font-bold ${styles.color} text-[clamp(1rem,2vh,1.25rem)]`}>{item.name}</h4>
                 </div>
                 <p className="text-xs mt-1 flex-shrink-0">
                     <span className={`font-bold ${styles.color}`}>[{styles.name}]</span>
@@ -268,19 +270,22 @@ const ItemDisplayCard: React.FC<ItemDisplayCardProps> = ({ item, title, slot, cu
 
     return (
         <div className="bg-secondary/50 rounded-lg p-3 flex flex-col h-full items-center text-center">
-            <h3 className="font-bold text-tertiary mb-1 text-base flex-shrink-0">{title}</h3>
-            <div className="relative w-20 h-20 rounded-lg flex items-center justify-center mb-1 flex-shrink-0">
+            <h3 className="font-bold text-tertiary mb-1 text-[clamp(0.8rem,1.5vh,1rem)] flex-shrink-0">{title}</h3>
+            <div className="relative rounded-lg flex items-center justify-center mb-1 flex-shrink-0 w-[clamp(4.5rem,12vh,6rem)] h-[clamp(4.5rem,12vh,6rem)]">
                 <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-lg" />
                 {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-3"/>}
             </div>
             <div className="flex items-baseline justify-center gap-1">
-                <h4 className={`text-base font-bold ${starInfo.colorClass}`}>{item.name}</h4>
-                {item.type === 'equipment' && item.stars > 0 && <span className={`text-base font-bold ${starInfo.colorClass}`}>{starInfo.text}</span>}
+                <h4 className={`font-bold ${starInfo.colorClass} text-[clamp(0.75rem,1.8vh,1rem)]`}>{item.name}</h4>
+                {item.type === 'equipment' && item.stars > 0 && <span className={`font-bold ${starInfo.colorClass} text-[clamp(0.75rem,1.8vh,1rem)]`}>{starInfo.text}</span>}
             </div>
             {item.type === 'equipment' && (
-                <p className="text-xs mt-1 flex-shrink-0">
+                <p className="text-xs mt-1 flex-shrink-0 text-center">
                     <span className={`font-bold ${styles.color}`}>[{styles.name}]</span>
-                    <span className={!levelRequirementMet ? 'text-red-400' : 'text-tertiary'}> (착용 레벨 합: {requiredLevel})</span>
+                    {item.options?.main && (
+                        <span className="font-semibold text-yellow-300 ml-1">{item.options.main.display}</span>
+                    )}
+                    <span className={!levelRequirementMet ? 'text-red-400' : 'text-tertiary'}> (Lv.{requiredLevel})</span>
                 </p>
             )}
             <div className="w-full mt-2 pt-2 border-t border-color text-secondary flex-grow overflow-y-auto pr-2">
@@ -303,9 +308,9 @@ const DisassemblyPreviewPanel: React.FC<{
             price += calculateSellPrice(item);
 
             const enhancementIndex = Math.min(item.stars, 9);
-            const costsForNextLevel = ENHANCEMENT_COSTS[item.grade]?.[enhancementIndex];
-            if (costsForNextLevel) {
-                for (const cost of costsForNextLevel) {
+            const costInfo = ENHANCEMENT_COSTS[item.grade]?.[enhancementIndex];
+            if (costInfo) {
+                for (const cost of costInfo.materials) {
                     const yieldAmount = Math.floor(cost.amount * 0.25);
                     if (yieldAmount > 0) {
                         materials[cost.name] = (materials[cost.name] || 0) + yieldAmount;
@@ -363,6 +368,10 @@ const CraftingDetailModal: React.FC<{
     
     const materialTiers = ['하급 강화석', '중급 강화석', '상급 강화석', '최상급 강화석', '신비의 강화석'];
     const tierIndex = materialTiers.indexOf(materialName);
+    if (tierIndex === -1) {
+        onClose(); // Should not happen
+        return null;
+    }
 
     const sourceMaterialName = materialName;
     const targetMaterialName = isUpgrade ? materialTiers[tierIndex + 1] : materialTiers[tierIndex - 1];
@@ -382,13 +391,8 @@ const CraftingDetailModal: React.FC<{
     const maxQuantity = Math.floor(sourceMaterialCount / conversionRate);
     const [quantity, setQuantity] = useState(maxQuantity > 0 ? 1 : 0);
 
-    const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const value = parseInt(e.target.value, 10);
-        if (!isNaN(value)) {
-            setQuantity(Math.max(0, Math.min(maxQuantity, value)));
-        } else {
-            setQuantity(0);
-        }
+    const handleQuantityChange = (newQuantity: number) => {
+        setQuantity(Math.max(0, Math.min(maxQuantity, newQuantity)));
     };
     
     const handleConfirm = () => {
@@ -421,15 +425,12 @@ const CraftingDetailModal: React.FC<{
                     <label htmlFor="quantity-slider" className="block text-sm font-medium text-secondary text-center">
                         {isUpgrade ? '합성' : '분해'}할 {sourceMaterialName}: <span className="font-bold text-highlight">{(quantity * conversionRate).toLocaleString()} / {sourceMaterialCount.toLocaleString()}</span>개
                     </label>
-                    <input
-                        id="quantity-slider"
-                        type="range"
-                        min="0"
-                        max={maxQuantity}
+                    <Slider 
                         value={quantity}
+                        min={0}
+                        max={maxQuantity}
                         onChange={handleQuantityChange}
                         disabled={maxQuantity === 0}
-                        className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer"
                     />
                      <div className="flex justify-between text-xs text-tertiary">
                         <span>0회</span>
@@ -542,7 +543,7 @@ const AutoSelectModal: React.FC<{
     };
 
     return (
-        <DraggableWindow title="분해 자동 선택" onClose={onClose} windowId="disassembly-auto-select" initialWidth={400} isTopmost>
+        <DraggableWindow title="분해 자동 선택" onClose={onClose} windowId="disassembly-auto-select" isTopmost>
             <div className="text-on-panel">
                 <p className="text-sm text-tertiary mb-4 text-center">분해할 장비 등급을 선택하세요. 신화 등급은 제외됩니다.</p>
                 <div className="grid grid-cols-2 gap-3">
@@ -597,13 +598,13 @@ const SynthesisPanel: React.FC<{
     }, [firstItemGrade, allSameGrade]);
     
     return (
-        <div className="w-full h-full bg-secondary/50 rounded-lg p-3 flex flex-col items-center justify-between text-center">
+        <div className="w-full h-full bg-secondary/50 rounded-lg p-3 flex flex-col items-center text-center">
             <div>
                 <h3 className="font-bold text-lg text-tertiary mb-2">장비 합성</h3>
-                <p className="text-sm text-tertiary mb-3">합성할 동일 등급의 장비 3개를 아래 슬롯에 올려주세요.</p>
-                <div className="flex gap-4 mb-3">
+                <p className="text-sm text-tertiary mb-2">합성할 동일 등급의 장비 3개를 아래 슬롯에 올려주세요.</p>
+                <div className="flex gap-4 mb-2">
                     {synthesisSlots.map((item, index) => (
-                        <div key={index} onClick={() => onRemove(index)} className="w-24 h-24 bg-tertiary/50 rounded-lg border-2 border-dashed border-color flex items-center justify-center cursor-pointer hover:border-accent">
+                        <div key={index} onClick={() => onRemove(index)} className="w-20 h-20 bg-tertiary/50 rounded-lg border-2 border-dashed border-color flex items-center justify-center cursor-pointer hover:border-accent">
                             {item ? (
                                 <div className="relative w-full h-full">
                                     <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-md" />
@@ -618,7 +619,7 @@ const SynthesisPanel: React.FC<{
                 </div>
             </div>
 
-            <div className="w-full bg-tertiary/30 p-3 rounded-md space-y-2 mt-4 flex-grow flex flex-col">
+            <div className="w-full bg-tertiary/30 p-3 rounded-md space-y-2 mt-2 flex-grow flex flex-col">
                 <h4 className="font-semibold text-highlight text-left border-b border-color pb-1 flex-shrink-0">예상 결과 부위</h4>
                 <div className="flex-grow overflow-y-auto pr-1">
                     {possibleSlots.length > 0 ? (
@@ -638,7 +639,7 @@ const SynthesisPanel: React.FC<{
                 </div>
             </div>
 
-            <div className="mt-4 flex-shrink-0 w-full">
+            <div className="mt-2 flex-shrink-0 w-full">
                 {firstItemGrade && <p className={`text-sm text-tertiary ${currentUser.gold < synthesisCost ? 'text-red-400' : ''}`}>비용: <span className="font-bold text-yellow-300">{synthesisCost.toLocaleString()} 골드</span></p>}
                  <div className="flex items-center justify-center gap-4 mt-2">
                     <Button onClick={onCancel} colorScheme="gray">취소</Button>
@@ -710,6 +711,9 @@ const BulkUseModal: React.FC<{
                         <Button onClick={() => handleQuantityChange(quantity + 1)} className="!py-1">+1</Button>
                         <Button onClick={() => handleQuantityChange(quantity + 10)} className="!py-1">+10</Button>
                     </div>
+                    <p className="text-center text-sm text-tertiary">
+                        사용할 수량: {quantity.toLocaleString()}개
+                    </p>
                 </div>
                 
                 <div className="flex justify-center gap-4 mt-6">
@@ -722,10 +726,10 @@ const BulkUseModal: React.FC<{
 };
 
 
-const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, onAction, onStartEnhance, enhancementAnimationTarget, onAnimationComplete, isTopmost }) => {
+const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, onAction, onStartEnhance, enhancementAnimationTarget, onAnimationComplete, isTopmost, initialTab }) => {
     const { inventory, inventorySlots } = currentUser;
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<Tab>('all');
+    const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab || 'all');
     const [sortKey, setSortKey] = useState<SortKey>('createdAt');
     const [disassembleMode, setDisassembleMode] = useState(false);
     const [showSynthesis, setShowSynthesis] = useState(false);
@@ -734,26 +738,34 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
     const [isAutoSelectOpen, setIsAutoSelectOpen] = useState(false);
     const [itemForBulkUse, setItemForBulkUse] = useState<InventoryItem | null>(null);
     
-    // --- NEW: Equipment Synthesis State ---
     const [synthesisMode, setSynthesisMode] = useState(false);
     const [synthesisSlots, setSynthesisSlots] = useState<(InventoryItem | null)[]>([null, null, null]);
+
+    useEffect(() => {
+        // This effect ensures that whenever we are NOT in synthesis mode,
+        // the synthesis slots are cleared. This is a robust way to handle
+        // leaving the synthesis panel for any reason (switching to disassembly,
+        // crafting, changing filter tabs, etc.).
+        if (!synthesisMode) {
+            setSynthesisSlots([null, null, null]);
+        }
+    }, [synthesisMode]);
 
     const selectedItem = useMemo(() => {
         if (!selectedItemId) return null;
         return inventory.find(item => item.id === selectedItemId) || null;
     }, [selectedItemId, inventory]);
+    
+    const isEquipmentView = useMemo(() => (activeTab === 'equipment') || (selectedItem?.type === 'equipment'), [activeTab, selectedItem]);
+
 
     useEffect(() => {
-        if (synthesisMode) {
-            setActiveTab('equipment');
-        }
+        if (synthesisMode) setActiveTab('equipment');
     }, [synthesisMode]);
 
     useEffect(() => {
         if (enhancementAnimationTarget) {
-            const timer = setTimeout(() => {
-                onAnimationComplete();
-            }, 800);
+            const timer = setTimeout(() => onAnimationComplete(), 800);
             return () => clearTimeout(timer);
         }
     }, [enhancementAnimationTarget, onAnimationComplete]);
@@ -786,10 +798,8 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
     
     const filteredAndSortedInventory = useMemo(() => {
         let items = [...inventory];
-        if (activeTab !== 'all') {
-            items = items.filter((item: InventoryItem) => item.type === activeTab);
-        }
-        items.sort((a, b) => {
+        if (activeTab !== 'all') items = items.filter(item => item.type === activeTab);
+        return items.sort((a, b) => {
             if (sortKey === 'createdAt') return b.createdAt - a.createdAt;
             if (sortKey === 'grade') {
                 const gradeA = gradeOrder[a.grade];
@@ -803,35 +813,25 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
             }
             return 0;
         });
-        return items;
     }, [inventory, activeTab, sortKey]);
     
+    useEffect(() => setSelectedItemId(null), [activeTab, disassembleMode, showSynthesis, synthesisMode]);
     useEffect(() => {
-        setSelectedItemId(null);
-    }, [activeTab, disassembleMode, showSynthesis, synthesisMode]);
-
-    useEffect(() => {
-        if (selectedItemId && !inventory.some(i => i.id === selectedItemId)) {
-            setSelectedItemId(null);
-        }
+        if (selectedItemId && !inventory.some(i => i.id === selectedItemId)) setSelectedItemId(null);
     }, [inventory, selectedItemId]);
     
     const currentlyEquippedItem = useMemo(() => {
-        if (selectedItem?.type !== 'equipment' || !selectedItem.slot) {
-            return null;
-        }
-        return inventory.find((item: InventoryItem) => item.isEquipped && item.slot === selectedItem.slot);
+        if (selectedItem?.type !== 'equipment' || !selectedItem.slot) return null;
+        return inventory.find(item => item.isEquipped && item.slot === selectedItem.slot);
     }, [selectedItem, inventory]);
 
     const inventoryDisplaySlots = Array.from({ length: inventorySlots }, (_, index) => filteredAndSortedInventory[index] || null);
-    
     const canExpand = inventorySlots < MAX_INVENTORY_SIZE;
 
-    // --- Disassembly Logic ---
     const handleDisassemble = () => {
         if (selectedForDisassembly.size === 0) return;
         const hasHighGrade = Array.from(selectedForDisassembly).some(itemId => {
-            const item = inventory.find((i: InventoryItem) => i.id === itemId);
+            const item = inventory.find(i => i.id === itemId);
             return item && (item.grade === 'legendary' || item.grade === 'mythic');
         });
         if (hasHighGrade && !window.confirm("높은 등급의 장비가 포함되어 있습니다. 그래도 분해하시겠습니까?")) return;
@@ -841,92 +841,41 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
             setDisassembleMode(false);
         }
     };
-    const toggleDisassemblySelection = (itemId: string) => {
-        setSelectedForDisassembly(prev => {
-            const newSet = new Set(prev);
-            newSet.has(itemId) ? newSet.delete(itemId) : newSet.add(itemId);
-            return newSet;
-        });
-    };
-     const handleAutoSelectConfirm = (grades: ItemGrade[]) => {
-        const itemsToSelect = inventory.filter(item =>
-            item.type === 'equipment' && !item.isEquipped && grades.includes(item.grade)
-        ).map(item => item.id);
+    const toggleDisassemblySelection = (itemId: string) => setSelectedForDisassembly(prev => { const newSet = new Set(prev); newSet.has(itemId) ? newSet.delete(itemId) : newSet.add(itemId); return newSet; });
+    const handleAutoSelectConfirm = (grades: ItemGrade[]) => {
+        const itemsToSelect = inventory.filter(item => item.type === 'equipment' && !item.isEquipped && grades.includes(item.grade)).map(item => item.id);
         setSelectedForDisassembly(prev => new Set([...prev, ...itemsToSelect]));
         setIsAutoSelectOpen(false);
     };
 
-    // --- Equipment Synthesis Logic ---
-    const handleEnterSynthesisMode = () => {
-        setDisassembleMode(false);
-        setShowSynthesis(false);
-        setSynthesisMode(true);
-        setSelectedItemId(null);
-    };
-
-    const handleExitSynthesisMode = () => {
-        setSynthesisMode(false);
-        setSynthesisSlots([null, null, null]);
-    };
-
+    const handleEnterSynthesisMode = () => { setDisassembleMode(false); setShowSynthesis(false); setSynthesisMode(true); setSelectedItemId(null); };
+    const handleExitSynthesisMode = () => { setSynthesisMode(false); setSynthesisSlots([null, null, null]); };
     const handleItemClickForSynthesis = (item: InventoryItem) => {
-        if (item.type !== 'equipment') {
-            return;
-        }
-        
-        if (synthesisSlots.some(slot => slot?.id === item.id)) {
-            const newSlots = synthesisSlots.map(slot => (slot?.id === item.id ? null : slot));
-            setSynthesisSlots(newSlots);
-            return;
-        }
-
+        if (item.type !== 'equipment') return;
+        if (synthesisSlots.some(slot => slot?.id === item.id)) { setSynthesisSlots(synthesisSlots.map(slot => (slot?.id === item.id ? null : slot))); return; }
         const firstItemInSlots = synthesisSlots.find(slot => slot !== null);
-        if (firstItemInSlots && item.grade !== firstItemInSlots.grade) {
-            return;
-        }
-
+        if (firstItemInSlots && item.grade !== firstItemInSlots.grade) return;
         const nextEmptySlotIndex = synthesisSlots.findIndex(slot => slot === null);
-        if (nextEmptySlotIndex !== -1) {
-            const newSlots = [...synthesisSlots];
-            newSlots[nextEmptySlotIndex] = item;
-            setSynthesisSlots(newSlots);
-        }
+        if (nextEmptySlotIndex !== -1) { const newSlots = [...synthesisSlots]; newSlots[nextEmptySlotIndex] = item; setSynthesisSlots(newSlots); }
     };
-    
-    const handleRemoveFromSynthesis = (index: number) => {
-        const newSlots = [...synthesisSlots];
-        newSlots[index] = null;
-        setSynthesisSlots(newSlots);
-    };
-
+    const handleRemoveFromSynthesis = (index: number) => { const newSlots = [...synthesisSlots]; newSlots[index] = null; setSynthesisSlots(newSlots); };
     const handleSynthesize = () => {
         const itemsInSlots = synthesisSlots.filter((item): item is InventoryItem => item !== null);
-        if (itemsInSlots.length !== 3) {
-            alert('3개의 장비를 모두 채워주세요.');
-            return;
-        }
+        if (itemsInSlots.length !== 3) { alert('3개의 장비를 모두 채워주세요.'); return; }
         const itemIds = itemsInSlots.map(item => item.id);
         const firstItemGrade = itemsInSlots[0]?.grade;
-        if (!firstItemGrade) {
-            return;
-        }
+        if (!firstItemGrade) return;
         const synthesisCost = SYNTHESIS_COSTS[firstItemGrade] || 0;
-        if (currentUser.gold < synthesisCost) {
-            alert(`합성에 필요한 골드가 부족합니다. (필요: ${synthesisCost.toLocaleString()} 골드)`);
-            return;
-        }
+        if (currentUser.gold < synthesisCost) { alert(`합성에 필요한 골드가 부족합니다. (필요: ${synthesisCost.toLocaleString()} 골드)`); return; }
         if(window.confirm(`[${gradeStyles[firstItemGrade].name} 등급] 장비 3개를 합성하시겠습니까?\n비용: ${synthesisCost.toLocaleString()} 골드`)) {
             onAction({ type: 'SYNTHESIZE_EQUIPMENT', payload: { itemIds } });
             handleExitSynthesisMode();
         }
     };
-    
-    const firstSynthesisItemGrade = useMemo(() => {
-        return synthesisSlots.find(item => item !== null)?.grade;
-    }, [synthesisSlots]);
+    const firstSynthesisItemGrade = useMemo(() => synthesisSlots.find(item => item !== null)?.grade, [synthesisSlots]);
 
     return (
-        <DraggableWindow title="가방" onClose={onClose} windowId="inventory" initialWidth={950} isTopmost={isTopmost}>
+        <DraggableWindow title="가방" onClose={onClose} windowId="inventory" initialWidth={850} isTopmost={isTopmost}>
             <div className="flex flex-col h-[calc(var(--vh,1vh)*75)]">
                 {craftingDetails && <CraftingDetailModal details={craftingDetails} inventory={inventory} onClose={() => setCraftingDetails(null)} onAction={onAction} />}
                 {isAutoSelectOpen && <AutoSelectModal onClose={() => setIsAutoSelectOpen(false)} onConfirm={handleAutoSelectConfirm} />}
@@ -939,59 +888,23 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                         <Button onClick={() => {setShowSynthesis(true); setDisassembleMode(false); setSynthesisMode(false);}} disabled={showSynthesis}>재료 변환</Button>
                     </div>
                      {(synthesisMode || disassembleMode || showSynthesis) && (
-                        <Button
-                            onClick={() => {
-                                setSynthesisMode(false);
-                                setDisassembleMode(false);
-                                setShowSynthesis(false);
-                                setSynthesisSlots([null, null, null]);
-                                setSelectedForDisassembly(new Set());
-                            }}
-                            colorScheme="gray"
-                        >
-                            돌아가기
-                        </Button>
+                        <Button onClick={() => { setSynthesisMode(false); setDisassembleMode(false); setShowSynthesis(false); setSelectedForDisassembly(new Set()); }} colorScheme="gray">돌아가기</Button>
                      )}
                 </div>
 
                 <div className="flex-1 min-h-0 mb-2">
-                    {synthesisMode ? (
-                        <SynthesisPanel synthesisSlots={synthesisSlots} onRemove={handleRemoveFromSynthesis} onSynthesize={handleSynthesize} onCancel={handleExitSynthesisMode} currentUser={currentUser} />
-                    ) : disassembleMode ? (
-                        <DisassemblyPreviewPanel selectedIds={selectedForDisassembly} inventory={inventory} />
-                    ) : showSynthesis ? (
-                        <div className="w-full h-full bg-secondary rounded-lg shadow-inner relative">
-                             <CraftingPanel inventory={inventory} onStartCraft={(materialName, craftType) => setCraftingDetails({ materialName, craftType })} />
-                        </div>
-                    ) : !selectedItem ? (
-                        <div className="w-full h-full bg-secondary/50 rounded-lg p-4 flex flex-col items-center justify-center text-center text-tertiary">
-                            <h3 className="font-bold text-lg">아이템 정보</h3>
-                            <p className="text-sm mt-4">아래 목록에서 아이템을 선택하여<br/>상세 정보를 확인하세요.</p>
-                        </div>
-                    ) : (activeTab !== 'equipment' && activeTab !== 'all') || (selectedItem && selectedItem.type !== 'equipment') ? (
-                         <ItemDisplayCard item={selectedItem} title="선택 아이템" currentUser={currentUser} activeTab={activeTab} isLarge={true} />
-                    ) : (
-                        <div className="w-full flex flex-row gap-4 h-full">
-                            <div className="w-1/2 h-full min-h-0"><ItemDisplayCard item={currentlyEquippedItem} title="현재 장착" slot={selectedItem?.slot} currentUser={currentUser} activeTab={activeTab} /></div>
-                            <div className="w-1/2 h-full min-h-0"><ItemDisplayCard item={selectedItem} title="선택 아이템" slot={selectedItem?.slot} currentUser={currentUser} activeTab={activeTab} comparisonItem={currentlyEquippedItem} /></div>
-                        </div>
-                    )}
+                    {synthesisMode ? <SynthesisPanel synthesisSlots={synthesisSlots} onRemove={handleRemoveFromSynthesis} onSynthesize={handleSynthesize} onCancel={handleExitSynthesisMode} currentUser={currentUser} />
+                    : disassembleMode ? <DisassemblyPreviewPanel selectedIds={selectedForDisassembly} inventory={inventory} />
+                    : showSynthesis ? <div className="w-full h-full bg-secondary rounded-lg shadow-inner relative"><CraftingPanel inventory={inventory} onStartCraft={(materialName, craftType) => setCraftingDetails({ materialName, craftType })} /></div>
+                    : !selectedItem ? <div className="w-full h-full bg-secondary/50 rounded-lg p-4 flex flex-col items-center justify-center text-center text-tertiary"><h3 className="font-bold text-lg">아이템 정보</h3><p className="text-sm mt-4">아래 목록에서 아이템을 선택하여<br/>상세 정보를 확인하세요.</p></div>
+                    : !isEquipmentView ? <ItemDisplayCard item={selectedItem} title="선택 아이템" currentUser={currentUser} activeTab={activeTab} isLarge={true} />
+                    : <div className="w-full flex flex-row gap-4 h-full"><div className="w-1/2 h-full min-h-0"><ItemDisplayCard item={currentlyEquippedItem} title="현재 장착" slot={selectedItem?.slot} currentUser={currentUser} activeTab={activeTab} /></div><div className="w-1/2 h-full min-h-0"><ItemDisplayCard item={selectedItem} title="선택 아이템" slot={selectedItem?.slot} currentUser={currentUser} activeTab={activeTab} comparisonItem={currentlyEquippedItem} /></div></div>}
                 </div>
                 
                  { !synthesisMode && !disassembleMode && !showSynthesis && selectedItem && (
                     <div className="w-full pt-2 mt-2 border-y border-color flex flex-wrap justify-center items-center gap-2 py-2">
-                        {selectedItem.type === 'equipment' && (
-                            <>
-                                <Button onClick={() => onAction({ type: 'TOGGLE_EQUIP_ITEM', payload: { itemId: selectedItem.id } })} colorScheme="green">{selectedItem.isEquipped ? '장착 해제' : '장착'}</Button>
-                                <Button onClick={() => onStartEnhance(selectedItem)} colorScheme="yellow" disabled={selectedItem.stars >= 10}>강화</Button>
-                            </>
-                        )}
-                        {selectedItem.type === 'consumable' && (
-                            <>
-                                <Button onClick={() => onAction({ type: 'USE_ITEM', payload: { itemId: selectedItem.id } })} colorScheme="green">사용</Button>
-                                <Button onClick={() => setItemForBulkUse(selectedItem)} colorScheme="blue">일괄 사용</Button>
-                            </>
-                        )}
+                        {selectedItem.type === 'equipment' && (<><Button onClick={() => onAction({ type: 'TOGGLE_EQUIP_ITEM', payload: { itemId: selectedItem.id } })} colorScheme="green">{selectedItem.isEquipped ? '장착 해제' : '장착'}</Button><Button onClick={() => onStartEnhance(selectedItem)} colorScheme="yellow" disabled={selectedItem.stars >= 10}>강화</Button></>)}
+                        {selectedItem.type === 'consumable' && (<><Button onClick={() => onAction({ type: 'USE_ITEM', payload: { itemId: selectedItem.id } })} colorScheme="green">사용</Button><Button onClick={() => setItemForBulkUse(selectedItem)} colorScheme="blue">일괄 사용</Button></>)}
                         <Button onClick={handleSell} colorScheme="orange" disabled={selectedItem.type === 'consumable' || selectedItem.isEquipped}>판매</Button>
                     </div>
                  )}
@@ -1004,104 +917,54 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                 )}
 
 
-                <div className="flex-shrink-0 flex flex-col pt-2 h-56">
+                <div className={`flex-shrink-0 flex flex-col pt-2 transition-all duration-300 ${isEquipmentView ? 'h-48' : 'h-[45%]'}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2 flex-shrink-0">
                         <div className="flex items-center gap-4">
                             <h3 className="text-lg font-bold text-on-panel">인벤토리 ({inventory.length} / {inventorySlots})</h3>
                              <div className="flex bg-tertiary/70 p-1 rounded-lg">
-                                {(['all', 'equipment', 'consumable', 'material'] as Tab[]).map(tab => {
+                                {(['all', 'equipment', 'consumable', 'material'] as InventoryTab[]).map(tab => {
                                     const isDisabled = (synthesisMode && tab !== 'equipment') || showSynthesis;
-                                    return (
-                                        <button
-                                            key={tab}
-                                            onClick={() => { if (!isDisabled) { setActiveTab(tab); setSynthesisMode(false); setDisassembleMode(false); setShowSynthesis(false); } }}
-                                            disabled={isDisabled}
-                                            className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === tab ? 'bg-accent' : 'text-tertiary hover:bg-secondary/50'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            {tab === 'all' ? '전체' : tab === 'equipment' ? '장비' : tab === 'consumable' ? '소모품' : '재료'}
-                                        </button>
-                                    );
+                                    return <button key={tab} onClick={() => { if (!isDisabled) { setActiveTab(tab); setSynthesisMode(false); setDisassembleMode(false); setShowSynthesis(false); } }} disabled={isDisabled} className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === tab ? 'bg-accent' : 'text-tertiary hover:bg-secondary/50'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>{tab === 'all' ? '전체' : tab === 'equipment' ? '장비' : tab === 'consumable' ? '소모품' : '재료'}</button>;
                                 })}
                             </div>
                         </div>
                          <div className="flex items-center gap-2">
                              <span className="text-xs text-secondary">정렬:</span>
-                            <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)} className="bg-secondary border border-color text-xs rounded-md p-1 focus:ring-accent focus:border-accent">
-                                <option value="createdAt">획득순</option>
-                                <option value="grade">등급순</option>
-                                <option value="type">종류순</option>
-                            </select>
+                            <select value={sortKey} onChange={e => setSortKey(e.target.value as SortKey)} className="bg-secondary border border-color text-xs rounded-md p-1 focus:ring-accent focus:border-accent"><option value="createdAt">획득순</option><option value="grade">등급순</option><option value="type">종류순</option></select>
                          </div>
                     </div>
                     
                     <div className="flex-grow overflow-y-auto pr-2 bg-tertiary/30 p-2 rounded-md">
-                        <div className="grid grid-cols-[repeat(auto-fill,minmax(56px,1fr))] gap-1">
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(clamp(48px,6vh,64px),1fr))] gap-1">
                             {inventoryDisplaySlots.map((item, index) => {
                                 const isDisassemblable = item?.type === 'equipment' && !item.isEquipped;
                                 const isSynthesizable = item?.type === 'equipment' && !item.isEquipped;
                                 const isSelectedForDisassembly = disassembleMode && item && selectedForDisassembly.has(item.id);
                                 const isInSynthesisSlot = synthesisMode && item && synthesisSlots.some(slot => slot?.id === item.id);
-                                
                                 const isClickable = !showSynthesis && ((synthesisMode && isSynthesizable) || (disassembleMode && isDisassemblable) || (!synthesisMode && !disassembleMode && item));
-
-                                // Logic to dim items during synthesis mode
                                 let isDisabledInSynthesis = false;
-                                if (synthesisMode && item?.type === 'equipment') {
-                                    if (firstSynthesisItemGrade && item.grade !== firstSynthesisItemGrade) {
-                                        isDisabledInSynthesis = true;
-                                    }
-                                }
+                                if (synthesisMode && item?.type === 'equipment' && firstSynthesisItemGrade && item.grade !== firstSynthesisItemGrade) isDisabledInSynthesis = true;
 
                                 return (
-                                    <div
-                                        key={item?.id || `empty-${index}`}
-                                        onClick={() => {
-                                            if (!isClickable || isDisabledInSynthesis) return;
-                                            if (synthesisMode && isSynthesizable) handleItemClickForSynthesis(item!);
-                                            else if (disassembleMode && isDisassemblable) toggleDisassemblySelection(item!.id);
-                                            else if (item) setSelectedItemId(item.id);
-                                        }}
-                                        className={`relative aspect-square rounded-md transition-all duration-200 ${item ? 'hover:scale-105' : 'bg-tertiary/50'} ${isClickable && !isDisabledInSynthesis ? 'cursor-pointer' : 'cursor-not-allowed'}`}
-                                    >
-                                        {item && (
-                                            <>
-                                                <div className={`absolute inset-0 rounded-md border-2 ${selectedItemId === item.id && !disassembleMode && !synthesisMode && !showSynthesis ? 'border-accent ring-2 ring-accent' : 'border-black/20'}`} />
-                                                <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-sm" />
-                                                {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-1" />}
-                                                
-                                                {item.isEquipped && <div className="absolute top-0.5 right-0.5 text-xs font-bold text-white bg-blue-600/80 px-1 rounded-bl-md">E</div>}
-                                                {item.quantity && item.quantity > 1 && <span className="absolute bottom-0 right-0 text-xs font-bold text-white bg-black/60 px-1 rounded-tl-md">{item.quantity}</span>}
-                                                {item.type === 'equipment' && renderStarDisplay(item.stars)}
-                                                
-                                                {disassembleMode && (
-                                                    <>
-                                                        {!isDisassemblable && <div className="absolute inset-0 bg-black/70 rounded-sm"></div>}
-                                                        {isSelectedForDisassembly && <div className="absolute inset-0 bg-red-500/70 flex items-center justify-center text-3xl text-white rounded-sm">✓</div>}
-                                                    </>
-                                                )}
-
-                                                {(synthesisMode || isInSynthesisSlot || isDisabledInSynthesis) && (
-                                                    <div className={`absolute inset-0 rounded-sm ${isInSynthesisSlot ? 'bg-green-500/70' : (isDisabledInSynthesis ? 'bg-black/80' : '')} flex items-center justify-center text-3xl text-white`}>
-                                                        {isInSynthesisSlot && '✓'}
-                                                    </div>
-                                                )}
-                                                
-                                                {enhancementAnimationTarget?.itemId === item.id && <div className="absolute inset-0 animate-ping rounded-md bg-yellow-400/50"></div>}
-                                            </>
-                                        )}
+                                    <div key={item?.id || `empty-${index}`} onClick={() => { if (!isClickable || isDisabledInSynthesis) return; if (synthesisMode && isSynthesizable) handleItemClickForSynthesis(item!); else if (disassembleMode && isDisassemblable) toggleDisassemblySelection(item!.id); else if (item) setSelectedItemId(item.id); }} className={`relative aspect-square rounded-md transition-all duration-200 ${item ? 'hover:scale-105' : 'bg-tertiary/50'} ${isClickable && !isDisabledInSynthesis ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                                        {item && ( <>
+                                            <div className={`absolute inset-0 rounded-md border-2 ${selectedItemId === item.id && !disassembleMode && !synthesisMode && !showSynthesis ? 'border-accent ring-2 ring-accent' : 'border-black/20'}`} />
+                                            <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-sm" />
+                                            {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-1" />}
+                                            {item.isEquipped && <div className="absolute top-0.5 right-0.5 text-xs font-bold text-white bg-blue-600/80 px-1 rounded-bl-md">E</div>}
+                                            {item.quantity && item.quantity > 1 && <span className="absolute bottom-0 right-0 text-xs font-bold text-white bg-black/60 px-1 rounded-tl-md">{item.quantity}</span>}
+                                            {item.type === 'equipment' && renderStarDisplay(item.stars)}
+                                            {disassembleMode && (<> {!isDisassemblable && <div className="absolute inset-0 bg-black/70 rounded-sm"></div>} {isSelectedForDisassembly && <div className="absolute inset-0 bg-red-500/70 flex items-center justify-center text-3xl text-white rounded-sm">✓</div>} </>)}
+                                            {(synthesisMode || isInSynthesisSlot || isDisabledInSynthesis) && (<div className={`absolute inset-0 rounded-sm ${isInSynthesisSlot ? 'bg-green-500/70' : (isDisabledInSynthesis ? 'bg-black/80' : '')} flex items-center justify-center text-3xl text-white`}> {isInSynthesisSlot && '✓'} </div>)}
+                                            {enhancementAnimationTarget?.itemId === item.id && <div className="absolute inset-0 animate-ping rounded-md bg-yellow-400/50"></div>}
+                                        </> )}
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
                     <div className="flex justify-end items-center mt-2 flex-shrink-0 text-sm">
-                        {canExpand ? (
-                            <Button onClick={handleExpand} colorScheme="blue" className="!text-xs !py-1" title={`비용: 💎 ${EXPANSION_COST_DIAMONDS}`}>
-                                확장 (+{EXPANSION_AMOUNT})
-                            </Button>
-                        ) : (
-                            <p className="text-xs text-tertiary">최대 확장</p>
-                        )}
+                        {canExpand ? ( <Button onClick={handleExpand} colorScheme="blue" className="!text-xs !py-1" title={`비용: 💎 ${EXPANSION_COST_DIAMONDS}`}> 확장 (+{EXPANSION_AMOUNT}) </Button> ) : ( <p className="text-xs text-tertiary">최대 확장</p> )}
                     </div>
                 </div>
             </div>

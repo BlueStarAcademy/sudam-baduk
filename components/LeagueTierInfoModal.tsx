@@ -1,7 +1,8 @@
 import React from 'react';
 import DraggableWindow from './DraggableWindow.js';
 import { LEAGUE_DATA, LEAGUE_WEEKLY_REWARDS } from '../constants.js';
-import { LeagueRewardTier } from '../types.js';
+// FIX: LeagueRewardTier is now defined in types/entities.ts and exported from types/index.js
+import { LeagueRewardTier } from '../types/index.js';
 
 interface LeagueTierInfoModalProps {
     onClose: () => void;
@@ -49,11 +50,19 @@ const LeagueTierInfoModal: React.FC<LeagueTierInfoModalProps> = ({ onClose, isTo
     return (
         <DraggableWindow title="챔피언십 리그 안내" onClose={onClose} windowId="league-tier-info-modal" initialWidth={550} isTopmost={isTopmost}>
             <div className="space-y-4">
-                <p className="text-sm text-gray-300 text-center">
-                    일주일간 16명의 유저가 경쟁하여 승급/유지/강급 되며, 일주일간의 경쟁이 끝나면 티어에 따라 보상을 지급받습니다.
-                </p>
+                <div className="bg-gray-900/50 p-3 rounded-lg">
+                    <h4 className="font-bold text-lg text-yellow-300 mb-2">주간 경쟁 규칙</h4>
+                    <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
+                        <li>매주 월요일 00시, 같은 리그의 15명의 유저(플레이어 및 봇)와 함께 경쟁 그룹에 배정됩니다.</li>
+                        <li>일주일간 자동대국 챔피언십에 참여하여 랭킹 점수를 획득하고, 경쟁자들 사이에서 순위를 높여야 합니다.</li>
+                        <li><strong>1위 ~ 3위:</strong> 상위 리그로 승급</li>
+                        <li><strong>4위 ~ 13위:</strong> 현재 리그 잔류</li>
+                        <li><strong>14위 ~ 16위:</strong> 하위 리그로 강등</li>
+                        <li>일주일간의 경쟁이 끝나면 티어와 순위에 따라 보상이 지급되고, 모든 유저의 챔피언십 점수는 500점으로 초기화됩니다.</li>
+                    </ul>
+                </div>
 
-                <ul className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+                <ul className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
                     {LEAGUE_DATA.map(tierData => {
                         const rewards = LEAGUE_WEEKLY_REWARDS[tierData.tier];
                         return (
@@ -62,7 +71,6 @@ const LeagueTierInfoModal: React.FC<LeagueTierInfoModalProps> = ({ onClose, isTo
                                    <img src={tierData.icon} alt={tierData.name} className="w-12 h-12 flex-shrink-0" />
                                    <div>
                                      <h3 className="text-lg font-bold">{tierData.name}</h3>
-                                     <p className="text-xs text-gray-400">챔피언십 점수 {tierData.scoreThreshold.toLocaleString()}점 이상</p>
                                    </div>
                                 </div>
                                 <div className="mt-3 pt-3 border-t border-gray-700/50">

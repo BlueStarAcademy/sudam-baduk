@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { LiveGameSession, User, ServerAction } from '../types.js';
+// FIX: Use `import type` for interfaces to prevent type/value confusion.
+import type { LiveGameSession, User, ServerAction } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 
@@ -11,7 +12,7 @@ interface BasePlacementModalProps {
 }
 
 const BasePlacementModal: React.FC<BasePlacementModalProps> = ({ session, currentUser, onAction }) => {
-    const { basePlacementDeadline, settings, player1, baseStones_p1, baseStones_p2 } = session;
+    const { id: gameId, basePlacementDeadline, settings, player1, baseStones_p1, baseStones_p2 } = session;
     const baseStoneCount = settings.baseStones || 4;
     
     const myStones = (currentUser.id === player1.id ? baseStones_p1 : baseStones_p2);
@@ -42,7 +43,7 @@ const BasePlacementModal: React.FC<BasePlacementModalProps> = ({ session, curren
                 
                 {!isDonePlacing && (
                     <Button 
-                        onClick={() => onAction({ type: 'PLACE_REMAINING_BASE_STONES_RANDOMLY' })}
+                        onClick={() => onAction({ type: 'PLACE_REMAINING_BASE_STONES_RANDOMLY', payload: { gameId } })}
                         colorScheme="yellow"
                         className="w-full mt-4 !text-sm !py-2"
                     >

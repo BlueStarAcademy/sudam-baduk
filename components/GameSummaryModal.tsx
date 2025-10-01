@@ -1,11 +1,11 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { LiveGameSession, User, Player, WinReason, StatChange, AnalysisResult, GameMode, GameSummary, InventoryItem, AvatarInfo, BorderInfo, AlkkagiStone } from '../types.js';
+import { LiveGameSession, User, Player, WinReason, StatChange, AnalysisResult, GameMode, GameSummary, InventoryItem, AvatarInfo, BorderInfo, AlkkagiStone } from '../types/index.js';
 import Avatar from './Avatar.js';
 import { audioService } from '../services/audioService.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
-import { PLAYFUL_GAME_MODES, AVATAR_POOL, BORDER_POOL, CONSUMABLE_ITEMS } from '../constants.js';
-import { getMannerRank as getMannerRankShared } from '../services/manner.js';
+import { PLAYFUL_GAME_MODES, AVATAR_POOL, BORDER_POOL, CONSUMABLE_ITEMS } from '../constants/index.js';
+import { getMannerRank as getMannerRankShared } from '../utils/mannerUtils.js';
 
 interface GameSummaryModalProps {
     session: LiveGameSession;
@@ -41,7 +41,7 @@ const useAnimationKey = (summary: GameSummary | undefined, isPlayful: boolean, c
 
 const XpBar: React.FC<{ summary: GameSummary | undefined, isPlayful: boolean, currentUser: User }> = React.memo(({ summary, isPlayful, currentUser }) => {
     const levelSummary = summary?.level;
-    const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
+    const getXpForLevel = (level: number): number => level * 100;
 
     // Fallback logic
     if (!levelSummary) {
@@ -155,38 +155,50 @@ const XpBar: React.FC<{ summary: GameSummary | undefined, isPlayful: boolean, cu
 
 
 const ScoreDetailsComponent: React.FC<{ analysis: AnalysisResult, session: LiveGameSession }> = ({ analysis, session }) => {
+    if (!analysis || !analysis.scoreDetails || !analysis.areaScore) {
+        return (
+            <div className="text-center text-gray-400">분석 데이터를 불러오는 중입니다...</div>
+        );
+    }
+    
     const { scoreDetails } = analysis;
     const { mode, settings } = session;
 
-    if (!scoreDetails) return <p className="text-center text-gray-400">점수 정보가 없습니다.</p>;
-    
     const isSpeedMode = mode === GameMode.Speed || (mode === GameMode.Mix && settings.mixedModes?.includes(GameMode.Speed));
     const isBaseMode = mode === GameMode.Base || (mode === GameMode.Mix && settings.mixedModes?.includes(GameMode.Base));
     const isHiddenMode = mode === GameMode.Hidden || (mode === GameMode.Mix && settings.mixedModes?.includes(GameMode.Hidden));
-
+    
     return (
-        <div className="space-y-3 text-xs md:text-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1 bg-gray-800/50 p-2 rounded-md">
-                    <h3 className="font-bold text-center mb-1">흑</h3>
-                    <div className="flex justify-between"><span>영토:</span> <span className="font-mono">{scoreDetails.black.territory.toFixed(0)}</span></div>
-                    <div className="flex justify-between"><span>따낸 돌:</span> <span className="font-mono">{scoreDetails.black.liveCaptures ?? 0}</span></div>
-                    <div className="flex justify-between"><span>사석:</span> <span className="font-mono">{scoreDetails.black.deadStones ?? 0}</span></div>
-                    {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span className="font-mono">{scoreDetails.black.baseStoneBonus}</span></div>}
-                    {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span className="font-mono">{scoreDetails.black.hiddenStoneBonus}</span></div>}
-                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span className="font-mono">{scoreDetails.black.timeBonus.toFixed(1)}</span></div>}
-                    <div className="flex justify-between border-t border-gray-600 pt-1 mt-1 font-bold text-base"><span>총점:</span> <span className="text-yellow-300">{scoreDetails.black.total.toFixed(1)}</span></div>
-                </div>
-                <div className="space-y-1 bg-gray-800/50 p-2 rounded-md">
-                    <h3 className="font-bold text-center mb-1">백</h3>
-                    <div className="flex justify-between"><span>영토:</span> <span className="font-mono">{scoreDetails.white.territory.toFixed(0)}</span></div>
-                    <div className="flex justify-between"><span>따낸 돌:</span> <span className="font-mono">{scoreDetails.white.liveCaptures ?? 0}</span></div>
-                    <div className="flex justify-between"><span>사석:</span> <span className="font-mono">{scoreDetails.white.deadStones ?? 0}</span></div>
-                    <div className="flex justify-between"><span>덤:</span> <span className="font-mono">{scoreDetails.white.komi}</span></div>
-                    {isBaseMode && <div className="flex justify-between text-blue-300"><span>베이스 보너스:</span> <span className="font-mono">{scoreDetails.white.baseStoneBonus}</span></div>}
-                    {isHiddenMode && <div className="flex justify-between text-purple-300"><span>히든 보너스:</span> <span className="font-mono">{scoreDetails.white.hiddenStoneBonus}</span></div>}
-                    {isSpeedMode && <div className="flex justify-between text-green-300"><span>시간 보너스:</span> <span className="font-mono">{scoreDetails.white.timeBonus}</span></div>}
-                    <div className="flex justify-between border-t border-gray-600 pt-1 mt-1 font-bold text-base"><span>총점:</span> <span className="text-yellow-300">{scoreDetails.white.total.toFixed(1)}</span></div>
+         <div className="text-sm text-white">
+            <div className="space-y-2">
+                <div className="bg-gray-900/50 p-3 rounded-lg my-2 text-xs">
+                    <div className="grid grid-cols-2 gap-x-4">
+                        {/* Black Column */}
+                        <div className="space-y-1">
+                            <h4 className="font-bold text-center border-b border-gray-600 pb-1 mb-1">흑</h4>
+                            <div className="flex justify-between"><span>영토:</span> <span className="font-mono">{scoreDetails.black.territory}</span></div>
+                            <div className="flex justify-between"><span>따낸 돌:</span> <span className="font-mono">{scoreDetails.black.liveCaptures ?? 0}</span></div>
+                            <div className="flex justify-between"><span>사석:</span> <span className="font-mono">{scoreDetails.black.deadStones ?? 0}</span></div>
+                            {isBaseMode && <div className="flex justify-between"><span>베이스:</span> <span className="font-mono">{scoreDetails.black.baseStoneBonus}</span></div>}
+                            {isHiddenMode && <div className="flex justify-between"><span>히든돌:</span> <span className="font-mono">{scoreDetails.black.hiddenStoneBonus}</span></div>}
+                            {isSpeedMode && <div className="flex justify-between"><span>시간:</span> <span className="font-mono">{scoreDetails.black.timeBonus.toFixed(1)}</span></div>}
+                            {scoreDetails.black.itemBonus > 0 && <div className="flex justify-between"><span>아이템:</span> <span className="font-mono">{scoreDetails.black.itemBonus}</span></div>}
+                            <div className="flex justify-between border-t border-gray-500 mt-1 pt-1 font-bold"><span>총점:</span> <span className="font-mono">{analysis.areaScore.black.toFixed(1)}</span></div>
+                        </div>
+                        {/* White Column */}
+                        <div className="space-y-1">
+                            <h4 className="font-bold text-center border-b border-gray-600 pb-1 mb-1">백</h4>
+                            <div className="flex justify-between"><span>영토:</span> <span className="font-mono">{scoreDetails.white.territory}</span></div>
+                            <div className="flex justify-between"><span>따낸 돌:</span> <span className="font-mono">{scoreDetails.white.liveCaptures ?? 0}</span></div>
+                            <div className="flex justify-between"><span>사석:</span> <span className="font-mono">{scoreDetails.white.deadStones ?? 0}</span></div>
+                            <div className="flex justify-between"><span>덤:</span> <span className="font-mono">{scoreDetails.white.komi}</span></div>
+                            {isBaseMode && <div className="flex justify-between"><span>베이스:</span> <span className="font-mono">{scoreDetails.white.baseStoneBonus}</span></div>}
+                            {isHiddenMode && <div className="flex justify-between"><span>히든돌:</span> <span className="font-mono">{scoreDetails.white.hiddenStoneBonus}</span></div>}
+                            {isSpeedMode && <div className="flex justify-between"><span>시간:</span> <span className="font-mono">{scoreDetails.white.timeBonus.toFixed(1)}</span></div>}
+                            {scoreDetails.white.itemBonus > 0 && <div className="flex justify-between"><span>아이템:</span> <span className="font-mono">{scoreDetails.white.itemBonus}</span></div>}
+                            <div className="flex justify-between border-t border-gray-500 mt-1 pt-1 font-bold"><span>총점:</span> <span className="font-mono">{analysis.areaScore.white.toFixed(1)}</span></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -288,7 +300,7 @@ const GameSummaryModal: React.FC<GameSummaryModalProps> = ({ session, currentUse
     const avatarUrl = useMemo(() => AVATAR_POOL.find((a: AvatarInfo) => a.id === currentUser.avatarId)?.url, [currentUser.avatarId]);
     const borderUrl = useMemo(() => BORDER_POOL.find((b: BorderInfo) => b.id === currentUser.borderId)?.url, [currentUser.borderId]);
     const rewardItem = mySummary?.items?.[0];
-    const rewardItemTemplate = rewardItem ? CONSUMABLE_ITEMS.find((item: { name: string; }) => item.name === rewardItem.name) : null;
+    const rewardItemTemplate = rewardItem ? CONSUMABLE_ITEMS.find((item) => item.name === rewardItem.name) : null;
     
     const hasLeveledUp = useMemo(() => mySummary?.level?.initial !== mySummary?.level?.final, [mySummary]);
 
@@ -454,9 +466,9 @@ const GameSummaryModal: React.FC<GameSummaryModalProps> = ({ session, currentUse
                                     </div>
                                     <div className="bg-gray-800 p-2 rounded-md flex items-center justify-center">
                                         {rewardItem && rewardItemTemplate ? (
-                                            <div className="flex items-center justify-center gap-2">
-                                                {rewardItemTemplate.image && <img src={rewardItemTemplate.image} alt={rewardItem.name} className="w-6 h-6 object-contain" />}
-                                                <p className="font-semibold text-xs">{rewardItem.name}</p>
+                                            <div className="flex items-center gap-2">
+                                                <img src={rewardItemTemplate.image!} alt={rewardItem.name} className="w-6 h-6 object-contain" />
+                                                <p className="text-xs">{rewardItem.name}</p>
                                             </div>
                                         ) : (
                                             <p className="font-semibold text-xs">🎁 상자 보상 없음</p>
@@ -467,7 +479,6 @@ const GameSummaryModal: React.FC<GameSummaryModalProps> = ({ session, currentUse
                         </div>
                     )}
                 </div>
-                 
                  <Button onClick={onConfirm} className="w-full py-3 mt-6">확인</Button>
             </div>
         </DraggableWindow>

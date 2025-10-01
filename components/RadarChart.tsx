@@ -13,7 +13,7 @@ interface RadarChartProps {
     size?: number;
 }
 
-const RadarChart: React.FC<RadarChartProps> = ({ datasets, maxStatValue = 200, size = 250 }) => {
+const RadarChart: React.FC<RadarChartProps> = ({ datasets, maxStatValue = 300, size = 180 }) => {
     const center = size / 2;
     const statKeys = Object.values(CoreStat);
     const numAxes = statKeys.length;
@@ -77,7 +77,6 @@ const RadarChart: React.FC<RadarChartProps> = ({ datasets, maxStatValue = 200, s
             />
         );
     }
-
 
     return (
         <svg viewBox={`0 0 ${size} ${size}`} width="100%" height="100%">

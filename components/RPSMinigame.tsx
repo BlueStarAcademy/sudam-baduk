@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { LiveGameSession, User, Player, RPSChoice, GameMode, GameStatus, ServerAction } from '../types.js';
 import { DICE_GO_MAIN_ROLL_TIME } from '../constants.js';
@@ -11,19 +10,19 @@ interface RPSMinigameProps {
     onAction: (action: ServerAction) => void;
 }
 
-const choices: RPSChoice[] = ['rock', 'paper', 'scissors'];
+const choices: RPSChoice[] = [RPSChoice.Rock, RPSChoice.Paper, RPSChoice.Scissors];
 const choiceDisplay = {
-    rock: { emoji: '✊', name: '바위' },
-    paper: { emoji: '🖐️', name: '보' },
-    scissors: { emoji: '✌️', name: '가위' },
+    [RPSChoice.Rock]: { emoji: '✊', name: '바위' },
+    [RPSChoice.Paper]: { emoji: '🖐️', name: '보' },
+    [RPSChoice.Scissors]: { emoji: '✌️', name: '가위' },
 };
 
 const getResult = (p1Choice: RPSChoice, p2Choice: RPSChoice): 'p1' | 'p2' | 'draw' => {
     if (p1Choice === p2Choice) return 'draw';
     if (
-        (p1Choice === 'rock' && p2Choice === 'scissors') ||
-        (p1Choice === 'scissors' && p2Choice === 'paper') ||
-        (p1Choice === 'paper' && p2Choice === 'rock')
+        (p1Choice === RPSChoice.Rock && p2Choice === RPSChoice.Scissors) ||
+        (p1Choice === RPSChoice.Scissors && p2Choice === RPSChoice.Paper) ||
+        (p1Choice === RPSChoice.Paper && p2Choice === RPSChoice.Rock)
     ) {
         return 'p1';
     }

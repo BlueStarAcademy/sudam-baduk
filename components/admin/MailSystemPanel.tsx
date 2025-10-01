@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-// FIX: Import missing types from the barrel file.
-import { ServerAction, AdminProps, InventoryItemType, User } from '../../types.js';
+// FIX: Use `import type` for interfaces to prevent type/value confusion.
+import type { ServerAction, AdminProps, InventoryItemType, User, Guild } from '../../types/index.js';
 import DraggableWindow from '../DraggableWindow.js';
 import Button from '../Button.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants.js';
@@ -46,7 +46,7 @@ const ItemSelectionModal: React.FC<ItemSelectionModalProps> = ({ onAddItem, onCl
                     {itemsForTab.map(item => (
                         <div
                             key={item.name}
-                            onClick={() => setSelectedItem({ name: item.name, type: item.type })}
+                            onClick={() => setSelectedItem({ name: item.name, type: item.type as InventoryItemType })}
                             className={`p-2 rounded-lg border-2 ${selectedItem?.name === item.name ? 'border-accent ring-2 ring-accent' : 'border-color bg-secondary/50'} cursor-pointer flex flex-col items-center`}
                         >
                             <img src={item.image!} alt={item.name} className="w-16 h-16 object-contain" />
@@ -67,11 +67,10 @@ const ItemSelectionModal: React.FC<ItemSelectionModalProps> = ({ onAddItem, onCl
 };
 
 
-// FIX: Correctly extend AdminProps to inherit all necessary props.
 interface MailSystemPanelProps extends AdminProps {}
 
-const MailSystemPanel: React.FC<MailSystemPanelProps> = ({ allUsers, onAction, onBack }) => {
-    const [targetType, setTargetType] = useState<'all' | 'specific'>('all');
+const MailSystemPanel: React.FC<MailSystemPanelProps> = ({ allUsers, onAction, onBack, guilds }) => {
+    const [targetType, setTargetType] = useState<'all' | 'user' | 'guild'>('all');
     const [targetSpecifier, setTargetSpecifier] = useState('');
     const [title, setTitle] = useState('');
     const [message, setMessage] = useState('');
@@ -87,10 +86,18 @@ const MailSystemPanel: React.FC<MailSystemPanelProps> = ({ allUsers, onAction, o
         const query = e.target.value;
         setTargetSpecifier(query);
         if (query.length > 1) {
-            const matches = allUsers
-                .filter(u => u.nickname.toLowerCase().includes(query.toLowerCase()) || u.username.toLowerCase().includes(query.toLowerCase()))
-                .map(u => u.nickname)
-                .slice(0, 5);
+            let matches: string[] = [];
+            if (targetType === 'user') {
+                matches = allUsers
+                    .filter(u => u.nickname.toLowerCase().includes(query.toLowerCase()) || u.username.toLowerCase().includes(query.toLowerCase()))
+                    .map(u => u.nickname)
+                    .slice(0, 5);
+            } else if (targetType === 'guild') {
+                matches = Object.values(guilds)
+                    .filter(g => g.name.toLowerCase().includes(query.toLowerCase()))
+                    .map(g => g.name)
+                    .slice(0, 5);
+            }
             setSearchResults(matches);
         } else {
             setSearchResults([]);
@@ -103,14 +110,15 @@ const MailSystemPanel: React.FC<MailSystemPanelProps> = ({ allUsers, onAction, o
             alert('제목과 메시지를 모두 입력해주세요.');
             return;
         }
-        if (targetType === 'specific' && !targetSpecifier.trim()) {
-            alert('특정 사용자 발송 시 닉네임 또는 아이디를 입력해주세요.');
+        if (targetType !== 'all' && !targetSpecifier.trim()) {
+            alert('대상을 입력해주세요.');
             return;
         }
 
         onAction({
             type: 'ADMIN_SEND_MAIL',
             payload: {
+                targetType,
                 targetSpecifier: targetType === 'all' ? 'all' : targetSpecifier,
                 title,
                 message,
@@ -142,14 +150,15 @@ const MailSystemPanel: React.FC<MailSystemPanelProps> = ({ allUsers, onAction, o
                     <div>
                         <label className="block mb-1 font-medium text-secondary">받는 사람</label>
                         <div className="flex gap-4">
-                            <label className="flex items-center"><input type="radio" name="targetType" value="all" checked={targetType === 'all'} onChange={() => setTargetType('all')} className="mr-2" />전체 사용자</label>
-                            <label className="flex items-center"><input type="radio" name="targetType" value="specific" checked={targetType === 'specific'} onChange={() => setTargetType('specific')} className="mr-2" />특정 사용자</label>
+                            <label className="flex items-center"><input type="radio" name="targetType" value="all" checked={targetType === 'all'} onChange={() => { setTargetType('all'); setSearchResults([]); }} className="mr-2" />전체</label>
+                            <label className="flex items-center"><input type="radio" name="targetType" value="user" checked={targetType === 'user'} onChange={() => { setTargetType('user'); setSearchResults([]); }} className="mr-2" />특정 유저</label>
+                            <label className="flex items-center"><input type="radio" name="targetType" value="guild" checked={targetType === 'guild'} onChange={() => { setTargetType('guild'); setSearchResults([]); }} className="mr-2" />길드</label>
                         </div>
                     </div>
 
-                    {targetType === 'specific' && (
+                    {targetType !== 'all' && (
                         <div className="relative">
-                            <label className="block mb-1 font-medium text-secondary">닉네임 또는 아이디</label>
+                            <label className="block mb-1 font-medium text-secondary">{targetType === 'user' ? '닉네임 또는 아이디' : '길드 이름'}</label>
                             <input 
                                 type="text"
                                 value={targetSpecifier}

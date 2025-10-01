@@ -1,18 +1,22 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { GameProps, Player, GameStatus, User, AnimationData, GameMode, Point } from '../../types.js';
-import GoBoard from '../GoBoard.js';
-import { getGoLogic } from '../../server/goLogic.js';
+// FIX: Separate enum and type imports, and correct import path.
+import { Player, GameStatus, GameMode } from '../../types/index.js';
+import type { GameProps, Point } from '../../types/index.js';
+import { getGoLogic } from '../../utils/goLogic.js';
 import { audioService } from '../../services/audioService.js';
+import GoBoard from '../GoBoard.js';
 
 interface DiceGoArenaProps extends GameProps {
     isMyTurn: boolean;
-    isMobile: boolean;
     showLastMoveMarker: boolean;
+    optimisticStone?: Point | null;
+    setOptimisticStone: (stone: Point | null) => void;
+    setIsSubmittingMove: (isSubmitting: boolean) => void;
 }
 
 const DiceGoArena: React.FC<DiceGoArenaProps> = (props) => {
-    const { session, onAction, currentUser, isSpectator, isMyTurn, isMobile, showLastMoveMarker } = props;
-    const { id: gameId, boardState, settings, lastMove, winningLine, gameStatus, currentPlayer, blackPlayerId, whitePlayerId, player1, player2, animation, lastTurnStones } = session;
+    const { session, onAction, currentUser, isSpectator, isMyTurn, showLastMoveMarker, optimisticStone, setOptimisticStone, setIsSubmittingMove } = props;
+    const { id: gameId, boardState, settings, lastMove, winningLine, gameStatus, currentPlayer, blackPlayerId, whitePlayerId, player1, player2, animation } = session;
     
     const myPlayerEnum = blackPlayerId === currentUser.id ? Player.Black : Player.White;
     
@@ -38,15 +42,21 @@ const DiceGoArena: React.FC<DiceGoArenaProps> = (props) => {
         return getGoLogic(session).getAllLibertiesOfPlayer(Player.White, boardState);
     }, [session, gameStatus, isMyTurn, boardState, settings.boardSize]);
 
-    const handleBoardClick = (x: number, y: number) => {
+    const handleBoardClick = async (x: number, y: number) => {
         if (!isMyTurn || gameStatus !== 'dice_placing') return;
         
-        const isValidMove = highlightedPoints.some(p => p.x === x && p.y === y);
+        const isValidMove = highlightedPoints.some((p: Point) => p.x === x && p.y === y);
         if (!isValidMove) {
             return;
         }
         
-        onAction({ type: 'DICE_PLACE_STONE', payload: { gameId, x, y } });
+        setIsSubmittingMove(true);
+        setOptimisticStone({ x, y });
+        const result = await onAction({ type: 'DICE_PLACE_STONE', payload: { gameId, x, y } });
+        if (result && !result.success) {
+            setOptimisticStone(null);
+            setIsSubmittingMove(false);
+        }
     };
 
     return (
@@ -56,7 +66,6 @@ const DiceGoArena: React.FC<DiceGoArenaProps> = (props) => {
                 boardSize={settings.boardSize}
                 onBoardClick={handleBoardClick}
                 lastMove={lastMove}
-                lastTurnStones={lastTurnStones}
                 isBoardDisabled={!isMyTurn || gameStatus !== 'dice_placing'}
                 stoneColor={Player.Black}
                 winningLine={winningLine}
@@ -73,8 +82,8 @@ const DiceGoArena: React.FC<DiceGoArenaProps> = (props) => {
                 whitePlayerNickname={whitePlayer?.nickname || '백'}
                 isItemModeActive={false}
                 animation={animation}
-                isMobile={isMobile}
                 showLastMoveMarker={showLastMoveMarker}
+                optimisticStone={optimisticStone ?? null}
             />
         </div>
     );

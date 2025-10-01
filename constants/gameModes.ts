@@ -1,20 +1,39 @@
-import { GameMode } from '../types.js';
 
-export const SPECIAL_GAME_MODES = [
-  { mode: GameMode.Standard, description: "일반적인 정통 바둑입니다.", available: true, image: "/images/simbols/simbol1.png" },
-  { mode: GameMode.Capture, description: "정해진 개수의 돌을 먼저 따내는 사람이 승리하는 바둑입니다.", available: true, image: "/images/simbols/simbol2.png" },
-  { mode: GameMode.Speed, description: "한 수를 둘 때마다 시간이 추가되는 피셔 방식입니다. 계가 시 남은 시간으로 보너스 집을 얻습니다.", available: true, image: "/images/simbols/simbol3.png" },
-  { mode: GameMode.Base, description: "각자 비밀리에 '베이스돌'을 놓아 독특한 시작 판을 만듭니다. 돌이 공개된 후, 초기 형세를 판단하여 흑/백과 덤을 결정하는 입찰을 진행합니다. 상대의 베이스돌을 따내면 보너스 점수를 얻는 전략적인 바둑입니다.", available: true, image: "/images/simbols/simbol4.png" },
-  { mode: GameMode.Hidden, description: "상대에게 보이지 않는 '히든돌'을 놓아 허를 찌르고, 한정된 '스캔' 아이템으로 상대의 비밀 착수를 간파하는 심리전 바둑입니다. 히든돌을 찾아내 따내면 큰 점수를 얻을 수 있어, 대국 내내 긴장감을 늦출 수 없습니다.", available: true, image: "/images/simbols/simbol5.png" },
-  { mode: GameMode.Missile, description: "미사일 아이템으로 내 돌을 움직여 전략적인 행마를 구사하는 바둑입니다.", available: true, image: "/images/simbols/simbol6.png" },
-  { mode: GameMode.Mix, description: "따내기, 스피드, 베이스, 히든, 미사일 바둑의 규칙을 2개 이상 섞어서 대결하는 모드입니다.", available: true, image: "/images/simbols/simbol7.png" }
+import { GameMode } from '../types/index.js';
+
+interface GameModeInfo {
+    mode: GameMode;
+    slug: string;
+    description: string;
+    available: boolean;
+    image: string;
+}
+
+export const SPECIAL_GAME_MODES: ReadonlyArray<GameModeInfo> = [
+  { mode: GameMode.Standard, slug: 'standard', description: "전통 규칙의 정통 바둑.", available: true, image: "/images/simbols/simbol1.png" },
+  { mode: GameMode.Capture, slug: 'capture', description: "상대 돌을 목표만큼 먼저 따내면 승리.", available: true, image: "/images/simbols/simbol2.png" },
+  { mode: GameMode.Speed, slug: 'speed', description: "피셔룰 기반의 속기 대국. 남은 시간은 보너스 집으로!", available: true, image: "/images/simbols/simbol3.png" },
+  { mode: GameMode.Base, slug: 'base', description: "비밀 '베이스돌' 배치 후 흑/백 입찰. 전략적 변수 가득!", available: true, image: "/images/simbols/simbol4.png" },
+  { mode: GameMode.Hidden, slug: 'hidden', description: "상대에게 보이지 않는 '히든돌'과 '스캔'을 활용한 심리전.", available: true, image: "/images/simbols/simbol5.png" },
+  { mode: GameMode.Missile, slug: 'missile', description: "'미사일'로 돌을 직선 이동시켜 판을 흔드는 동적인 바둑.", available: true, image: "/images/simbols/simbol6.png" },
+  { mode: GameMode.Mix, slug: 'mix', description: "두 가지 이상의 특수 규칙을 조합하여 즐기는 새로운 바둑.", available: true, image: "/images/simbols/simbol7.png" }
 ];
 
-export const PLAYFUL_GAME_MODES = [
-  { mode: GameMode.Dice, description: "총 3라운드에 걸쳐, 주사위를 굴려 나온 수만큼 흑돌을 놓아 백돌을 모두 따내는 게임입니다. 두 플레이어 모두 흑돌로 플레이합니다.", available: true, image: "/images/simbols/simbolp1.png" },
-  { mode: GameMode.Omok, description: "다섯 개의 돌을 먼저 나란히 놓으면 승리하는 클래식 게임입니다.", available: true, image: "/images/simbols/simbolp2.png" },
-  { mode: GameMode.Ttamok, description: "오목을 만들거나 정해진 상대 돌을 먼저 따내면 승리합니다.", available: true, image: "/images/simbols/simbolp3.png" },
-  { mode: GameMode.Thief, description: "도둑(흑)과 경찰(백) 역할을 번갈아 맡아 5턴씩 진행하며, 총점으로 승패를 가리는 전략 주사위 게임입니다.", available: true, image: "/images/simbols/simbolp4.png" },
-  { mode: GameMode.Alkkagi, description: "손가락으로 바둑돌을 쳐서 상대방의 돌을 판 밖으로 밀어내는 게임입니다.", available: true, image: "/images/simbols/simbolp5.png" },
-  { mode: GameMode.Curling, description: "바둑판 위에서 돌을 미끄러뜨려 목표(하우스)에 가장 가깝게 보내 점수를 얻는 게임입니다.", available: true, image: "/images/simbols/simbolp6.png" }
+export const PLAYFUL_GAME_MODES: ReadonlyArray<GameModeInfo> = [
+  { mode: GameMode.Dice, slug: 'dice', description: "주사위를 굴려 나온 수만큼 착수! 백돌을 모두 따내세요.", available: true, image: "/images/simbols/simbolp1.png" },
+  { mode: GameMode.Omok, slug: 'omok', description: "가로, 세로, 대각선으로 다섯 알을 먼저 나란히 놓으면 승리.", available: true, image: "/images/simbols/simbolp2.png" },
+  { mode: GameMode.Ttamok, slug: 'ttamok', description: "오목 또는 따내기! 두 가지 승리 조건을 모두 노리세요.", available: true, image: "/images/simbols/simbolp3.png" },
+  { mode: GameMode.Thief, slug: 'thief', description: "도둑과 경찰이 되어 상대를 속이는 추격전! 점수로 승리!", available: true, image: "/images/simbols/simbolp4.png" },
+  { mode: GameMode.Alkkagi, slug: 'alkkagi', description: "바둑돌을 튕겨 상대 돌을 판 밖으로! 짜릿한 손맛 승부.", available: true, image: "/images/simbols/simbolp5.png" },
+  { mode: GameMode.Curling, slug: 'curling', description: "바둑판 위의 컬링! 스톤을 목표 지점에 더 가깝게 보내세요.", available: true, image: "/images/simbols/simbolp6.png" }
 ];
+
+export const ALL_GAME_MODES = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES];
+
+export const GAME_MODE_BY_SLUG: Map<string, GameMode> = new Map(
+    ALL_GAME_MODES.map(m => [m.slug, m.mode])
+);
+
+export const SLUG_BY_GAME_MODE: Map<GameMode, string> = new Map(
+    ALL_GAME_MODES.map(m => [m.mode, m.slug])
+);
