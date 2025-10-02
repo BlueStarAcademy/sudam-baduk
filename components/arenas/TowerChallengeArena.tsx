@@ -11,7 +11,7 @@ import TowerChallengeInfoPanel from '../game/TowerChallengeInfoPanel.js';
 import { useClientTimer } from '../../hooks/useClientTimer.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import TurnCounterPanel from '../game/TurnCounterPanel.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/index.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, TOWER_STAGES } from '../../constants/index.js';
 import TowerStatusPanel from '../game/TowerStatusPanel.js';
 import SinglePlayerIntroModal from '../modals/SinglePlayerIntroModal.js';
 import { processMove } from '../../utils/goLogic.js';
@@ -44,7 +44,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     if (!player1?.id || !player2?.id || !currentUser || !currentUserWithStatus) {
         return <div className="flex items-center justify-center min-h-screen">플레이어 정보를 불러오는 중...</div>;
     }
-
+    
     const [confirmModalType, setConfirmModalType] = useState<'resign' | null>(null);
     const [showResultModal, setShowResultModal] = useState(false);
     const [showFinalTerritory, setShowFinalTerritory] = useState(false);
@@ -61,10 +61,14 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
         ['hidden_placing', 'scanning', 'missile_selecting', 'ai_hidden_thinking'].includes(session.gameStatus), 
         [session.gameStatus]
     );
-    
+
     const handleIntroConfirm = () => {
         handlers.handleAction({ type: 'CONFIRM_SP_INTRO', payload: { gameId: session.id } });
     };
+
+    if (session.gameStatus === GameStatus.SinglePlayerIntro) {
+        return <SinglePlayerIntroModal session={session} onConfirm={handleIntroConfirm} />;
+    }
 
     useEffect(() => {
         const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -157,7 +161,6 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
             const isFischer = (gameSettings.timeIncrement ?? 0) > 0;
             const isInByoyomi = myMainTimeLeft <= 0 && hasByoyomi && !isFischer;
             
-            // For SP/Tower games, only byoyomi and fischer modes should have warnings.
             const shouldWarn = isInByoyomi || isFischer;
 
             if (shouldWarn && myTime <= 10 && myTime > 0 && !warningSoundPlayedForTurn.current) {
@@ -217,6 +220,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
                  setIsSubmittingMove(false);
             }
         }
+// FIX: Corrected typo in useCallback dependency array from 'isSubmitting' to 'isSubmittingMove'.
     }, [isSubmittingMove, session, gameStatus, isMyTurn, handlers, isMobile, settings.features.mobileConfirm, pendingMove, isItemModeActive, gameId, mode, currentUser, player1.id]);
 
     const handleConfirmMove = useCallback(async () => {
@@ -262,7 +266,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
         negotiations: Object.values(negotiations),
         onViewUser: handlers.openViewingUser,
     };
-
+    
     const backgroundClass = useMemo(() => {
         if (session.floor === 100) {
             return 'bg-tower-100';
@@ -299,9 +303,6 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     
     return (
         <div className={`w-full h-full flex flex-col p-2 lg:p-4 text-stone-200 overflow-hidden relative ${backgroundClass}`}>
-             {session.gameStatus === GameStatus.SinglePlayerIntro && (
-                <SinglePlayerIntroModal session={session} onConfirm={handleIntroConfirm} />
-            )}
             {session.promptForMoreStones && !['ended', 'no_contest'].includes(session.gameStatus) && (
                 <TowerAddStonesPromptModal session={session} onAction={handlers.handleAction} />
             )}

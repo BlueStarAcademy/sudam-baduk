@@ -1,5 +1,5 @@
 import * as types from '../../types/index.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, BOT_NAMES, AVATAR_POOL, TOWER_STAGES, defaultSettings, SINGLE_PLAYER_STAGES, aiUserId, strategicAiDisplayMap, captureAiLevelMap } from '../../constants/index.js';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, BOT_NAMES, AVATAR_POOL, TOWER_STAGES, defaultSettings, SINGLE_PLAYER_STAGES, aiUserId } from '../../constants/index.js';
 import { createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats, createDefaultQuests } from '../initialData.js';
 import { makePlayfulAiMove } from './playfulAi.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
@@ -89,39 +89,46 @@ export const getAiUser = (mode: types.GameMode, difficulty: number = 50, stageId
 
     const bot = JSON.parse(JSON.stringify(baseAiUser));
     
-    let gnuGoLevel = 1;
     let botName = 'AI 상대';
-    let botStrategyLevel = 1; // for display only
+    let botStrategyLevel = 1;
+    let botPlayfulLevel = 1;
 
     if (floor) { // Tower Challenge
-        gnuGoLevel = Math.min(10, Math.floor(floor / 10) + 1);
-        botName = `도전의 탑 ${floor}층 AI (그누고 ${gnuGoLevel}단)`;
-        botStrategyLevel = floor; // Just for display
+        let aiStage: number;
+        if (floor <= 30) aiStage = 7;
+        else if (floor <= 60) aiStage = 8;
+        else if (floor <= 90) aiStage = 9;
+        else aiStage = 10;
+        
+        const displayLevel = aiStage * 5;
+        botName = `도전의 탑 ${floor}층 AI (${displayLevel}레벨)`;
+        botStrategyLevel = displayLevel;
+
     } else if (stageId) { // Single Player
         const stage = SINGLE_PLAYER_STAGES.find(s => s.id === stageId);
         if (stage) {
-            gnuGoLevel = Math.min(10, stage.katagoLevel); // katagoLevel now maps to GnuGo level
-            botName = `${stage.name} AI (그누고 ${gnuGoLevel}단)`;
-            botStrategyLevel = stage.katagoLevel;
+            const aiStage = stage.katagoLevel; // This is 1-10
+            const displayLevel = aiStage * 5;
+            botName = `${stage.name} AI (${displayLevel}레벨)`;
+            botStrategyLevel = displayLevel;
         }
     } else { // PvP AI
         const difficultyStep = Math.max(1, Math.min(10, Math.round(difficulty / 10)));
+        const displayLevel = difficultyStep * 5;
         const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === mode);
 
         if (isPlayful) {
-            gnuGoLevel = difficultyStep;
-            botName = `${mode}봇 ${gnuGoLevel}단`;
-            botStrategyLevel = gnuGoLevel;
-        } else { // Strategic (or fallback)
-            gnuGoLevel = difficultyStep;
-            botName = `AI 상대 (그누고 ${gnuGoLevel}단)`;
-            botStrategyLevel = gnuGoLevel;
+            botName = `${mode}봇 ${displayLevel}레벨`;
+            botPlayfulLevel = displayLevel;
+        } else { // Strategic
+            botName = `${mode}봇 ${displayLevel}레벨`;
+            botStrategyLevel = displayLevel;
         }
     }
-
+    
     bot.nickname = botName;
     bot.strategyLevel = botStrategyLevel;
-    bot.playfulLevel = Math.max(0, gnuGoLevel - 1); // Use playfulLevel to store the GnuGo engine level (0-9)
+    bot.playfulLevel = botPlayfulLevel;
     
     aiUserCache.set(cacheKey, bot);
     return bot;

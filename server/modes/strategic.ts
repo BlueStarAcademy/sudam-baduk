@@ -8,14 +8,10 @@ import {
     GameStatus,
     WinReason,
     GameMode,
-    type Negotiation,
-    GameType,
-    Point,
 } from '../../types/index.js';
-import * as db from '../db.js';
-import { endGame, getGameResult } from '../summaryService.js';
-import { makeAiHiddenMove, makeAiMove } from '../ai/index.js';
 import { processMove } from '../goLogic.js';
+import { getGameResult, endGame } from '../summaryService.js';
+import { makeAiHiddenMove, makeAiMove } from '../ai/index.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
 
 // Import handlers from specific mode files
@@ -27,16 +23,19 @@ import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidde
 import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
 import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
 import { handleSharedAction, transitionToPlaying } from './shared.js';
-import * as currencyService from '../currencyService.js';
-import { DEFAULT_GAME_SETTINGS } from '../../constants/gameSettings.js';
 
 
 // Helper function
 export const isFischerGame = (game: LiveGameSession): boolean => {
+    // Check the specific timeControl setting first, which is most reliable for SP/Tower
+    if (game.settings.timeControl?.type === 'fischer') {
+        return true;
+    }
+    // Fallback for PvP modes
     return game.mode === GameMode.Speed || (game.mode === GameMode.Mix && !!game.settings.mixedModes?.includes(GameMode.Speed));
 };
 
-export const initializeStrategicGame = (game: LiveGameSession, neg: Negotiation, now: number) => {
+export const initializeStrategicGame = (game: LiveGameSession, neg: any, now: number) => {
     const p1 = game.player1;
     const p2 = game.player2;
     
@@ -92,58 +91,72 @@ export const initializeStrategicGame = (game: LiveGameSession, neg: Negotiation,
     }
 };
 
-export const handleStrategicGameAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
+export const handleStrategicGameAction = async (volatileState: VolatileState, session: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const { type, payload } = action;
     const now = Date.now();
-    
-    if (type === 'PLACE_STONE' || type === 'PASS_TURN') {
-        return handleStandardAction(volatileState, game, action, user);
-    }
-
-    const sharedResult = await handleSharedAction(volatileState, game, action, user);
-    if (sharedResult) return sharedResult;
-
-    const nigiriResult = handleNigiriAction(game, action, user);
-    if (nigiriResult) return nigiriResult;
-    
-    const captureResult = handleCaptureAction(game, action, user);
-    if (captureResult) return captureResult;
-
-    const baseResult = handleBaseAction(game, action, user);
-    if (baseResult) return baseResult;
-
-    const hiddenResult = handleHiddenAction(volatileState, game, action, user);
-    if (hiddenResult) return hiddenResult;
-
-    const missileResult = handleMissileAction(game, action, user);
-    if (missileResult) return missileResult;
 
     if (type === 'PAUSE_GAME' || type === 'RESUME_GAME') {
-        const isPaused = game.gameStatus === GameStatus.Paused;
+        if (!session.isAiGame && !session.isSinglePlayer && !session.isTowerChallenge) {
+            return { error: "PvP games cannot be paused." };
+        }
+        const isPaused = session.gameStatus === GameStatus.Paused;
         if (type === 'PAUSE_GAME' && !isPaused) {
-            game.gameStatus = GameStatus.Paused;
-            if (game.turnDeadline) {
-                game.pausedTurnTimeLeft = (game.turnDeadline - now) / 1000;
-                game.turnDeadline = undefined;
-                game.turnStartTime = undefined;
+            session.gameStatus = GameStatus.Paused;
+            if (session.turnDeadline) {
+                session.pausedTurnTimeLeft = (session.turnDeadline - now) / 1000;
+                session.turnDeadline = undefined;
+                session.turnStartTime = undefined;
             }
         } else if (type === 'RESUME_GAME' && isPaused) {
-            game.gameStatus = GameStatus.Playing;
-            game.promptForMoreStones = false; // Always clear prompt on resume
-            if (game.pausedTurnTimeLeft) {
-                game.turnDeadline = now + game.pausedTurnTimeLeft * 1000;
-                game.turnStartTime = now;
-                game.pausedTurnTimeLeft = undefined;
+            session.gameStatus = GameStatus.Playing;
+            session.promptForMoreStones = false; // Always clear prompt on resume
+            if (session.pausedTurnTimeLeft) {
+                const now = Date.now();
+                session.turnDeadline = now + session.pausedTurnTimeLeft * 1000;
+                session.turnStartTime = now;
+                session.pausedTurnTimeLeft = undefined;
             }
         }
         return {};
     }
 
+    // Timer update
+    if (type === 'PLACE_STONE' || type === 'PASS_TURN') {
+        const result = await handleStandardAction(volatileState, session, action, user);
+        if (result) return result;
+    }
+
+    const sharedResult = await handleSharedAction(volatileState, session, action, user);
+    if (sharedResult) return sharedResult;
+
+    const nigiriResult = handleNigiriAction(session, action, user);
+    if (nigiriResult) return nigiriResult;
+    
+    const captureResult = handleCaptureAction(session, action, user);
+    if (captureResult) return captureResult;
+
+    const baseResult = handleBaseAction(session, action, user);
+    if (baseResult) return baseResult;
+
+    const hiddenResult = handleHiddenAction(volatileState, session, action, user);
+    if (hiddenResult) return hiddenResult;
+
+    const missileResult = handleMissileAction(session, action, user);
+    if (missileResult) return missileResult;
+
     return null;
 };
 
 export const updateStrategicGameState = async (game: LiveGameSession, now: number) => {
-    // Timeout logic for standard time control
+    if (game.gameStatus === GameStatus.Paused) {
+        return; // Don't process timers or AI moves if paused
+    }
+
+    if (isFischerGame(game)) {
+        updateSpeedState(game, now);
+    }
+    
+    // Timeout logic
     const deadline = Number(game.turnDeadline);
     if (game.gameStatus === GameStatus.Playing && deadline && now > deadline && !isFischerGame(game)) {
         const timedOutPlayer = game.currentPlayer;
@@ -154,18 +167,22 @@ export const updateStrategicGameState = async (game: LiveGameSession, now: numbe
         const wasInMainTime = (game as any)[timeKey] > 0;
 
         if (wasInMainTime) {
-            (game as any)[timeKey] = 0; // Transition to byoyomi
+            (game as any)[timeKey] = 0; // Enter byoyomi
             if ((game.settings.byoyomiCount ?? 0) > 0) {
-                // Start first byoyomi period WITHOUT decrementing count
+                // This is the first byoyomi period, count is NOT decremented yet.
                 game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                 game.turnStartTime = now;
                 return; // Game continues
             }
-        } else { // Was already in byoyomi
+        } else { // Already in byoyomi
             if ((game.settings.byoyomiCount ?? 0) > 0) {
-                (game as any)[byoyomiKey]--; // Decrement byoyomi period
-                if (((game as any)[byoyomiKey] ?? 0) >= 1) { // End game when count becomes 0
-                    // Start next byoyomi period
+                // Decrement a byoyomi period because this one has timed out.
+                (game as any)[byoyomiKey]--;
+                const periodsLeft = (game as any)[byoyomiKey];
+                
+                // If they have periods left (>= 1), give them another turn.
+                // If this decrement made it 0, they had 1 left, and now have 0 left. They lose.
+                if (periodsLeft > 0) {
                     game.turnDeadline = now + game.settings.byoyomiTime * 1000;
                     game.turnStartTime = now;
                     return; // Game continues
@@ -173,12 +190,14 @@ export const updateStrategicGameState = async (game: LiveGameSession, now: numbe
             }
         }
         
+        // If we reach here, it's a timeout loss
         game.lastTimeoutPlayerId = game.currentPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
         game.lastTimeoutPlayerIdClearTime = now + 5000;
         
         await endGame(game, winner, WinReason.Timeout);
     }
     
+    // AI Game Logic
     const isAiGame = game.isAiGame || game.isSinglePlayer || game.isTowerChallenge;
     const aiPlayerId = isAiGame ? game.player2.id : null;
     const aiPlayerEnum = game.blackPlayerId === aiPlayerId ? Player.Black : (game.whitePlayerId === aiPlayerId ? Player.White : Player.None);
@@ -207,24 +226,31 @@ export const updateStrategicGameState = async (game: LiveGameSession, now: numbe
         const aiMove = await game.pendingAiMove;
         game.pendingAiMove = undefined;
 
-        if (aiMove.x === -3 && aiMove.y === -3) {
+        if (aiMove.x === -3 && aiMove.y === -3) { // Special code for "move handled internally by playful AI"
             return;
         }
 
+        const now_ai_move = Date.now();
+        const playerWhoMoved = game.currentPlayer;
+        const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+        
+        // Update time used - CORRECTED LOGIC
+        const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischerGame(game);
+        if (game.turnStartTime && !wasInByoyomi) {
+            const timeUsed = (now_ai_move - game.turnStartTime) / 1000;
+            (game as any)[timeKey] -= timeUsed;
+            if ((game as any)[timeKey] < 0) (game as any)[timeKey] = 0;
+        }
+        
+        if (isFischerGame(game)) {
+            (game as any)[timeKey] += (game.settings.timeIncrement || 0);
+        }
+        
         if (aiMove.x === -2 && aiMove.y === -2) { // AI resigns
             const winner = game.currentPlayer === Player.Black ? Player.White : Player.Black;
             await endGame(game, winner, WinReason.Resign);
             console.log(`[AI] AI resigns in game ${game.id} due to no legal moves.`);
             return;
-        }
-
-        const now = Date.now();
-        const playerWhoMoved = game.currentPlayer;
-        const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0;
-
-        if (game.turnDeadline && !wasInByoyomi) {
-            (game as any)[timeKey] = Math.max(0, (game.turnDeadline - now) / 1000);
         }
 
         if (aiMove.x === -1 && aiMove.y === -1) { // AI passes
@@ -242,7 +268,6 @@ export const updateStrategicGameState = async (game: LiveGameSession, now: numbe
                 game.lastMove = { x: aiMove.x, y: aiMove.y };
                 game.moveHistory.push({ player: game.currentPlayer, ...aiMove });
                 
-                // After server state is updated, inform GnuGo
                 if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
                     gnuGoServiceManager.playUserMove(game.id, aiMove, aiPlayerEnum, game.settings.boardSize, game.moveHistory, game.finalKomi ?? game.settings.komi).catch(e => {
                         console.error(`[Strategic Action] Failed to inform GNU Go of AI move for game ${game.id}`, e);
@@ -264,8 +289,8 @@ export const updateStrategicGameState = async (game: LiveGameSession, now: numbe
     
                 const isSpOrTowerCapture = (game.isSinglePlayer || game.isTowerChallenge) && game.gameType === 'capture';
                 if (isSpOrTowerCapture) {
-                    const blackTarget = game.effectiveCaptureTargets?.[Player.Black];
-                    const whiteTarget = game.effectiveCaptureTargets?.[Player.White];
+                    const blackTarget = game.effectiveCaptureTargets?.[Player.Black] || Infinity;
+                    const whiteTarget = game.effectiveCaptureTargets?.[Player.White] || Infinity;
 
                     if (blackTarget && game.captures[Player.Black] >= blackTarget) {
                         await endGame(game, Player.Black, WinReason.CaptureLimit);
@@ -297,20 +322,20 @@ export const updateStrategicGameState = async (game: LiveGameSession, now: numbe
             return;
         }
 
-        if (isFischerGame(game)) {
-            (game as any)[timeKey] += game.settings.timeIncrement || 0;
-        }
-
+        // Switch turn
         game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
         game.missileUsedThisTurn = false;
-        const nextTimeKey = game.currentPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        const isNextInByoyomi = (game as any)[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischerGame(game);
-        
-        game.turnStartTime = now;
-        if (isNextInByoyomi) {
-            game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-        } else {
-            game.turnDeadline = now + (game as any)[nextTimeKey] * 1000;
+
+        if (game.settings.timeLimit > 0) {
+            const nextTimeKey = game.currentPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+            const isNextInByoyomi = (game as any)[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischerGame(game);
+            
+            game.turnStartTime = now_ai_move;
+            if (isNextInByoyomi) {
+                game.turnDeadline = now_ai_move + game.settings.byoyomiTime * 1000;
+            } else {
+                game.turnDeadline = now_ai_move + (game as any)[nextTimeKey] * 1000;
+            }
         }
     }
     

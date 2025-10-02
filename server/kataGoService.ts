@@ -1,17 +1,27 @@
+/// <reference types="node" />
+
 import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove } from '../types.js';
 import * as types from '../types.js';
+import { fileURLToPath } from 'url';
 
 // --- Configuration ---
-// These paths should be configured for your environment.
-// Based on user's log, assuming this structure.
-const KATAGO_PATH = 'c:/katago/katago.exe';
-const MODEL_PATH = 'c:/katago/kata1-b28c512nbt-s9853922560-d5031756885.bin.gz';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename); // .../server/services
+
+const isWindows = process.platform === 'win32';
+const exeName = isWindows ? 'katago.exe' : 'katago';
+// FIX: Correctly resolve the path to server/katago instead of the project root.
+const KATAGO_DIR = path.resolve(__dirname, '..', 'katago');
+
+const KATAGO_PATH = path.join(KATAGO_DIR, exeName);
+const MODEL_PATH = path.join(KATAGO_DIR, 'kata1-b28c512nbt-s9853922560-d5031756885.bin.gz');
 const CONFIG_PATH = path.resolve('server/temp_katago_config.cfg');
 const KATAGO_HOME_PATH = path.resolve('server/katago_home');
+
 
 const LETTERS = "ABCDEFGHJKLMNOPQRST";
 
@@ -188,7 +198,15 @@ class KataGoManager {
             console.log('[KataGo] Attempting to start engine...');
 
             if (!fs.existsSync(KATAGO_PATH)) {
-                const errorMsg = `[KataGo] Engine not found at ${KATAGO_PATH}. Analysis will be unavailable.`;
+                const errorMsg = `[KataGo] Engine not found at ${KATAGO_PATH}. Analysis will be unavailable. Please place katago executable in 'server/katago/'.`;
+                console.error(errorMsg);
+                this.isStarting = false;
+                this.readyPromise = null;
+                return reject(new Error(errorMsg));
+            }
+            
+            if (!fs.existsSync(MODEL_PATH)) {
+                const errorMsg = `[KataGo] Model not found at ${MODEL_PATH}. Analysis will be unavailable. Please place the model file in 'server/katago/'.`;
                 console.error(errorMsg);
                 this.isStarting = false;
                 this.readyPromise = null;

@@ -12,6 +12,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
         case 'LOGOUT': {
             delete volatileState.userConnections[user.id];
             delete volatileState.userStatuses[user.id];
+            delete volatileState.userSessions[user.id];
             return { clientResponse: { success: true } };
         }
         case 'ENTER_WAITING_ROOM': {

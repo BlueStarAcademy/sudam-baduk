@@ -17,7 +17,8 @@
     "hooks",
     "services",
     "types",
-    "utils"
+    "utils",
+    "scripts"
   ],
   "exclude": [
     "server"

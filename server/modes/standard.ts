@@ -108,7 +108,6 @@ export const handleStandardAction = async (volatileState: VolatileState, game: L
 
             if(game.isSinglePlayer || game.isTowerChallenge) {
                 if (game.blackStoneLimit && (game.blackStonesPlaced || 0) >= game.blackStoneLimit) {
-                    // Check if player can buy more stones in Tower Challenge
                     if (game.isTowerChallenge && (game.gameType === 'survival' || game.gameType === 'capture')) {
                         const canPurchaseMore = (game.towerAddStonesUsed || 0) < 1;
                         const addStonesCost = 100; // Diamonds
@@ -135,10 +134,11 @@ export const handleStandardAction = async (volatileState: VolatileState, game: L
             const playerWhoMoved = game.currentPlayer;
             const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
             if (game.settings.timeLimit > 0) {
-                const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0;
-                if (game.turnDeadline && !wasInByoyomi) {
-                    const timeRemaining = Math.max(0, (game.turnDeadline - now) / 1000);
-                    (game as any)[timeKey] = timeRemaining;
+                const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischerGame(game);
+                if (game.turnStartTime && !wasInByoyomi) {
+                    const timeUsed = (now - game.turnStartTime) / 1000;
+                    (game as any)[timeKey] -= timeUsed;
+                    if ((game as any)[timeKey] < 0) (game as any)[timeKey] = 0;
                 }
                 if (isFischerGame(game)) {
                     (game as any)[timeKey] += (game.settings.timeIncrement || 0);
@@ -187,9 +187,11 @@ export const handleStandardAction = async (volatileState: VolatileState, game: L
             const playerWhoMoved = game.currentPlayer;
             const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
             if (game.settings.timeLimit > 0) {
-                const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0;
-                if (game.turnDeadline && !wasInByoyomi) {
-                    (game as any)[timeKey] = Math.max(0, (game.turnDeadline - now) / 1000);
+                const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0 && !isFischerGame(game);
+                if (game.turnStartTime && !wasInByoyomi) {
+                    const timeUsed = (now - game.turnStartTime) / 1000;
+                    (game as any)[timeKey] -= timeUsed;
+                    if ((game as any)[timeKey] < 0) (game as any)[timeKey] = 0;
                 }
                 if (isFischerGame(game)) {
                     (game as any)[timeKey] += (game.settings.timeIncrement || 0);

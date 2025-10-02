@@ -1,4 +1,4 @@
-import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession } from '../../types/index.js';
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus } from '../../types/index.js';
 import * as db from '../db.js';
 // FIX: Changed import to be a named import as the function is now exported from strategic.ts
 import { handleStrategicGameAction } from '../modes/strategic.js';
@@ -110,12 +110,30 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
         if (type === 'PAUSE_GAME' || type === 'RESUME_GAME') {
             const game = await db.getLiveGame(gameId);
             if (!game) return { error: "Game not found." };
-            // Since this is only for single player / tower, it must be strategic.
-            const result = await handleStrategicGameAction(volatileState, game, actionWithUserId, user);
-            if (result) {
-                await db.saveGame(game);
-                return result;
+            if (!game.isAiGame && !game.isSinglePlayer && !game.isTowerChallenge) return { error: "Can't pause this game."};
+
+            const isPaused = game.gameStatus === GameStatus.Paused;
+            const now = Date.now();
+            if (type === 'PAUSE_GAME' && !isPaused) {
+// FIX: Use GameStatus enum member instead of string literal.
+                game.gameStatus = GameStatus.Paused;
+                if (game.turnDeadline) {
+                    game.pausedTurnTimeLeft = (game.turnDeadline - now) / 1000;
+                    game.turnDeadline = undefined;
+                    game.turnStartTime = undefined;
+                }
+            } else if (type === 'RESUME_GAME' && isPaused) {
+// FIX: Use GameStatus enum member instead of string literal.
+                game.gameStatus = GameStatus.Playing;
+                game.promptForMoreStones = false; // Always clear prompt on resume
+                if (game.pausedTurnTimeLeft) {
+                    game.turnDeadline = now + game.pausedTurnTimeLeft * 1000;
+                    game.turnStartTime = now;
+                    game.pausedTurnTimeLeft = undefined;
+                }
             }
+            await db.saveGame(game);
+            return {};
         }
         if (type === 'TOWER_PURCHASE_ITEM') {
             const game = await db.getLiveGame(gameId);

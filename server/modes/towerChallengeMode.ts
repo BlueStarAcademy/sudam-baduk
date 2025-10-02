@@ -149,8 +149,14 @@ export const handleTowerChallengeGameStart = async (
     
     game.gameStatus = GameStatus.SinglePlayerIntro;
 
-    // Add GnuGo instance creation for low-level AI
-    gnuGoServiceManager.create(game.id, game.player2.playfulLevel, game.settings.boardSize, game.settings.komi);
+    let aiStage: number;
+    if (floor <= 30) aiStage = 7;
+    else if (floor <= 60) aiStage = 8;
+    else if (floor <= 90) aiStage = 9;
+    else aiStage = 10;
+    const gnuGoEngineLevel = aiStage - 1;
+
+    gnuGoServiceManager.create(game.id, gnuGoEngineLevel, game.settings.boardSize, game.settings.komi);
 
     await db.saveGame(game);
     volatileState.userStatuses[user.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id };

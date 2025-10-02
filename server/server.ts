@@ -1,6 +1,8 @@
+
 import 'dotenv/config';
-// FIX: Changed Express import to default and used namespace for types to resolve type conflicts.
-import express from 'express';
+// FIX: Use aliased imports for Express types to avoid conflicts with global Request/Response types.
+// Explicitly import Request, Response, and NextFunction to resolve type conflicts.
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV } from './db.js';
 import { handleAction } from './actions/gameActions.js';
@@ -35,10 +37,9 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// FIX: Use express.Request, express.Response, and express.NextFunction to avoid type conflicts.
-// FIX: Use imported Request, Response, NextFunction types directly.
-// FIX: Updated Express types for middleware function parameters.
-const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+// FIX: Update Express Request and Response types to avoid conflict with global types.
+// FIX: Use Request, Response, and NextFunction types directly imported from 'express' to resolve type conflicts.
+const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     // For login/register, no session check is needed
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register') {
         return next();
@@ -70,10 +71,8 @@ const userMiddleware = async (req: express.Request, res: express.Response, next:
 
 app.use(userMiddleware);
 
-// FIX: Use express.Request and express.Response to avoid type conflicts.
-// FIX: Use imported Request, Response types directly.
-// FIX: Updated Express types for route handler parameters.
-app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
+// FIX: Update Express Request and Response types to avoid conflict with global types.
+app.post('/api/auth/register', async (req: Request, res: Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
         return res.status(400).json({ message: 'Username, password, and nickname are required.' });
@@ -102,10 +101,8 @@ app.post('/api/auth/register', async (req: express.Request, res: express.Respons
     }
 });
 
-// FIX: Use express.Request and express.Response to avoid type conflicts.
-// FIX: Use imported Request, Response types directly.
-// FIX: Updated Express types for route handler parameters.
-app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
+// FIX: Update Express Request and Response types to avoid conflict with global types.
+app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: 'Username and password are required.' });
@@ -132,10 +129,8 @@ app.post('/api/auth/login', async (req: express.Request, res: express.Response) 
     }
 });
 
-// FIX: Use express.Request and express.Response to avoid type conflicts.
-// FIX: Use imported Request, Response types directly.
-// FIX: Updated Express types for route handler parameters.
-app.post('/api/state', async (req: express.Request, res: express.Response) => {
+// FIX: Update Express Request and Response types to avoid conflict with global types.
+app.post('/api/state', async (req: Request, res: Response) => {
     const user = (req as any).user as User;
     let userStatus: UserStatusInfo | undefined;
     if (user) {
@@ -158,12 +153,19 @@ app.post('/api/state', async (req: express.Request, res: express.Response) => {
     res.json({ ...data, userStatuses: volatileState.userStatuses, negotiations: volatileState.negotiations, waitingRoomChats: volatileState.waitingRoomChats, gameChats: volatileState.gameChats });
 });
 
-// FIX: Use express.Request and express.Response to avoid type conflicts.
-// FIX: Use imported Request, Response types directly.
-// FIX: Updated Express types for route handler parameters.
-app.post('/api/action', async (req: express.Request, res: express.Response) => {
+// FIX: Update Express Request and Response types to avoid conflict with global types.
+app.post('/api/action', async (req: Request, res: Response) => {
     const user = (req as any).user as User;
     if (!user) {
+        // For beacon calls on logout, user might not be attached if session check fails.
+        // We still need to process the logout.
+        if (req.body.type === 'LOGOUT' && req.body.userId) {
+            console.log(`Processing beacon logout for user ${req.body.userId}`);
+            delete volatileState.userConnections[req.body.userId];
+            delete volatileState.userStatuses[req.body.userId];
+            delete volatileState.userSessions[req.body.userId];
+            return res.json({ success: true });
+        }
         return res.status(401).json({ message: 'Authentication required for this action.' });
     }
 
@@ -211,13 +213,18 @@ const startServer = async () => {
     setInterval(async () => {
         const now = Date.now();
         
+        const thirtyMinutes = 30 * 60 * 1000;
         for (const userId in volatileState.userConnections) {
-            if (now - volatileState.userConnections[userId] > 30000) { // 30 second timeout
-                delete volatileState.userConnections[userId];
-                delete volatileState.userStatuses[userId];
-                delete volatileState.userSessions[userId];
+            const lastSeen = volatileState.userConnections[userId];
+            const userStatus = volatileState.userStatuses[userId];
+
+            // If user is 'waiting' and hasn't polled in 30 minutes, set to 'resting'
+            if (userStatus?.status === UserStatus.Waiting && (now - lastSeen) > thirtyMinutes) {
+                console.log(`[Idle] User ${userId} idle for 30 mins in waiting room. Setting to Resting.`);
+                userStatus.status = UserStatus.Resting;
             }
         }
+
         for (const negId in volatileState.negotiations) {
             if (now > volatileState.negotiations[negId].deadline) {
                 const neg = volatileState.negotiations[negId];
@@ -254,29 +261,40 @@ const startServer = async () => {
         
         const allUsers = await db.getAllUsers();
         for(const user of allUsers) {
-            let modifiedUser: User = JSON.parse(JSON.stringify(user));
+            const originalUserSnapshot = JSON.stringify(user);
+            const userCopy: User = JSON.parse(originalUserSnapshot);
             const guild = user.guildId ? guilds[user.guildId] : null;
 
-            // Daily/Weekly/Monthly Resets
-            const userAfterReset = await resetAndGenerateQuests(modifiedUser);
-            if (userAfterReset !== modifiedUser) {
-                modifiedUser = userAfterReset;
-            }
+            const userAfterReset = await resetAndGenerateQuests(userCopy);
+            const userAfterAP = regenerateActionPoints(userAfterReset, guild);
+            const userAfterMissions = accumulateMissionRewards(userAfterAP);
+            
+            const finalCalculatedUser = userAfterMissions;
 
-            // Regenerate action points
-            const userAfterAP = regenerateActionPoints(modifiedUser, guild);
-            if (userAfterAP !== modifiedUser) {
-                 modifiedUser = userAfterAP;
-            }
-
-            // Accumulate single player mission rewards
-            const userAfterMissions = accumulateMissionRewards(modifiedUser);
-            if (userAfterMissions !== modifiedUser) {
-                modifiedUser = userAfterMissions;
-            }
-
-            if (JSON.stringify(modifiedUser) !== JSON.stringify(user)) {
-                await db.updateUser(modifiedUser);
+            if (JSON.stringify(finalCalculatedUser) !== originalUserSnapshot) {
+                const latestUser = await db.getUser(user.id);
+                if (latestUser) {
+                    // Merge properties managed by this loop
+                    latestUser.quests = finalCalculatedUser.quests;
+                    latestUser.actionPoints = finalCalculatedUser.actionPoints;
+                    latestUser.lastActionPointUpdate = finalCalculatedUser.lastActionPointUpdate;
+                    latestUser.singlePlayerMissions = finalCalculatedUser.singlePlayerMissions;
+                    latestUser.lastNeighborhoodPlayedDate = finalCalculatedUser.lastNeighborhoodPlayedDate;
+                    latestUser.neighborhoodRewardClaimed = finalCalculatedUser.neighborhoodRewardClaimed;
+                    latestUser.lastNeighborhoodTournament = finalCalculatedUser.lastNeighborhoodTournament;
+                    latestUser.lastNationalPlayedDate = finalCalculatedUser.lastNationalPlayedDate;
+                    latestUser.nationalRewardClaimed = finalCalculatedUser.nationalRewardClaimed;
+                    latestUser.lastNationalTournament = finalCalculatedUser.lastNationalTournament;
+                    latestUser.lastWorldPlayedDate = finalCalculatedUser.lastWorldPlayedDate;
+                    latestUser.worldRewardClaimed = finalCalculatedUser.worldRewardClaimed;
+                    latestUser.lastWorldTournament = finalCalculatedUser.lastWorldTournament;
+                    latestUser.dailyChampionshipMatchesPlayed = finalCalculatedUser.dailyChampionshipMatchesPlayed;
+                    latestUser.lastChampionshipMatchDate = finalCalculatedUser.lastChampionshipMatchDate;
+                    latestUser.guildBossAttempts = finalCalculatedUser.guildBossAttempts;
+                    latestUser.lastGuildBossAttemptDate = finalCalculatedUser.lastGuildBossAttemptDate;
+                    
+                    await db.updateUser(latestUser);
+                }
             }
         }
     }, 5000);

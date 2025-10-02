@@ -170,9 +170,9 @@ export const handleSinglePlayerGameStart = async (
     
     // All single player games should start with the intro modal.
     game.gameStatus = GameStatus.SinglePlayerIntro;
-
-    // Add GnuGo instance creation for low-level AI
-    gnuGoServiceManager.create(game.id, game.player2.playfulLevel, game.settings.boardSize, game.settings.komi);
+    
+    const gnuGoEngineLevel = stage.katagoLevel - 1;
+    gnuGoServiceManager.create(game.id, gnuGoEngineLevel, game.settings.boardSize, game.settings.komi);
 
     await db.saveGame(game);
     

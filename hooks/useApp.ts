@@ -27,13 +27,34 @@ export const useApp = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
 
+    // Refs to hold current user/session for unload handler to prevent stale closures
+    const stateForUnloadRef = useRef({ currentUser, sessionId });
+    useEffect(() => {
+        stateForUnloadRef.current = { currentUser, sessionId };
+    }, [currentUser, sessionId]);
+
+    // Logout on browser/tab close
+    useEffect(() => {
+        const handleUnload = () => {
+            const { currentUser: user, sessionId: sId } = stateForUnloadRef.current;
+            if (user && sId) {
+                // Use navigator.sendBeacon for reliable background sending on page exit.
+                const data = JSON.stringify({
+                    type: 'LOGOUT',
+                    userId: user.id,
+                    sessionId: sId,
+                });
+                navigator.sendBeacon('/api/action', new Blob([data], { type: 'application/json' }));
+            }
+        };
+        window.addEventListener('unload', handleUnload);
+        return () => {
+            window.removeEventListener('unload', handleUnload);
+        };
+    }, []); // Empty dependency array means this effect runs once on mount.
+
     useEffect(() => {
         try {
-            if (!sessionStorage.getItem('sessionIsActive')) {
-                localStorage.removeItem('sessionData');
-                sessionStorage.setItem('sessionIsActive', 'true');
-                return;
-            }
             const stored = localStorage.getItem('sessionData');
             if (stored) {
                 const { user, sessionId: sid } = JSON.parse(stored);
@@ -43,7 +64,6 @@ export const useApp = () => {
         } catch (e) {
             console.error('Failed to initialize session from storage', e);
             localStorage.removeItem('sessionData');
-            sessionStorage.removeItem('sessionIsActive');
         }
     }, []);
 
@@ -78,22 +98,14 @@ export const useApp = () => {
         return () => window.removeEventListener('resize', checkIsMobile);
     }, []);
     
-    const handleLogout = useCallback(async () => {
-        if (isLoggingOut.current) return;
-        isLoggingOut.current = true;
-        
-        // Inform server of logout (fire and forget is fine)
-        handleAction({ type: 'LOGOUT' });
-
-        // Reset client-side state
+    // Fix: create helper function to break circular dependency
+    const doLogoutClientSide = useCallback(() => {
         setCurrentUser(null);
         setSessionId(null);
-        
         isLoggingOut.current = false;
-        // Redirect to login page
         window.location.hash = '';
     }, []);
-    
+
     const handleAction = useCallback(async (action: ServerAction): Promise<{success: boolean, error?: string, [key: string]: any} | undefined> => {
         if (
             action.type.startsWith('LEAVE_') || 
@@ -158,7 +170,8 @@ export const useApp = () => {
                 if (res.status === 401) {
                     showError('다른 기기에서 로그인하여 세션이 만료되었습니다. 다시 로그인해주세요.');
                     if (!isLoggingOut.current) {
-                        handleLogout();
+                        isLoggingOut.current = true;
+                        doLogoutClientSide();
                     }
                     return { success: false, error: 'Session expired' };
                 }
@@ -255,7 +268,18 @@ export const useApp = () => {
             showError(err.message);
             return { success: false, error: err.message };
         }
-    }, [currentUser?.id, sessionId, handleLogout]);
+    }, [currentUser?.id, sessionId, doLogoutClientSide]);
+
+    const handleLogout = useCallback(async () => {
+        if (isLoggingOut.current) return;
+        isLoggingOut.current = true;
+        
+        // Await server confirmation before clearing local state to prevent race conditions
+        await handleAction({ type: 'LOGOUT' });
+
+        // Reset client-side state
+        doLogoutClientSide();
+    }, [handleAction, doLogoutClientSide]);
     
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -472,25 +496,11 @@ export const useApp = () => {
     useEffect(() => {
         if (currentUser && sessionId) {
             localStorage.setItem('sessionData', JSON.stringify({ user: currentUser, sessionId }));
-            if (!sessionStorage.getItem('sessionIsActive')) {
-                sessionStorage.setItem('sessionIsActive', 'true');
-            }
         } else {
             localStorage.removeItem('sessionData');
-            sessionStorage.removeItem('sessionIsActive');
         }
     }, [currentUser, sessionId]);
 
-    const openShop = useCallback((tab: ShopTab = 'equipment') => {
-        setShopInitialTab(tab);
-        setIsShopOpen(true);
-    }, []);
-
-    const openInventory = useCallback((tab: InventoryTab = 'all') => {
-        setInventoryInitialTab(tab);
-        setIsInventoryOpen(true);
-    }, []);
-    
     // --- State Polling ---
     useEffect(() => {
         if (!currentUser?.id || !sessionId) return;
@@ -822,6 +832,16 @@ export const useApp = () => {
     
     const openGuildEffectsModal = useCallback(() => setIsGuildEffectsModalOpen(true), []);
     const closeGuildEffectsModal = useCallback(() => setIsGuildEffectsModalOpen(false), []);
+// FIX: Define openInventory and openShop to resolve shorthand property errors in handlers object.
+    const openInventory = useCallback((initialTab: InventoryTab = 'all') => {
+        setInventoryInitialTab(initialTab);
+        setIsInventoryOpen(true);
+    }, []);
+
+    const openShop = useCallback((initialTab: ShopTab = 'equipment') => {
+        setShopInitialTab(initialTab);
+        setIsShopOpen(true);
+    }, []);
 
     const handlers = {
         handleAction, handleLogout, handleEnterWaitingRoom,

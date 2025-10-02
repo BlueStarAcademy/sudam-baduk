@@ -1,16 +1,21 @@
-import { getGoLogic } from './goLogic';
-// FIX: Corrected import paths for constants.
-import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS } from '../constants/index';
-import { TOWER_STAGES } from '../constants/towerChallengeConstants';
-import { SINGLE_PLAYER_STAGES } from '../constants/singlePlayerConstants';
-// FIX: Import types and enums to resolve errors
-import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild } from '../types/index';
-import { aiUserId, makeAiMove, getAiUser } from './ai/index';
-import { initializeStrategicGame, updateStrategicGameState } from './modes/strategic';
-import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful';
-import * as db from './db';
-import * as effectService from '../utils/statUtils';
-import { endGame, getGameResult } from './summaryService';
+import { getGoLogic } from './goLogic.js';
+import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS } from '../constants/index.js';
+import { TOWER_STAGES } from '../constants/towerChallengeConstants.js';
+import { SINGLE_PLAYER_STAGES } from '../constants/singlePlayerConstants.js';
+import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild, Move } from '../types/index.js';
+import { aiUserId, makeAiMove, getAiUser } from './ai/index.js';
+import { initializeStrategicGame, updateStrategicGameState } from './modes/strategic.js';
+import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.js';
+import * as db from './db.js';
+import * as effectService from '../utils/statUtils.js';
+import { endGame, getGameResult } from './summaryService.js';
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
+import { gnuGoServiceManager } from './services/gnuGoService.js';
+// FIX: Export pointToGnuGoMove to be used in other modules.
+import { pointToGnuGoMove } from './services/gnuGoService.js';
+
 
 export const getNewActionButtons = (game: LiveGameSession): ActionButton[] => {
     const { mode, moveHistory } = game;
@@ -147,7 +152,6 @@ export const initializeGame = async (neg: Negotiation, guilds: Record<string, Gu
     const p2Guild = opponent.id !== aiUserId && opponent.guildId ? guilds[opponent.id] : null;
 
     if (SPECIAL_GAME_MODES.some(m => m.mode === mode) || game.isSinglePlayer || game.isTowerChallenge) {
-        // FIX: The function call to `initializeStrategicGame` had too many arguments. It expected 3 but received 5. The extra arguments have been removed.
         initializeStrategicGame(game, neg, now);
     } else if (PLAYFUL_GAME_MODES.some(m => m.mode === mode)) {
         await initializePlayfulGame(game, neg, now, p1Guild, p2Guild);
@@ -157,6 +161,47 @@ export const initializeGame = async (neg: Negotiation, guilds: Record<string, Gu
         game.currentPlayer = Player.Black;
         if (settings.timeLimit > 0) game.turnDeadline = now + game.blackTimeLeft * 1000;
         game.turnStartTime = now;
+    }
+    
+    if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
+        await gnuGoServiceManager.create(game.id, game.player2.playfulLevel, game.settings.boardSize, game.finalKomi ?? game.settings.komi);
+        const instance = gnuGoServiceManager.get(game.id);
+        if (instance) {
+            const initialMoves: Move[] = [];
+            for (let y = 0; y < game.settings.boardSize; y++) {
+                for (let x = 0; x < game.settings.boardSize; x++) {
+                    const player = game.boardState[y][x];
+                    if (player !== Player.None) {
+                        initialMoves.push({ player, x, y });
+                    }
+                }
+            }
+            if (initialMoves.length > 0) {
+                // Create a temporary SGF string to set up the board state in GnuGo
+                let sgfString = `(;GM[1]FF[4]CA[UTF-8]AP[SUDAM]RU[Japanese]SZ[${game.settings.boardSize}]KM[${game.finalKomi ?? game.settings.komi}]`;
+                const blackStones = initialMoves.filter(m => m.player === Player.Black).map(m => `[${String.fromCharCode(97 + m.x)}${String.fromCharCode(97 + m.y)}]`).join('');
+                const whiteStones = initialMoves.filter(m => m.player === Player.White).map(m => `[${String.fromCharCode(97 + m.x)}${String.fromCharCode(97 + m.y)}]`).join('');
+                if (blackStones) sgfString += `AB${blackStones}`;
+                if (whiteStones) sgfString += `AW${whiteStones}`;
+                if (game.currentPlayer === Player.Black || game.currentPlayer === Player.White) {
+                    sgfString += `PL[${game.currentPlayer === Player.Black ? 'B' : 'W'}]`;
+                }
+                sgfString += ')';
+
+                const tempFilePath = path.join(os.tmpdir(), `sudam-initial-${game.id}.sgf`);
+                try {
+                    fs.writeFileSync(tempFilePath, sgfString);
+                    await instance.sendCommand(`loadsgf ${tempFilePath}`);
+                    console.log(`[GnuGoManager] Loaded initial board state via SGF for game ${game.id}`);
+                } catch (e) {
+                    console.error(`[GnuGoManager] Failed to load initial state via SGF for game ${game.id}`, e);
+                } finally {
+                    if (fs.existsSync(tempFilePath)) {
+                        fs.unlinkSync(tempFilePath);
+                    }
+                }
+            }
+        }
     }
     
     return game;
@@ -195,7 +240,6 @@ export const resetGameForRematch = (game: LiveGameSession, negotiation: Negotiat
     // This is a potential limitation if guild effects are expected to be recalculated.
     // For now, assuming stats don't change between matches is acceptable.
     if (SPECIAL_GAME_MODES.some(m => m.mode === newGame.mode)) {
-        // FIX: The function call to `initializeStrategicGame` had too many arguments. It expected 3 but received 5. The extra arguments have been removed.
         initializeStrategicGame(newGame, negotiation, now);
     } else if (PLAYFUL_GAME_MODES.some(m => m.mode === newGame.mode)) {
         initializePlayfulGame(newGame, negotiation, now, null, null);

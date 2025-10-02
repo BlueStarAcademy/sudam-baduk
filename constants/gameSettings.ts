@@ -136,3 +136,7 @@ export const CURLING_GAUGE_SPEEDS = [
   { value: 700, label: 'x2 (보통)' },
   { value: 400, label: 'x3 (빠름)' },
 ];
+
+// FIX: Add missing AI difficulty maps for NegotiationModal.
+export const strategicAiDisplayMap = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+export const captureAiLevelMap = [1, 3, 5, 7, 9, 11, 13, 15, 17, 18];

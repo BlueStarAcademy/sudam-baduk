@@ -309,7 +309,12 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
         
             const game = await initializeGame(negotiation, guilds);
             
-            gnuGoServiceManager.create(game.id, game.player2.playfulLevel, game.settings.boardSize, game.settings.komi);
+            const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
+            const displayLevel = isStrategic ? game.player2.strategyLevel : game.player2.playfulLevel;
+            const aiStage = Math.max(1, displayLevel / 5);
+            const gnuGoEngineLevel = Math.max(0, aiStage - 1);
+
+            gnuGoServiceManager.create(game.id, gnuGoEngineLevel, game.settings.boardSize, game.settings.komi);
 
             await db.saveGame(game);
             

@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { useAppContext } from '../hooks/useAppContext.js';
-import { GuildMember, GuildMemberRole } from '../types/index.js';
-import { isSameDayKST } from '../utils/timeUtils.js';
-import { GUILD_CHECK_IN_MILESTONE_REWARDS } from '../constants/index.js';
+import { useAppContext } from '.././hooks/useAppContext.js';
+import { GuildMember, GuildMemberRole } from '.././types/index.js';
+import { isSameDayKST } from '.././utils/timeUtils.js';
+import { GUILD_CHECK_IN_MILESTONE_REWARDS } from '.././constants/index.js';
 
 interface QuickAccessSidebarProps {
     mobile?: boolean;
@@ -53,11 +53,12 @@ const QuickAccessSidebar: React.FC<QuickAccessSidebarProps> = ({ mobile = false,
 
     const allButtons = [
         { label: '퀘스트', iconUrl: '/images/quickmenu/quest.png', handler: handlers.openQuests, disabled: false, notification: hasClaimableQuest },
-        { label: '길드', iconUrl: '/images/quickmenu/guild.png', handler: () => window.location.hash = '#/guild', disabled: false, notification: guildNotification },
         { label: '우편함', iconUrl: '/images/quickmenu/mail.png', handler: handlers.openMailbox, disabled: false, notification: hasUnreadMail, count: unreadMailCount },
+        { label: '기보', iconUrl: '/images/quickmenu/gibo.png', handler: () => alert('기보 기능은 현재 준비 중입니다.'), disabled: false, notification: false },
         { label: '상점', iconUrl: '/images/quickmenu/store.png', handler: () => handlers.openShop(), disabled: false, notification: false },
+        { label: '길드', iconUrl: '/images/quickmenu/guild.png', handler: () => window.location.hash = '#/guild', disabled: false, notification: guildNotification },
         { label: '가방', iconUrl: '/images/quickmenu/bag.png', handler: () => handlers.openInventory(), disabled: false, notification: false },
-        { label: '도감', iconUrl: '/images/item/itembook.png', handler: handlers.openEncyclopedia, disabled: false, notification: false },
+
     ];
     
     const containerClass = mobile 

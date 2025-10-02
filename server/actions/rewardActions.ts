@@ -4,7 +4,7 @@ import { DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_RE
 import { CONSUMABLE_ITEMS } from '../../constants/items.js';
 import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../../constants/singlePlayerConstants.js';
 import { DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS } from '../../constants/quests.js';
-import { updateQuestProgress, getMissionInfoWithLevel } from '../questService.js';
+import { updateQuestProgress, getMissionInfoWithLevel, accumulateMissionRewards } from '../questService.js';
 import * as currencyService from '../currencyService.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
 // FIX: Import `calculateUserEffects` from the correct utility file.
@@ -198,6 +198,11 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
         }
         case 'CLAIM_SINGLE_PLAYER_MISSION_REWARD': {
             const { missionId } = payload;
+            
+            // Apply accumulation logic right before claiming to get the latest state
+            // and prevent race conditions with the 5-second server loop.
+            user = accumulateMissionRewards(user);
+
             const missionState = user.singlePlayerMissions[missionId];
             if (!missionState || !missionState.isStarted || missionState.accumulatedAmount < 1) {
                 return { error: '수령할 보상이 없습니다.' };
@@ -220,8 +225,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
         
             const addedItems = grantReward(user, reward, `${leveledMissionInfo.name} 수련과제 보상`);
             
-            // FIX: Set to 0 instead of subtracting to prevent float precision issues and ensure a clean state.
-            missionState.accumulatedAmount = 0;
+            missionState.accumulatedAmount -= amountToClaim;
             missionState.lastCollectionTime = Date.now();
 
             updateQuestProgress(user, 'claim_single_player_mission');
