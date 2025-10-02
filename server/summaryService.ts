@@ -7,7 +7,7 @@ import { getGoLogic } from './goLogic.js';
 import { updateQuestProgress } from './questService.js';
 import * as currencyService from './currencyService.js';
 import * as guildService from './guildService.js';
-import { getMannerRank, getMannerScore } from './services/manner.js';
+import { getMannerRank, getMannerScore } from '../utils/mannerUtils.js';
 // FIX: Import `calculateUserEffects` from the correct utility file.
 import { calculateUserEffects } from '../utils/statUtils.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inventoryUtils.js';
@@ -178,7 +178,6 @@ const processAiGameSummary = async (game: LiveGameSession) => {
     const mannerScore = getMannerScore(user);
 
     const effects = calculateUserEffects(user, userGuild);
-    // FIX: Property 'goldBonusPercent' does not exist on type 'CalculatedEffects'.
     const itemGoldBonus = effects.specialStatBonuses[SpecialStat.GoldBonus]?.percent || 0;
     const modeSpecificBonus = isPlayful ? effects.playfulGoldBonusPercent : effects.strategicGoldBonusPercent;
     const goldBonus = 1 + ((itemGoldBonus + modeSpecificBonus) / 100);
@@ -262,7 +261,6 @@ export const processGameSummary = async (game: LiveGameSession) => {
 
         const userGuild = user.guildId ? guilds[user.guildId] : null;
         const effects = calculateUserEffects(user, userGuild);
-        // FIX: Property 'goldBonusPercent' does not exist on type 'CalculatedEffects'.
         const itemGoldBonus = effects.specialStatBonuses[SpecialStat.GoldBonus]?.percent || 0;
         const modeSpecificBonus = isPlayful ? effects.playfulGoldBonusPercent : effects.strategicGoldBonusPercent;
         const goldBonus = 1 + ((itemGoldBonus + modeSpecificBonus) / 100);
@@ -395,3 +393,4 @@ export const getGameResult = async (game: LiveGameSession) => {
         await db.saveGame(game);
     }
 };
+

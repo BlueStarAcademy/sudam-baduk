@@ -1,6 +1,7 @@
 
 
-import type { User, Guild } from '../types/index';
+
+import type { User, Guild, MannerEffects } from '../../types/index.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
 
 export const regenerateActionPoints = (user: User, guild: Guild | null): User => {

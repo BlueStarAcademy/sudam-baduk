@@ -9,10 +9,10 @@ import {
     WinReason,
     GameMode,
 } from '../../types/index.js';
-import { processMove } from '../../utils/goLogic.js';
+import { processMove } from '../goLogic.js';
 import { getGameResult, endGame } from '../summaryService.js';
 import { isFischerGame } from './strategic.js';
-import { getOmokLogic } from '../omokLogic.js';
+import { getOmokLogic } from './omokLogic.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
 
 export const handleStandardAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {

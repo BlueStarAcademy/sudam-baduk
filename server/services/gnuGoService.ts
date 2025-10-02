@@ -1,12 +1,11 @@
-// FIX: Add reference to node types to resolve errors with 'process', 'Buffer', and node modules.
 /// <reference types="node" />
 
 import { spawn, ChildProcess, ChildProcessWithoutNullStreams } from 'child_process';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove, Move } from '../../types.js';
-import * as types from '../../types.js';
+import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove, Move } from '../../types/index.js';
+import * as types from '../../types/index.js';
 import { fileURLToPath } from 'url';
 import * as db from '../db.js';
 
@@ -152,29 +151,40 @@ class GnuGoInstance {
         const suggestedMoveStr = await this.sendCommand(`reg_genmove ${color}`);
         let finalMoveStr = suggestedMoveStr;
     
-        // First, check if the game rules forbid passing
         const game = await db.getLiveGame(this.gameId);
-        let forceNonPass = false;
-        if (game && (game.isSinglePlayer || game.isTowerChallenge) && (game.gameType === 'capture' || game.gameType === 'survival')) {
-            let goalMet = false;
-            if (game.gameType === 'capture') {
-                const blackTarget = game.effectiveCaptureTargets?.[Player.Black] || Infinity;
-                const whiteTarget = game.effectiveCaptureTargets?.[Player.White] || Infinity;
-                if (game.captures[Player.Black] >= blackTarget || game.captures[Player.White] >= whiteTarget) {
-                    goalMet = true;
-                }
-            } else { // survival
-                const whiteStonesLeft = (game.whiteStoneLimit ?? 0) - (game.whiteStonesPlaced ?? 0);
-                if (whiteStonesLeft <= 0) {
-                    goalMet = true;
-                }
+        let shouldAvoidPassing = false;
+    
+        if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
+            shouldAvoidPassing = true;
+    
+            // Exception 1: Game is ending because the human passed. AI can pass to finish.
+            if (game.passCount === 1) {
+                shouldAvoidPassing = false;
             }
-            if (!goalMet) {
-                forceNonPass = true;
+            // Exception 2: Game-specific goals are met in SP/Tower. AI can pass.
+            else if ((game.isSinglePlayer || game.isTowerChallenge) && (game.gameType === 'capture' || game.gameType === 'survival')) {
+                let goalMet = false;
+                if (game.gameType === 'capture') {
+                    // Check if either player has met their capture target
+                    const blackTarget = game.effectiveCaptureTargets?.[Player.Black] || Infinity;
+                    const whiteTarget = game.effectiveCaptureTargets?.[Player.White] || Infinity;
+                    if (game.captures[Player.Black] >= blackTarget || game.captures[Player.White] >= whiteTarget) {
+                        goalMet = true;
+                    }
+                } else { // survival
+                    const whiteStonesLeft = (game.whiteStoneLimit ?? 0) - (game.whiteStonesPlaced ?? 0);
+                    if (whiteStonesLeft <= 0) {
+                        goalMet = true;
+                    }
+                }
+                if (goalMet) {
+                    shouldAvoidPassing = false; // Goal is met, AI can pass.
+                }
             }
         }
     
-        if (/pass|resign/i.test(suggestedMoveStr) || forceNonPass) {
+        // Always avoid resigning. If passing is suggested, check if we should avoid it.
+        if (/resign/i.test(suggestedMoveStr) || (shouldAvoidPassing && /pass/i.test(suggestedMoveStr))) {
             console.log(`[GnuGoInstance ${this.gameId}] GnuGo suggested pass/resign or rules forbid it. Checking for alternatives.`);
             try {
                 const legalMovesStr = await this.sendCommand(`list_moves`);
@@ -182,7 +192,7 @@ class GnuGoInstance {
     
                 if (legalMoves.length > 0) {
                     const alternativeMove = legalMoves[Math.floor(Math.random() * legalMoves.length)];
-                    console.log(`[GnuGoInstance ${this.gameId}] Overriding pass with alternative move: ${alternativeMove}`);
+                    console.log(`[GnuGoInstance ${this.gameId}] Overriding with alternative move: ${alternativeMove}`);
                     finalMoveStr = alternativeMove;
                 } else {
                     console.log(`[GnuGoInstance ${this.gameId}] No other legal moves available, allowing pass.`);

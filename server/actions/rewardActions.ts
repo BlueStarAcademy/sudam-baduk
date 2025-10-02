@@ -208,8 +208,6 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
 
             const level = missionState.level || 1;
             const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
-
-            const wasAtMax = missionState.accumulatedAmount >= leveledMissionInfo.maxCapacity;
         
             const amountToClaim = Math.floor(missionState.accumulatedAmount);
             const reward: QuestReward = {};
@@ -222,11 +220,10 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
         
             const addedItems = grantReward(user, reward, `${leveledMissionInfo.name} 수련과제 보상`);
             
-            missionState.accumulatedAmount -= amountToClaim;
-            if (wasAtMax) {
-                missionState.lastCollectionTime = Date.now();
-            }
-            
+            // FIX: Set to 0 instead of subtracting to prevent float precision issues and ensure a clean state.
+            missionState.accumulatedAmount = 0;
+            missionState.lastCollectionTime = Date.now();
+
             updateQuestProgress(user, 'claim_single_player_mission');
             
             await db.updateUser(user);

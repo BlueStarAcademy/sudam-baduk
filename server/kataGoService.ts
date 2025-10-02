@@ -175,17 +175,17 @@ class KataGoManager {
     private readyPromise: Promise<void> | null = null;
 
     constructor() {
-        // Eager start removed. Will be started lazily on first query.
+        // Constructor is now empty. Initialization is handled by the initialize() method.
     }
 
-    private start(): Promise<void> {
+    public initialize(): Promise<void> {
         if (this.readyPromise) {
             return this.readyPromise;
         }
 
         this.isStarting = true;
         this.readyPromise = new Promise<void>((resolve, reject) => {
-            console.log('[KataGo] Lazily attempting to start engine...');
+            console.log('[KataGo] Attempting to start engine...');
 
             if (!fs.existsSync(KATAGO_PATH)) {
                 const errorMsg = `[KataGo] Engine not found at ${KATAGO_PATH}. Analysis will be unavailable.`;
@@ -307,7 +307,7 @@ maxVisits = 1000
     public async query(analysisQuery: any): Promise<any> {
         if (!this.process) {
             try {
-                await this.start();
+                await this.initialize();
             } catch (e: any) {
                 // If start() fails (e.g., file not found), reject the query.
                 return Promise.reject(e);
@@ -336,7 +336,7 @@ maxVisits = 1000
 
 let kataGoManager: KataGoManager | null = null;
 
-const getKataGoManager = (): KataGoManager => {
+export const getKataGoManager = (): KataGoManager => {
     if (!kataGoManager) {
         kataGoManager = new KataGoManager();
     }

@@ -1,4 +1,3 @@
-// FIX: Add reference to node types to resolve 'process.exit' error.
 /// <reference types="node" />
 
 import pg from 'pg';

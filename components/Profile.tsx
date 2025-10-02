@@ -433,9 +433,9 @@ const Profile: React.FC<ProfileProps> = () => {
                         const baseValue = (currentUserWithStatus.baseStats[stat] || 0) + (currentUserWithStatus.spentStatPoints?.[stat] || 0);
                         const bonus = finalValue - baseValue;
                         return (
-                            <div key={stat} className="bg-tertiary/40 p-1 rounded-md flex items-center justify-between text-xs">
-                                <span className="font-semibold text-secondary">{stat}</span>
-                                <span className="font-mono font-bold" title={`기본+분배: ${baseValue}, 장비+효과: ${bonus}`}>
+                             <div key={stat} className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-secondary truncate mr-2">{stat}</span>
+                                <span className="font-mono font-bold truncate" title={`기본+분배: ${baseValue}, 장비+효과: ${bonus}`}>
                                     {finalValue}
                                     {bonus > 0 && <span className="text-green-400 text-xs ml-0.5">(+{bonus})</span>}
                                 </span>

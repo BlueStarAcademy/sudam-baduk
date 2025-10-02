@@ -1,7 +1,6 @@
-
 import 'dotenv/config';
-// FIX: Use namespaced import for Express to avoid conflicts with global DOM types.
-import express, { Request, Response, NextFunction } from 'express';
+// FIX: Changed Express import to default and used namespace for types to resolve type conflicts.
+import express from 'express';
 import cors from 'cors';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV } from './db.js';
 import { handleAction } from './actions/gameActions.js';
@@ -15,6 +14,7 @@ import * as guildService from './guildService.js';
 import { randomUUID } from 'crypto';
 import { GUILD_RESEARCH_PROJECTS } from '../constants/index.js';
 import { regenerateActionPoints } from './services/effectService.js';
+import { getKataGoManager } from './kataGoService.js';
 
 const volatileState: VolatileState = {
     userStatuses: {},
@@ -35,8 +35,10 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// FIX: Use explicit express types to avoid conflict with global DOM types.
-const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+// FIX: Use express.Request, express.Response, and express.NextFunction to avoid type conflicts.
+// FIX: Use imported Request, Response, NextFunction types directly.
+// FIX: Updated Express types for middleware function parameters.
+const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // For login/register, no session check is needed
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register') {
         return next();
@@ -68,8 +70,10 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
 
 app.use(userMiddleware);
 
-// FIX: Use explicit express types to avoid conflict with global DOM types.
-app.post('/api/auth/register', async (req: Request, res: Response) => {
+// FIX: Use express.Request and express.Response to avoid type conflicts.
+// FIX: Use imported Request, Response types directly.
+// FIX: Updated Express types for route handler parameters.
+app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
         return res.status(400).json({ message: 'Username, password, and nickname are required.' });
@@ -98,8 +102,10 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Use explicit express types to avoid conflict with global DOM types.
-app.post('/api/auth/login', async (req: Request, res: Response) => {
+// FIX: Use express.Request and express.Response to avoid type conflicts.
+// FIX: Use imported Request, Response types directly.
+// FIX: Updated Express types for route handler parameters.
+app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: 'Username and password are required.' });
@@ -126,8 +132,10 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Use explicit express types to avoid conflict with global DOM types.
-app.post('/api/state', async (req: Request, res: Response) => {
+// FIX: Use express.Request and express.Response to avoid type conflicts.
+// FIX: Use imported Request, Response types directly.
+// FIX: Updated Express types for route handler parameters.
+app.post('/api/state', async (req: express.Request, res: express.Response) => {
     const user = (req as any).user as User;
     let userStatus: UserStatusInfo | undefined;
     if (user) {
@@ -150,8 +158,10 @@ app.post('/api/state', async (req: Request, res: Response) => {
     res.json({ ...data, userStatuses: volatileState.userStatuses, negotiations: volatileState.negotiations, waitingRoomChats: volatileState.waitingRoomChats, gameChats: volatileState.gameChats });
 });
 
-// FIX: Use explicit express types to avoid conflict with global DOM types.
-app.post('/api/action', async (req: Request, res: Response) => {
+// FIX: Use express.Request and express.Response to avoid type conflicts.
+// FIX: Use imported Request, Response types directly.
+// FIX: Updated Express types for route handler parameters.
+app.post('/api/action', async (req: express.Request, res: express.Response) => {
     const user = (req as any).user as User;
     if (!user) {
         return res.status(401).json({ message: 'Authentication required for this action.' });
@@ -177,6 +187,11 @@ app.post('/api/action', async (req: Request, res: Response) => {
 const startServer = async () => {
     await initializeDatabase();
     await performOneTimeReset();
+
+    // Eagerly initialize KataGo to make scoring faster on first game
+    getKataGoManager().initialize().catch(err => {
+        console.warn("[Server Start] KataGo analysis engine could not be started. Analysis will be unavailable.", err.message);
+    });
 
     // Game loop
     setInterval(async () => {

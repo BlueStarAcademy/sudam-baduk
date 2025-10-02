@@ -161,7 +161,7 @@ const Auth: React.FC = () => {
                     (격돌하는 초인들이 승천하는 최고의 세계)
                 </p>
             </header>
-            <div className="relative w-full max-w-xs p-4 space-y-3 bg-secondary/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-color z-10">
+            <div className="relative w-full max-w-xs p-4 space-y-3 bg-secondary/80 rounded-2xl shadow-2xl border border-color z-10">
                 <div className="space-y-2">
                     <Button colorScheme="gray" className="w-full !justify-start !py-2 !text-sm" disabled title="준비 중인 기능입니다.">
                         <span className="w-6 text-base font-bold">G</span> Google 계정으로 로그인

@@ -8,6 +8,7 @@ import WaitingRoom from './waiting-room/WaitingRoom';
 import Game from '../Game';
 import Admin from './Admin';
 import TournamentLobby from './TournamentLobby';
+// FIX: Update import for SinglePlayerLobby to be a named import as its export has been changed from default to named.
 import SinglePlayerLobby from './SinglePlayerLobby';
 import TowerChallengeLobby from './TowerChallengeLobby';
 import Guild from './Guild';

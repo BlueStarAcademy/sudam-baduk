@@ -1,4 +1,3 @@
-// FIX: Add reference to node types to resolve 'process.exit' error.
 /// <reference types="node" />
 
 import 'dotenv/config';
@@ -31,7 +30,7 @@ const migrate = async () => {
             console.error('해결 방법:');
             console.error('1. 프로젝트 최상위 폴더(package.json 파일이 있는 곳)에 `.env` 라는 이름의 파일을 만드세요.');
             console.error('   - 파일 이름은 반드시 점(.)으로 시작해야 합니다.');
-            console.error('   - 예: `C:\\firstproject\\BSBaduk\\.env`');
+            console.error('   - 예: `C:\\Project\\BSBaduk\\.env`');
             console.error('\n2. `.env` 파일 안에 Supabase에서 복사한 "Connection String"을 아래와 같이 붙여넣으세요.');
             console.error('   DATABASE_URL="postgres://postgres.[...]:[YOUR-PASSWORD]@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres"');
             console.error('\n3. 가장 중요: `[YOUR-PASSWORD]` 부분을 실제 데이터베이스 비밀번호로 수정해주세요.');
@@ -71,21 +70,7 @@ const migrate = async () => {
         console.error('[MIGRATE] Database connection failed:', err.message);
         if (err.message.includes('password authentication failed')) {
             console.error('[MIGRATE] HINT: The password in your .env file seems to be incorrect. Please double-check it.');
-        } else if (err.message.includes('searchParams')) {
-             console.error('\n❌ [오류] 데이터베이스 연결 주소를 찾을 수 없습니다.');
-            console.error('================================================================================');
-            console.error('해결 방법:');
-            console.error('1. 프로젝트 최상위 폴더(package.json 파일이 있는 곳)에 `.env` 라는 이름의 파일을 만드세요.');
-            console.error('   - 파일 이름은 반드시 점(.)으로 시작해야 합니다.');
-            console.error('   - 예: `C:\\firstproject\\BSBaduk\\.env`');
-            console.error('\n2. `.env` 파일 안에 Supabase에서 복사한 "Connection String"을 아래와 같이 붙여넣으세요.');
-            console.error('   DATABASE_URL="postgres://postgres.[...]:[YOUR-PASSWORD]@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres"');
-            console.error('\n3. 가장 중요: `[YOUR-PASSWORD]` 부분을 실제 데이터베이스 비밀번호로 수정해주세요.');
-            console.error('   - 대괄호 `[]`도 함께 지워야 합니다.');
-            console.error('\n4. 파일을 저장한 후, 다시 `npm run migrate` 명령어를 실행하세요.');
-            console.error('================================================================================\n');
-        }
-        else {
+        } else {
             console.error('[MIGRATE] HINT: Please check if your DATABASE_URL in the .env file is correct and that you have internet access.');
         }
         process.exit(1);

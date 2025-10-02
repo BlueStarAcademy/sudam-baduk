@@ -1,5 +1,5 @@
 import { type LiveGameSession, type KomiBid, Player, type Point, type BoardState, type ServerAction, type User, type HandleActionResult, GameStatus } from '../../types/index.js';
-import { getGoLogic } from '../../utils/goLogic.js';
+import { getGoLogic } from '../goLogic.js';
 import { transitionToPlaying } from './shared.js';
 import { aiUserId } from '../ai/index.js';
 
