@@ -1,4 +1,4 @@
-import * as db from '../db';
+import * as db from '../db.js';
 import { 
     type ServerAction, 
     type User, 
@@ -16,16 +16,17 @@ import {
     Player,
     WinReason,
     GameStatus as GameStatusEnum // Use alias to avoid conflict
-} from '../../types/index';
-import { defaultStats, createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultUser } from '../initialData';
-import * as summaryService from '../summaryService';
-import { createItemFromTemplate } from '../shop';
-import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants/items';
-import * as mannerService from '../services/mannerService';
-import { containsProfanity } from '../../profanity';
-import * as effectService from '../../utils/statUtils';
-import * as currencyService from '../currencyService';
-import { isSameDayKST } from '../../utils/timeUtils';
+} from '../../types/index.js';
+import { defaultStats, createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultUser } from '../initialData.js';
+import * as summaryService from '../summaryService.js';
+import { createItemFromTemplate } from '../shop.js';
+import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants/items.js';
+import * as mannerService from '../services/mannerService.js';
+import { containsProfanity } from '../../profanity.js';
+// FIX: Import `calculateUserEffects` from the correct utility file.
+import { calculateUserEffects } from '../../utils/statUtils.js';
+import * as currencyService from '../currencyService.js';
+import { isSameDayKST } from '../../utils/timeUtils.js';
 
 type HandleActionResult = { 
     clientResponse?: any;
@@ -268,7 +269,7 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             
             const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
             const guild = targetUser.guildId ? (guilds[targetUser.guildId] ?? null) : null;
-            const effects = effectService.calculateUserEffects(targetUser, guild);
+            const effects = calculateUserEffects(targetUser, guild);
             targetUser.actionPoints.max = effects.maxActionPoints;
         
             await db.updateUser(targetUser);
@@ -439,7 +440,7 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             
             const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
             const targetUserGuild = targetUser.guildId ? (guilds[targetUser.guildId] ?? null) : null;
-            const effects = effectService.calculateUserEffects(targetUser, targetUserGuild);
+            const effects = calculateUserEffects(targetUser, targetUserGuild);
             targetUser.actionPoints.max = effects.maxActionPoints;
 
             if (updatedDetails.quests) {

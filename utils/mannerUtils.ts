@@ -1,4 +1,3 @@
-
 import { User, MannerEffects } from '../types/index.js';
 import { ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/rules.js';
 

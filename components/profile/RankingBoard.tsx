@@ -1,10 +1,9 @@
-
 import React, { useState, useMemo } from 'react';
 import { User, UserWithStatus, GameMode, Guild, LeagueTier, CoreStat } from '../../types';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, RANKING_TIERS, LEAGUE_DATA, AVATAR_POOL, BORDER_POOL } from '../../constants';
 import Avatar from '../Avatar.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
-import { calculateTotalStats } from '../../services/statService.js';
+import { calculateTotalStats } from '../../utils/statUtils.js';
 
 type RankingTab = 'combat' | 'championship' | 'strategic' | 'playful' | 'manner';
 

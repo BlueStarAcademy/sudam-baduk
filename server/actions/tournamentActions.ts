@@ -1,11 +1,12 @@
+
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
+// FIX: Removed unused 'types' import that was causing namespace conflicts.
 import { type ServerAction, type User, type VolatileState, TournamentType, PlayerForTournament, InventoryItem, InventoryItemType, TournamentState, LeagueTier, CoreStat, Guild, Round, Match, CommentaryLine } from '../../types/index.js';
-import * as types from '../../types/index.js';
 import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, MATERIAL_ITEMS, TOURNAMENT_SCORE_REWARDS, BOT_NAMES, AVATAR_POOL } from '../../constants/index.js';
 import { updateQuestProgress } from '../questService.js';
 import { createItemFromTemplate, SHOP_ITEMS } from '../shop.js';
-import { isSameDayKST } from '../../utils/timeUtils.js';
+import { isSameDayKST } from '../utils/timeUtils.js';
 import * as tournamentService from '../tournamentService.js';
 import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
 import { calculateTotalStats } from '../services/statService.js';
@@ -221,7 +222,7 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
                 case 'world': stateKey = 'lastWorldTournament'; break;
                 default: return { error: 'Invalid tournament type.' };
             }
-            let tournamentState: types.TournamentState | null | undefined = volatileState.activeTournaments?.[user.id];
+            let tournamentState: TournamentState | null | undefined = volatileState.activeTournaments?.[user.id];
 
             if (!tournamentState) {
                 tournamentState = user[stateKey];

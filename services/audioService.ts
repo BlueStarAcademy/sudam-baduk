@@ -4,7 +4,7 @@
 import { ItemGrade } from '../types/index';
 // FIX: Corrected import path for types.
 import type { SoundSettings } from '../types/index';
-import { defaultSettings } from '../constants/index';
+import { defaultSettings } from '../constants/settings';
 
 class AudioService {
     private audioContext: AudioContext | null = null;

@@ -9,11 +9,12 @@ import { initializeGame } from '../gameModes.js';
 import { getAiUser } from '../ai/index.js';
 import { TOWER_STAGES } from '../../constants/index.js';
 import { transitionToPlaying } from './shared.js';
-import * as effectService from '../services/effectService.js';
-import * as currencyService from '../currencyService.js';
+// FIX: Import `calculateUserEffects` from the correct utility file.
+import { calculateUserEffects } from '../../utils/statUtils.js';
 import { getGoLogic } from '../goLogic.js';
-import { Point } from '../../types/index.js';
+import * as currencyService from '../currencyService.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
+import { Point } from '../../types/index.js';
 
 const placeStonesRandomly = (boardState: Player[][], boardSize: number, count: number, player: Player, avoidCenter = false) => {
     let placed = 0;
@@ -98,7 +99,7 @@ export const handleTowerChallengeGameStart = async (
 
     if (!user.isAdmin) {
         const userGuild = user.guildId ? (guilds[user.guildId] ?? null) : null;
-        const effects = effectService.calculateUserEffects(user, userGuild);
+        const effects = calculateUserEffects(user, userGuild);
         const maxAP = effects.maxActionPoints;
         const wasAtMax = user.actionPoints.current >= maxAP;
         

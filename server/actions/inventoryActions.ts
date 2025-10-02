@@ -21,7 +21,8 @@ import {
     ENHANCEMENT_LEVEL_REQUIREMENTS
 } from '../../constants/index.js';
 import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
-import * as effectService from '../../utils/statUtils.js';
+// FIX: Import `calculateUserEffects` from the correct utility file.
+import { calculateUserEffects } from '../../utils/statUtils.js';
 import * as currencyService from '../currencyService.js';
 import * as guildService from '../guildService.js';
 
@@ -243,7 +244,7 @@ export const handleInventoryAction = async (volatileState: VolatileState, action
             
             const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
             const userGuild = user.guildId ? (guilds[user.guildId] ?? null) : null;
-            const effects = effectService.calculateUserEffects(user, userGuild);
+            const effects = calculateUserEffects(user, userGuild);
             user.actionPoints.max = effects.maxActionPoints;
             user.actionPoints.current = Math.min(user.actionPoints.current, user.actionPoints.max);
             

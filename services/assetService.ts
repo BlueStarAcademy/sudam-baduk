@@ -1,3 +1,5 @@
+// This file centralizes all image assets for the game for easy management and future updates.
+
 // Corrected import paths for constants from their specific files.
 import {
     emptySlotImages, EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS

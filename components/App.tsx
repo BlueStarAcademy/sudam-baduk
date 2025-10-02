@@ -146,9 +146,9 @@ const Auth: React.FC = () => {
     };
 
     return (
-        <div className="relative h-full w-full flex flex-col items-center justify-between p-4 sm:p-8 bg-tertiary bg-[url('/images/bg/loginbg.png')] bg-cover bg-center">
+        <div className="relative h-full w-full flex flex-col items-center justify-center p-4 sm:p-8 bg-tertiary bg-[url('/images/bg/loginbg.png')] bg-cover bg-center">
             <div className="absolute inset-0 bg-black/60"></div>
-            <header className="relative text-center z-10 pt-8 md:pt-16">
+            <header className="relative text-center z-10 pt-8 md:pt-16 mb-8">
                 <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-widest uppercase title-glow" style={{ fontFamily: 'serif' }}>
                     SUDAM
                 </h1>
@@ -161,13 +161,13 @@ const Auth: React.FC = () => {
                     (격돌하는 초인들이 승천하는 최고의 세계)
                 </p>
             </header>
-            <div className="relative w-full max-w-sm p-6 sm:p-8 space-y-6 bg-secondary/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-color z-10 mb-8">
-                <div className="space-y-3">
-                    <Button colorScheme="gray" className="w-full !justify-start" disabled title="준비 중인 기능입니다.">
-                        <span className="w-6 text-lg font-bold">G</span> Google 계정으로 로그인
+            <div className="relative w-full max-w-xs p-4 space-y-3 bg-secondary/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-color z-10">
+                <div className="space-y-2">
+                    <Button colorScheme="gray" className="w-full !justify-start !py-2 !text-sm" disabled title="준비 중인 기능입니다.">
+                        <span className="w-6 text-base font-bold">G</span> Google 계정으로 로그인
                     </Button>
-                     <Button colorScheme="yellow" className="w-full !justify-start" disabled title="준비 중인 기능입니다.">
-                        <span className="w-6 text-lg font-bold">K</span> Kakao 계정으로 로그인
+                     <Button colorScheme="yellow" className="w-full !justify-start !py-2 !text-sm" disabled title="준비 중인 기능입니다.">
+                        <span className="w-6 text-base font-bold">K</span> Kakao 계정으로 로그인
                     </Button>
                 </div>
 
@@ -180,7 +180,7 @@ const Auth: React.FC = () => {
                     </div>
                 </div>
 
-                <form className="space-y-4" onSubmit={handleSubmit}>
+                <form className="space-y-3" onSubmit={handleSubmit}>
                     {isRegisterMode ? (
                         <>
                              {isVerified ? (
@@ -189,26 +189,26 @@ const Auth: React.FC = () => {
                                     <p className="text-sm">{verifiedInfo?.name} ({verifiedInfo?.dob})</p>
                                 </div>
                             ) : (
-                                <Button type="button" onClick={handleVerification} disabled={isVerifying} className="w-full !py-3 !text-base" colorScheme="green">
+                                <Button type="button" onClick={handleVerification} disabled={isVerifying} className="w-full !py-2 !text-sm" colorScheme="green">
                                     {isVerifying ? '인증 진행 중...' : '본인인증'}
                                 </Button>
                             )}
 
-                            <input type="text" value={username} onChange={e => setUsername(e.target.value)} required className="w-full px-4 py-3 bg-tertiary border border-color rounded-md disabled:bg-gray-700/50 disabled:cursor-not-allowed" placeholder="아이디" disabled={!isVerified || isLoading} />
-                            <input type="text" value={nickname} onChange={e => setNickname(e.target.value)} required className="w-full px-4 py-3 bg-tertiary border border-color rounded-md disabled:bg-gray-700/50 disabled:cursor-not-allowed" placeholder="닉네임" disabled={!isVerified || isLoading} />
-                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full px-4 py-3 bg-tertiary border border-color rounded-md disabled:bg-gray-700/50 disabled:cursor-not-allowed" placeholder="비밀번호 (4자 이상)" disabled={!isVerified || isLoading} />
-                            <input type="password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} required className="w-full px-4 py-3 bg-tertiary border border-color rounded-md disabled:bg-gray-700/50 disabled:cursor-not-allowed" placeholder="비밀번호 확인" disabled={!isVerified || isLoading} />
+                            <input type="text" value={username} onChange={e => setUsername(e.target.value)} required className="w-full px-4 py-2 text-sm bg-tertiary border border-color rounded-md disabled:bg-gray-700/50 disabled:cursor-not-allowed" placeholder="아이디" disabled={!isVerified || isLoading} />
+                            <input type="text" value={nickname} onChange={e => setNickname(e.target.value)} required className="w-full px-4 py-2 text-sm bg-tertiary border border-color rounded-md disabled:bg-gray-700/50 disabled:cursor-not-allowed" placeholder="닉네임" disabled={!isVerified || isLoading} />
+                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full px-4 py-2 text-sm bg-tertiary border border-color rounded-md disabled:bg-gray-700/50 disabled:cursor-not-allowed" placeholder="비밀번호 (4자 이상)" disabled={!isVerified || isLoading} />
+                            <input type="password" value={passwordConfirm} onChange={e => setPasswordConfirm(e.target.value)} required className="w-full px-4 py-2 text-sm bg-tertiary border border-color rounded-md disabled:bg-gray-700/50 disabled:cursor-not-allowed" placeholder="비밀번호 확인" disabled={!isVerified || isLoading} />
                         </>
                     ) : (
                         <>
-                            <input type="text" value={username} onChange={e => setUsername(e.target.value)} required className="w-full px-4 py-3 bg-tertiary border border-color rounded-md" placeholder="아이디" />
-                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full px-4 py-3 bg-tertiary border border-color rounded-md" placeholder="비밀번호" />
+                            <input type="text" value={username} onChange={e => setUsername(e.target.value)} required className="w-full px-4 py-2 text-sm bg-tertiary border border-color rounded-md" placeholder="아이디" />
+                            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full px-4 py-2 text-sm bg-tertiary border border-color rounded-md" placeholder="비밀번호" />
                         </>
                     )}
                     
                     {error && <p className="text-sm text-red-400 text-center">{error}</p>}
 
-                    <Button type="submit" disabled={isLoading || (isRegisterMode && !isVerified)} className="w-full !py-3 !text-base">
+                    <Button type="submit" disabled={isLoading || (isRegisterMode && !isVerified)} className="w-full !py-2 !text-sm">
                         {isLoading ? '처리 중...' : (isRegisterMode ? '회원가입' : '로그인')}
                     </Button>
                 </form>

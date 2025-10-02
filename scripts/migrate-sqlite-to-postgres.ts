@@ -1,3 +1,6 @@
+// FIX: Add reference to node types to resolve 'process.exit' error.
+/// <reference types="node" />
+
 import 'dotenv/config';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';

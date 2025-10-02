@@ -2,6 +2,7 @@ import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, Negotiation, GameMode, UserStatus, Player, GameStatus as GameStatusEnum, Guild } from '../../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_POINT_COST, PLAYFUL_ACTION_POINT_COST, DEFAULT_GAME_SETTINGS } from '../../constants/index.js';
 import { initializeGame } from '../gameModes.js';
+// FIX: Corrected import path for calculateUserEffects
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import { aiUserId, getAiUser } from '../ai/index.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';

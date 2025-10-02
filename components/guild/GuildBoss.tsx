@@ -13,11 +13,11 @@ import GuildShopModal from './GuildShopModal.js';
 import { BOSS_SKILL_ICON_MAP } from '../../assets.js';
 import HelpModal from '../HelpModal.js';
 import { runGuildBossBattle, BattleLogEntry, GuildBossBattleResult } from '../../utils/guildBossSimulator.js';
-import { calculateTotalStats } from '../../services/statService.js';
+// FIX: Import `calculateTotalStats` and `calculateUserEffects` from the correct utility file.
+import { calculateTotalStats, calculateUserEffects } from '../../utils/statUtils.js';
 import Avatar from '../Avatar.js';
 import { GUILD_ATTACK_ICON, GUILD_RESEARCH_HEAL_BLOCK_IMG, GUILD_RESEARCH_IGNITE_IMG, GUILD_RESEARCH_REGEN_IMG } from '../../assets.js';
 import RadarChart from '../RadarChart.js';
-import { calculateUserEffects } from '../../server/services/effectService.js';
 
 const getResearchSkillDisplay = (researchId: GuildResearchId, level: number): { chance?: number; description: string; } | null => {
     if (level === 0) return null;
@@ -31,17 +31,17 @@ const getResearchSkillDisplay = (researchId: GuildResearchId, level: number): { 
             return { description: `[${totalEffect}% 증가]` };
         case GuildResearchId.boss_skill_heal_block: {
             const chance = 10 + (15 * level);
-            const reduction = 10 * level;
+            const reduction = 10 * level; // baseEffect is 10
             return { chance, description: `회복 불가 또는 회복량 ${reduction}% 감소` };
         }
         case GuildResearchId.boss_skill_regen: { // '회복'
             const chance = 10 + (15 * level);
-            const increase = 10 * level;
+            const increase = 10 * level; // baseEffect is 10
             return { chance, description: `회복, 회복량 +${increase}%` };
         }
         case GuildResearchId.boss_skill_ignite: {
             const chance = 10 + (15 * level);
-            const increasePercent = level * 10;
+            const increasePercent = level * 10; // baseEffect is 10
             return { chance, description: `고정피해, 피해량 +${increasePercent}%` };
         }
         default:
@@ -717,4 +717,5 @@ const GuildBoss: React.FC = () => {
     );
 };
 
+// FIX: Change to a default export.
 export default GuildBoss;

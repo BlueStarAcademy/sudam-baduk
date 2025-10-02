@@ -1,4 +1,5 @@
 
+
 import { LiveGameSession, Player, WinReason, GameSummary, User, StatChange, GameMode, GameStatus, Guild, QuestReward, InventoryItem, SinglePlayerStageInfo, SpecialStat } from '../types/index.js';
 import * as db from './db.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../constants/index.js';
@@ -7,7 +8,8 @@ import { updateQuestProgress } from './questService.js';
 import * as currencyService from './currencyService.js';
 import * as guildService from './guildService.js';
 import { getMannerRank, getMannerScore } from './services/manner.js';
-import { calculateUserEffects } from './services/effectService.js';
+// FIX: Import `calculateUserEffects` from the correct utility file.
+import { calculateUserEffects } from '../utils/statUtils.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inventoryUtils.js';
 import { analyzeGame } from './kataGoService.js';
 import { gnuGoServiceManager } from './services/gnuGoService.js';

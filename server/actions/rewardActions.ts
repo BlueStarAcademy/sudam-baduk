@@ -7,7 +7,8 @@ import { DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILEST
 import { updateQuestProgress, getMissionInfoWithLevel } from '../questService.js';
 import * as currencyService from '../currencyService.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
-import { calculateUserEffects } from '../services/effectService.js';
+// FIX: Import `calculateUserEffects` from the correct utility file.
+import { calculateUserEffects } from '../../utils/statUtils.js';
 import { SHOP_ITEMS } from '../shop.js';
 import { currencyBundles } from '../../constants/index.js';
 // FIX: Import inventory utility functions to resolve 'Cannot find name' errors.

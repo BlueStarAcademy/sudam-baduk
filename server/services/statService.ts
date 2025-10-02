@@ -1,6 +1,8 @@
 
-import { User, CoreStat, Guild } from '../types/index';
-import { calculateUserEffects } from './effectService';
+
+import { User, CoreStat, Guild } from '../types/index.js';
+// FIX: Import `calculateUserEffects` from the correct utility file.
+import { calculateUserEffects } from '../../utils/statUtils.js';
 
 export const calculateTotalStats = (user: User, guild: Guild | null): Record<CoreStat, number> => {
     const finalStats: Record<CoreStat, number> = {} as any;

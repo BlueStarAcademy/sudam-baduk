@@ -4,7 +4,7 @@ import { getGoLogic, processMove } from '../../utils/goLogic.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';
 import { aiUserId } from '../ai/index.js';
 import { DICE_GO_INITIAL_WHITE_STONES_BY_ROUND, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_TURN_CHOICE_TIME, DICE_GO_TURN_ROLL_TIME, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
-import * as effectService from '../services/effectService.js';
+import { calculateUserEffects } from '../../utils/statUtils.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 
 export function finishPlacingTurn(game: LiveGameSession, playerId: string) {
@@ -136,8 +136,8 @@ export const initializeDiceGo = (game: LiveGameSession, neg: Negotiation, now: n
     game.diceLastCaptureStones = [];
     game.diceRollHistory = { [p1.id]: [], [p2.id]: [] };
 
-    const p1Effects = effectService.calculateUserEffects(p1, p1Guild);
-    const p2Effects = effectService.calculateUserEffects(p2, p2Guild);
+    const p1Effects = calculateUserEffects(p1, p1Guild);
+    const p2Effects = calculateUserEffects(p2, p2Guild);
     
     game.diceGoItemUses = {
         [p1.id]: { odd: (game.settings.oddDiceCount || 0) + (p1Effects.mythicStatBonuses[MythicStat.DiceGoOddBonus]?.flat || 0), even: game.settings.evenDiceCount || 0 },

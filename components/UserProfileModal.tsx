@@ -1,12 +1,11 @@
-
 import React, { useMemo, useState } from 'react';
 // Import EquipmentSlot enum to use its members instead of string literals.
 import { UserWithStatus, EquipmentSlot, InventoryItem, ItemGrade, GameMode } from '../types/index.js';
 import Avatar from './Avatar.js';
 import DraggableWindow from './DraggableWindow.js';
-import { AVATAR_POOL, BORDER_POOL, emptySlotImages, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, LEAGUE_DATA, GRADE_LEVEL_REQUIREMENTS, RANKING_TIERS, SINGLE_PLAYER_STAGES } from '../constants.js';
+import { AVATAR_POOL, BORDER_POOL, emptySlotImages, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, LEAGUE_DATA, GRADE_LEVEL_REQUIREMENTS, RANKING_TIERS, SINGLE_PLAYER_STAGES } from '../constants/index.js';
 // Update import path for manner functions from the missing utils/manner.js to the new services/manner.js.
-import { getMannerScore, getMannerRank, getMannerStyle } from '../services/manner.js';
+import { getMannerScore, getMannerRank, getMannerStyle } from '../utils/mannerUtils.js';
 import MbtiInfoModal from './MbtiInfoModal.js';
 
 interface UserProfileModalProps {

@@ -1,4 +1,5 @@
 
+
 import { type LiveGameSession, type AlkkagiStone, type Point, AlkkagiLayoutType, Player, AlkkagiPlacementType, type Negotiation, MythicStat, type VolatileState, type ServerAction, type User, type HandleActionResult, GameMode, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';
@@ -6,7 +7,7 @@ import { aiUserId } from '../ai/index.js';
 import { ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 // FIX: Corrected the import path for effectService to point to the root services directory where calculateUserEffects is exported.
-import * as effectService from '../services/effectService.js';
+import { calculateUserEffects } from '../../utils/statUtils.js';
 
 // --- Simulation & Scoring Logic ---
 const runServerSimulation = (game: LiveGameSession) => {
@@ -214,8 +215,8 @@ export const initializeAlkkagi = (game: LiveGameSession, neg: Negotiation, now: 
     game.alkkagiRoundSummary = undefined;
     game.timeoutFouls = { [p1.id]: 0, [p2.id]: 0 };
 
-    const p1Effects = effectService.calculateUserEffects(p1, p1Guild);
-    const p2Effects = effectService.calculateUserEffects(p2, p2Guild);
+    const p1Effects = calculateUserEffects(p1, p1Guild);
+    const p2Effects = calculateUserEffects(p2, p2Guild);
     const p1SlowBonus = p1Effects.mythicStatBonuses[MythicStat.AlkkagiSlowBonus]?.flat || 0;
     const p1AimBonus = p1Effects.mythicStatBonuses[MythicStat.AlkkagiAimingBonus]?.flat || 0;
     const p2SlowBonus = p2Effects.mythicStatBonuses[MythicStat.AlkkagiSlowBonus]?.flat || 0;

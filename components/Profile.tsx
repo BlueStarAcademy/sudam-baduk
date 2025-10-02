@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { UserWithStatus, GameMode, EquipmentSlot, InventoryItem, ItemGrade, ServerAction, LeagueTier, CoreStat, SpecialStat, MythicStat, ItemOptionType, TournamentState, User, Guild } from '../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, AVATAR_POOL, BORDER_POOL, LEAGUE_DATA, CORE_STATS_DATA, SPECIAL_STATS_DATA, MYTHIC_STATS_DATA, emptySlotImages, TOURNAMENT_DEFINITIONS, GRADE_LEVEL_REQUIREMENTS, RANKING_TIERS, SINGLE_PLAYER_STAGES } from '../constants/index.js';
@@ -6,12 +5,11 @@ import { STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SIN
 import Avatar from './Avatar.js';
 import Button from './Button.js';
 import DetailedStatsModal from './DetailedStatsModal.js';
-import { getMannerScore, getMannerRank, getMannerStyle } from '../services/manner.js';
-import { calculateUserEffects } from '../services/effectService.js';
+import { getMannerScore, getMannerRank, getMannerStyle } from '../utils/mannerUtils.js';
+import { calculateUserEffects, calculateTotalStats } from '../utils/statUtils.js';
 import { useAppContext } from '../hooks/useAppContext.js';
 import QuickAccessSidebar from './QuickAccessSidebar.js';
 import ChatWindow from "./waiting-room/ChatWindow.js";
-import { calculateTotalStats } from "../services/statService.js";
 import EquipmentEffectsModal from "./EquipmentEffectsModal.js";
 import PresetModal from "./PresetModal.js";
 import RankingBoard from "./profile/RankingBoard.js";

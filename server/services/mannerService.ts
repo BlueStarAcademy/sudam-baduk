@@ -1,5 +1,6 @@
 // server/services/mannerService.ts
-import { User, MannerEffects, CoreStat, Guild } from '../../types/index.js';
+import { User, MannerEffects, CoreStat, Guild } from '../types/index.js';
+// FIX: Import regenerateActionPoints from effectService
 import { regenerateActionPoints } from './effectService.js';
 import { createDefaultSpentStatPoints } from '../initialData.js';
 import { getMannerRank } from '../../utils/mannerUtils.js';
