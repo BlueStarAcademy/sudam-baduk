@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://your-render-backend-url.onrender.com/api/:path*"
+      "destination": "postgresql://postgres.ytczozanlcrcthqpivco:gudans10!%40%23@aws-1-ap-northeast-2.pooler.supabase.com:6543/postgres"
     }
   ]
 }

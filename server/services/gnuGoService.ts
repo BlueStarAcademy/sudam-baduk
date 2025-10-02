@@ -1,12 +1,22 @@
+// FIX: Add reference to node types to resolve errors with 'process', 'Buffer', and node modules.
 /// <reference types="node" />
-// server/services/gnuGoService.ts
 
-import { spawn, ChildProcessWithoutNullStreams } from 'child_process';
-import { Player, Point, Move } from '../../types/index.js';
-import path from 'path';
+import { spawn, ChildProcess, ChildProcessWithoutNullStreams } from 'child_process';
+import { randomUUID } from 'crypto';
 import fs from 'fs';
+import path from 'path';
+import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove, Move } from '../../types.js';
+import * as types from '../../types.js';
 import { fileURLToPath } from 'url';
 import * as db from '../db.js';
+
+// --- Configuration ---
+// These paths should be configured for your environment.
+// Based on user's log, assuming this structure.
+const KATAGO_PATH = 'c:/katago/katago.exe';
+const MODEL_PATH = 'c:/katago/kata1-b28c512nbt-s9853922560-d5031756885.bin.gz';
+const CONFIG_PATH = path.resolve('server/temp_katago_config.cfg');
+const KATAGO_HOME_PATH = path.resolve('server/katago_home');
 
 const LETTERS = "ABCDEFGHJKLMNOPQRST";
 
