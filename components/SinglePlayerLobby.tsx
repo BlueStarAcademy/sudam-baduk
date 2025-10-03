@@ -20,24 +20,6 @@ const gameTypeKorean: Record<GameType, string> = {
     'hidden': '히든'
 };
 
-const StoneDisplay: React.FC<{
-    baseSrc: string;
-    patternSrc?: string;
-    count: number;
-    title: string;
-}> = ({ baseSrc, patternSrc, count, title }) => {
-    if (count === 0) return null;
-    return (
-        <div className="flex items-center gap-1" title={title}>
-            <div className="relative w-4 h-4">
-                <img src={baseSrc} alt={title} className="w-full h-full object-contain" />
-                {patternSrc && <img src={patternSrc} alt="" className="w-full h-full absolute top-0 left-0 object-contain" />}
-            </div>
-            <span className="text-xs font-semibold">x{count}</span>
-        </div>
-    );
-};
-
 const StageListItem: React.FC<{
     stage: typeof SINGLE_PLAYER_STAGES[0];
     isLocked: boolean;
@@ -60,10 +42,19 @@ const StageListItem: React.FC<{
                       
     const rewards = isCleared ? stage.rewards.repeatClear : stage.rewards.firstClear;
     const rewardTitle = isCleared ? "반복 클리어 보상" : "최초 클리어 보상";
-    
-    const hasTargetScore = !!stage.targetScore;
-    
-    const gameTypeDisplay = stage.gameType ? gameTypeKorean[stage.gameType] : '클래식';
+
+    const getEndConditionText = (stage: SinglePlayerStageInfo): string => {
+        if (stage.gameType === 'capture' && stage.targetScore) {
+            return `따내기 목표: 흑 ${stage.targetScore.black}`;
+        }
+        if (stage.gameType === 'survival' && stage.whiteStoneLimit) {
+            return `생존 조건: 백돌 ${stage.whiteStoneLimit}수`;
+        }
+        if (stage.autoEndTurnCount) {
+            return `종료 조건: ${stage.autoEndTurnCount}수 후 계가`;
+        }
+        return '';
+    };
     
     const renderRewardItem = (reward: InventoryItem | { itemId: string; quantity: number }, index: number) => {
         const itemName = 'itemId' in reward ? reward.itemId : reward.name;
@@ -78,11 +69,36 @@ const StageListItem: React.FC<{
         );
     };
 
+    const RewardDisplay: React.FC<{ reward: typeof rewards; title: string }> = ({ reward, title }) => (
+        <div className="flex flex-col items-center" title={title}>
+            <h4 className="text-[10px] text-yellow-400 font-semibold">{title}</h4>
+            <div className="flex items-center flex-wrap justify-center gap-x-1.5 mt-0.5">
+                {(reward.gold ?? 0) > 0 && (
+                    <span className="flex items-center gap-0.5 text-xs" title={`골드 ${reward.gold}`}>
+                        <img src="/images/Gold.png" alt="골드" className="w-3 h-3" />
+                        {reward.gold}
+                    </span>
+                )}
+                {(reward.exp?.amount ?? 0) > 0 && (
+                     <span className="flex items-center gap-0.5 text-xs" title={`경험치 ${reward.exp!.amount}`}>
+                        <span className="text-sm">⭐</span> {reward.exp!.amount}
+                    </span>
+                )}
+                {reward.items?.map(renderRewardItem)}
+                {reward.bonus && (
+                    <span className="flex items-center gap-0.5" title={`보너스 스탯 ${reward.bonus.replace('스탯', '')}`}>
+                        <img src="/images/icons/stat_point.png" alt="Stat Point" className="w-4 h-4" />
+                        {reward.bonus.replace('스탯', '')}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+
     return (
         <li ref={refProp} className={`flex items-center gap-2 p-2 rounded-lg border-2 transition-all duration-200 ${
             isLocked ? 'bg-secondary/30 opacity-60' : `bg-secondary/60 ${borderClass} hover:bg-tertiary/60`
         }`}>
-            {/* Stage Icon */}
             <div className="flex-shrink-0 w-12 h-12 flex flex-col items-center justify-center bg-tertiary rounded-lg border-2 border-color shadow-inner">
                 {isCleared ? (
                     <span className="text-2xl" title="클리어">✅</span>
@@ -90,77 +106,23 @@ const StageListItem: React.FC<{
                     <>
                         <span className="text-[10px] text-tertiary">스테이지</span>
                         <span className="font-bold text-lg text-primary -my-1">{stage.name.replace('스테이지 ', '')}</span>
-                        <div className="flex items-center gap-1 text-[10px] text-highlight font-semibold">
-                            {stage.missileCount && <span title={`미사일 ${stage.missileCount}개`}>🚀{stage.missileCount}</span>}
-                            {stage.hiddenStoneCount && <span title={`히든 ${stage.hiddenStoneCount}개`}>❓{stage.hiddenStoneCount}</span>}
-                            {stage.scanCount && <span title={`스캔 ${stage.scanCount}개`}>🔍{stage.scanCount}</span>}
-                        </div>
                     </>
                 )}
             </div>
 
-            {/* Main Info */}
-            <div className="flex-1 flex flex-col justify-center gap-1 text-xs text-secondary min-w-0">
-                <div className="flex items-center justify-between whitespace-nowrap gap-2">
-                    <div className="flex items-center gap-2" title={`AI 레벨 ${stage.katagoLevel}`}>
-                        <span className="text-base">🤖</span>
-                        <span className="font-semibold">Lv.{stage.katagoLevel}</span>
-                        <span className="font-bold text-tertiary">({gameTypeDisplay})</span>
-                    </div>
-                    {hasTargetScore ? (
-                        <div className="flex items-center gap-1" title={`목표 점수 흑 ${stage.targetScore!.black} / 백 ${stage.targetScore!.white}`}>
-                            <span className="font-bold text-tertiary">목표:</span>
-                            <span className="font-bold text-highlight">{`흑${stage.targetScore!.black}/백${stage.targetScore!.white}`}</span>
-                        </div>
-                    ) : stage.autoEndTurnCount ? (
-                        <div className="flex items-center gap-1" title="자동 계가">
-                            <span className="font-bold text-tertiary">종료:</span>
-                            <span className="font-bold text-highlight">{stage.autoEndTurnCount}수</span>
-                        </div>
-                    ) : null}
-                </div>
-                <div className="flex items-center justify-center gap-4 bg-tertiary/40 p-1 rounded-md">
-                    <div className="flex items-center gap-2">
-                        <StoneDisplay baseSrc="/images/single/Black.png" count={stage.placements.black} title={`흑돌 ${stage.placements.black}개`} />
-                        <StoneDisplay baseSrc="/images/single/Black.png" patternSrc="/images/single/BlackDouble.png" count={stage.placements.blackPattern} title={`흑 문양돌 ${stage.placements.blackPattern}개`} />
-                    </div>
-                    <div className="w-px h-4 bg-color self-stretch"></div>
-                    <div className="flex items-center gap-2">
-                        <StoneDisplay baseSrc="/images/single/White.png" count={stage.placements.white} title={`백돌 ${stage.placements.white}개`} />
-                        <StoneDisplay baseSrc="/images/single/White.png" patternSrc="/images/single/WhiteDouble.png" count={stage.placements.whitePattern} title={`백 문양돌 ${stage.placements.whitePattern}개`} />
-                    </div>
-                </div>
+            <div className="flex-1 flex flex-col justify-center text-xs text-secondary min-w-0 px-2">
+                <h4 className="font-bold text-sm text-primary truncate">{getEndConditionText(stage)}</h4>
+                <p className="text-xs text-tertiary">종료: {stage.autoEndTurnCount || '없음'}수</p>
             </div>
-
-            {/* Rewards & Button */}
-            <div className="w-24 flex-shrink-0 flex flex-col items-center justify-center gap-1">
-                 <div className="flex flex-col items-center h-10" title={rewardTitle}>
-                    <p className="text-[10px] text-yellow-400 font-semibold whitespace-nowrap">{rewardTitle}</p>
-                    <div className="flex items-center flex-wrap justify-center gap-x-1.5">
-                        {(rewards.gold ?? 0) > 0 && (
-                            <span className="flex items-center gap-0.5 text-xs" title={`골드 ${rewards.gold}`}>
-                                <img src="/images/Gold.png" alt="골드" className="w-3 h-3" />
-                                {rewards.gold}
-                            </span>
-                        )}
-                        {(rewards.exp?.amount ?? 0) > 0 && (
-                             <span className="flex items-center gap-0.5 text-xs" title={`경험치 ${rewards.exp!.amount}`}>
-                                <span className="text-sm">⭐</span> {rewards.exp!.amount}
-                            </span>
-                        )}
-                        {rewards.items?.map(renderRewardItem)}
-                        {rewards.bonus && (
-                            <span className="flex items-center gap-0.5" title={`보너스 스탯 ${rewards.bonus.replace('스탯', '')}`}>
-                                <img src="/images/icons/stat_point.png" alt="Stat Point" className="w-4 h-4" />
-                                {rewards.bonus.replace('스탯', '')}
-                            </span>
-                        )}
-                    </div>
+            
+            <div className="flex items-center gap-2">
+                <div className="flex-1 h-full flex items-center justify-center min-w-[100px]">
+                    <RewardDisplay reward={rewards} title={rewardTitle} />
                 </div>
                 <Button 
                     onClick={() => handleStageClick(stage.id)} 
                     disabled={isLocked || !canAfford}
-                    className="!py-1.5 !px-2 w-full !text-xs mt-1"
+                    className="!py-1.5 !px-2 !text-xs w-24"
                     title={!canAfford ? '행동력이 부족합니다.' : `행동력 ${stage.actionPointCost} 소모`}
                 >
                     {isLocked ? '🔒 잠김' : `입장 (⚡${stage.actionPointCost})`}
@@ -180,9 +142,9 @@ const formatTime = (ms: number): string => {
 
 const getRequiredProgressForStageId = (stageId: string): number => {
     const index = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stageId);
-    if (index !== -1) return index + 1; // Progress is index + 1
+    if (index !== -1) return index + 1;
     const parts = stageId.split('-');
-    if (parts.length !== 2) return Infinity; // Cannot parse, lock it
+    if (parts.length !== 2) return Infinity; 
     const levelPart = parts[0];
     const stageNum = parseInt(parts[1], 10);
     if (isNaN(stageNum)) return Infinity;
@@ -259,19 +221,26 @@ const MissionCard: React.FC<{
         if (!isStarted) {
             return { displayAmount: 0, timeToNextReward: 0 };
         }
-        
+
         const productionIntervalMs = leveledInfo.productionRateMinutes * 60 * 1000;
         if (productionIntervalMs <= 0) {
             return { displayAmount: accumulatedAmount, timeToNextReward: 0 };
         }
 
-        let nextRewardTime = 0;
-        if (accumulatedAmount < leveledInfo.maxCapacity) {
-            const elapsedMsSinceLastTick = Date.now() - lastCollectionTime;
-            nextRewardTime = productionIntervalMs - (elapsedMsSinceLastTick % productionIntervalMs);
-        }
+        const elapsedMs = Date.now() - lastCollectionTime;
+        const rewardsGenerated = Math.floor(elapsedMs / productionIntervalMs);
+        const newAccumulated = accumulatedAmount + (rewardsGenerated * leveledInfo.rewardAmount);
         
-        return { displayAmount: accumulatedAmount, timeToNextReward: nextRewardTime };
+        const currentDisplayAmount = Math.min(newAccumulated, leveledInfo.maxCapacity);
+
+        let nextRewardTime = 0;
+        if (currentDisplayAmount < leveledInfo.maxCapacity) {
+            const effectiveLastCollection = lastCollectionTime + (rewardsGenerated * productionIntervalMs);
+            const elapsedSinceLastTick = Date.now() - effectiveLastCollection;
+            nextRewardTime = productionIntervalMs - elapsedSinceLastTick;
+        }
+
+        return { displayAmount: currentDisplayAmount, timeToNextReward: nextRewardTime };
     }, [isStarted, lastCollectionTime, accumulatedAmount, leveledInfo, tick]);
 
     if (!isUnlocked) {
@@ -294,50 +263,52 @@ const MissionCard: React.FC<{
 
     return (
         <div className="bg-secondary/60 p-2 rounded-lg flex flex-col h-full border-2 border-color text-on-panel">
-            <div className="flex flex-col items-center gap-1 mb-1 flex-grow text-center">
-                <div className="w-[50px] h-[50px] flex-shrink-0 bg-tertiary rounded-md">
-                    <img src={mission.image} alt={mission.name} className="w-full h-full object-cover p-1" />
+            <div className="flex-grow flex flex-col items-center gap-1 text-center">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                    <img src={mission.image} alt={mission.name} className="w-16 h-16 object-cover p-1 rounded-md bg-tertiary" />
+                    <Button
+                        onClick={onUpgrade}
+                        disabled={level >= 10 || !canAffordUpgrade}
+                        colorScheme="blue"
+                        className="!p-1.5 aspect-square self-stretch flex flex-col justify-center"
+                        title={!canAffordUpgrade ? '골드가 부족합니다' : `강화 비용: ${upgradeCost.toLocaleString()} 골드`}
+                    >
+                        <div className="flex flex-col items-center">
+                            <span className="text-[10px]">강화</span>
+                            <div className="flex items-center text-[10px] gap-0.5">
+                                <img src="/images/Gold.png" alt="골드" className="w-2.5 h-2.5" />
+                                <span>{upgradeCost.toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </Button>
                 </div>
-                <div className="flex flex-col min-w-0">
-                    <h4 className="font-bold text-sm text-highlight" title={mission.name}>{mission.name}{level > 0 ? levelText : ''}</h4>
-                    <p className="text-[10px] text-tertiary mt-0.5">{mission.description}</p>
-                </div>
+                <h4 className="font-bold text-sm text-highlight" title={mission.name}>{mission.name}{level > 0 ? levelText : ''}</h4>
+                <p className="text-[10px] text-tertiary flex-grow">{mission.description}</p>
             </div>
             
             {isStarted ? (
                 <div className="flex-shrink-0 space-y-1">
-                     <div className="flex items-center justify-between text-xs text-tertiary">
-                        <span className="flex items-center gap-1">
-                            <img src={rewardIcon} alt={mission.rewardType} className="w-4 h-4" />
+                    <div className="flex items-center justify-between text-xs text-tertiary">
+                        <div className="flex items-center gap-1">
+                             <img src={rewardIcon} alt={mission.rewardType} className="w-3 h-3" />
                             <span>{leveledInfo.rewardAmount.toLocaleString()}/{leveledInfo.productionRateMinutes}분</span>
-                        </span>
-                        <span>
-                           {displayAmount < leveledInfo.maxCapacity ? formatTime(timeToNextReward) : 'MAX'}
-                        </span>
+                        </div>
+                         <Button
+                            onClick={onClaim}
+                            disabled={Math.floor(displayAmount) < 1}
+                            colorScheme="green"
+                            className="!p-1.5 aspect-square"
+                        >
+                            <span className="text-xs">수령</span>
+                        </Button>
                     </div>
-                    <div className="w-full bg-tertiary rounded-full h-3 relative overflow-hidden border border-black/20">
+                     <div className="w-full bg-tertiary rounded-full h-3 relative overflow-hidden border border-black/20">
                         <div className="bg-green-500 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
                         <span className="absolute inset-0 text-[10px] font-bold text-white flex items-center justify-center" style={{ textShadow: '1px 1px 1px black' }}>
                             {Math.floor(displayAmount).toLocaleString()}/{leveledInfo.maxCapacity.toLocaleString()}
+                             ({displayAmount < leveledInfo.maxCapacity ? formatTime(timeToNextReward) : 'MAX'})
                         </span>
                     </div>
-                    <Button
-                        onClick={onClaim}
-                        disabled={Math.floor(displayAmount) < 1}
-                        colorScheme="green"
-                        className="w-full !py-1 !text-xs"
-                    >
-                        수령하기 ({Math.floor(displayAmount).toLocaleString()})
-                    </Button>
-                     <Button 
-                        onClick={onUpgrade} 
-                        disabled={level >= 10 || !canAffordUpgrade}
-                        colorScheme="blue"
-                        className="w-full !py-1 !text-xs"
-                        title={!canAffordUpgrade ? '골드가 부족합니다' : `강화 비용: ${upgradeCost.toLocaleString()} 골드`}
-                    >
-                        강화 (💰{upgradeCost.toLocaleString()})
-                    </Button>
                 </div>
             ) : (
                  <div className="flex-shrink-0">
@@ -556,7 +527,6 @@ const SinglePlayerLobby: React.FC = () => {
             <main className="flex-1 min-h-0 flex flex-col">
                 {/* DESKTOP LAYOUT */}
                 <div className="hidden lg:flex flex-col gap-4 h-full">
-                    {/* Top Row: Level Selection + Stage List */}
                     <div className="flex-1 flex flex-row gap-4 min-h-0">
                         <div className="w-[420px] flex-shrink-0 flex flex-col">
                             <LevelSelectionPanel
@@ -575,7 +545,6 @@ const SinglePlayerLobby: React.FC = () => {
                             />
                         </div>
                     </div>
-                    {/* Bottom Row: Training Tasks */}
                     <div className="flex-shrink-0">
                         <SinglePlayerMissions />
                     </div>

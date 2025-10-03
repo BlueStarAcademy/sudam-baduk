@@ -24,10 +24,38 @@ export const initializeHidden = (game: LiveGameSession) => {
 };
 
 export const updateHiddenState = (game: LiveGameSession, now: number) => {
-    if (game.gameStatus === GameStatus.Scanning && game.itemUseDeadline && now > game.itemUseDeadline) {
-        game.foulInfo = { message: `스캔 시간 초과!`, expiry: now + 4000 };
-        game.gameStatus = GameStatus.Playing;
+    if (game.gameStatus === GameStatus.HiddenPlacing && game.itemUseDeadline && now > game.itemUseDeadline) {
+        const timedOutPlayerId = game.currentPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+        game.foulInfo = { message: `히든 착수 시간 초과!`, expiry: now + 4000 };
+        
+        // "Consume" the hidden stone usage for this turn
+        const myHiddenUsedKey = timedOutPlayerId === game.player1.id ? 'hidden_stones_used_p1' : 'hidden_stones_used_p2';
+        (game as any)[myHiddenUsedKey] = ((game as any)[myHiddenUsedKey] || 0) + 1;
 
+        game.gameStatus = GameStatus.Playing;
+        if (game.pausedTurnTimeLeft) {
+            const timeKey = game.currentPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+            game[timeKey] = game.pausedTurnTimeLeft;
+            game.turnDeadline = now + game[timeKey] * 1000;
+            game.turnStartTime = now;
+        }
+        game.itemUseDeadline = undefined;
+        game.pausedTurnTimeLeft = undefined;
+        return;
+    }
+
+    if (game.gameStatus === GameStatus.Scanning && game.itemUseDeadline && now > game.itemUseDeadline) {
+        const timedOutPlayerId = game.currentPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+        game.foulInfo = { message: `스캔 시간 초과!`, expiry: now + 4000 };
+        
+        // Consume one scan
+        const myScansKey = timedOutPlayerId === game.player1.id ? 'scans_p1' : 'scans_p2';
+        if ((game as any)[myScansKey] > 0) {
+            (game as any)[myScansKey]--;
+        }
+
+        game.gameStatus = GameStatus.Playing;
+        
         if (game.settings.timeLimit > 0 && game.pausedTurnTimeLeft) {
             const currentPlayerTimeKey = game.currentPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
             game[currentPlayerTimeKey] = game.pausedTurnTimeLeft;

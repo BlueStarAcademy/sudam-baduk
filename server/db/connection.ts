@@ -1,8 +1,5 @@
-/// <reference types="node" />
-
 import pg from 'pg';
 import path from 'path';
-// FIX: Corrected import path for types.
 import { Player } from '../../types/index';
 
 const { Pool } = pg;
@@ -101,6 +98,7 @@ const migrations: { [version: number]: string } = {
     55: 'ALTER TABLE live_games ADD COLUMN IF NOT EXISTS "towerItemPurchases" TEXT;',
     56: 'ALTER TABLE live_games ADD COLUMN IF NOT EXISTS "pausedTurnTimeLeft" REAL;',
     57: 'ALTER TABLE live_games ADD COLUMN IF NOT EXISTS "promptForMoreStones" BOOLEAN;',
+    58: 'ALTER TABLE user_credentials ADD COLUMN "salt" TEXT; ALTER TABLE user_credentials RENAME COLUMN "passwordHash" TO hash;',
 };
 
 

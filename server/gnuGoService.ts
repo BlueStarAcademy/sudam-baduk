@@ -4,10 +4,11 @@ import { spawn, ChildProcess, ChildProcessWithoutNullStreams } from 'child_proce
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove, Move } from '../../types/index.js';
-import * as types from '../../types/index.js';
+import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove, Move } from '../types/index.js';
+import * as types from '../types/index.js';
 import { fileURLToPath } from 'url';
 import * as db from '../db.js';
+import { processMove } from './goLogic.js';
 
 // --- Configuration ---
 // These paths should be configured for your environment.

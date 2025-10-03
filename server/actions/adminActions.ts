@@ -27,6 +27,8 @@ import { containsProfanity } from '../../profanity.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import * as currencyService from '../currencyService.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
+// FIX: Add crypto import for password hashing.
+import crypto from 'crypto';
 
 type HandleActionResult = { 
     clientResponse?: any;
@@ -168,7 +170,10 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             
             const newUser = createDefaultUser(`user-${globalThis.crypto.randomUUID()}`, username, nickname, false);
             await db.createUser(newUser);
-            await db.createUserCredentials(username, password, newUser.id);
+            // FIX: Hash password and provide correct arguments to createUserCredentials.
+            const salt = crypto.randomBytes(16).toString('hex');
+            const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+            await db.createUserCredentials(username, hash, salt, newUser.id);
             return {};
         }
         case 'ADMIN_FORCE_LOGOUT': {

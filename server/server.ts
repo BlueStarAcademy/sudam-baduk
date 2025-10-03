@@ -1,9 +1,8 @@
-
 import 'dotenv/config';
-// FIX: Use aliased imports for Express types to avoid conflicts with global Request/Response types.
-// Explicitly import Request, Response, and NextFunction to resolve type conflicts.
+// FIX: Corrected Express type imports to use named imports for Request, Response, and NextFunction.
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import crypto from 'crypto';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV } from './db.js';
 import { handleAction } from './actions/gameActions.js';
 import { type VolatileState, type ServerAction, type User, type ChatMessage, Guild, UserStatus, type UserStatusInfo } from '../types/index.js';
@@ -37,8 +36,7 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// FIX: Update Express Request and Response types to avoid conflict with global types.
-// FIX: Use Request, Response, and NextFunction types directly imported from 'express' to resolve type conflicts.
+// FIX: Corrected Express request/response types.
 const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     // For login/register, no session check is needed
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register') {
@@ -71,7 +69,7 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
 
 app.use(userMiddleware);
 
-// FIX: Update Express Request and Response types to avoid conflict with global types.
+// FIX: Corrected Express request/response types.
 app.post('/api/auth/register', async (req: Request, res: Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
@@ -90,7 +88,12 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
         const newUser = createDefaultUser(`user-${globalThis.crypto.randomUUID()}`, username, nickname);
         await createUser(newUser);
-        await createUserCredentials(username, password, newUser.id);
+
+        // Hash the password
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+
+        await createUserCredentials(username, hash, salt, newUser.id);
 
         const sessionId = randomUUID();
         volatileState.userSessions[newUser.id] = sessionId;
@@ -101,7 +104,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Update Express Request and Response types to avoid conflict with global types.
+// FIX: Corrected Express request/response types.
 app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -109,9 +112,16 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
     try {
         const credentials = await getUserCredentials(username);
-        if (!credentials || credentials.passwordHash !== password) {
+        if (!credentials || !credentials.hash || !credentials.salt) {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
+
+        const hashToCompare = crypto.pbkdf2Sync(password, credentials.salt, 10000, 64, 'sha512').toString('hex');
+
+        if (credentials.hash !== hashToCompare) {
+            return res.status(401).json({ message: 'Invalid username or password.' });
+        }
+
         let user = await getUser(credentials.userId);
         if (!user) {
             return res.status(404).json({ message: 'User not found.' });
@@ -129,7 +139,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Update Express Request and Response types to avoid conflict with global types.
+// FIX: Corrected Express request/response types.
 app.post('/api/state', async (req: Request, res: Response) => {
     const user = (req as any).user as User;
     let userStatus: UserStatusInfo | undefined;
@@ -153,7 +163,7 @@ app.post('/api/state', async (req: Request, res: Response) => {
     res.json({ ...data, userStatuses: volatileState.userStatuses, negotiations: volatileState.negotiations, waitingRoomChats: volatileState.waitingRoomChats, gameChats: volatileState.gameChats });
 });
 
-// FIX: Update Express Request and Response types to avoid conflict with global types.
+// FIX: Corrected Express request/response types.
 app.post('/api/action', async (req: Request, res: Response) => {
     const user = (req as any).user as User;
     if (!user) {
@@ -259,42 +269,28 @@ const startServer = async () => {
             await db.setKV('guilds', guilds);
         }
         
-        const allUsers = await db.getAllUsers();
-        for(const user of allUsers) {
+        // --- User State Update Loop ---
+        const allUserIds = (await db.getAllUsers()).map(u => u.id);
+
+        for (const userId of allUserIds) {
+            // Fetch the most up-to-date user object for each iteration to prevent race conditions.
+            const user = await db.getUser(userId);
+            if (!user) continue;
+    
             const originalUserSnapshot = JSON.stringify(user);
-            const userCopy: User = JSON.parse(originalUserSnapshot);
+            let userToUpdate = JSON.parse(originalUserSnapshot); // Create a mutable copy to work on
+    
             const guild = user.guildId ? guilds[user.guildId] : null;
-
-            const userAfterReset = await resetAndGenerateQuests(userCopy);
-            const userAfterAP = regenerateActionPoints(userAfterReset, guild);
-            const userAfterMissions = accumulateMissionRewards(userAfterAP);
+    
+            // These functions perform time-based updates (quest resets, AP regen, mission accumulation)
+            // and will only modify the object if a change is needed.
+            userToUpdate = await resetAndGenerateQuests(userToUpdate);
+            userToUpdate = regenerateActionPoints(userToUpdate, guild);
+            userToUpdate = accumulateMissionRewards(userToUpdate);
             
-            const finalCalculatedUser = userAfterMissions;
-
-            if (JSON.stringify(finalCalculatedUser) !== originalUserSnapshot) {
-                const latestUser = await db.getUser(user.id);
-                if (latestUser) {
-                    // Merge properties managed by this loop
-                    latestUser.quests = finalCalculatedUser.quests;
-                    latestUser.actionPoints = finalCalculatedUser.actionPoints;
-                    latestUser.lastActionPointUpdate = finalCalculatedUser.lastActionPointUpdate;
-                    latestUser.singlePlayerMissions = finalCalculatedUser.singlePlayerMissions;
-                    latestUser.lastNeighborhoodPlayedDate = finalCalculatedUser.lastNeighborhoodPlayedDate;
-                    latestUser.neighborhoodRewardClaimed = finalCalculatedUser.neighborhoodRewardClaimed;
-                    latestUser.lastNeighborhoodTournament = finalCalculatedUser.lastNeighborhoodTournament;
-                    latestUser.lastNationalPlayedDate = finalCalculatedUser.lastNationalPlayedDate;
-                    latestUser.nationalRewardClaimed = finalCalculatedUser.nationalRewardClaimed;
-                    latestUser.lastNationalTournament = finalCalculatedUser.lastNationalTournament;
-                    latestUser.lastWorldPlayedDate = finalCalculatedUser.lastWorldPlayedDate;
-                    latestUser.worldRewardClaimed = finalCalculatedUser.worldRewardClaimed;
-                    latestUser.lastWorldTournament = finalCalculatedUser.lastWorldTournament;
-                    latestUser.dailyChampionshipMatchesPlayed = finalCalculatedUser.dailyChampionshipMatchesPlayed;
-                    latestUser.lastChampionshipMatchDate = finalCalculatedUser.lastChampionshipMatchDate;
-                    latestUser.guildBossAttempts = finalCalculatedUser.guildBossAttempts;
-                    latestUser.lastGuildBossAttemptDate = finalCalculatedUser.lastGuildBossAttemptDate;
-                    
-                    await db.updateUser(latestUser);
-                }
+            // If any of the background tasks modified the user object, save it.
+            if (JSON.stringify(userToUpdate) !== originalUserSnapshot) {
+                await db.updateUser(userToUpdate);
             }
         }
     }, 5000);
@@ -314,10 +310,16 @@ const startServer = async () => {
             console.error("Error in scheduled tasks:", e);
         }
     }, 60 * 60 * 1000);
-
-    app.listen(port, () => {
-        console.log(`Server listening on port ${port}`);
-    });
 };
 
 startServer();
+
+// For local development, start the server and listen.
+// For Vercel, this block will be ignored and the exported `app` will be used.
+if (!process.env.VERCEL) {
+    app.listen(port, () => {
+        console.log(`Server listening on port ${port}`);
+    });
+}
+
+export default app;

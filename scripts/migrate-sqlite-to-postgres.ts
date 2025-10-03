@@ -1,5 +1,4 @@
-/// <reference types="node" />
-
+// FIX: Removed redundant Node.js type reference. It's now handled globally in vite-env.d.ts.
 import 'dotenv/config';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';

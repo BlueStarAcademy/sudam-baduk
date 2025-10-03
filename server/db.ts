@@ -1,15 +1,11 @@
-
-
 import { Pool } from 'pg';
 import { getDb, initializeAndGetDb } from './db/connection';
-// FIX: Corrected import path for types.
 import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank } from '../types/index';
 import { getInitialState } from './initialData';
 
 // --- Initialization and Seeding ---
 let isInitialized = false;
 
-// FIX: Update db parameter type from SQLite Database to pg Pool to match repository expectations.
 const seedInitialData = async (db: Pool) => {
     console.log('[DB] Database is empty. Seeding initial data...');
     const userRepository = await import('./repositories/userRepository');
@@ -25,8 +21,8 @@ const seedInitialData = async (db: Pool) => {
     for (const username of Object.keys(credentialsToCreate)) {
         const cred = credentialsToCreate[username];
         const originalUser = usersToCreate.find(u => u.username === username);
-        if (originalUser) {
-            await credentialsRepository.createUserCredentials(db, originalUser.username, cred.passwordHash, cred.userId);
+        if (originalUser && cred.hash && cred.salt) {
+            await credentialsRepository.createUserCredentials(db, originalUser.username, cred.hash, cred.salt, cred.userId);
         }
     }
     console.log('[DB] Initial data seeding complete.');
@@ -35,7 +31,6 @@ const seedInitialData = async (db: Pool) => {
 export const initializeDatabase = async () => {
     if (isInitialized) return;
     const db = await initializeAndGetDb();
-    // FIX: Use db.query instead of db.get for PostgreSQL and parse string count.
     const userCountResult = await db.query<{ count: string }>('SELECT COUNT(*) as count FROM users');
     const userCount = userCountResult.rows[0] ? parseInt(userCountResult.rows[0].count, 10) : 0;
     if (userCount === 0) {
@@ -98,9 +93,9 @@ export const getUserCredentialsByUserId = async (userId: string): Promise<UserCr
     const credentialsRepository = await import('./repositories/credentialsRepository');
     return credentialsRepository.getUserCredentialsByUserId(await getDb(), userId);
 };
-export const createUserCredentials = async (username: string, passwordHash: string, userId: string): Promise<void> => {
+export const createUserCredentials = async (username: string, hash: string, salt: string, userId: string): Promise<void> => {
     const credentialsRepository = await import('./repositories/credentialsRepository');
-    return credentialsRepository.createUserCredentials(await getDb(), username, passwordHash, userId);
+    return credentialsRepository.createUserCredentials(await getDb(), username, hash, salt, userId);
 };
 export const updateUserPassword = async (userId: string, newPasswordHash: string): Promise<void> => {
     const credentialsRepository = await import('./repositories/credentialsRepository');

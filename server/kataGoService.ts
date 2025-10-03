@@ -1,5 +1,4 @@
-/// <reference types="node" />
-
+// FIX: Removed redundant Node.js type reference. It's now handled globally in vite-env.d.ts.
 import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import fs from 'fs';

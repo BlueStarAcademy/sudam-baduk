@@ -26,9 +26,14 @@ export const updateMissileState = (game: LiveGameSession, now: number) => {
         const timedOutPlayerId = timedOutPlayerEnum === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
         
         game.foulInfo = { message: `${game.player1.id === timedOutPlayerId ? game.player1.nickname : game.player2.nickname}님의 아이템 시간 초과!`, expiry: now + 4000 };
-        game.gameStatus = GameStatus.Playing;
-        // currentPlayer remains timedOutPlayerEnum
+        
+        // Consume one missile
+        const myMissilesKey = timedOutPlayerId === game.player1.id ? 'missiles_p1' : 'missiles_p2';
+        if (game[myMissilesKey] && game[myMissilesKey]! > 0) {
+            (game as any)[myMissilesKey]--;
+        }
 
+        game.gameStatus = GameStatus.Playing;
         // Restore the timer for the current player
         if (game.settings.timeLimit > 0 && game.pausedTurnTimeLeft) {
             const currentPlayerTimeKey = timedOutPlayerEnum === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';

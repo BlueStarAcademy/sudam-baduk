@@ -243,6 +243,8 @@ export interface AdminProps {
 }
 
 export interface UserCredentials {
-    passwordHash: string;
+    passwordHash?: string; // Kept for potential migration, but new records will use hash/salt
+    hash?: string;
+    salt?: string;
     userId: string;
 }
