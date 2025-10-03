@@ -1,6 +1,6 @@
 import pg from 'pg';
 import path from 'path';
-import { Player } from '../../types/index';
+import { Player } from '../../types/index.js';
 
 const { Pool } = pg;
 

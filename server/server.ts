@@ -1,6 +1,7 @@
+
 import 'dotenv/config';
-// FIX: Corrected Express type imports to use named imports for Request, Response, and NextFunction.
-import express, { Request, Response, NextFunction } from 'express';
+// FIX: Changed import to use express namespace directly to avoid type conflicts.
+import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV } from './db.js';
@@ -36,8 +37,8 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// FIX: Corrected Express request/response types.
-const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+// FIX: Explicitly type req and res with express types to solve property not found errors.
+const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // For login/register, no session check is needed
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register') {
         return next();
@@ -69,8 +70,8 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
 
 app.use(userMiddleware);
 
-// FIX: Corrected Express request/response types.
-app.post('/api/auth/register', async (req: Request, res: Response) => {
+// FIX: Explicitly type req and res with express types to solve property not found errors.
+app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
         return res.status(400).json({ message: 'Username, password, and nickname are required.' });
@@ -86,13 +87,11 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
             return res.status(409).json({ message: 'Nickname already exists.' });
         }
 
-        const newUser = createDefaultUser(`user-${globalThis.crypto.randomUUID()}`, username, nickname);
+        const newUser = createDefaultUser(`user-${globalThis.crypto.randomUUID()}`, username, nickname, false);
         await createUser(newUser);
-
-        // Hash the password
+        // FIX: Hash password and provide correct arguments to createUserCredentials.
         const salt = crypto.randomBytes(16).toString('hex');
         const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
-
         await createUserCredentials(username, hash, salt, newUser.id);
 
         const sessionId = randomUUID();
@@ -104,8 +103,8 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Corrected Express request/response types.
-app.post('/api/auth/login', async (req: Request, res: Response) => {
+// FIX: Explicitly type req and res with express types to solve property not found errors.
+app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: 'Username and password are required.' });
@@ -139,8 +138,8 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Corrected Express request/response types.
-app.post('/api/state', async (req: Request, res: Response) => {
+// FIX: Explicitly type req and res with express types to solve property not found errors.
+app.post('/api/state', async (req: express.Request, res: express.Response) => {
     const user = (req as any).user as User;
     let userStatus: UserStatusInfo | undefined;
     if (user) {
@@ -163,8 +162,8 @@ app.post('/api/state', async (req: Request, res: Response) => {
     res.json({ ...data, userStatuses: volatileState.userStatuses, negotiations: volatileState.negotiations, waitingRoomChats: volatileState.waitingRoomChats, gameChats: volatileState.gameChats });
 });
 
-// FIX: Corrected Express request/response types.
-app.post('/api/action', async (req: Request, res: Response) => {
+// FIX: Explicitly type req and res with express types to solve property not found errors.
+app.post('/api/action', async (req: express.Request, res: express.Response) => {
     const user = (req as any).user as User;
     if (!user) {
         // For beacon calls on logout, user might not be attached if session check fails.

@@ -200,11 +200,10 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             const { missionId } = payload;
             
             // Apply accumulation logic right before claiming to get the latest state
-            // and prevent race conditions with the 5-second server loop.
             user = accumulateMissionRewards(user);
 
             const missionState = user.singlePlayerMissions[missionId];
-            if (!missionState || !missionState.isStarted || missionState.accumulatedAmount < 1) {
+            if (!missionState || !missionState.isStarted || missionState.claimableAmount < 1) {
                 return { error: '수령할 보상이 없습니다.' };
             }
         
@@ -214,7 +213,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             const level = missionState.level || 1;
             const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
         
-            const amountToClaim = Math.floor(missionState.accumulatedAmount);
+            const amountToClaim = Math.floor(missionState.claimableAmount);
             const reward: QuestReward = {};
             
             if (leveledMissionInfo.rewardType === 'gold') {
@@ -225,8 +224,8 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
         
             const addedItems = grantReward(user, reward, `${leveledMissionInfo.name} 수련과제 보상`);
             
-            missionState.accumulatedAmount -= amountToClaim;
-            missionState.lastCollectionTime = Date.now();
+            missionState.claimableAmount -= amountToClaim;
+            missionState.progressTowardNextLevel = (missionState.progressTowardNextLevel || 0) + amountToClaim;
 
             updateQuestProgress(user, 'claim_single_player_mission');
             
@@ -247,33 +246,41 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             if (!user.singlePlayerMissions?.[missionId]?.isStarted) {
                 return { error: '미션을 먼저 시작해야 합니다.' };
             }
-            
-            const missionState = user.singlePlayerMissions[missionId];
-            const level = missionState.level || 1;
         
-            if (level >= 10) {
+            const missionState = user.singlePlayerMissions[missionId];
+            const currentLevel = missionState.level || 1;
+        
+            if (currentLevel >= 10) {
                 return { error: '최대 레벨입니다.' };
             }
         
             const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
             if (!missionInfo) return { error: '미션 정보를 찾을 수 없습니다.' };
         
-            const missionInfoWithLevel = getMissionInfoWithLevel(missionInfo, level);
-            let cost = 0;
-            
-            if (missionInfoWithLevel.rewardType === 'gold') {
-                cost = missionInfoWithLevel.maxCapacity * 5;
-                if (user.gold < cost) return { error: '골드가 부족합니다.' };
-                currencyService.spendGold(user, cost, `${missionInfo.name} 강화`);
-            } else { // diamond
-                cost = missionInfoWithLevel.maxCapacity * 1000;
-                if (user.gold < cost) return { error: '골드가 부족합니다.' };
-                currencyService.spendGold(user, cost, `${missionInfo.name} 강화`);
+            const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, currentLevel);
+        
+            const upgradeTarget = leveledMissionInfo.maxCapacity * currentLevel * 10;
+            if ((missionState.progressTowardNextLevel || 0) < upgradeTarget) {
+                return { error: '강화에 필요한 누적 수령액이 부족합니다.' };
             }
         
-            missionState.level = level + 1;
-            await db.updateUser(user);
+            let goldCost: number;
+            if (leveledMissionInfo.rewardType === 'gold') {
+                goldCost = leveledMissionInfo.maxCapacity * 5;
+            } else { // diamonds
+                goldCost = leveledMissionInfo.maxCapacity * 1000;
+            }
+
+            if (user.gold < goldCost) {
+                return { error: '골드가 부족합니다.' };
+            }
         
+            currencyService.spendGold(user, goldCost, `${missionInfo.name} 강화`);
+        
+            missionState.level = currentLevel + 1;
+            missionState.progressTowardNextLevel = 0;
+        
+            await db.updateUser(user);
             return { clientResponse: { updatedUser: user } };
         }
         case 'CLAIM_ACTION_POINT_QUIZ_REWARD': {
@@ -338,7 +345,8 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             user.singlePlayerMissions[missionId] = {
                 isStarted: true,
                 lastCollectionTime: Date.now(),
-                accumulatedAmount: 0,
+                claimableAmount: 0,
+                progressTowardNextLevel: 0,
                 level: 1,
             };
             

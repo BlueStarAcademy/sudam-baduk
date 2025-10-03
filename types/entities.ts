@@ -712,7 +712,8 @@ export interface SinglePlayerMissionInfo {
 export interface SinglePlayerMissionState {
     isStarted: boolean;
     lastCollectionTime: number;
-    accumulatedAmount: number;
+    claimableAmount: number;
+    progressTowardNextLevel: number;
     level?: number;
 }
 

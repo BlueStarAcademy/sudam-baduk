@@ -9,11 +9,10 @@ import { fileURLToPath } from 'url';
 
 // --- Configuration ---
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename); // .../server/services
+const __dirname = path.dirname(__filename); // .../server
 
 const isWindows = process.platform === 'win32';
 const exeName = isWindows ? 'katago.exe' : 'katago';
-// FIX: Correctly resolve the path to server/katago instead of the project root.
 const KATAGO_DIR = path.resolve(__dirname, '..', 'katago');
 
 const KATAGO_PATH = path.join(KATAGO_DIR, exeName);
@@ -197,7 +196,7 @@ class KataGoManager {
             console.log('[KataGo] Attempting to start engine...');
 
             if (!fs.existsSync(KATAGO_PATH)) {
-                const errorMsg = `[KataGo] Engine not found at ${KATAGO_PATH}. Analysis will be unavailable. Please place katago executable in 'server/katago/'.`;
+                const errorMsg = `[KataGo] Engine not found at ${KATAGO_PATH}. Analysis will be unavailable. Please place katago executable in 'katago/'.`;
                 console.error(errorMsg);
                 this.isStarting = false;
                 this.readyPromise = null;
@@ -205,7 +204,7 @@ class KataGoManager {
             }
             
             if (!fs.existsSync(MODEL_PATH)) {
-                const errorMsg = `[KataGo] Model not found at ${MODEL_PATH}. Analysis will be unavailable. Please place the model file in 'server/katago/'.`;
+                const errorMsg = `[KataGo] Model not found at ${MODEL_PATH}. Analysis will be unavailable. Please place the model file in 'katago/'.`;
                 console.error(errorMsg);
                 this.isStarting = false;
                 this.readyPromise = null;

@@ -207,7 +207,7 @@ export const accumulateMissionRewards = (user: types.User): types.User => {
         const level = missionState.level || 1;
         const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
         
-        const currentAmount = missionState.accumulatedAmount || 0;
+        const currentAmount = missionState.claimableAmount || 0;
         if (currentAmount >= leveledMissionInfo.maxCapacity) {
             continue;
         }
@@ -227,10 +227,10 @@ export const accumulateMissionRewards = (user: types.User): types.User => {
                     const amountNeeded = leveledMissionInfo.maxCapacity - currentAmount;
                     const ticksToFill = Math.ceil(amountNeeded / leveledMissionInfo.rewardAmount);
                     const timeToFillMs = ticksToFill * productionIntervalMs;
-                    missionState.accumulatedAmount = leveledMissionInfo.maxCapacity;
+                    missionState.claimableAmount = leveledMissionInfo.maxCapacity;
                     missionState.lastCollectionTime = lastCollectionTime + timeToFillMs;
                 } else {
-                    missionState.accumulatedAmount = newTotal;
+                    missionState.claimableAmount = newTotal;
                     missionState.lastCollectionTime = lastCollectionTime + (rewardsToGenerate * productionIntervalMs);
                 }
                 modified = true;

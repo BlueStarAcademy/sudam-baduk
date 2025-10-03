@@ -1,4 +1,6 @@
 
+
+
 import { type AppState, type User, type UserCredentials, type QuestLog, type DailyQuestData, type WeeklyCompetitor, type WeeklyQuestData, type MonthlyQuestData, type Guild, CoreStat, GameMode, LeagueTier, GuildMemberRole, GuildResearchId, type InventoryItem } from '../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/gameModes.js';
 import { BOT_NAMES } from '../constants/auth.js';
@@ -6,6 +8,7 @@ import { AVATAR_POOL } from '../constants/ui.js';
 // FIX: Corrected import path for GUILD_MISSIONS_POOL.
 import { GUILD_MISSIONS_POOL, GUILD_INITIAL_MEMBER_LIMIT } from '../constants/index.js';
 import { defaultSettings } from '../constants/index.js';
+import crypto from 'crypto';
 
 export const createDefaultBaseStats = (): Record<CoreStat, number> => ({
     [CoreStat.Concentration]: 100,
@@ -183,6 +186,18 @@ export const getInitialState = (): Omit<AppState, 'liveGames' | 'negotiations' |
     const testUser2 = createDefaultUser(`user-test-${Date.now()+2}`, '노란별', '노란별');
     const testUser3 = createDefaultUser(`user-test-${Date.now()+3}`, '녹색별', '녹색별');
 
+    const createCredentials = (password: string): { hash: string; salt: string } => {
+        const salt = crypto.randomBytes(16).toString('hex');
+        const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
+        return { hash, salt };
+    };
+
+    const adminCreds = createCredentials('1217');
+    const test1Creds = createCredentials('1217');
+    const test2Creds = createCredentials('1217');
+    const test3Creds = createCredentials('1217');
+
+
     return {
         users: {
             [adminUser.id]: adminUser,
@@ -191,10 +206,10 @@ export const getInitialState = (): Omit<AppState, 'liveGames' | 'negotiations' |
             [testUser3.id]: testUser3,
         },
         userCredentials: {
-            '푸른별바둑학원': { passwordHash: '1217', userId: adminUser.id },
-            '푸른별': { passwordHash: '1217', userId: testUser1.id },
-            '노란별': { passwordHash: '1217', userId: testUser2.id },
-            '녹색별': { passwordHash: '1217', userId: testUser3.id },
+            '푸른별바둑학원': { ...adminCreds, userId: adminUser.id },
+            '푸른별': { ...test1Creds, userId: testUser1.id },
+            '노란별': { ...test2Creds, userId: testUser2.id },
+            '녹색별': { ...test3Creds, userId: testUser3.id },
         },
         guilds: {},
     };
@@ -238,7 +253,7 @@ export const createDefaultGuild = (id: string, name: string, description: string
             championshipClaims: 0,
             towerFloor50Conquerors: [],
             towerFloor100Conquerors: [],
-            bossAttempts: 0
+            bossAttempts: 0,
         },
         lastMissionReset: now,
         lastWeeklyContributionReset: now,

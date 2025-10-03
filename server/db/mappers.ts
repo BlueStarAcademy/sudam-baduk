@@ -1,5 +1,5 @@
 import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
-import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, MonthlyQuestData, EquipmentPreset, AppSettings } from '../../types/index.js';
+import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, MonthlyQuestData, EquipmentPreset, AppSettings, SinglePlayerMissionState } from '../../types/index.js';
 import { LeagueTier, Player, GameMode } from '../../types/index.js';
 import { DEFAULT_GAME_SETTINGS } from '../../constants/gameSettings.js';
 import { defaultSettings } from '../../constants/settings.js';
@@ -58,9 +58,27 @@ export const rowToUser = (row: any): User | null => {
         const monthlyFromDb = ensureObject(questsFromDb.monthly);
 
         const quests: QuestLog = {
-            daily: { ...defaultQuests.daily, ...dailyFromDb, quests: ensureArray(dailyFromDb.quests), claimedMilestones: ensureArray(dailyFromDb.claimedMilestones, [false,false,false,false,false]) },
-            weekly: { ...defaultQuests.weekly, ...weeklyFromDb, quests: ensureArray(weeklyFromDb.quests), claimedMilestones: ensureArray(weeklyFromDb.claimedMilestones, [false,false,false,false,false]) },
-            monthly: { ...defaultQuests.monthly, ...monthlyFromDb, quests: ensureArray(monthlyFromDb.quests), claimedMilestones: ensureArray(monthlyFromDb.claimedMilestones, [false,false,false,false,false]) },
+            daily: { 
+                ...defaultQuests.daily, 
+                ...dailyFromDb, 
+                lastReset: dailyFromDb.lastReset != null ? Number(dailyFromDb.lastReset) : 0,
+                quests: ensureArray(dailyFromDb.quests), 
+                claimedMilestones: ensureArray(dailyFromDb.claimedMilestones, [false,false,false,false,false]) 
+            },
+            weekly: { 
+                ...defaultQuests.weekly, 
+                ...weeklyFromDb, 
+                lastReset: weeklyFromDb.lastReset != null ? Number(weeklyFromDb.lastReset) : 0,
+                quests: ensureArray(weeklyFromDb.quests), 
+                claimedMilestones: ensureArray(weeklyFromDb.claimedMilestones, [false,false,false,false,false]) 
+            },
+            monthly: { 
+                ...defaultQuests.monthly, 
+                ...monthlyFromDb, 
+                lastReset: monthlyFromDb.lastReset != null ? Number(monthlyFromDb.lastReset) : 0,
+                quests: ensureArray(monthlyFromDb.quests), 
+                claimedMilestones: ensureArray(monthlyFromDb.claimedMilestones, [false,false,false,false,false]) 
+            },
         };
         
         const actionPointsFromDb = ensureObject(safeParse(row.actionPoints, { current: 30, max: 30 }));
@@ -95,6 +113,18 @@ export const rowToUser = (row: any): User | null => {
         const dailyDonationsFromDb = ensureObject(safeParse(row.dailyDonations, {}));
         const dailyMissionContributionFromDb = ensureObject(safeParse(row.dailyMissionContribution, {}));
 
+        const spMissionsFromDb = ensureObject(safeParse(row.singlePlayerMissions, {}));
+        const finalSpMissions: Record<string, SinglePlayerMissionState> = {};
+        for (const missionId in spMissionsFromDb) {
+            const state = spMissionsFromDb[missionId];
+            finalSpMissions[missionId] = {
+                isStarted: state.isStarted,
+                lastCollectionTime: state.lastCollectionTime != null ? Number(state.lastCollectionTime) : 0,
+                claimableAmount: state.claimableAmount ?? state.accumulatedAmount ?? 0,
+                progressTowardNextLevel: state.progressTowardNextLevel ?? 0, // Old data won't have this, so it defaults to 0.
+                level: state.level ?? 1,
+            };
+        }
 
         const user: User = {
             id: row.id,
@@ -110,11 +140,11 @@ export const rowToUser = (row: any): User | null => {
             inventorySlots: row.inventorySlots ?? 40,
             chatBanUntil: row.chatBanUntil ?? undefined,
             connectionBanUntil: row.connectionBanUntil ?? undefined,
-            lastActionPointUpdate: row.lastActionPointUpdate ?? 0,
+            lastActionPointUpdate: row.lastActionPointUpdate != null ? Number(row.lastActionPointUpdate) : 0,
             actionPointPurchasesToday: row.actionPointPurchasesToday ?? 0,
-            lastActionPointPurchaseDate: row.lastActionPointPurchaseDate ?? 0,
+            lastActionPointPurchaseDate: row.lastActionPointPurchaseDate != null ? Number(row.lastActionPointPurchaseDate) : 0,
             actionPointQuizzesToday: row.actionPointQuizzesToday ?? 0,
-            lastActionPointQuizDate: row.lastActionPointQuizDate ?? 0,
+            lastActionPointQuizDate: row.lastActionPointQuizDate != null ? Number(row.lastActionPointQuizDate) : 0,
             dailyShopPurchases: ensureObject(safeParse(row.dailyShopPurchases, {})),
             avatarId: row.avatarId || 'profile_1',
             borderId: row.borderId || 'default',
@@ -135,38 +165,38 @@ export const rowToUser = (row: any): User | null => {
             actionPoints,
             mail: ensureArray(safeParse(row.mail, [])),
             quests,
-            lastNeighborhoodPlayedDate: row.lastNeighborhoodPlayedDate ?? undefined,
+            lastNeighborhoodPlayedDate: row.lastNeighborhoodPlayedDate != null ? Number(row.lastNeighborhoodPlayedDate) : undefined,
             neighborhoodRewardClaimed: !!row.neighborhoodRewardClaimed,
             lastNeighborhoodTournament: ensureObject(safeParse(row.lastNeighborhoodTournament, null), null),
-            lastNationalPlayedDate: row.lastNationalPlayedDate ?? undefined,
+            lastNationalPlayedDate: row.lastNationalPlayedDate != null ? Number(row.lastNationalPlayedDate) : undefined,
             nationalRewardClaimed: !!row.nationalRewardClaimed,
             lastNationalTournament: ensureObject(safeParse(row.lastNationalTournament, null), null),
-            lastWorldPlayedDate: row.lastWorldPlayedDate ?? undefined,
+            lastWorldPlayedDate: row.lastWorldPlayedDate != null ? Number(row.lastWorldPlayedDate) : undefined,
             worldRewardClaimed: !!row.worldRewardClaimed,
             lastWorldTournament: ensureObject(safeParse(row.lastWorldTournament, null), null),
             dailyChampionshipMatchesPlayed: row.dailyChampionshipMatchesPlayed ?? 0,
-            lastChampionshipMatchDate: row.lastChampionshipMatchDate ?? 0,
+            lastChampionshipMatchDate: row.lastChampionshipMatchDate != null ? Number(row.lastChampionshipMatchDate) : 0,
             weeklyCompetitors: ensureArray(safeParse(row.weeklyCompetitors, [])),
-            lastWeeklyCompetitorsUpdate: row.lastWeeklyCompetitorsUpdate ?? 0,
-            lastLeagueUpdate: row.lastLeagueUpdate ?? 0,
-            monthlyGoldBuffExpiresAt: row.monthlyGoldBuffExpiresAt ?? 0,
+            lastWeeklyCompetitorsUpdate: row.lastWeeklyCompetitorsUpdate != null ? Number(row.lastWeeklyCompetitorsUpdate) : 0,
+            lastLeagueUpdate: row.lastLeagueUpdate != null ? Number(row.lastLeagueUpdate) : 0,
+            monthlyGoldBuffExpiresAt: row.monthlyGoldBuffExpiresAt != null ? Number(row.monthlyGoldBuffExpiresAt) : 0,
             mbti: row.mbti ?? null,
             isMbtiPublic: !!row.isMbtiPublic,
             singlePlayerProgress: row.singlePlayerProgress ?? 0,
             bonusStatPoints: row.bonusStatPoints ?? 0,
-            singlePlayerMissions: ensureObject(safeParse(row.singlePlayerMissions, {})),
+            singlePlayerMissions: finalSpMissions,
             towerProgress: { highestFloor: 0, lastClearTimestamp: 0, ...towerProgressFromDb },
             claimedFirstClearRewards: ensureArray(safeParse(row.claimedFirstClearRewards, [])),
             currencyLogs: ensureArray(safeParse(row.currencyLogs, [])),
             guildId: row.guildId ?? null,
             guildApplications: ensureArray(safeParse(row.guildApplications, [])),
-            guildLeaveCooldownUntil: row.guildLeaveCooldownUntil ?? 0,
+            guildLeaveCooldownUntil: row.guildLeaveCooldownUntil != null ? Number(row.guildLeaveCooldownUntil) : 0,
             guildCoins: row.guildCoins ?? 0,
             guildBossAttempts: row.guildBossAttempts ?? 0,
-            lastGuildBossAttemptDate: row.lastGuildBossAttemptDate ?? 0,
-            lastLoginAt: row.lastLoginAt ?? 0,
-            dailyDonations: { gold: 0, diamond: 0, date: 0, ...dailyDonationsFromDb },
-            dailyMissionContribution: { amount: 0, date: 0, ...dailyMissionContributionFromDb },
+            lastGuildBossAttemptDate: row.lastGuildBossAttemptDate != null ? Number(row.lastGuildBossAttemptDate) : 0,
+            lastLoginAt: row.lastLoginAt != null ? Number(row.lastLoginAt) : 0,
+            dailyDonations: { gold: 0, diamond: 0, ...dailyDonationsFromDb, date: dailyDonationsFromDb.date != null ? Number(dailyDonationsFromDb.date) : 0 },
+            dailyMissionContribution: { amount: 0, ...dailyMissionContributionFromDb, date: dailyMissionContributionFromDb.date != null ? Number(dailyMissionContributionFromDb.date) : 0 },
             guildShopPurchases: ensureObject(safeParse(row.guildShopPurchases, {})),
             appSettings,
         };
@@ -207,7 +237,7 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             blackPlayerId: row.blackPlayerId ?? null,
             whitePlayerId: row.whitePlayerId ?? null,
             gameStatus: row.gameStatus,
-            currentPlayer: row.currentPlayer,
+            currentPlayer: row.currentPlayer ?? 0,
             boardState: ensureArray(safeParse(row.boardState, [])),
             moveHistory: ensureArray(safeParse(row.moveHistory, [])),
             captures: ensureObject(safeParse(row.captures, { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 })),
@@ -216,7 +246,7 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             winner: row.winner ?? null,
             winReason: row.winReason ?? null,
             finalScores: ensureObject(safeParse(row.finalScores, null), null),
-            createdAt: row.createdAt,
+            createdAt: row.createdAt != null ? Number(row.createdAt) : 0,
             lastMove: ensureObject(safeParse(row.lastMove, null), null),
             lastTurnStones: ensureArray(safeParse(row.lastTurnStones, null), null),
             stonesPlacedThisTurn: ensureArray(safeParse(row.stonesPlacedThisTurn, null), null),
@@ -226,10 +256,10 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             statsUpdated: !!row.statsUpdated,
             summary: ensureObject(safeParse(row.summary, undefined), undefined),
             animation: ensureObject(safeParse(row.animation, undefined), undefined),
-            blackTimeLeft: row.blackTimeLeft,
-            whiteTimeLeft: row.whiteTimeLeft,
-            blackByoyomiPeriodsLeft: row.blackByoyomiPeriodsLeft,
-            whiteByoyomiPeriodsLeft: row.whiteByoyomiPeriodsLeft,
+            blackTimeLeft: row.blackTimeLeft ?? 0,
+            whiteTimeLeft: row.whiteTimeLeft ?? 0,
+            blackByoyomiPeriodsLeft: row.blackByoyomiPeriodsLeft ?? 0,
+            whiteByoyomiPeriodsLeft: row.whiteByoyomiPeriodsLeft ?? 0,
             turnDeadline: row.turnDeadline ?? undefined,
             turnStartTime: row.turnStartTime ?? undefined,
             disconnectionState: ensureObject(safeParse(row.disconnectionState, null), null),

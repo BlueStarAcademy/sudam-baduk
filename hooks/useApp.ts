@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 // FIX: Separate type and value imports
 import { GameMode, UserStatus, ShopTab, InventoryTab } from '../types/index';
-import type { User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult } from '../types/index';
+import type { User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult, SinglePlayerMissionInfo } from '../types/index';
 // FIX: Corrected import path for audioService.
 import { audioService } from '../services/audioService';
 import { stableStringify, parseHash } from '../utils/appUtils';
@@ -21,6 +21,38 @@ function usePrevious<T>(value: T): T | undefined {
     }, [value]);
     return ref.current;
 }
+
+// FIX: Added helper function to calculate mission info based on level, copied from SinglePlayerLobby.
+const getMissionInfoWithLevel = (missionInfo: SinglePlayerMissionInfo, level: number): SinglePlayerMissionInfo => {
+    let newInfo = { ...missionInfo };
+    if (level <= 1) return newInfo;
+
+    if (newInfo.rewardType === 'gold') {
+        let maxCapacity = newInfo.maxCapacity;
+        // Start from level 2 for upgrades
+        for (let i = 2; i <= level; i++) {
+            if (i < 10) {
+                maxCapacity *= 1.2;
+            } else { // i == 10
+                maxCapacity *= 1.4;
+            }
+        }
+        newInfo.maxCapacity = Math.floor(maxCapacity);
+    } else { // diamond
+        let maxCapacity = newInfo.maxCapacity;
+        let productionRate = newInfo.productionRateMinutes;
+        for (let i = 2; i <= level; i++) {
+            maxCapacity += 1;
+            if (i === 10) {
+                productionRate -= 20;
+            }
+        }
+        newInfo.maxCapacity = maxCapacity;
+        newInfo.productionRateMinutes = productionRate;
+    }
+    return newInfo;
+}
+
 
 export const useApp = () => {
     // --- State Management ---
@@ -461,15 +493,33 @@ export const useApp = () => {
                checkReward(lastWorldTournament, worldRewardClaimed);
     }, [currentUserWithStatus]);
 
+    // FIX: Replaced 'accumulatedAmount' with 'claimableAmount' and added client-side time calculation for accuracy.
     const hasFullMissionReward = useMemo(() => {
         if (!currentUserWithStatus?.singlePlayerMissions) return false;
         
+        const now = Date.now();
         for (const missionId in currentUserWithStatus.singlePlayerMissions) {
             const missionState = currentUserWithStatus.singlePlayerMissions[missionId];
             const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
             
             if (missionState && missionInfo && missionState.isStarted) {
-                if (missionState.accumulatedAmount >= missionInfo.maxCapacity) {
+                const currentLevel = missionState.level || 1;
+                const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, currentLevel);
+                
+                const productionIntervalMs = leveledMissionInfo.productionRateMinutes * 60 * 1000;
+                if (productionIntervalMs <= 0) {
+                    if (missionState.claimableAmount >= leveledMissionInfo.maxCapacity) {
+                        return true;
+                    }
+                    continue;
+                }
+                
+                const elapsedMs = now - missionState.lastCollectionTime;
+                const rewardsGenerated = Math.floor(elapsedMs / productionIntervalMs);
+                const amountGenerated = rewardsGenerated * leveledMissionInfo.rewardAmount;
+                const newAccumulated = (missionState.claimableAmount || 0) + amountGenerated;
+
+                if (newAccumulated >= leveledMissionInfo.maxCapacity) {
                     return true;
                 }
             }

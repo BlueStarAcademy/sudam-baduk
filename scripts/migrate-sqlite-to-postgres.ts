@@ -6,6 +6,7 @@ import pg from 'pg';
 import { rowToUser as sqliteRowToUser, rowToGame as sqliteRowToGame } from './sqliteMappers.js';
 import { User, LiveGameSession, UserCredentials, Guild, AdminLog, Announcement, OverrideAnnouncement, GameMode, TowerRank } from '../types/index.js';
 import { runSchemaAndMigrations } from '../server/db/connection.js';
+import crypto from 'crypto';
 
 const { Pool } = pg;
 
@@ -100,7 +101,9 @@ const migrate = async () => {
         console.log('[MIGRATE] Migrating user_credentials...');
         const credentials = await sqliteDb.all('SELECT * FROM user_credentials');
         for (const cred of credentials) {
-            await pgClient.query('INSERT INTO user_credentials (username, "passwordHash", "userId") VALUES ($1, $2, $3) ON CONFLICT (username) DO NOTHING', [cred.username, cred.passwordHash, cred.userId]);
+             const salt = crypto.randomBytes(16).toString('hex');
+             const hash = crypto.pbkdf2Sync(cred.passwordHash, salt, 10000, 64, 'sha512').toString('hex');
+            await pgClient.query('INSERT INTO user_credentials (username, hash, salt, "userId") VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING', [cred.username, hash, salt, cred.userId]);
         }
         console.log(`[MIGRATE] Migrated ${credentials.length} credentials.`);
 
