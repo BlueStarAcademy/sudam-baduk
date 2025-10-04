@@ -17,6 +17,11 @@ export const getUserByNickname = async (db: Pool, nickname: string): Promise<Use
     return rowToUser(res.rows[0]);
 };
 
+export const getUserByKakaoId = async (db: Pool, kakaoId: string): Promise<User | null> => {
+    const res = await db.query('SELECT * FROM users WHERE "kakaoId" = $1', [kakaoId]);
+    return rowToUser(res.rows[0]);
+};
+
 export const createUser = async (db: Pool, user: User): Promise<void> => {
     const columns = Object.keys(user);
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(',');

@@ -1,5 +1,3 @@
-/// <reference lib="dom" />
-
 // FIX: Corrected import path for types.
 import { ItemGrade } from '../types/index';
 // FIX: Corrected import path for types.

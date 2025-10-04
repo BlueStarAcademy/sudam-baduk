@@ -1,11 +1,14 @@
 
 
+
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild } from '../../types/index.js';
 import * as db from '../db.js';
 import { containsProfanity } from '../../profanity.js';
 import { createDefaultSpentStatPoints } from '../initialData.js';
 import * as currencyService from '../currencyService.js';
 import * as guildService from '../guildService.js';
+// FIX: Add crypto import for password hashing
+import crypto from 'crypto';
 
 export const handleUserAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
@@ -115,14 +118,21 @@ export const handleUserAction = async (volatileState: VolatileState, action: Ser
         case 'CHANGE_PASSWORD': {
             const { currentPassword, newPassword } = payload;
             const creds = await db.getUserCredentialsByUserId(user.id);
-            if (creds?.passwordHash !== currentPassword) {
+            if (!creds?.hash || !creds.salt) {
+                return { error: '비밀번호 정보가 올바르지 않습니다.' };
+            }
+            const currentHash = crypto.pbkdf2Sync(currentPassword, creds.salt, 10000, 64, 'sha512').toString('hex');
+            if (creds.hash !== currentHash) {
                 return { error: '현재 비밀번호가 일치하지 않습니다.' };
             }
             // FIX: Add password length check
             if (newPassword.length < 4) {
                  return { error: '새 비밀번호는 4자 이상이어야 합니다.' };
             }
-            await db.updateUserPassword(user.id, newPassword);
+            // FIX: Generate new salt and hash for the new password and pass all 3 arguments to updateUserPassword.
+            const newSalt = crypto.randomBytes(16).toString('hex');
+            const newHash = crypto.pbkdf2Sync(newPassword, newSalt, 10000, 64, 'sha512').toString('hex');
+            await db.updateUserPassword(user.id, newHash, newSalt);
             return { clientResponse: { success: true } };
         }
         case 'CONFIRM_STAT_ALLOCATION': {

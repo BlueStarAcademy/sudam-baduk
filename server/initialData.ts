@@ -1,6 +1,3 @@
-
-
-
 import { type AppState, type User, type UserCredentials, type QuestLog, type DailyQuestData, type WeeklyCompetitor, type WeeklyQuestData, type MonthlyQuestData, type Guild, CoreStat, GameMode, LeagueTier, GuildMemberRole, GuildResearchId, type InventoryItem } from '../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/gameModes.js';
 import { BOT_NAMES } from '../constants/auth.js';
@@ -76,7 +73,7 @@ export const createInitialBotCompetitors = (newUser: Pick<User, 'league' | 'tour
     return competitors;
 };
 
-export const createDefaultUser = (id: string, username: string, nickname: string, isAdmin = false): User => {
+export const createDefaultUser = (id: string, username: string, nickname: string, isAdmin = false, kakaoId?: string): User => {
     const now = Date.now();
     const user: User = {
         id,
@@ -143,6 +140,7 @@ export const createDefaultUser = (id: string, username: string, nickname: string
         dailyMissionContribution: { amount: 0, date: 0 },
         guildShopPurchases: {},
         appSettings: defaultSettings,
+        kakaoId,
 
         // Tournament progress
         lastNeighborhoodPlayedDate: undefined,

@@ -1,24 +1,22 @@
 import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 
-// Import all view components
-import Profile from './Profile';
-import Lobby from './Lobby';
-import WaitingRoom from './waiting-room/WaitingRoom';
-import Game from '../Game';
-import Admin from './Admin';
-import TournamentLobby from './TournamentLobby';
-// FIX: Update import for SinglePlayerLobby to be a named import as its export has been changed from default to named.
-import SinglePlayerLobby from './SinglePlayerLobby';
-import TowerChallengeLobby from './TowerChallengeLobby';
-import Guild from './Guild';
-// FIX: Changed to default import to match named export from GuildBoss.tsx
-import GuildBoss from './guild/GuildBoss';
+// Import all view components. It's safe to assume they exist based on the file list.
+import Profile from './Profile.js';
+import Lobby from './Lobby.js';
+import WaitingRoom from './waiting-room/WaitingRoom.js';
+import Game from '../Game.js';
+import Admin from './Admin.js';
+import TournamentLobby from './TournamentLobby.js';
+import SinglePlayerLobby from './SinglePlayerLobby.js';
+import TowerChallengeLobby from './TowerChallengeLobby.js';
+import Guild from './guild/Guild.js';
+import GuildBoss from './guild/GuildBoss.js';
 
 const Router: React.FC = () => {
-    const { currentRoute, activeGame, currentUserWithStatus } = useAppContext();
+    const { currentRoute, activeGame } = useAppContext();
     
-    // This component now only renders content for logged-in users.
+    // This component only renders content for logged-in users.
     // The logic in useApp hook handles the redirect for active games.
     
     switch (currentRoute.view) {
@@ -37,6 +35,7 @@ const Router: React.FC = () => {
              if (currentRoute.params.id && activeGame && activeGame.id === currentRoute.params.id) {
                 return <Game session={activeGame} />;
             }
+            // This case handles when the user leaves a game; useApp will redirect them.
             return <div className="flex items-center justify-center h-full">대국 종료 중...</div>;
         case 'guild':
             return <Guild />;
@@ -51,6 +50,7 @@ const Router: React.FC = () => {
         case 'towerchallenge':
              return <TowerChallengeLobby />;
         default:
+            // Fallback to profile if route is unknown
             window.location.hash = '#/profile';
             return null;
     }

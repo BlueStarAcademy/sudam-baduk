@@ -4,35 +4,7 @@ import Button from './Button.js';
 import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType, InventoryItem, SinglePlayerStageInfo, SinglePlayerMissionInfo } from '../types/index.js';
 import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../constants/index.js';
 import DraggableWindow from './DraggableWindow.js';
-
-const getMissionInfoWithLevel = (missionInfo: SinglePlayerMissionInfo, level: number): SinglePlayerMissionInfo => {
-    let newInfo = { ...missionInfo };
-    if (level <= 1) return newInfo;
-
-    if (newInfo.rewardType === 'gold') {
-        let maxCapacity = newInfo.maxCapacity;
-        for (let i = 2; i <= level; i++) {
-            if (i < 10) {
-                maxCapacity *= 1.2;
-            } else { // i == 10
-                maxCapacity *= 1.4;
-            }
-        }
-        newInfo.maxCapacity = Math.floor(maxCapacity);
-    } else { // diamond
-        let maxCapacity = newInfo.maxCapacity;
-        let productionRate = newInfo.productionRateMinutes;
-        for (let i = 2; i <= level; i++) {
-            maxCapacity += 1;
-            if (i === 10) {
-                productionRate -= 20;
-            }
-        }
-        newInfo.maxCapacity = maxCapacity;
-        newInfo.productionRateMinutes = productionRate;
-    }
-    return newInfo;
-}
+import { getMissionInfoWithLevel } from '../utils/questUtils.js';
 
 interface UpgradeMissionModalProps {
     mission: SinglePlayerMissionInfo;
@@ -227,14 +199,6 @@ const StageListItem: React.FC<{
     );
 };
 
-const formatTime = (ms: number): string => {
-    if (ms <= 0) return "00:00";
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-};
-
 const getRequiredProgressForStageId = (stageId: string): number => {
     const index = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stageId);
     if (index !== -1) return index + 1;
@@ -277,7 +241,6 @@ const MissionCard: React.FC<{
     
     const rewardIcon = mission.rewardType === 'gold' ? '/images/Gold.png' : '/images/Zem.png';
     const [tick, setTick] = useState(0);
-    const levelText = currentLevel >= 10 ? ' (Max)' : ` (Lv.${currentLevel})`;
 
     useEffect(() => {
         if (!isStarted || claimableAmount >= leveledMissionInfo.maxCapacity) return;
@@ -310,13 +273,13 @@ const MissionCard: React.FC<{
         const unlockText = mission.unlockStageId ? `${mission.unlockStageId} 클리어 필요` : '이전 단계 클리어 필요';
         return (
             <div className="bg-secondary/30 p-2 rounded-lg flex flex-col items-center text-center opacity-60 h-full">
-                 <div className="relative w-[50px] h-[50px] flex-shrink-0 mb-2">
+                 <div className="relative w-[50px] h-[50px] flex-shrink-0 mb-1">
                     <img src={mission.image} alt={mission.name} className="w-full h-full object-cover p-1 rounded-md grayscale" />
                     <div className="absolute inset-0 bg-black/60 rounded-md flex items-center justify-center">
                         <span className="text-4xl" role="img" aria-label="Locked">🔒</span>
                     </div>
                 </div>
-                <h4 className="font-bold text-sm text-tertiary flex-grow">{mission.name}</h4>
+                <h4 className="font-bold text-sm text-tertiary flex-grow truncate">{mission.name}</h4>
                 <p className="text-xs text-red-400 mt-1 font-semibold">{unlockText}</p>
             </div>
         );
@@ -327,31 +290,26 @@ const MissionCard: React.FC<{
     return (
         <div className="bg-secondary/60 p-2 rounded-lg flex flex-col h-full border-2 border-color text-on-panel">
             <div className="flex-grow flex flex-col items-center gap-1 text-center">
-                <img src={mission.image} alt={mission.name} className="w-16 h-16 object-cover p-1 rounded-md bg-tertiary" />
-                <h4 className="font-bold text-sm text-highlight" title={mission.name}>{mission.name}{levelText}</h4>
-                <p className="text-[10px] text-tertiary flex-grow">{mission.description}</p>
+                <img src={mission.image} alt={mission.name} className="w-12 h-12 object-cover p-1 rounded-md bg-tertiary" />
+                <h4 className="font-bold text-sm text-highlight truncate" title={mission.name}>{mission.name}</h4>
+                <p className="text-[10px] text-tertiary flex-grow min-h-[2rem]">{mission.description}</p>
             </div>
             
             {isStarted ? (
-                <div className="flex-shrink-0 space-y-1 mt-2">
+                <div className="flex-shrink-0 space-y-1 mt-1">
                     <div className="w-full bg-tertiary rounded-full h-2.5 relative overflow-hidden border border-black/20" title="강화 진행도">
                         <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${upgradeProgress}%` }}></div>
-                        <span className="absolute inset-0 text-[10px] font-bold text-white flex items-center justify-center" style={{ textShadow: '1px 1px 1px black' }}>
-                           누적 수령액: {Math.floor(progressTowardNextLevel).toLocaleString()} / {upgradeTarget.toLocaleString()}
-                        </span>
                     </div>
-                    <Button onClick={() => onUpgrade(mission)} disabled={!canUpgrade} colorScheme="blue" className="w-full !py-1 !text-sm">
-                        강화 (Lv.{currentLevel} → {currentLevel + 1})
-                    </Button>
+                     <div className="flex items-center justify-center gap-1">
+                        <Button onClick={() => onUpgrade(mission)} disabled={!canUpgrade} colorScheme="blue" className="flex-1 !py-1 !text-xs">
+                            강화
+                        </Button>
+                        <Button onClick={onClaim} disabled={Math.floor(displayAmount) < 1} colorScheme="green" className="flex-1 !py-1 !text-xs">
+                            수령
+                        </Button>
+                    </div>
 
-                    <div className="flex items-center justify-between text-xs text-tertiary pt-2">
-                        <div className="flex items-center gap-1">
-                             <img src={rewardIcon} alt={mission.rewardType} className="w-3 h-3" />
-                            <span>{leveledMissionInfo.rewardAmount.toLocaleString()}/{leveledMissionInfo.productionRateMinutes}분</span>
-                        </div>
-                         <Button onClick={onClaim} disabled={Math.floor(displayAmount) < 1} colorScheme="green" className="!p-1.5 aspect-square"><span className="text-xs">수령</span></Button>
-                    </div>
-                     <div className="w-full bg-tertiary rounded-full h-3 relative overflow-hidden border border-black/20" title="수령 가능 보상">
+                    <div className="w-full bg-tertiary rounded-full h-3 relative overflow-hidden border border-black/20" title="수령 가능 보상">
                         <div className="bg-green-500 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
                         <span className="absolute inset-0 text-[10px] font-bold text-white flex items-center justify-center" style={{ textShadow: '1px 1px 1px black' }}>
                             {Math.floor(displayAmount).toLocaleString()}/{leveledMissionInfo.maxCapacity.toLocaleString()}
@@ -360,7 +318,7 @@ const MissionCard: React.FC<{
                     </div>
                 </div>
             ) : (
-                 <div className="flex-shrink-0">
+                 <div className="flex-shrink-0 mt-auto">
                     <div className="text-[10px] text-tertiary text-center mb-1">
                         <img src={rewardIcon} alt={mission.rewardType} className="w-4 h-4 inline-block mr-1" />
                         <span>{mission.rewardAmount.toLocaleString()}/{mission.productionRateMinutes}분 (최대: {mission.maxCapacity.toLocaleString()})</span>
@@ -374,127 +332,23 @@ const MissionCard: React.FC<{
     );
 };
 
-const SinglePlayerMissions: React.FC<{onClose?: () => void}> = ({ onClose }) => {
-    const { currentUserWithStatus, handlers } = useAppContext();
-    const [upgradingMission, setUpgradingMission] = useState<SinglePlayerMissionInfo | null>(null);
-
-    if (!currentUserWithStatus) return null;
-
-    const userProgress = currentUserWithStatus.singlePlayerProgress ?? 0;
-
-    return (
-        <div className="bg-panel border border-color rounded-lg p-2 lg:p-4 flex flex-col min-h-0 w-full lg:min-h-fit lg:h-auto">
-             {upgradingMission && (
-                <UpgradeMissionModal
-                    mission={upgradingMission}
-                    currentUser={currentUserWithStatus}
-                    onClose={() => setUpgradingMission(null)}
-                    onAction={handlers.handleAction}
-                />
-            )}
-            <div className="flex justify-between items-center mb-2 lg:justify-center lg:mb-4 flex-shrink-0">
-                <h2 className="text-xl font-bold text-highlight">수련 과제</h2>
-                {onClose && <button onClick={onClose} className="lg:hidden text-2xl font-bold text-tertiary hover:text-primary">&times;</button>}
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-2 lg:gap-4 flex-grow lg:flex-grow-0 overflow-y-auto lg:overflow-visible pr-1 lg:pr-0">
-                {SINGLE_PLAYER_MISSIONS.map(mission => {
-                    const requiredProgress = getRequiredProgressForStageId(mission.unlockStageId);
-                    const isUnlocked = userProgress >= requiredProgress;
-                    
-                    return (
-                        <MissionCard 
-                            key={mission.id}
-                            mission={mission}
-                            isUnlocked={isUnlocked}
-                            onStart={() => handlers.handleAction({ type: 'START_SINGLE_PLAYER_MISSION', payload: { missionId: mission.id } })}
-                            onClaim={() => handlers.handleAction({ type: 'CLAIM_SINGLE_PLAYER_MISSION_REWARD', payload: { missionId: mission.id } })}
-                            onUpgrade={(m) => setUpgradingMission(m)}
-                        />
-                    );
-                })}
-            </div>
-        </div>
-    );
+const formatTime = (ms: number): string => {
+    if (ms <= 0) return "00:00";
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-const LevelSelectionPanel: React.FC<{
-    activeLevelData: typeof LEVEL_DATA[0];
-    onPrev: () => void;
-    onNext: () => void;
-    className?: string;
-}> = React.memo(({ activeLevelData, onPrev, onNext, className }) => (
-    <div className={`bg-panel border border-color rounded-lg p-4 flex flex-col items-center w-full ${className}`}>
-        <h2 className="text-[clamp(1.1rem,0.9rem+1vw,1.25rem)] font-bold mb-2">레벨 선택</h2>
-        <div className="w-full flex items-center justify-center gap-2 relative group flex-1 min-h-0">
-            <button onClick={onPrev} className="absolute left-0 -translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all flex items-center justify-center flex-shrink-0" aria-label="Previous Level">&#x276E;</button>
-            <div className="relative w-full h-full rounded-lg overflow-hidden bg-black">
-                <img key={activeLevelData.id} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-full object-contain animate-fade-in" />
-                <div className="absolute inset-0 bg-black/20"></div>
-                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/60 to-transparent pointer-events-none">
-                    <h3 key={`${activeLevelData.id}-title`} className="text-[clamp(1.5rem,1rem+2.5vw,1.875rem)] font-bold text-white text-center animate-fade-in drop-shadow-lg">{activeLevelData.name}</h3>
-                </div>
-            </div>
-            <button onClick={onNext} className="absolute right-0 translate-x-full z-10 w-10 h-10 rounded-full bg-secondary/70 text-primary text-xl hover:bg-tertiary transition-all flex items-center justify-center flex-shrink-0" aria-label="Next Level">&#x276F;</button>
-        </div>
-    </div>
-));
-
-
-export const StageList: React.FC<{
-    activeLevelData: typeof LEVEL_DATA[0];
-    userProgress: number;
-    currentUserWithStatus: UserWithStatus;
-    handlers: any;
-}> = ({ activeLevelData, userProgress, currentUserWithStatus, handlers }) => {
-    const stagesForLevel = useMemo((): SinglePlayerStageInfo[] => {
-        return SINGLE_PLAYER_STAGES.filter(stage => stage.level === activeLevelData.id);
-    }, [activeLevelData.id]);
-
-    const scrollContainerRef = useRef<HTMLUListElement>(null);
-    const stageRefs = useRef<Map<string, HTMLLIElement | null>>(new Map());
-
-    useEffect(() => {
-        const currentStage = SINGLE_PLAYER_STAGES[userProgress];
-        if (currentStage && currentStage.level === activeLevelData.id) {
-            const targetElement = stageRefs.current.get(currentStage.id);
-            if (targetElement && scrollContainerRef.current) {
-                setTimeout(() => {
-                    targetElement.scrollIntoView({ behavior: 'auto', block: 'center' });
-                }, 100);
-            }
-        }
-    }, [userProgress, activeLevelData.id]);
-
-    return (
-        <div className="flex flex-col h-full">
-            <h3 className="text-lg font-bold text-center mb-2 text-primary flex-shrink-0">스테이지 선택</h3>
-            <ul ref={scrollContainerRef} className="space-y-2 flex flex-col-reverse overflow-y-auto pr-2">
-                {stagesForLevel.map((stage) => {
-                    const stageIndex = (SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id));
-                    const isLocked = !currentUserWithStatus.isAdmin && userProgress < stageIndex;
-                    const isCleared = userProgress > stageIndex;
-                    const isCurrent = userProgress === stageIndex;
-                    return (
-                        <StageListItem
-                            key={stage.id} stage={stage} isLocked={isLocked} isCleared={isCleared} isCurrent={isCurrent}
-                            onAction={handlers.handleAction} currentUser={currentUserWithStatus}
-                            refProp={(el) => { stageRefs.current.set(stage.id, el); }}
-                        />
-                    );
-                })}
-            </ul>
-        </div>
-    );
-};
 
 const SinglePlayerLobby: React.FC = () => {
     const { currentUserWithStatus, handlers } = useAppContext();
     const [activeLevelIndex, setActiveLevelIndex] = useState(0);
-    const [isMobilePanelOpen, setIsMobilePanelOpen] = useState(false);
+    const [upgradingMission, setUpgradingMission] = useState<SinglePlayerMissionInfo | null>(null);
+    const scrollContainerRef = useRef<HTMLUListElement>(null);
+    const stageRefs = useRef<Map<string, HTMLLIElement | null>>(new Map());
 
-    const userProgress = useMemo(() => {
-        return currentUserWithStatus?.singlePlayerProgress ?? 0;
-    }, [currentUserWithStatus?.singlePlayerProgress]);
+    const userProgress = useMemo(() => currentUserWithStatus?.singlePlayerProgress ?? 0, [currentUserWithStatus?.singlePlayerProgress]);
 
     useEffect(() => {
         if (currentUserWithStatus) {
@@ -509,77 +363,109 @@ const SinglePlayerLobby: React.FC = () => {
             setActiveLevelIndex(highestUnlockedIndex);
         }
     }, [currentUserWithStatus]);
-
-    if (!currentUserWithStatus) return null;
-
-    const activeLevelData = LEVEL_DATA[activeLevelIndex];
     
+    const activeLevelData = LEVEL_DATA[activeLevelIndex];
+    const stagesForLevel = useMemo((): SinglePlayerStageInfo[] => {
+        return SINGLE_PLAYER_STAGES.filter(stage => stage.level === activeLevelData.id)
+            .sort((a, b) => {
+                const numA = parseInt(a.id.split('-')[1]);
+                const numB = parseInt(b.id.split('-')[1]);
+                return numA - numB;
+            });
+    }, [activeLevelData.id]);
+    
+     useEffect(() => {
+        const currentStage = SINGLE_PLAYER_STAGES[userProgress];
+        if (currentStage && currentStage.level === activeLevelData.id) {
+            const targetElement = stageRefs.current.get(currentStage.id);
+            if (targetElement && scrollContainerRef.current) {
+                setTimeout(() => {
+                    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+            }
+        }
+    }, [userProgress, activeLevelData.id]);
+
     const handleNextLevel = useCallback(() => setActiveLevelIndex(prev => (prev + 1) % LEVEL_DATA.length), []);
     const handlePrevLevel = useCallback(() => setActiveLevelIndex(prev => (prev - 1 + LEVEL_DATA.length) % LEVEL_DATA.length), []);
 
+    if (!currentUserWithStatus) return null;
+
     return (
-        <div className="w-full h-full flex flex-col bg-tertiary text-primary p-4 gap-4 overflow-hidden">
-            <header className="flex justify-between items-center flex-shrink-0">
+        <div className="w-full h-full flex flex-col bg-academy-bg text-primary overflow-hidden">
+            {upgradingMission && (
+                <UpgradeMissionModal
+                    mission={upgradingMission}
+                    currentUser={currentUserWithStatus}
+                    onClose={() => setUpgradingMission(null)}
+                    onAction={handlers.handleAction}
+                />
+            )}
+            <header className="flex justify-between items-center flex-shrink-0 px-4 pt-4">
                  <Button onClick={() => window.location.hash = '#/profile'} colorScheme="gray">&larr; 프로필로</Button>
                 <h1 className="text-[clamp(1.75rem,1.25rem+2.5vw,2.25rem)] font-bold whitespace-nowrap">싱글플레이</h1>
                 <div className="w-32"></div>
             </header>
 
-            <main className="flex-1 min-h-0 flex flex-col">
-                {/* DESKTOP LAYOUT */}
-                <div className="hidden lg:flex flex-col gap-4 h-full">
-                    <div className="flex-1 flex flex-row gap-4 min-h-0">
-                        <div className="w-[420px] flex-shrink-0 flex flex-col">
-                            <LevelSelectionPanel
-                                className="h-full"
-                                activeLevelData={activeLevelData}
-                                onPrev={handlePrevLevel}
-                                onNext={handleNextLevel}
-                            />
+            <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-4">
+                {/* Panel 1: Level Selection */}
+                <div className="w-full lg:w-1/4 flex items-center">
+                    <div className="bg-panel border border-color rounded-lg p-4 flex flex-col w-full h-full">
+                        <div className="w-full relative flex-1 min-h-0">
+                            <div className="relative w-full h-full rounded-lg overflow-hidden bg-black">
+                                <img key={activeLevelData.id} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-full object-cover animate-fade-in" />
+                            </div>
                         </div>
-                        <div className="flex-1 min-w-0 flex">
-                            <StageList
-                                activeLevelData={activeLevelData}
-                                userProgress={userProgress}
-                                currentUserWithStatus={currentUserWithStatus!}
-                                handlers={handlers}
-                            />
+                        <div className="flex items-center justify-center gap-4 mt-2 flex-shrink-0">
+                            <Button onClick={handlePrevLevel} className="!px-3 !py-1 text-xl font-bold">&lt;</Button>
+                            <h3 className="text-[clamp(1.2rem,1rem+2.5vw,1.5rem)] font-bold text-white text-center drop-shadow-lg">{activeLevelData.name}</h3>
+                            <Button onClick={handleNextLevel} className="!px-3 !py-1 text-xl font-bold">&gt;</Button>
                         </div>
-                    </div>
-                    <div className="flex-shrink-0">
-                        <SinglePlayerMissions />
                     </div>
                 </div>
 
-                {/* MOBILE LAYOUT */}
-                <div className="lg:hidden flex flex-col flex-1 min-h-0 gap-4 relative">
-                    <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
-                        <LevelSelectionPanel
-                            className="flex-shrink-0 max-w-xl mx-auto"
-                            activeLevelData={activeLevelData}
-                            onPrev={handlePrevLevel}
-                            onNext={handleNextLevel}
-                        />
-                        <div className="flex-shrink-0">
-                            <SinglePlayerMissions onClose={() => setIsMobilePanelOpen(false)} />
+                {/* Panel 2: Stage List */}
+                <div className="w-full lg:w-1/2 min-w-0 flex flex-col bg-panel border border-color rounded-lg p-4">
+                    <h3 className="text-xl font-bold text-center mb-2 text-primary flex-shrink-0">{activeLevelData.name} 스테이지</h3>
+                    <ul ref={scrollContainerRef} className="space-y-2 flex flex-col overflow-y-auto pr-2">
+                        {stagesForLevel.map((stage) => {
+                            const stageIndex = (SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id));
+                            const isLocked = !currentUserWithStatus.isAdmin && userProgress < stageIndex;
+                            const isCleared = userProgress > stageIndex;
+                            const isCurrent = userProgress === stageIndex;
+                            return (
+                                <StageListItem
+                                    key={stage.id} stage={stage} isLocked={isLocked} isCleared={isCleared} isCurrent={isCurrent}
+                                    onAction={handlers.handleAction} currentUser={currentUserWithStatus}
+                                    refProp={(el) => { stageRefs.current.set(stage.id, el); }}
+                                />
+                            );
+                        })}
+                    </ul>
+                </div>
+
+                {/* Panel 3: Training Tasks */}
+                <div className="w-full lg:w-1/4 flex flex-col">
+                    <div className="bg-panel border border-color rounded-lg p-2 lg:p-4 flex flex-col min-h-0 w-full h-full">
+                        <h2 className="text-xl font-bold text-highlight text-center mb-2 lg:mb-4 flex-shrink-0">수련 과제</h2>
+                        <div className="grid grid-cols-2 grid-rows-3 gap-2 lg:gap-3 flex-grow lg:flex-grow-0 overflow-y-auto lg:overflow-visible pr-1 lg:pr-0">
+                            {SINGLE_PLAYER_MISSIONS.map(mission => {
+                                const requiredProgress = getRequiredProgressForStageId(mission.unlockStageId);
+                                const isUnlocked = userProgress >= requiredProgress;
+                                
+                                return (
+                                    <MissionCard 
+                                        key={mission.id}
+                                        mission={mission}
+                                        isUnlocked={isUnlocked}
+                                        onStart={() => handlers.handleAction({ type: 'START_SINGLE_PLAYER_MISSION', payload: { missionId: mission.id } })}
+                                        onClaim={() => handlers.handleAction({ type: 'CLAIM_SINGLE_PLAYER_MISSION_REWARD', payload: { missionId: mission.id } })}
+                                        onUpgrade={(m) => setUpgradingMission(m)}
+                                    />
+                                );
+                            })}
                         </div>
                     </div>
-                    
-                    <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
-                        <button onClick={() => setIsMobilePanelOpen(true)} className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg" aria-label="스테이지 목록 열기">
-                            <span className="font-bold text-lg">{'<'}</span>
-                        </button>
-                    </div>
-                    <div className={`fixed top-0 right-0 h-full w-[320px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMobilePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                         <div className="flex justify-between items-center p-2 border-b border-color flex-shrink-0">
-                            <h3 className="text-lg font-bold">스테이지 목록</h3>
-                            <button onClick={() => setIsMobilePanelOpen(false)} className="text-2xl font-bold text-tertiary hover:text-primary">&times;</button>
-                        </div>
-                        <div className="flex-1 min-h-0">
-                            <StageList activeLevelData={activeLevelData} userProgress={userProgress} currentUserWithStatus={currentUserWithStatus!} handlers={handlers} />
-                        </div>
-                    </div>
-                    {isMobilePanelOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMobilePanelOpen(false)}></div>}
                 </div>
             </main>
         </div>

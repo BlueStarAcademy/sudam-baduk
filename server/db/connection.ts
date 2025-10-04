@@ -99,6 +99,7 @@ const migrations: { [version: number]: string } = {
     56: 'ALTER TABLE live_games ADD COLUMN IF NOT EXISTS "pausedTurnTimeLeft" REAL;',
     57: 'ALTER TABLE live_games ADD COLUMN IF NOT EXISTS "promptForMoreStones" BOOLEAN;',
     58: 'ALTER TABLE user_credentials ADD COLUMN "salt" TEXT; ALTER TABLE user_credentials RENAME COLUMN "passwordHash" TO hash;',
+    59: 'ALTER TABLE users ADD COLUMN "kakaoId" TEXT UNIQUE;',
 };
 
 

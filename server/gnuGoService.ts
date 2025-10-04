@@ -1,9 +1,8 @@
-/// <reference types="node" />
-
 import { spawn, ChildProcess, ChildProcessWithoutNullStreams } from 'child_process';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove, Move } from '../types/index.js';
 import * as types from '../types/index.js';
 import { fileURLToPath } from 'url';

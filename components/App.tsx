@@ -30,7 +30,7 @@ import SynthesisResultModal from './SynthesisResultModal.js';
 import TowerRankingRewardsModal from './TowerRankingRewardsModal.js';
 import LevelUpModal from './LevelUpModal.js';
 import ActionPointQuizModal from './modals/ActionPointQuizModal.js';
-import { UserStatus } from '../types/index.js';
+import { UserStatus, User } from '../types/index.js';
 import GuildEffectsModal from './guild/GuildEffectsModal.js';
 import GuildBossBattleResultModal from './guild/GuildBossBattleResultModal.js';
 import EquipmentEffectsModal from './EquipmentEffectsModal.js';
@@ -47,7 +47,7 @@ function usePrevious<T>(value: T): T | undefined {
 }
 
 const Auth: React.FC = () => {
-    const { login } = useAppContext();
+    const { login, handlers } = useAppContext();
     const [isRegisterMode, setIsRegisterMode] = useState(false);
     const [username, setUsername] = useState('');
     const [nickname, setNickname] = useState('');
@@ -56,6 +56,7 @@ const Auth: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     
+    // States for mock identity verification
     const [isVerified, setIsVerified] = useState(false);
     const [isVerifying, setIsVerifying] = useState(false);
     const [verifiedInfo, setVerifiedInfo] = useState<{name: string, dob: string} | null>(null);
@@ -63,11 +64,19 @@ const Auth: React.FC = () => {
     const handleVerification = () => {
         setIsVerifying(true);
         setError(null);
+        // Simulate API call for verification
         setTimeout(() => {
             setIsVerified(true);
             setIsVerifying(false);
-            setVerifiedInfo({ name: '홍*동', dob: '900101-1******' });
+            setVerifiedInfo({ name: '홍*동', dob: '900101-1******' }); // Mock data
         }, 1500);
+    };
+    
+    const handleKakaoLogin = () => {
+        const KAKAO_REST_API_KEY = import.meta.env.VITE_KAKAO_REST_API_KEY;
+        const KAKAO_REDIRECT_URI = import.meta.env.VITE_KAKAO_REDIRECT_URI;
+        const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}&redirect_uri=${KAKAO_REDIRECT_URI}&response_type=code`;
+        window.location.href = kakaoAuthUrl;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -83,6 +92,11 @@ const Auth: React.FC = () => {
             }
             if (!username.trim() || !nickname.trim() || !password.trim()) {
                 setError("모든 필드를 입력해주세요.");
+                setIsLoading(false);
+                return;
+            }
+             if (password.length < 4) {
+                setError("비밀번호는 4자 이상이어야 합니다.");
                 setIsLoading(false);
                 return;
             }
@@ -166,7 +180,7 @@ const Auth: React.FC = () => {
                     <Button colorScheme="gray" className="w-full !justify-start !py-2 !text-sm" disabled title="준비 중인 기능입니다.">
                         <span className="w-6 text-base font-bold">G</span> Google 계정으로 로그인
                     </Button>
-                     <Button colorScheme="yellow" className="w-full !justify-start !py-2 !text-sm" disabled title="준비 중인 기능입니다.">
+                     <Button colorScheme="yellow" className="w-full !justify-start !py-2 !text-sm" onClick={handleKakaoLogin}>
                         <span className="w-6 text-base font-bold">K</span> Kakao 계정으로 로그인
                     </Button>
                 </div>
@@ -176,7 +190,7 @@ const Auth: React.FC = () => {
                         <div className="w-full border-t border-color" />
                     </div>
                     <div className="relative flex justify-center text-sm">
-                        <span className="px-2 bg-secondary/80 text-tertiary">또는</span>
+                        <span className="px-2 bg-secondary text-tertiary">또는</span>
                     </div>
                 </div>
 
@@ -223,7 +237,6 @@ const Auth: React.FC = () => {
     );
 };
 
-
 const App: React.FC = () => {
     const {
         currentUser,
@@ -242,7 +255,7 @@ const App: React.FC = () => {
     } = useAppContext();
     
     const [isPreloading, setIsPreloading] = useState(true);
-    
+
     useEffect(() => {
         const preventContextMenu = (e: MouseEvent) => {
             const target = e.target as HTMLElement;

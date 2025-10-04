@@ -13,6 +13,7 @@ import {
     SINGLE_PLAYER_MISSIONS
 } from '../constants/index';
 import { defaultSettings } from './useAppSettings';
+import { getMissionInfoWithLevel } from '../utils/questUtils';
 
 function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T | undefined>(undefined);
@@ -21,38 +22,6 @@ function usePrevious<T>(value: T): T | undefined {
     }, [value]);
     return ref.current;
 }
-
-// FIX: Added helper function to calculate mission info based on level, copied from SinglePlayerLobby.
-const getMissionInfoWithLevel = (missionInfo: SinglePlayerMissionInfo, level: number): SinglePlayerMissionInfo => {
-    let newInfo = { ...missionInfo };
-    if (level <= 1) return newInfo;
-
-    if (newInfo.rewardType === 'gold') {
-        let maxCapacity = newInfo.maxCapacity;
-        // Start from level 2 for upgrades
-        for (let i = 2; i <= level; i++) {
-            if (i < 10) {
-                maxCapacity *= 1.2;
-            } else { // i == 10
-                maxCapacity *= 1.4;
-            }
-        }
-        newInfo.maxCapacity = Math.floor(maxCapacity);
-    } else { // diamond
-        let maxCapacity = newInfo.maxCapacity;
-        let productionRate = newInfo.productionRateMinutes;
-        for (let i = 2; i <= level; i++) {
-            maxCapacity += 1;
-            if (i === 10) {
-                productionRate -= 20;
-            }
-        }
-        newInfo.maxCapacity = maxCapacity;
-        newInfo.productionRateMinutes = productionRate;
-    }
-    return newInfo;
-}
-
 
 export const useApp = () => {
     // --- State Management ---

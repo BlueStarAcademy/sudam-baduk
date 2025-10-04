@@ -164,6 +164,7 @@ export const initializeGame = async (neg: Negotiation, guilds: Record<string, Gu
     }
     
     if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
+        // FIX: Provide all required arguments to the gnuGoServiceManager.create method.
         await gnuGoServiceManager.create(game.id, game.player2.playfulLevel, game.settings.boardSize, game.finalKomi ?? game.settings.komi);
         const instance = gnuGoServiceManager.get(game.id);
         if (instance) {

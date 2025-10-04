@@ -1,4 +1,3 @@
-// FIX: Removed redundant Node.js type reference. It's now handled globally in vite-env.d.ts.
 import 'dotenv/config';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
@@ -103,7 +102,7 @@ const migrate = async () => {
         for (const cred of credentials) {
              const salt = crypto.randomBytes(16).toString('hex');
              const hash = crypto.pbkdf2Sync(cred.passwordHash, salt, 10000, 64, 'sha512').toString('hex');
-            await pgClient.query('INSERT INTO user_credentials (username, hash, salt, "userId") VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING', [cred.username, hash, salt, cred.userId]);
+            await pgClient.query('INSERT INTO user_credentials (username, hash, salt, "userId") VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING', [cred.username.toLowerCase(), hash, salt, cred.userId]);
         }
         console.log(`[MIGRATE] Migrated ${credentials.length} credentials.`);
 

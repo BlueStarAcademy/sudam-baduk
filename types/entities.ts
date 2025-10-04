@@ -70,6 +70,7 @@ export interface User {
     dailyMissionContribution: { amount: number; date: number };
     guildShopPurchases: Record<string, { quantity: number, lastPurchaseTimestamp: number }>;
     appSettings?: AppSettings;
+    kakaoId?: string;
 
     // Tournament progress
     lastNeighborhoodPlayedDate?: number;

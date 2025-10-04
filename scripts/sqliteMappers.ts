@@ -1,4 +1,3 @@
-
 import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../server/initialData.js';
 import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, MonthlyQuestData, EquipmentPreset, AppSettings } from '../types/index.js';
 import { LeagueTier, Player, GameMode } from '../types/index.js';
@@ -177,6 +176,7 @@ export const rowToUser = (row: any): User | null => {
             dailyMissionContribution: { amount: 0, ...dailyMissionContributionFromDb, date: dailyMissionContributionFromDb.date != null ? Number(dailyMissionContributionFromDb.date) : 0 },
             guildShopPurchases: ensureObject(safeParse(row.guildShopPurchases, {})),
             appSettings,
+            kakaoId: row.kakaoId ?? undefined,
             // Tournament progress
             lastNeighborhoodPlayedDate: row.lastNeighborhoodPlayedDate != null ? Number(row.lastNeighborhoodPlayedDate) : undefined,
             neighborhoodRewardClaimed: !!row.neighborhoodRewardClaimed,

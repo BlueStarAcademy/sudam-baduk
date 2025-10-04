@@ -1,17 +1,33 @@
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, InventoryItem, QuestReward, SinglePlayerStageInfo, SinglePlayerMissionInfo, Guild, ItemGrade, Quest, ServerActionType } from '../../types/index.js';
-import { DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_REWARDS } from '../../constants/quests.js';
-import { CONSUMABLE_ITEMS } from '../../constants/items.js';
-import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../../constants/singlePlayerConstants.js';
-import { DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS } from '../../constants/quests.js';
-import { updateQuestProgress, getMissionInfoWithLevel, accumulateMissionRewards } from '../questService.js';
-import * as currencyService from '../currencyService.js';
-import { isSameDayKST } from '../../utils/timeUtils.js';
+import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult, Guild } from '../../types/index.js';
+import { updateQuestProgress } from '../questService.js';
+import { SHOP_ITEMS, createItemFromTemplate, pickRandom } from '../shop.js';
+// FIX: Corrected import paths for constants.
+import { 
+    currencyBundles,
+    CONSUMABLE_ITEMS, 
+    MATERIAL_ITEMS, 
+    GRADE_LEVEL_REQUIREMENTS,
+    ITEM_SELL_PRICES,
+    MATERIAL_SELL_PRICES,
+    ENHANCEMENT_COSTS,
+    ENHANCEMENT_SUCCESS_RATES,
+    ENHANCEMENT_FAIL_BONUS_RATES,
+    GRADE_SUB_OPTION_RULES,
+    SUB_OPTION_POOLS,
+    SYNTHESIS_COSTS,
+    SYNTHESIS_UPGRADE_CHANCES,
+    EQUIPMENT_POOL,
+    ENHANCEMENT_LEVEL_REQUIREMENTS
+} from '../../constants/index.js';
+import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
 // FIX: Import `calculateUserEffects` from the correct utility file.
 import { calculateUserEffects } from '../../utils/statUtils.js';
-import { SHOP_ITEMS } from '../shop.js';
-import { currencyBundles } from '../../constants/index.js';
-// FIX: Import inventory utility functions to resolve 'Cannot find name' errors.
+import * as currencyService from '../currencyService.js';
+import * as guildService from '../guildService.js';
+import { isSameDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../../utils/timeUtils.js';
+import { DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_REWARDS, DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS, SINGLE_PLAYER_MISSIONS } from '../../constants/index.js';
+import { getMissionInfoWithLevel, accumulateMissionRewards } from '../questService.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../../utils/inventoryUtils.js';
 
 const getRandomInt = (min: number, max: number): number => {
@@ -59,7 +75,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
 }> => {
     const { type, payload } = action;
 
-    const rewardActionTypes: ServerActionType[] = [
+    const rewardActionTypes: ServerAction['type'][] = [
         'CLAIM_MAIL_ATTACHMENTS', 'CLAIM_ALL_MAIL_ATTACHMENTS', 'DELETE_MAIL', 'DELETE_ALL_CLAIMED_MAIL', 'MARK_MAIL_AS_READ',
         'CLAIM_QUEST_REWARD', 'CLAIM_ACTIVITY_MILESTONE', 'CLAIM_SINGLE_PLAYER_MISSION_REWARD',
         'CLAIM_ACTION_POINT_QUIZ_REWARD', 'RESET_SINGLE_PLAYER_REWARDS', 'START_SINGLE_PLAYER_MISSION', 'UPGRADE_SINGLE_PLAYER_MISSION'
@@ -198,8 +214,8 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
         }
         case 'CLAIM_SINGLE_PLAYER_MISSION_REWARD': {
             const { missionId } = payload;
+            const now = Date.now();
             
-            // Apply accumulation logic right before claiming to get the latest state
             user = accumulateMissionRewards(user);
 
             const missionState = user.singlePlayerMissions[missionId];
@@ -224,7 +240,9 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
         
             const addedItems = grantReward(user, reward, `${leveledMissionInfo.name} 수련과제 보상`);
             
-            missionState.claimableAmount -= amountToClaim;
+            missionState.claimableAmount = missionState.claimableAmount - amountToClaim;
+            missionState.lastCollectionTime = now;
+            
             missionState.progressTowardNextLevel = (missionState.progressTowardNextLevel || 0) + amountToClaim;
 
             updateQuestProgress(user, 'claim_single_player_mission');

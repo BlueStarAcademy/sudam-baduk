@@ -15,12 +15,8 @@ export const createUserCredentials = async (db: Pool, username: string, hash: st
     await db.query('INSERT INTO user_credentials (username, hash, salt, "userId") VALUES ($1, $2, $3, $4)', [username.toLowerCase(), hash, salt, userId]);
 };
 
-export const updateUserPassword = async (db: Pool, userId: string, newPasswordHash: string): Promise<void> => {
-    // This function would need to be updated to handle hashing if used, but for now we focus on login/register.
-    const userCreds = await getUserCredentialsByUserId(db, userId);
-    if (userCreds) {
-        await db.query('UPDATE user_credentials SET hash = $1 WHERE "userId" = $2', [newPasswordHash, userId]);
-    }
+export const updateUserPassword = async (db: Pool, userId: string, newHash: string, newSalt: string): Promise<void> => {
+    await db.query('UPDATE user_credentials SET hash = $1, salt = $2 WHERE "userId" = $3', [newHash, newSalt, userId]);
 };
 
 export const deleteUserCredentials = async (db: Pool, username: string): Promise<void> => {

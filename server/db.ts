@@ -97,9 +97,9 @@ export const createUserCredentials = async (username: string, hash: string, salt
     const credentialsRepository = await import('./repositories/credentialsRepository.js');
     return credentialsRepository.createUserCredentials(await getDb(), username, hash, salt, userId);
 };
-export const updateUserPassword = async (userId: string, newPasswordHash: string): Promise<void> => {
+export const updateUserPassword = async (userId: string, newHash: string, newSalt: string): Promise<void> => {
     const credentialsRepository = await import('./repositories/credentialsRepository.js');
-    return credentialsRepository.updateUserPassword(await getDb(), userId, newPasswordHash);
+    return credentialsRepository.updateUserPassword(await getDb(), userId, newHash, newSalt);
 };
 
 

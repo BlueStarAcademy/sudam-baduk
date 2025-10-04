@@ -3,37 +3,9 @@ import * as types from '../types/index.js';
 import { DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, SINGLE_PLAYER_MISSIONS } from '../constants/index.js';
 import { isDifferentDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../utils/timeUtils.js';
 import { createDefaultQuests } from './initialData.js';
+import { getMissionInfoWithLevel, accumulateMissionRewards } from '../utils/questUtils.js';
 
-export const getMissionInfoWithLevel = (missionInfo: types.SinglePlayerMissionInfo, level: number): types.SinglePlayerMissionInfo => {
-    let newInfo = { ...missionInfo };
-    if (level <= 1) return newInfo;
-
-    if (newInfo.rewardType === 'gold') {
-        let maxCapacity = newInfo.maxCapacity;
-        // Start from level 2 for upgrades
-        for (let i = 2; i <= level; i++) {
-            if (i < 10) {
-                maxCapacity *= 1.2;
-            } else { // i == 10
-                maxCapacity *= 1.4;
-            }
-        }
-        newInfo.maxCapacity = Math.floor(maxCapacity);
-    } else { // diamond
-        let maxCapacity = newInfo.maxCapacity;
-        let productionRate = newInfo.productionRateMinutes;
-        for (let i = 2; i <= level; i++) {
-            maxCapacity += 1;
-            if (i === 10) {
-                productionRate -= 20;
-            }
-        }
-        newInfo.maxCapacity = maxCapacity;
-        newInfo.productionRateMinutes = productionRate;
-    }
-    return newInfo;
-}
-
+export { getMissionInfoWithLevel, accumulateMissionRewards };
 
 const generateQuestsFromPool = (questPool: Omit<types.Quest, 'id' | 'progress' | 'isClaimed'>[]): types.Quest[] => {
     return questPool.map(q => ({
@@ -182,61 +154,4 @@ export const updateQuestProgress = (user: types.User, type: 'win' | 'participate
     processQuestList(user.quests.daily);
     processQuestList(user.quests.weekly);
     processQuestList(user.quests.monthly);
-};
-
-export const accumulateMissionRewards = (user: types.User): types.User => {
-    if (!user.singlePlayerMissions) {
-        return user;
-    }
-
-    const now = Date.now();
-    let modified = false;
-    const updatedUser = JSON.parse(JSON.stringify(user));
-
-    for (const missionId in updatedUser.singlePlayerMissions) {
-        const missionState = updatedUser.singlePlayerMissions[missionId];
-        if (!missionState.isStarted) {
-            continue;
-        }
-
-        const missionInfo = SINGLE_PLAYER_MISSIONS.find(m => m.id === missionId);
-        if (!missionInfo) {
-            continue;
-        }
-
-        const level = missionState.level || 1;
-        const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
-        
-        const currentAmount = missionState.claimableAmount || 0;
-        if (currentAmount >= leveledMissionInfo.maxCapacity) {
-            continue;
-        }
-        
-        const lastCollectionTime = missionState.lastCollectionTime || now;
-        const elapsedMs = now - lastCollectionTime;
-        const productionIntervalMs = leveledMissionInfo.productionRateMinutes * 60 * 1000;
-
-        if (elapsedMs > 0 && productionIntervalMs > 0) {
-            const rewardsToGenerate = Math.floor(elapsedMs / productionIntervalMs);
-
-            if (rewardsToGenerate > 0) {
-                const amountGenerated = rewardsToGenerate * leveledMissionInfo.rewardAmount;
-                const newTotal = currentAmount + amountGenerated;
-
-                if (newTotal >= leveledMissionInfo.maxCapacity) {
-                    const amountNeeded = leveledMissionInfo.maxCapacity - currentAmount;
-                    const ticksToFill = Math.ceil(amountNeeded / leveledMissionInfo.rewardAmount);
-                    const timeToFillMs = ticksToFill * productionIntervalMs;
-                    missionState.claimableAmount = leveledMissionInfo.maxCapacity;
-                    missionState.lastCollectionTime = lastCollectionTime + timeToFillMs;
-                } else {
-                    missionState.claimableAmount = newTotal;
-                    missionState.lastCollectionTime = lastCollectionTime + (rewardsToGenerate * productionIntervalMs);
-                }
-                modified = true;
-            }
-        }
-    }
-
-    return modified ? updatedUser : user;
 };
