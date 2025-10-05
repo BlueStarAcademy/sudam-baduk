@@ -5,6 +5,10 @@ import path from 'path';
 import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove } from '../types.js';
 import * as types from '../types.js';
 import { fileURLToPath } from 'url';
+// FIX: import process to use process.platform
+import process from 'process';
+// FIX: Import Buffer to correctly type stream data.
+import { Buffer } from 'buffer';
 
 // --- Configuration ---
 const __filename = fileURLToPath(import.meta.url);
@@ -297,7 +301,7 @@ maxVisits = 1000
         this.pendingQueries.clear();
     }
 
-    private processStdoutData(data: any) {
+    private processStdoutData(data: Buffer) {
         this.stdoutBuffer += data.toString();
         let newlineIndex;
         while ((newlineIndex = this.stdoutBuffer.indexOf('\n')) !== -1) {

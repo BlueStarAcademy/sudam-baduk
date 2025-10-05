@@ -1,3 +1,4 @@
+
 import { type User } from '../../types/index.js';
 import { Pool } from 'pg';
 import { rowToUser } from './mappers.js';
@@ -29,6 +30,7 @@ export const createUser = async (db: Pool, user: User): Promise<void> => {
         const value = (user as any)[key];
         return typeof value === 'object' && value !== null ? JSON.stringify(value) : value;
     });
+    // FIX: Add "kakaoId" to the column list to ensure it's included during user creation.
     await db.query(`INSERT INTO users (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders})`, values);
 };
 

@@ -362,7 +362,7 @@ const GameControls: React.FC<GameControlsProps> = (props) => {
     const isPreGame = !isGameActive && !isGameEnded;
     const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
     const handlePass = () => { if (isMyTurn && !isSpectator && gameStatus === 'playing') onAction({ type: 'PASS_TURN', payload: { gameId } }); };
-    const handleResign = () => { if (!isSpectator && !session.isAiGame && isGameActive) setConfirmModalType('resign'); };
+    const handleResign = () => { if (!isSpectator && isGameActive) setConfirmModalType('resign'); };
     const handleUseItem = (item: 'hidden' | 'scan' | 'missile') => { if(gameStatus !== 'playing') return; const actionType = item === 'hidden' ? 'START_HIDDEN_PLACEMENT' : (item === 'scan' ? 'START_SCANNING' : 'START_MISSILE_SELECTION'); onAction({ type: actionType, payload: { gameId } }); };
 
     const myPlayerEnum = currentUser.id === blackPlayerId ? Player.Black : Player.White;
@@ -447,8 +447,8 @@ const GameControls: React.FC<GameControlsProps> = (props) => {
                             <Button onClick={() => setShowResultModal(true)} colorScheme="yellow" className="!text-sm !py-2">결과 보기</Button>
                         ) : (
                             <>
-                                {isStrategic && mode !== GameMode.Capture && !session.isAiGame && <Button onClick={handlePass} disabled={!isMyTurn || isSpectator || isPreGame} colorScheme="blue" className={buttonClasses}><img src="/images/button/pass.png" alt="통과" className={iconClass} /><span className={textClass}>통과</span></Button>}
-                                <Button onClick={handleResign} disabled={isSpectator || session.isAiGame || isPreGame} colorScheme="red" className={buttonClasses}><img src="/images/button/giveup.png" alt="기권" className={iconClass} /><span className={textClass}>기권</span></Button>
+                                {isStrategic && mode !== GameMode.Capture && <Button onClick={handlePass} disabled={!isMyTurn || isSpectator || isPreGame} colorScheme="blue" className={buttonClasses}><img src="/images/button/pass.png" alt="통과" className={iconClass} /><span className={textClass}>통과</span></Button>}
+                                <Button onClick={handleResign} disabled={isSpectator || isPreGame} colorScheme="red" className={buttonClasses}><img src="/images/button/giveup.png" alt="기권" className={iconClass} /><span className={textClass}>기권</span></Button>
                             </>
                         )}
                     </div>

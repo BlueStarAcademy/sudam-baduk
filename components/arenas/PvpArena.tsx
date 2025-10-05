@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Player, GameMode, GameStatus, Point, GameProps, LiveGameSession, AlkkagiStone, ServerAction, User, UserWithStatus, WinReason } from '../../types/index.js';
 import GameArena from '../GameArena.js';
@@ -75,7 +73,6 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
         return Player.None;
     }, [currentUser, blackPlayerId, whitePlayerId, isSpectator, mode, gameStatus, player1.id, session.settings.mixedModes]);
     
-    // FIX: Destructure clientTimes from the hook's return value to match its updated signature and align with other components.
     const clientTimes = useClientTimer(session, myPlayerEnum);
     
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
@@ -133,6 +130,10 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
             setShowFinalTerritory(true);
         }
     }, [gameStatus, prevGameStatus]);
+    
+    const handleCloseResults = useCallback(() => {
+        setShowResultModal(false);
+    }, []);
     
     const isMyTurn = useMemo(() => {
         if (isSpectator) return false;
@@ -241,6 +242,35 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
         }
     }, [isMyTurn, clientTimes, myPlayerEnum, session.moveHistory, prevMoveCount, gameStatus, session.blackByoyomiPeriodsLeft, session.whiteByoyomiPeriodsLeft, prevByoyomiBlack, prevByoyomiWhite, session.blackTimeLeft, session.whiteTimeLeft, session.settings.byoyomiCount, session.mode, session.settings.mixedModes, session.settings.timeIncrement]);
 
+    const isNoContestLeaveAvailable = useMemo(() => !isSpectator && !session.isAiGame && !!session.canRequestNoContest?.[currentUser!.id], [session.canRequestNoContest, currentUser, isSpectator, session.isAiGame]);
+
+    const handleLeaveOrResignClick = useCallback(() => {
+        const slug = SLUG_BY_GAME_MODE.get(session.mode);
+        const redirectUrl = slug ? `#/waiting/${slug}` : '#/profile';
+        sessionStorage.setItem('postGameRedirect', redirectUrl);
+    
+        if (isSpectator) {
+            handlers.handleAction({ type: 'LEAVE_SPECTATING', payload: { gameId, mode: session.mode } });
+            return;
+        }
+    
+        if (['ended', 'no_contest', 'rematch_pending'].includes(gameStatus)) {
+            if (session.isAiGame) {
+                handlers.handleAction({ type: 'LEAVE_AI_GAME', payload: { gameId: session.id } });
+            } else {
+                handlers.handleAction({ type: 'LEAVE_GAME_ROOM', payload: { gameId, mode: session.mode } });
+            }
+            return;
+        }
+    
+        if (isNoContestLeaveAvailable) {
+            if (window.confirm("상대방의 장고로 인해 페널티 없이 무효 처리하고 나가시겠습니까?")) {
+                handlers.handleAction({ type: 'REQUEST_NO_CONTEST_LEAVE', payload: { gameId } });
+            }
+        } else {
+            setConfirmModalType('resign');
+        }
+    }, [isSpectator, handlers, session.mode, gameId, gameStatus, isNoContestLeaveAvailable, session.isAiGame]);
 
     const isItemModeActive = ['hidden_placing', 'scanning', 'missile_selecting', 'missile_animating', 'scanning_animating'].includes(gameStatus);
 
@@ -294,7 +324,7 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
                  setIsSubmittingMove(false);
             }
         }
-    }, [isSubmittingMove, isSpectator, gameStatus, isMyTurn, myPlayerEnum, session.boardState, session.koInfo, session.moveHistory.length, isMobile, settings.features.mobileConfirm, isItemModeActive, pendingMove, gameId, mode, handlers, currentUser, player1.id, session.baseStones_p1, session.baseStones_p2, session.settings.baseStones]);
+    }, [isSubmittingMove, isSpectator, session, gameStatus, isMyTurn, myPlayerEnum, isMobile, settings.features.mobileConfirm, isItemModeActive, pendingMove, gameId, mode, handlers, currentUser, player1.id]);
 
     const handleConfirmMove = useCallback(async () => {
         audioService.stopTimerWarning();
@@ -324,44 +354,8 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
     }, [pendingMove, session.id, handlers, gameStatus, isMyTurn, mode, isSubmittingMove]);
 
     const handleCancelMove = useCallback(() => setPendingMove(null), []);
-
-    const analysisResult = useMemo(() => session.analysisResult?.[currentUser!.id] ?? (['ended','no_contest'].includes(gameStatus) ? session.analysisResult?.['system'] : null), [session.analysisResult, currentUser, gameStatus]);
-    const isNoContestLeaveAvailable = useMemo(() => !isSpectator && !session.isAiGame && !!session.canRequestNoContest?.[currentUser!.id], [session.canRequestNoContest, currentUser, isSpectator, session.isAiGame]);
-
-    const handleLeaveOrResignClick = useCallback(() => {
-        const slug = SLUG_BY_GAME_MODE.get(session.mode);
-        const redirectUrl = slug ? `#/waiting/${slug}` : '#/profile';
-        sessionStorage.setItem('postGameRedirect', redirectUrl);
-    
-        if (isSpectator) {
-            handlers.handleAction({ type: 'LEAVE_SPECTATING', payload: { gameId, mode: session.mode } });
-            return;
-        }
-        
-        if (session.isAiGame) {
-            handlers.handleAction({ type: 'LEAVE_AI_GAME', payload: { gameId } });
-            return;
-        }
-    
-        if (['ended', 'no_contest', 'rematch_pending'].includes(gameStatus)) {
-            handlers.handleAction({ type: 'LEAVE_GAME_ROOM', payload: { gameId, mode: session.mode } });
-            return;
-        }
-    
-        if (isNoContestLeaveAvailable) {
-            if (window.confirm("상대방의 장고로 인해 페널티 없이 무효 처리하고 나가시겠습니까?")) {
-                handlers.handleAction({ type: 'REQUEST_NO_CONTEST_LEAVE', payload: { gameId } });
-            }
-        } else {
-            setConfirmModalType('resign');
-        }
-    }, [isSpectator, handlers, session.mode, session.isAiGame, gameId, gameStatus, isNoContestLeaveAvailable]);
     
     const globalChat = useMemo(() => waitingRoomChats['global'] || [], [waitingRoomChats]);
-    
-    const handleCloseResults = useCallback(() => {
-        setShowResultModal(false);
-    }, []);
     
     const gameProps: GameProps = {
         session, onAction: handlers.handleAction, currentUser: currentUserWithStatus!, waitingRoomChat: globalChat,
@@ -487,8 +481,8 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
                 )}
             </div>
             
-            {isAnalysisActive && analysisResult && (
-                <TerritoryAnalysisWindow session={session} result={analysisResult} onClose={() => setIsAnalysisActive(false)} />
+            {isAnalysisActive && session.analysisResult?.[currentUser!.id] && (
+                <TerritoryAnalysisWindow session={session} result={session.analysisResult[currentUser!.id]} onClose={() => setIsAnalysisActive(false)} />
             )}
             
             <GameModals 

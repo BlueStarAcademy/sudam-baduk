@@ -6,6 +6,7 @@ import { rowToUser as sqliteRowToUser, rowToGame as sqliteRowToGame } from './sq
 import { User, LiveGameSession, UserCredentials, Guild, AdminLog, Announcement, OverrideAnnouncement, GameMode, TowerRank } from '../types/index.js';
 import { runSchemaAndMigrations } from '../server/db/connection.js';
 import crypto from 'crypto';
+import process from 'process';
 
 const { Pool } = pg;
 
@@ -72,6 +73,11 @@ const migrate = async () => {
         } else {
             console.error('[MIGRATE] HINT: Please check if your DATABASE_URL in the .env file is correct and that you have internet access.');
         }
+        process.exit(1);
+    }
+    
+    if (!sqliteDb || !pgClient) {
+        console.error('[MIGRATE] Database connection failed, exiting.');
         process.exit(1);
     }
 

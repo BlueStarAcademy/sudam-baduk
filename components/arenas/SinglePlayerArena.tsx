@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel, GameMode } from '../../types/index.js';
 import GameArena from '../GameArena.js';
@@ -321,7 +322,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
 
     return (
         <div className={`w-full h-full flex flex-col p-2 lg:p-4 text-stone-200 overflow-hidden relative ${backgroundClass}`}>
-             {session.gameStatus === GameStatus.SinglePlayerIntro && (
+            {session.gameStatus === GameStatus.SinglePlayerIntro && (
                 <SinglePlayerIntroModal session={session} onConfirm={handleIntroConfirm} />
             )}
             
@@ -359,6 +360,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                                 pendingMove={pendingMove}
                                 onConfirmMove={handleConfirmMove}
                                 onCancelMove={handleCancelMove}
+                                setConfirmModalType={setConfirmModalType}
                             />
                         </div>
                     </div>

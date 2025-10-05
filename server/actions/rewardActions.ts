@@ -69,7 +69,8 @@ export const grantReward = (user: User, reward: QuestReward, reason: string): In
     return addedItems;
 };
 
-export const handleRewardAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<{ 
+// FIX: Add 'guilds' parameter to function signature.
+export const handleRewardAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User, guilds: Record<string, Guild>): Promise<{ 
     clientResponse?: any;
     error?: string;
 }> => {
@@ -228,6 +229,9 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
 
             const level = missionState.level || 1;
             const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
+
+            // Check if storage was full before claiming
+            const wasFull = missionState.claimableAmount >= leveledMissionInfo.maxCapacity;
         
             const amountToClaim = Math.floor(missionState.claimableAmount);
             const reward: QuestReward = {};
@@ -241,7 +245,11 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             const addedItems = grantReward(user, reward, `${leveledMissionInfo.name} 수련과제 보상`);
             
             missionState.claimableAmount = missionState.claimableAmount - amountToClaim;
-            missionState.lastCollectionTime = now;
+            
+            // Only reset the timer if the storage was full. Otherwise, the advanced time from accumulation is preserved.
+            if (wasFull) {
+                missionState.lastCollectionTime = now;
+            }
             
             missionState.progressTowardNextLevel = (missionState.progressTowardNextLevel || 0) + amountToClaim;
 
@@ -277,7 +285,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
         
             const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, currentLevel);
         
-            const upgradeTarget = leveledMissionInfo.maxCapacity * currentLevel * 10;
+            const upgradeTarget = leveledMissionInfo.maxCapacity * 10;
             if ((missionState.progressTowardNextLevel || 0) < upgradeTarget) {
                 return { error: '강화에 필요한 누적 수령액이 부족합니다.' };
             }
@@ -313,7 +321,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
                 return { error: '오늘 퀴즈 참여 횟수를 모두 사용했습니다.' };
             }
             
-            const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
+            // FIX: Use passed-in guilds object instead of fetching from DB.
             const guild = user.guildId ? (guilds[user.guildId] ?? null) : null;
             const effects = calculateUserEffects(user, guild);
             user.actionPoints.max = effects.maxActionPoints;

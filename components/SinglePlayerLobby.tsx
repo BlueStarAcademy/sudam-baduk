@@ -140,17 +140,17 @@ const StageListItem: React.FC<{
         <div className="flex flex-col items-center" title={title}>
             <h4 className="text-[10px] text-yellow-400 font-semibold">{title}</h4>
             <div className="flex items-center flex-wrap justify-center gap-x-1.5 mt-0.5">
-                {(reward.gold ?? 0) > 0 && (
+                {(reward.gold ?? 0) > 0 &&
                     <span className="flex items-center gap-0.5 text-xs" title={`골드 ${reward.gold}`}>
                         <img src="/images/Gold.png" alt="골드" className="w-3 h-3" />
                         {reward.gold}
                     </span>
-                )}
-                {(reward.exp?.amount ?? 0) > 0 && (
+                }
+                {(reward.exp?.amount ?? 0) > 0 &&
                      <span className="flex items-center gap-0.5 text-xs" title={`경험치 ${reward.exp!.amount}`}>
                         <span className="text-sm">⭐</span> {reward.exp!.amount}
                     </span>
-                )}
+                }
                 {reward.items?.map(renderRewardItem)}
                 {reward.bonus && 
                     <span className="flex items-center gap-0.5" title={`보너스 스탯 ${reward.bonus.replace('스탯', '')}`}>
@@ -235,7 +235,7 @@ const MissionCard: React.FC<{
     const lastCollectionTime = missionState?.lastCollectionTime ?? 0;
     
     const leveledMissionInfo = useMemo(() => getMissionInfoWithLevel(mission, currentLevel), [mission, currentLevel]);
-    const upgradeTarget = leveledMissionInfo.maxCapacity * currentLevel * 10;
+    const upgradeTarget = leveledMissionInfo.maxCapacity * 10;
     const upgradeProgress = Math.min(100, (progressTowardNextLevel / upgradeTarget) * 100);
     const canUpgrade = upgradeProgress >= 100 && currentLevel < 10;
     
@@ -287,10 +287,19 @@ const MissionCard: React.FC<{
     
     const progressPercent = (displayAmount / leveledMissionInfo.maxCapacity) * 100;
 
+    const formatTime = (ms: number): string => {
+        if (ms <= 0) return "00:00";
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        // FIX: Fix "Type 'String' has no call signatures" error by using .toString() method
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    };
+
     return (
         <div className="bg-secondary/60 p-2 rounded-lg flex flex-col h-full border-2 border-color text-on-panel">
-            <div className="flex-grow flex flex-col items-center gap-1 text-center">
-                <img src={mission.image} alt={mission.name} className="w-12 h-12 object-cover p-1 rounded-md bg-tertiary" />
+            <div className="flex-grow flex flex-col items-center gap-2 text-center">
+                <img src={mission.image} alt={mission.name} className="w-16 h-16 object-cover p-1 rounded-md bg-tertiary" />
                 <h4 className="font-bold text-sm text-highlight truncate" title={mission.name}>{mission.name}</h4>
                 <p className="text-[10px] text-tertiary flex-grow min-h-[2rem]">{mission.description}</p>
             </div>
@@ -301,10 +310,10 @@ const MissionCard: React.FC<{
                         <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${upgradeProgress}%` }}></div>
                     </div>
                      <div className="flex items-center justify-center gap-1">
-                        <Button onClick={() => onUpgrade(mission)} disabled={!canUpgrade} colorScheme="blue" className="flex-1 !py-1 !text-xs">
+                        <Button onClick={() => onUpgrade(mission)} disabled={!canUpgrade} colorScheme="blue" className="flex-1 !py-1 !text-[10px] lg:!text-xs">
                             강화
                         </Button>
-                        <Button onClick={onClaim} disabled={Math.floor(displayAmount) < 1} colorScheme="green" className="flex-1 !py-1 !text-xs">
+                        <Button onClick={onClaim} disabled={Math.floor(displayAmount) < 1} colorScheme="green" className="flex-1 !py-1 !text-[10px] lg:!text-xs">
                             수령
                         </Button>
                     </div>
@@ -323,7 +332,7 @@ const MissionCard: React.FC<{
                         <img src={rewardIcon} alt={mission.rewardType} className="w-4 h-4 inline-block mr-1" />
                         <span>{mission.rewardAmount.toLocaleString()}/{mission.productionRateMinutes}분 (최대: {mission.maxCapacity.toLocaleString()})</span>
                     </div>
-                    <Button onClick={onStart} colorScheme="blue" className="w-full mt-auto !py-1 !text-xs">
+                    <Button onClick={onStart} colorScheme="blue" className="w-full mt-auto !py-1 !text-[10px] lg:!text-xs">
                         시작하기
                     </Button>
                 </div>
@@ -331,15 +340,6 @@ const MissionCard: React.FC<{
         </div>
     );
 };
-
-const formatTime = (ms: number): string => {
-    if (ms <= 0) return "00:00";
-    const totalSeconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-};
-
 
 const SinglePlayerLobby: React.FC = () => {
     const { currentUserWithStatus, handlers } = useAppContext();

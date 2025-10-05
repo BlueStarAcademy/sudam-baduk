@@ -1,6 +1,3 @@
-
-
-
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild } from '../../types/index.js';
 import * as db from '../db.js';
 import { containsProfanity } from '../../profanity.js';

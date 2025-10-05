@@ -1,11 +1,8 @@
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus } from '../../types/index.js';
 import * as db from '../db.js';
-// FIX: Changed import to be a named import as the function is now exported from strategic.ts
 import { handleStrategicGameAction } from '../modes/strategic.js';
 import { handlePlayfulGameAction } from '../modes/playful.js';
-// FIX: Corrected import paths for singlePlayerMode.
 import { handleSinglePlayerGameStart, handleSinglePlayerRefresh, handleConfirmSPIntro } from '../modes/singlePlayerMode.js';
-// FIX: Corrected import paths for towerChallengeMode.
 import { handleTowerChallengeGameStart, handleTowerChallengeRefresh, handleTowerAddStones } from '../modes/towerChallengeMode.js';
 import { handleUserAction } from './userActions.js';
 import { handleNegotiationAction } from './negotiationActions.js';
@@ -62,7 +59,7 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
         'CLAIM_ACTION_POINT_QUIZ_REWARD', 'RESET_SINGLE_PLAYER_REWARDS', 'START_SINGLE_PLAYER_MISSION'
     ];
     if (rewardActionTypes.includes(type)) {
-        return handleRewardAction(volatileState, actionWithUserId, user);
+        return handleRewardAction(volatileState, actionWithUserId, user, guilds);
     }
 
     if (type.startsWith('TOGGLE_EQUIP') || type.startsWith('SELL_') || type.startsWith('ENHANCE_') || type.startsWith('DISASSEMBLE_') || type.startsWith('CRAFT_') || type.startsWith('SYNTHESIZE_') || type === 'USE_ITEM' || type === 'USE_ITEM_BULK') {
@@ -86,7 +83,6 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
         'SKIP_TOURNAMENT_END', 'RESIGN_TOURNAMENT_MATCH', 'USE_CONDITION_POTION', 'CLAIM_TOURNAMENT_REWARD', 'ENTER_TOURNAMENT_VIEW', 'LEAVE_TOURNAMENT_VIEW'
     ];
      if (tournamentActionTypes.includes(type)) {
-// FIX: Expected 3 arguments, but got 4. The function signature for handleTournamentAction was missing the 'guilds' parameter. Added it to the function definition and this call is now correct.
         return handleTournamentAction(volatileState, actionWithUserId, user, guilds);
     }
     
@@ -115,7 +111,6 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
             const isPaused = game.gameStatus === GameStatus.Paused;
             const now = Date.now();
             if (type === 'PAUSE_GAME' && !isPaused) {
-// FIX: Use GameStatus enum member instead of string literal.
                 game.gameStatus = GameStatus.Paused;
                 if (game.turnDeadline) {
                     game.pausedTurnTimeLeft = (game.turnDeadline - now) / 1000;
@@ -123,7 +118,6 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
                     game.turnStartTime = undefined;
                 }
             } else if (type === 'RESUME_GAME' && isPaused) {
-// FIX: Use GameStatus enum member instead of string literal.
                 game.gameStatus = GameStatus.Playing;
                 game.promptForMoreStones = false; // Always clear prompt on resume
                 if (game.pausedTurnTimeLeft) {

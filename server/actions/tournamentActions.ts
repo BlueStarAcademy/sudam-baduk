@@ -1,4 +1,5 @@
 
+
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
 // FIX: Removed unused 'types' import that was causing namespace conflicts.
@@ -293,7 +294,8 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
         }
 
         case 'CLAIM_TOURNAMENT_REWARD': {
-            return handleRewardAction(volatileState, action, user);
+// FIX: Pass the 'guilds' parameter to handleRewardAction.
+            return handleRewardAction(volatileState, action, user, guilds);
         }
 
         default:

@@ -42,6 +42,7 @@ export function parseHash(hash: string): AppRoute {
         case 'towerchallenge': return { view: 'towerchallenge', params: {} };
         case 'guild': return { view: 'guild', params: {} };
         case 'guildboss': return { view: 'guildboss', params: {} };
+        case 'guildwar': return { view: 'guildwar', params: {} };
         case 'admin': return { view: 'admin', params: {} };
         case 'profile': return { view: 'profile', params: {} };
         default: return { view: 'profile', params: {} };

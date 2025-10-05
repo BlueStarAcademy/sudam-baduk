@@ -40,7 +40,7 @@ const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
     const botName = isStrategic ? `${mode}봇(카타고)` : `${mode}봇`;
 
     return (
-        <div className="bg-panel rounded-lg shadow-lg p-3 flex items-center justify-between flex-shrink-0 text-on-panel">
+        <div className="bg-panel panel-glow rounded-lg shadow-lg p-3 flex items-center justify-between flex-shrink-0 text-on-panel">
             <div className="flex items-center gap-3">
                  <Avatar userId={aiUserId} userName="AI" size={40} className="border-2 border-purple-500" />
                  <div>
@@ -81,14 +81,14 @@ const AnnouncementBoard: React.FC<{ mode: GameMode; }> = ({ mode }) => {
     
     if (!announcements || announcements.length === 0) {
         return (
-            <div className="bg-panel rounded-lg shadow-lg p-2 flex items-center justify-center flex-shrink-0 h-10 text-on-panel">
+            <div className="bg-panel panel-glow rounded-lg shadow-lg p-2 flex items-center justify-center flex-shrink-0 h-10 text-on-panel">
                 <span className="font-bold text-tertiary text-center">[현재 등록된 공지사항이 없습니다.]</span>
             </div>
         );
     }
 
     return (
-        <div className="bg-panel rounded-lg shadow-lg px-4 relative overflow-hidden flex-shrink-0 h-10">
+        <div className="bg-panel panel-glow rounded-lg shadow-lg px-4 relative overflow-hidden flex-shrink-0 h-10">
             <div
                 className="w-full absolute top-0 left-0 transition-transform duration-1000 ease-in-out"
                 style={{ transform: `translateY(-${currentIndex * 2.5}rem)` }}
@@ -189,10 +189,10 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                 <div className="flex-shrink-0"><AnnouncementBoard mode={mode} /></div>
                 <div className="flex-shrink-0"><AiChallengePanel mode={mode} /></div>
                 <div className="flex-1 flex flex-col gap-4 min-h-0">
-                    <div className="h-1/2 bg-panel border border-color rounded-lg shadow-lg flex flex-col min-h-0">
+                    <div className="h-1/2 bg-panel panel-glow rounded-lg shadow-lg flex flex-col min-h-0">
                         <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                     </div>
-                    <div className="h-1/2 bg-panel border border-color rounded-lg shadow-lg flex flex-col min-h-0">
+                    <div className="h-1/2 bg-panel panel-glow rounded-lg shadow-lg flex flex-col min-h-0">
                         <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} />
                     </div>
                 </div>
@@ -210,7 +210,7 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                 </button>
             </div>
             <div className={`fixed top-0 right-0 h-full w-[280px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMobileSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
-                <button onClick={() => setIsMobileSidebarOpen(false)} className="self-end text-2xl p-2 text-tertiary hover:text-primary">×</button>
+                <button onClick={() => setIsMobileSidebarOpen(false)} className="self-end text-2xl p-2 text-tertiary hover:text-primary">&times;</button>
                 <div className="flex-shrink-0 p-2 border-b border-color">
                     <QuickAccessSidebar mobile={true} />
                 </div>
@@ -230,10 +230,10 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                     <AiChallengePanel mode={mode} />
                 </div>
                 <div className="grid grid-rows-2 gap-4 flex-1 min-h-0">
-                    <div className="min-h-0 bg-panel border border-color rounded-lg shadow-lg flex flex-col">
+                    <div className="min-h-0 bg-panel panel-glow rounded-lg shadow-lg flex flex-col">
                         <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                     </div>
-                    <div className="min-h-0 flex flex-col bg-panel border border-color rounded-lg shadow-lg">
+                    <div className="min-h-0 flex flex-col bg-panel panel-glow rounded-lg shadow-lg">
                         <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
                     </div>
                 </div>
@@ -242,7 +242,7 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
             {/* Right Sidebar Column */}
             <div className="lg:col-span-2 grid grid-rows-2 gap-4">
               <div className="flex flex-row gap-4 items-stretch min-h-0">
-                <div className="flex-1 bg-panel border border-color rounded-lg shadow-lg min-w-0">
+                <div className="flex-1 bg-panel panel-glow rounded-lg shadow-lg min-w-0">
                   <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
                 </div>
                 <div className="w-24 flex-shrink-0">
@@ -250,7 +250,7 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                 </div>
               </div>
 
-              <div className="bg-panel border border-color rounded-lg shadow-lg min-h-0">
+              <div className="bg-panel panel-glow rounded-lg shadow-lg min-h-0">
                 <RankingList currentUser={currentUserWithStatus} mode={mode} onViewUser={handlers.openViewingUser} onShowTierInfo={() => setIsTierInfoModalOpen(true)} onShowPastRankings={handlers.openPastRankings} />
               </div>
             </div>

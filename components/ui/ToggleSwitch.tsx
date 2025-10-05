@@ -19,13 +19,12 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, onChange, label, d
           className="sr-only" 
           checked={checked} 
           onChange={e => !disabled && onChange(e.target.checked)}
-          // FIX: Add disabled property to the input itself
           disabled={disabled}
         />
         <div className={`block w-12 h-6 rounded-full transition-colors ${checked ? 'bg-accent' : 'bg-secondary'}`}></div>
         <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${checked ? 'transform translate-x-6' : ''}`}></div>
       </div>
-      {label && <span className="ml-3 text-secondary font-medium">{label}</span>}
+      {label && <span className="ml-3 text-secondary font-medium text-xs sm:text-sm whitespace-nowrap">{label}</span>}
     </label>
   );
 };

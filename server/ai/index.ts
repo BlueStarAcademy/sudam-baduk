@@ -136,31 +136,15 @@ export const getAiUser = (mode: types.GameMode, difficulty: number = 50, stageId
 
 export const makeAiMove = async (game: types.LiveGameSession): Promise<types.Point> => {
     const aiPlayerId = game.player2.id;
-    const aiPlayerEnum = game.blackPlayerId === aiPlayerId ? types.Player.Black : types.Player.White;
+    const aiPlayerEnum = game.blackPlayerId === aiPlayerId ? types.Player.Black : (game.whitePlayerId === aiPlayerId ? types.Player.White : types.Player.None);
     const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge;
 
     if (!isStrategic) {
-        // For playful modes, a separate AI logic dispatcher is used.
-        game.pendingAiMove = makePlayfulAiMove(game).then(() => ({x: -3, y: -3}));
-        return { x: -2, y: -2 }; // Signal that AI move is handled internally
+        // Playful AI move logic now directly modifies the game state.
+        // It returns a sentinel value to indicate that the move has been handled.
+        await makePlayfulAiMove(game);
+        return {x: -3, y: -3};
     }
     
-    // For ALL strategic modes, now use GnuGo
-    const movePromise: Promise<types.Point> = gnuGoServiceManager.generateMove(game.id, aiPlayerEnum, game.settings.boardSize);
-    
-    game.pendingAiMove = movePromise;
-    return movePromise;
-};
-
-
-export const makeAiHiddenMove = async (game: types.LiveGameSession): Promise<void> => {
-    // Simple logic: if AI has hidden stones left, use one with 50% chance.
-    const hiddenStonesUsed = game.hidden_stones_used_p1 ?? 0; // AI is always P1 in SP
-    const maxHiddenStones = game.settings.hiddenStoneCount ?? 0;
-    
-    if (hiddenStonesUsed < maxHiddenStones && Math.random() < 0.5) {
-        game.pendingAiMove = makeAiMove(game).then(point => ({ ...point, isHidden: true }));
-    } else {
-        game.pendingAiMove = makeAiMove(game);
-    }
+    return gnuGoServiceManager.generateMove(game.id, aiPlayerEnum, game.settings.boardSize);
 };

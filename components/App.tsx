@@ -37,6 +37,7 @@ import EquipmentEffectsModal from './EquipmentEffectsModal.js';
 import PresetModal from './PresetModal.js';
 import Button from './Button.js';
 import { containsProfanity } from '../profanity.js';
+import { supabase } from '../services/supabase.js';
 
 function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T | undefined>(undefined);
@@ -72,11 +73,14 @@ const Auth: React.FC = () => {
         }, 1500);
     };
     
-    const handleKakaoLogin = () => {
-        const KAKAO_REST_API_KEY = import.meta.env.VITE_KAKAO_REST_API_KEY;
-        const KAKAO_REDIRECT_URI = import.meta.env.VITE_KAKAO_REDIRECT_URI;
-        const kakaoAuthUrl = `https://kauth.kakao.com/oauth/authorize?client_id=${KAKAO_REST_API_KEY}&redirect_uri=${KAKAO_REDIRECT_URI}&response_type=code`;
-        window.location.href = kakaoAuthUrl;
+    const handleKakaoLogin = async () => {
+        setError(null);
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'kakao',
+        });
+        if (error) {
+            setError(`카카오 로그인에 실패했습니다: ${error.message}`);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {

@@ -12,6 +12,7 @@ import SinglePlayerLobby from './SinglePlayerLobby.js';
 import TowerChallengeLobby from './TowerChallengeLobby.js';
 import Guild from './guild/Guild.js';
 import GuildBoss from './guild/GuildBoss.js';
+import GuildWar from './guild/GuildWar.js';
 
 const Router: React.FC = () => {
     const { currentRoute, activeGame } = useAppContext();
@@ -41,6 +42,8 @@ const Router: React.FC = () => {
             return <Guild />;
         case 'guildboss':
             return <GuildBoss />;
+        case 'guildwar':
+            return <GuildWar />;
         case 'admin':
             return <Admin />;
         case 'tournament':

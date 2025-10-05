@@ -1,6 +1,5 @@
-
-import React, { useMemo } from 'react';
-import { GameProps, Player, ServerAction, SinglePlayerLevel, Point, GameStatus, AppSettings } from '../../types/index.js';
+import React, { useMemo, useCallback } from 'react';
+import { GameProps, Player, ServerAction, SinglePlayerLevel, Point, GameStatus } from '../../types/index.js';
 import Button from '../Button.js';
 import { SINGLE_PLAYER_STAGES } from '../../constants/singlePlayerConstants.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
@@ -9,6 +8,7 @@ interface SinglePlayerControlsProps extends Pick<GameProps, 'session' | 'onActio
     pendingMove: Point | null;
     onConfirmMove: () => void;
     onCancelMove: () => void;
+    setConfirmModalType: (type: 'resign' | null) => void;
 }
 
 const ControlButton: React.FC<{
@@ -45,9 +45,9 @@ const ControlButton: React.FC<{
     </Button>
 );
 
-const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, onAction, currentUser, pendingMove, onConfirmMove, onCancelMove }) => {
+const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, onAction, currentUser, pendingMove, onConfirmMove, onCancelMove, setConfirmModalType }) => {
     const { handlers, settings, isMobile } = useAppContext();
-    const { id: gameId, gameStatus, gameType, moveHistory, singlePlayerPlacementRefreshesUsed } = session;
+    const { id: gameId, gameStatus, moveHistory, singlePlayerPlacementRefreshesUsed } = session;
     const isWinner = session.winner === Player.Black;
 
     if (gameStatus === 'ended' || gameStatus === 'no_contest') {
@@ -107,33 +107,13 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
     const isMyTurn = session.currentPlayer === Player.Black;
 
     // Item logic
-    const isHiddenMode = gameType === 'hidden';
-    const isMissileMode = gameType === 'missile';
-
-    const myHiddenUsed = session.hidden_stones_used_p1 ?? 0;
-    const myScansLeft = session.scans_p1 ?? 0;
-    const myMissilesLeft = session.missiles_p1 ?? 0;
-    const hiddenLeft = (session.settings.hiddenStoneCount || 0) - myHiddenUsed;
-    
-    const canScan = useMemo(() => {
-        const opponentPlayerEnum = Player.White;
-        if (!session.hiddenMoves || !session.moveHistory) return false;
-        return Object.entries(session.hiddenMoves).some(([moveIndexStr, isHidden]) => {
-            if (!isHidden) return false;
-            const move = session.moveHistory[parseInt(moveIndexStr)];
-            if (!move || move.player !== opponentPlayerEnum) return false;
-            const { x, y } = move;
-            if (session.boardState[y]?.[x] !== opponentPlayerEnum) return false;
-            const isPermanentlyRevealed = session.permanentlyRevealedStones?.some(p => p.x === x && p.y === y);
-            return !isPermanentlyRevealed;
-        });
-    }, [session.hiddenMoves, session.moveHistory, session.boardState, session.permanentlyRevealedStones]);
-
-    const handleUseItem = (item: 'hidden' | 'scan' | 'missile') => {
-        if(gameStatus !== 'playing' || !isMyTurn) return;
-        const actionType = item === 'hidden' ? 'START_HIDDEN_PLACEMENT' : (item === 'scan' ? 'START_SCANNING' : 'START_MISSILE_SELECTION');
-        onAction({ type: actionType, payload: { gameId } });
-    };
+    const { isHiddenMode, isMissileMode } = useMemo(() => {
+        const stageInfo = SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId);
+        return {
+            isHiddenMode: stageInfo?.gameType === 'hidden' || stageInfo?.hiddenStoneCount,
+            isMissileMode: stageInfo?.gameType === 'missile' || stageInfo?.missileCount,
+        };
+    }, [session.stageId]);
 
     if (isMobile && settings.features.mobileConfirm && pendingMove && onConfirmMove && onCancelMove) {
         return (
@@ -146,18 +126,21 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
 
     return (
         <div className="bg-stone-800/60 backdrop-blur-sm rounded-lg p-2 flex items-center justify-around gap-1 w-full h-full border border-stone-700/50">
-            {isHiddenMode && <ControlButton imgSrc="/images/button/hidden.png" label="히든" count={hiddenLeft} onClick={() => handleUseItem('hidden')} disabled={!isMyTurn || gameStatus !== 'playing' || hiddenLeft <= 0} />}
-            {isHiddenMode && <ControlButton imgSrc="/images/button/scan.png" label="스캔" count={myScansLeft} onClick={() => handleUseItem('scan')} disabled={!isMyTurn || gameStatus !== 'playing' || myScansLeft <= 0 || !canScan} />}
-            {isMissileMode && <ControlButton imgSrc="/images/button/missile.png" label="미사일" count={myMissilesLeft} onClick={() => handleUseItem('missile')} disabled={!isMyTurn || gameStatus !== 'playing' || myMissilesLeft <= 0} />}
-
+            {canRefresh && (
+                 <ControlButton 
+                    imgSrc="/images/button/reflesh.png" 
+                    label="새로고침" 
+                    count={`${5 - refreshesUsed}`}
+                    cost={nextCost > 0 ? `${nextCost}` : '무료'}
+                    onClick={handleRefresh} 
+                    disabled={!canRefresh || !canAfford} 
+                    title={!canAfford ? '골드가 부족합니다.' : `판 새로고침 (${5-refreshesUsed}회 남음)`}
+                />
+            )}
             <ControlButton 
-                imgSrc="/images/button/reflesh.png" 
-                label="새로고침" 
-                count={`${5 - refreshesUsed}`}
-                cost={nextCost > 0 ? `${nextCost}` : '무료'}
-                onClick={handleRefresh} 
-                disabled={!canRefresh || !canAfford} 
-                title={!canAfford ? '골드가 부족합니다.' : `판 새로고침 (${5-refreshesUsed}회 남음)`}
+                imgSrc="/images/button/giveup.png" 
+                label="기권" 
+                onClick={() => setConfirmModalType('resign')} 
             />
         </div>
     );

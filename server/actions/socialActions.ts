@@ -23,6 +23,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 userStatus.mode = mode;
                 delete userStatus.gameId;
                 delete userStatus.spectatingGameId;
+                userStatus.stateEnteredAt = now;
             }
             return { clientResponse: { success: true } };
         }
@@ -34,6 +35,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             const userStatus = volatileState.userStatuses[user.id];
             if (userStatus && [UserStatus.Waiting, UserStatus.Resting, UserStatus.Online].includes(userStatus.status)) {
                 userStatus.status = status;
+                userStatus.stateEnteredAt = now;
             }
             return { clientResponse: { success: true } };
         }
@@ -49,6 +51,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 userStatus.status = UserStatus.Spectating;
                 userStatus.spectatingGameId = gameId;
                 userStatus.mode = game.mode;
+                userStatus.stateEnteredAt = now;
             }
             return { clientResponse: { success: true } };
         }
@@ -119,6 +122,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 status.status = UserStatus.Online; // Go back to general online status, not waiting room
                 delete status.gameId;
                 delete status.mode;
+                status.stateEnteredAt = now;
             }
             return { clientResponse: { success: true } };
         }
@@ -127,6 +131,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 volatileState.userStatuses[user.id].status = UserStatus.Online;
                 volatileState.userStatuses[user.id].mode = undefined;
                 volatileState.userStatuses[user.id].gameId = undefined;
+                volatileState.userStatuses[user.id].stateEnteredAt = now;
             }
             return { clientResponse: { success: true } };
         }
@@ -138,6 +143,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 userStatus.status = UserStatus.Waiting;
                 userStatus.mode = mode;
                 delete userStatus.gameId;
+                userStatus.stateEnteredAt = now;
             }
             return { clientResponse: { success: true } };
         }
@@ -149,6 +155,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 userStatus.status = UserStatus.Waiting;
                 userStatus.mode = mode;
                 delete userStatus.spectatingGameId;
+                userStatus.stateEnteredAt = now;
             }
             return { clientResponse: { success: true } };
         }

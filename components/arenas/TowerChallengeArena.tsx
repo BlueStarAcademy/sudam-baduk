@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel, GameMode } from '../../types/index.js';
 import GameArena from '../GameArena.js';
@@ -20,6 +21,7 @@ import CurrencyPanel from '../game/CurrencyPanel.js';
 import ChatWindow from '../waiting-room/ChatWindow.js';
 import WisdomPanel from '../game/WisdomPanel.js';
 import TowerAddStonesPromptModal from '../modals/TowerAddStonesPromptModal.js';
+
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -44,7 +46,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     if (!player1?.id || !player2?.id || !currentUser || !currentUserWithStatus) {
         return <div className="flex items-center justify-center min-h-screen">플레이어 정보를 불러오는 중...</div>;
     }
-    
+
     const [confirmModalType, setConfirmModalType] = useState<'resign' | null>(null);
     const [showResultModal, setShowResultModal] = useState(false);
     const [showFinalTerritory, setShowFinalTerritory] = useState(false);
@@ -61,14 +63,10 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
         ['hidden_placing', 'scanning', 'missile_selecting', 'ai_hidden_thinking'].includes(session.gameStatus), 
         [session.gameStatus]
     );
-
+    
     const handleIntroConfirm = () => {
         handlers.handleAction({ type: 'CONFIRM_SP_INTRO', payload: { gameId: session.id } });
     };
-
-    if (session.gameStatus === GameStatus.SinglePlayerIntro) {
-        return <SinglePlayerIntroModal session={session} onConfirm={handleIntroConfirm} />;
-    }
 
     useEffect(() => {
         const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
@@ -220,7 +218,6 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
                  setIsSubmittingMove(false);
             }
         }
-// FIX: Corrected typo in useCallback dependency array from 'isSubmitting' to 'isSubmittingMove'.
     }, [isSubmittingMove, session, gameStatus, isMyTurn, handlers, isMobile, settings.features.mobileConfirm, pendingMove, isItemModeActive, gameId, mode, currentUser, player1.id]);
 
     const handleConfirmMove = useCallback(async () => {
@@ -303,6 +300,10 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     
     return (
         <div className={`w-full h-full flex flex-col p-2 lg:p-4 text-stone-200 overflow-hidden relative ${backgroundClass}`}>
+            {session.gameStatus === GameStatus.SinglePlayerIntro && (
+                <SinglePlayerIntroModal session={session} onConfirm={handleIntroConfirm} />
+            )}
+
             {session.promptForMoreStones && !['ended', 'no_contest'].includes(session.gameStatus) && (
                 <TowerAddStonesPromptModal session={session} onAction={handlers.handleAction} />
             )}

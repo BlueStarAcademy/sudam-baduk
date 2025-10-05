@@ -1,8 +1,11 @@
-// Corrected import path for types.
+// server/modes/omokLogic.ts
 import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus } from '../../types/index.js';
 import { handleSharedAction, updateSharedGameState, transitionToPlaying } from './shared.js';
 import { Negotiation } from '../../types/index.js';
 import { endGame } from '../summaryService.js';
+// FIX: Corrected import for switchTurnAndUpdateTimers from standard.js
+import { switchTurnAndUpdateTimers } from './standard.js';
+
 
 export const getOmokLogic = (game: LiveGameSession) => {
     const { settings: { boardSize } } = game;
@@ -243,37 +246,46 @@ export const initializeOmok = (game: LiveGameSession, neg: Negotiation, now: num
 export const updateOmokState = async (game: LiveGameSession, now: number) => {
     if (updateSharedGameState(game, now)) return;
 
-    const deadline = Number(game.turnDeadline);
-    if (game.gameStatus === 'playing' && deadline && now > deadline) {
+    const isTimedGame = (game.settings.timeLimit ?? 0) > 0;
+    
+    if (isTimedGame && game.gameStatus === GameStatus.Playing && game.turnDeadline && now > game.turnDeadline) {
         const timedOutPlayer = game.currentPlayer;
         const winner = timedOutPlayer === Player.Black ? Player.White : Player.Black;
         const timeKey = timedOutPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
         const byoyomiKey = timedOutPlayer === Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
-        const wasInMainTime = (game as any)[timeKey] > 0;
+
+        const byoyomiTime = game.settings.byoyomiTime ?? 30;
+        const byoyomiCount = game.settings.byoyomiCount ?? 0;
+
+        const wasInMainTime = game[timeKey] > 0;
 
         if (wasInMainTime) {
-            (game as any)[timeKey] = 0; // Transition to byoyomi
-            if ((game.settings.byoyomiCount ?? 0) > 0) {
-                // Don't decrement on first timeout
-                game.turnDeadline = now + game.settings.byoyomiTime * 1000;
+            game[timeKey] = 0; // Enter byoyomi
+            if (byoyomiCount > 0) {
                 game.turnStartTime = now;
-                return; // Game continues
+                game.turnDeadline = now + (byoyomiTime > 0 ? byoyomiTime : 30) * 1000;
+            } else {
+                game.lastTimeoutPlayerId = timedOutPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+                game.lastTimeoutPlayerIdClearTime = now + 5000;
+                await endGame(game, winner, WinReason.Timeout);
             }
-        } else { // Was already in byoyomi
-            if ((game.settings.byoyomiCount ?? 0) > 0) {
-                (game as any)[byoyomiKey]--; // Decrement byoyomi period
-                if (((game as any)[byoyomiKey] ?? 0) >= 1) { // Ends when it becomes 0
-                    game.turnDeadline = now + game.settings.byoyomiTime * 1000;
+        } else { // Already in byoyomi
+            if (byoyomiCount > 0) {
+                game[byoyomiKey]--; // Decrement a period
+                if (game[byoyomiKey] >= 0) { // Can be 0 after decrement
                     game.turnStartTime = now;
-                    return; // Game continues
+                    game.turnDeadline = now + (byoyomiTime > 0 ? byoyomiTime : 30) * 1000;
+                } else {
+                    game.lastTimeoutPlayerId = timedOutPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+                    game.lastTimeoutPlayerIdClearTime = now + 5000;
+                    await endGame(game, winner, WinReason.Timeout);
                 }
+            } else {
+                game.lastTimeoutPlayerId = timedOutPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+                game.lastTimeoutPlayerIdClearTime = now + 5000;
+                await endGame(game, winner, WinReason.Timeout);
             }
         }
-        
-        game.lastTimeoutPlayerId = game.currentPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
-        game.lastTimeoutPlayerIdClearTime = now + 5000;
-        
-        await endGame(game, winner, WinReason.Timeout);
     }
 };
 
@@ -322,30 +334,7 @@ export const handleOmokAction = async (volatileState: VolatileState, game: LiveG
             }
         }
         
-        // Switch turn
-        const playerWhoMoved = game.currentPlayer;
-        if (game.settings.timeLimit > 0) {
-            const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-            const wasInByoyomi = (game as any)[timeKey] <= 0 && game.settings.byoyomiCount > 0;
-            if (game.turnDeadline && !wasInByoyomi) {
-                const timeRemaining = Math.max(0, (game.turnDeadline - now) / 1000);
-                (game as any)[timeKey] = timeRemaining;
-            }
-        }
-        
-        game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
-        game.passCount = 0;
-        
-        if (game.settings.timeLimit > 0) {
-            const nextTimeKey = game.currentPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-            const isNextInByoyomi = (game as any)[nextTimeKey] <= 0 && game.settings.byoyomiCount > 0;
-            if (isNextInByoyomi) {
-                game.turnDeadline = now + game.settings.byoyomiTime * 1000;
-            } else {
-                game.turnDeadline = now + (game as any)[nextTimeKey] * 1000;
-            }
-            game.turnStartTime = now;
-        }
+        switchTurnAndUpdateTimers(game, now);
         
         return {};
     }
@@ -427,6 +416,5 @@ export const makeOmokAiMove = async (game: LiveGameSession): Promise<void> => {
         }
     }
 
-    // Switch turn
-    game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+    switchTurnAndUpdateTimers(game, Date.now());
 };

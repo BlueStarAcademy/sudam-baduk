@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 // FIX: Import SinglePlayerStageInfo to resolve type errors.
-import { LiveGameSession, User, Player, ServerAction, UserWithStatus, GameMode, AnalysisResult, InventoryItem, SinglePlayerStageInfo, GameSummary } from '.././types/index.js';
+import { LiveGameSession, User, Player, ServerAction, UserWithStatus, GameMode, AnalysisResult, InventoryItem, SinglePlayerStageInfo, GameSummary, WinReason } from '.././types/index.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
 // FIX: Import TOWER_STAGES constant.
@@ -234,8 +234,10 @@ const RewardDisplay: React.FC<{ mySummary: GameSummary | undefined }> = ({ mySum
     );
 };
 
+
 const TowerChallengeSummaryModal: React.FC<TowerChallengeSummaryModalProps> = ({ session, currentUser, onAction, onClose, isTopmost }) => {
-    const isWinner = session.winner === Player.Black;
+    const { winner, winReason } = session;
+    const isWinner = winner === Player.Black;
     const soundPlayed = useRef(false);
 
     const mySummary = session.summary?.[currentUser.id];
@@ -262,9 +264,18 @@ const TowerChallengeSummaryModal: React.FC<TowerChallengeSummaryModalProps> = ({
     
     const canTryNext = isWinner && nextStage;
 
-    const title = isWinner ? '도전 성공!' : '도전 실패!';
-    const color = isWinner ? 'text-green-400' : 'text-red-400';
-
+    const { title, color } = useMemo(() => {
+        if (isWinner) {
+            let title = '도전 성공!';
+            return { title, color: 'text-green-400' };
+        } else {
+            let title = '도전 실패!';
+            if (winReason === WinReason.Timeout) title = '시간패';
+            if (winReason === WinReason.StoneLimitExceeded) title = '착수 제한 초과';
+            return { title, color: 'text-red-400' };
+        }
+    }, [isWinner, winReason]);
+    
     const currentStageCost = stage?.actionPointCost;
     const nextStageCost = nextStage?.actionPointCost;
 
@@ -291,7 +302,7 @@ const TowerChallengeSummaryModal: React.FC<TowerChallengeSummaryModalProps> = ({
     };
     
     return (
-        <DraggableWindow title={`${stage?.floor}층 결과`} onClose={() => onClose(true)} windowId="tower-summary" initialWidth={550} isTopmost={isTopmost}>
+        <DraggableWindow title={`${stage?.floor}층 결과`} onClose={() => onClose(false)} windowId="tower-summary" isTopmost={isTopmost}>
             <div className="text-white text-center">
                 <h1 className={`text-5xl font-black mb-4 ${color}`}>{title}</h1>
                 <p className="text-gray-300 mb-6">{isWinner ? `축하합니다! ${stage?.floor}층을 클리어했습니다.` : `아쉽지만 다음 기회에 다시 도전해보세요.`}</p>

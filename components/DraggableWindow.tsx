@@ -214,7 +214,7 @@ const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, windowId, onCl
             )}
             <div
                 ref={windowRef}
-                className={`fixed top-1/2 left-1/2 bg-primary rounded-xl shadow-2xl border border-color flex flex-col z-50 text-on-panel`}
+                className={`fixed top-1/2 left-1/2 bg-primary rounded-xl shadow-2xl flex flex-col z-50 text-on-panel panel-glow`}
                 style={{
                     width: responsiveWidth,
                     transform: transformStyle,

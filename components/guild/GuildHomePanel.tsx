@@ -466,13 +466,16 @@ const BossPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
 };
 
 const WarPanel: React.FC = () => (
-     <div className="bg-secondary p-4 rounded-lg flex flex-col items-center text-center opacity-50 cursor-not-allowed flex-grow">
+    <button 
+        onClick={() => window.location.hash = '#/guildwar'}
+        className="bg-secondary p-4 rounded-lg flex flex-col items-center text-center flex-grow transition-all hover:bg-tertiary/70"
+    >
         <h3 className="font-bold text-xl text-highlight mb-2">길드 전쟁</h3>
         <div className="w-24 h-24 bg-tertiary rounded-lg flex items-center justify-center my-2">
             <img src="/images/guild/guildwar.png" alt="길드 전쟁" className="w-20 h-20" />
         </div>
-        <span className="text-sm text-tertiary mt-auto">(준비중)</span>
-    </div>
+        <span className="text-sm text-secondary mt-auto">입장하기</span>
+    </button>
 );
 
 const GuildHomePanel: React.FC<GuildHomePanelProps> = ({ guild, myMemberInfo, onOpenMissions, onOpenResearch, onOpenShop, missionNotification, guildDonationAnimation }) => {

@@ -1,4 +1,3 @@
-
 import React, { useEffect, useMemo, useState } from 'react';
 import { UserWithStatus } from '../types/index.js';
 import Button from './Button.js';
@@ -58,7 +57,7 @@ const Header: React.FC = () => {
     const borderUrl = useMemo(() => BORDER_POOL.find(b => b.id === borderId)?.url, [borderId]);
 
     return (
-        <header className="flex-shrink-0 bg-primary/80 backdrop-blur-sm shadow-lg">
+        <header className="flex-shrink-0 bg-primary/80 backdrop-blur-sm shadow-lg border-b border-color">
             <div className="p-2 flex justify-between items-center gap-2 h-[60px]">
                 <div className="flex items-center gap-2 sm:gap-3 flex-shrink min-w-0">
                      <Avatar userId={currentUserWithStatus.id} userName={currentUserWithStatus.nickname} avatarUrl={avatarUrl} borderUrl={borderUrl} size={40} />

@@ -94,6 +94,8 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             volatileState.negotiations[negotiationId] = newNegotiation;
             const userStatusInfo = volatileState.userStatuses[user.id];
             userStatusInfo.status = UserStatus.Negotiating;
+            // FIX: Add missing 'stateEnteredAt' property.
+            userStatusInfo.stateEnteredAt = now;
             
             return { clientResponse: { newNegotiation, userStatusUpdate: userStatusInfo } };
         }
@@ -121,6 +123,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 const challengerStatus = volatileState.userStatuses[user.id];
                 if (challengerStatus && challengerStatus.status === UserStatus.Negotiating) {
                     challengerStatus.status = UserStatus.Waiting;
+                    challengerStatus.stateEnteredAt = now;
                 }
                 return { error: '상대방이 다른 대국 신청을 먼저 받았습니다. 잠시 후 다시 시도해주세요.' };
             }
@@ -145,7 +148,11 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             negotiation.deadline = now + 60000;
 
             if (negotiation.turnCount >= 10) {
-                volatileState.userStatuses[negotiation.challenger.id].status = UserStatus.Waiting;
+                const challengerStatus = volatileState.userStatuses[negotiation.challenger.id];
+                if (challengerStatus) {
+                    challengerStatus.status = UserStatus.Waiting;
+                    challengerStatus.stateEnteredAt = now;
+                }
                 delete volatileState.negotiations[negotiationId];
                 return { error: 'Negotiation failed after too many turns.' };
             }
@@ -168,8 +175,10 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             const challengerStatus = volatileState.userStatuses[challenger.id];
             if (!challengerStatus || challengerStatus.status !== UserStatus.Negotiating) {
                 delete volatileState.negotiations[negotiationId];
-                if (volatileState.userStatuses[user.id]) {
-                    volatileState.userStatuses[user.id].status = UserStatus.Waiting;
+                const myStatus = volatileState.userStatuses[user.id];
+                if (myStatus) {
+                    myStatus.status = UserStatus.Waiting;
+                    myStatus.stateEnteredAt = now;
                 }
                 return { error: '대국 신청자가 자리를 비워 신청이 취소되었습니다.' };
             }
@@ -183,9 +192,11 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 delete volatileState.negotiations[negotiationId];
                 if (volatileState.userStatuses[challenger.id]) {
                     volatileState.userStatuses[challenger.id].status = UserStatus.Waiting;
+                    volatileState.userStatuses[challenger.id].stateEnteredAt = now;
                 }
                 if (volatileState.userStatuses[user.id]) {
                     volatileState.userStatuses[user.id].status = UserStatus.Waiting;
+                    volatileState.userStatuses[user.id].stateEnteredAt = now;
                 }
                 return { error: '상대방의 액션 포인트가 부족하여 대국이 취소되었습니다.' };
             }
@@ -218,8 +229,10 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             const game = await initializeGame(negotiation, guilds);
             await db.saveGame(game);
             
-            volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id };
-            volatileState.userStatuses[game.player2.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id };
+            // FIX: Add missing 'stateEnteredAt' property to conform to UserStatusInfo
+            volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: now };
+            // FIX: Add missing 'stateEnteredAt' property to conform to UserStatusInfo
+            volatileState.userStatuses[game.player2.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: now };
             
             if (negotiation.rematchOfGameId) {
                 const originalGame = await db.getLiveGame(negotiation.rematchOfGameId);
@@ -233,8 +246,10 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             Object.values(volatileState.negotiations).forEach(negToCancel => {
                 if (negToCancel.id !== negotiationId && (playerIdsInGame.has(negToCancel.challenger.id) || playerIdsInGame.has(negToCancel.opponent.id))) {
                     const challengerId = negToCancel.challenger.id;
-                    if (volatileState.userStatuses[challengerId]?.status === UserStatus.Negotiating) {
-                        volatileState.userStatuses[challengerId].status = UserStatus.Waiting;
+                    const challengerStatusToUpdate = volatileState.userStatuses[challengerId];
+                    if (challengerStatusToUpdate?.status === UserStatus.Negotiating) {
+                        challengerStatusToUpdate.status = UserStatus.Waiting;
+                        challengerStatusToUpdate.stateEnteredAt = now;
                     }
                     delete volatileState.negotiations[negToCancel.id];
                 }
@@ -265,6 +280,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                         status.status = UserStatus.Waiting;
                         status.mode = mode;
                         delete status.gameId;
+                        status.stateEnteredAt = now;
                     }
                 });
             } else {
@@ -273,6 +289,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                     challengerStatus.status = UserStatus.Waiting;
                     challengerStatus.mode = mode;
                     challengerStatus.gameId = undefined;
+                    challengerStatus.stateEnteredAt = now;
                 }
             }
         
@@ -309,12 +326,17 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
         
             const game = await initializeGame(negotiation, guilds);
             
-            // FIX: Pass arguments to create GnuGo instance
-            gnuGoServiceManager.create(game.id, game.player2.playfulLevel, game.settings.boardSize, game.settings.komi);
+            const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
+            const displayLevel = isStrategic ? game.player2.strategyLevel : game.player2.playfulLevel;
+            const aiStage = Math.max(1, displayLevel / 5);
+            const gnuGoEngineLevel = Math.max(0, aiStage - 1);
+
+            await gnuGoServiceManager.create(game.id, gnuGoEngineLevel, game.settings.boardSize, game.settings.komi);
 
             await db.saveGame(game);
             
-            volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id };
+            // FIX: Add missing 'stateEnteredAt' property to conform to UserStatusInfo
+            volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: now };
             
             const draftNegId = Object.keys(volatileState.negotiations).find(id => {
                 const neg = volatileState.negotiations[id];
@@ -361,10 +383,12 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             if (volatileState.userStatuses[user.id]) {
                 volatileState.userStatuses[user.id].status = UserStatus.Negotiating;
                 volatileState.userStatuses[user.id].gameId = originalGameId;
+                volatileState.userStatuses[user.id].stateEnteredAt = now;
             }
             if (volatileState.userStatuses[opponent.id]) {
                 volatileState.userStatuses[opponent.id].status = UserStatus.Negotiating;
                 volatileState.userStatuses[opponent.id].gameId = originalGameId;
+                volatileState.userStatuses[opponent.id].stateEnteredAt = now;
             }
         
             return {};

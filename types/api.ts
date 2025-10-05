@@ -7,6 +7,7 @@ export interface UserStatusInfo {
     mode?: GameMode;
     gameId?: string;
     spectatingGameId?: string;
+    stateEnteredAt: number;
 }
 
 export interface AppState {

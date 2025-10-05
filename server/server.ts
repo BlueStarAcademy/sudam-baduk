@@ -1,6 +1,12 @@
 
+
+
+
+
+
+
 import 'dotenv/config';
-// FIX: Changed import to use express namespace directly to avoid type conflicts.
+// FIX: Import Request, Response, NextFunction types from express
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
@@ -37,10 +43,19 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// FIX: Explicitly type req and res with express types to solve property not found errors.
+// Extend Express Request type
+declare global {
+  namespace Express {
+    interface Request {
+      user?: User;
+    }
+  }
+}
+
+// FIX: Use namespace-qualified types for Express Request, Response, and NextFunction to resolve type errors.
 const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // For login/register, no session check is needed
-    if (req.path === '/api/auth/login' || req.path === '/api/auth/register') {
+    if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync') {
         return next();
     }
 
@@ -59,7 +74,7 @@ const userMiddleware = async (req: express.Request, res: express.Response, next:
 
         const user = await getUser(userId);
         if (user) {
-            (req as any).user = user;
+            req.user = user;
         } else {
             // User might have been deleted, but session still exists.
             return res.status(401).json({ message: 'User not found.' });
@@ -70,7 +85,7 @@ const userMiddleware = async (req: express.Request, res: express.Response, next:
 
 app.use(userMiddleware);
 
-// FIX: Explicitly type req and res with express types to solve property not found errors.
+// FIX: Use namespace-qualified types for Express Request and Response.
 app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
@@ -89,7 +104,6 @@ app.post('/api/auth/register', async (req: express.Request, res: express.Respons
 
         const newUser = createDefaultUser(`user-${globalThis.crypto.randomUUID()}`, username, nickname, false);
         await createUser(newUser);
-        // FIX: Hash password and provide correct arguments to createUserCredentials.
         const salt = crypto.randomBytes(16).toString('hex');
         const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
         await createUserCredentials(username, hash, salt, newUser.id);
@@ -103,50 +117,115 @@ app.post('/api/auth/register', async (req: express.Request, res: express.Respons
     }
 });
 
-// FIX: Explicitly type req and res with express types to solve property not found errors.
+// FIX: Use namespace-qualified types for Express Request and Response.
 app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password are required.' });
+        return res.status(400).json({ message: '아이디와 비밀번호를 모두 입력해주세요.' });
     }
     try {
         const credentials = await getUserCredentials(username);
-        if (!credentials || !credentials.hash || !credentials.salt) {
-            return res.status(401).json({ message: 'Invalid username or password.' });
+        if (!credentials || !credentials.hash) {
+            return res.status(401).json({ message: '잘못된 아이디 또는 비밀번호입니다.' });
+        }
+
+        if (!credentials.salt) {
+            console.warn(`Login attempt for user ${username} with no salt. Account requires password update.`);
+            return res.status(401).json({ message: '보안 업데이트가 필요한 계정입니다. 관리자에게 문의해주세요.' });
         }
 
         const hashToCompare = crypto.pbkdf2Sync(password, credentials.salt, 10000, 64, 'sha512').toString('hex');
 
         if (credentials.hash !== hashToCompare) {
-            return res.status(401).json({ message: 'Invalid username or password.' });
+            return res.status(401).json({ message: '잘못된 아이디 또는 비밀번호입니다.' });
         }
 
         let user = await getUser(credentials.userId);
         if (!user) {
-            return res.status(404).json({ message: 'User not found.' });
+            return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
         }
         
         user = await resetAndGenerateQuests(user);
         
+        const now = Date.now();
         const sessionId = randomUUID();
         volatileState.userSessions[user.id] = sessionId;
-        volatileState.userStatuses[user.id] = { status: UserStatus.Online };
+        volatileState.userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
 
         res.json({ user, sessionId });
     } catch (error: any) {
-        res.status(500).json({ message: error.message });
+        console.error(`[Login Error] for user ${username}:`, error);
+        res.status(500).json({ message: 'A server error occurred during login.' });
     }
 });
 
-// FIX: Explicitly type req and res with express types to solve property not found errors.
+// FIX: Use namespace-qualified types for Express Request and Response.
+app.post('/api/auth/sync', async (req: express.Request, res: express.Response) => {
+    const { session } = req.body;
+    if (!session || !session.user) {
+        return res.status(400).json({ message: 'Session data is required.' });
+    }
+
+    const supabaseUser = session.user;
+    const kakaoIdentity = supabaseUser.identities?.find((id: any) => id.provider === 'kakao');
+
+    if (!kakaoIdentity) {
+        return res.status(400).json({ message: 'Kakao identity not found in session.' });
+    }
+
+    const kakaoId = kakaoIdentity.id;
+
+    try {
+        let user = await db.getUserByKakaoId(kakaoId);
+        
+        if (!user) {
+            // User does not exist, create a new one.
+            const nickname = supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '카카오 유저';
+            
+            // Ensure nickname is unique
+            let uniqueNickname = nickname;
+            let existingByNickname = await db.getUserByNickname(uniqueNickname);
+            let counter = 1;
+            while(existingByNickname) {
+                uniqueNickname = `${nickname}${counter}`;
+                existingByNickname = await db.getUserByNickname(uniqueNickname);
+                counter++;
+            }
+
+            user = createDefaultUser(
+                `user-${randomUUID()}`, 
+                `kakao_${kakaoId}`, 
+                uniqueNickname, 
+                false, 
+                kakaoId
+            );
+            await db.createUser(user);
+        }
+        
+        user = await resetAndGenerateQuests(user);
+        
+        const now = Date.now();
+        const sessionId = randomUUID();
+        volatileState.userSessions[user.id] = sessionId;
+        volatileState.userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
+
+        res.json({ user, sessionId });
+
+    } catch (error: any) {
+        console.error('Error during user sync:', error);
+        res.status(500).json({ message: 'Failed to sync user.' });
+    }
+});
+
+// FIX: Use namespace-qualified types for Express Request and Response.
 app.post('/api/state', async (req: express.Request, res: express.Response) => {
-    const user = (req as any).user as User;
+    const user = req.user;
     let userStatus: UserStatusInfo | undefined;
     if (user) {
         volatileState.userConnections[user.id] = Date.now();
         userStatus = volatileState.userStatuses[user.id];
         if (!userStatus) {
-            userStatus = { status: UserStatus.Online };
+            userStatus = { status: UserStatus.Online, stateEnteredAt: Date.now() };
             volatileState.userStatuses[user.id] = userStatus;
         }
     }
@@ -162,12 +241,10 @@ app.post('/api/state', async (req: express.Request, res: express.Response) => {
     res.json({ ...data, userStatuses: volatileState.userStatuses, negotiations: volatileState.negotiations, waitingRoomChats: volatileState.waitingRoomChats, gameChats: volatileState.gameChats });
 });
 
-// FIX: Explicitly type req and res with express types to solve property not found errors.
+// FIX: Use namespace-qualified types for Express Request and Response.
 app.post('/api/action', async (req: express.Request, res: express.Response) => {
-    const user = (req as any).user as User;
+    const user = req.user;
     if (!user) {
-        // For beacon calls on logout, user might not be attached if session check fails.
-        // We still need to process the logout.
         if (req.body.type === 'LOGOUT' && req.body.userId) {
             console.log(`Processing beacon logout for user ${req.body.userId}`);
             delete volatileState.userConnections[req.body.userId];
@@ -209,7 +286,7 @@ const startServer = async () => {
         try {
             const allActiveGames = await db.getAllActiveGames();
             const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
-            const updatedGames = await gameModes.updateGameStates(allActiveGames, Date.now(), guilds);
+            const updatedGames = await gameModes.updateGameStates(allActiveGames, Date.now(), volatileState, guilds);
             for (const game of updatedGames) {
                 await db.saveGame(game);
             }
@@ -221,19 +298,40 @@ const startServer = async () => {
     // Volatile state cleanup & User state updates
     setInterval(async () => {
         const now = Date.now();
-        
-        const thirtyMinutes = 30 * 60 * 1000;
+        const CONNECTION_TIMEOUT_MS = 60 * 1000; // 60 seconds
+        const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+
+        // Cleanup disconnected users & check for idle users
         for (const userId in volatileState.userConnections) {
             const lastSeen = volatileState.userConnections[userId];
+            if (now - lastSeen > CONNECTION_TIMEOUT_MS) {
+                const userStatus = volatileState.userStatuses[userId];
+                // CRITICAL FIX: Do NOT time out users who are currently in a game.
+                // The game itself has its own timers (byoyomi, etc.) which are the only
+                // timers that should apply during a match.
+                if (userStatus?.status === UserStatus.InGame) {
+                    continue; // Skip to the next user in the loop
+                }
+                
+                console.log(`[Cleanup] User ${userId} connection timed out. Setting to offline.`);
+                delete volatileState.userConnections[userId];
+                delete volatileState.userStatuses[userId];
+            }
+        }
+        
+        for (const userId in volatileState.userStatuses) {
             const userStatus = volatileState.userStatuses[userId];
-
-            // If user is 'waiting' and hasn't polled in 30 minutes, set to 'resting'
-            if (userStatus?.status === UserStatus.Waiting && (now - lastSeen) > thirtyMinutes) {
-                console.log(`[Idle] User ${userId} idle for 30 mins in waiting room. Setting to Resting.`);
-                userStatus.status = UserStatus.Resting;
+            if (userStatus.status === UserStatus.Waiting && userStatus.stateEnteredAt) {
+                if (now - userStatus.stateEnteredAt > IDLE_TIMEOUT_MS) {
+                    console.log(`[Idle Check] User ${userId} idle in waiting room. Setting status to Resting.`);
+                    userStatus.status = UserStatus.Resting;
+                    userStatus.stateEnteredAt = now; // Update timestamp for the new state
+                }
             }
         }
 
+
+        // Cleanup expired negotiations
         for (const negId in volatileState.negotiations) {
             if (now > volatileState.negotiations[negId].deadline) {
                 const neg = volatileState.negotiations[negId];

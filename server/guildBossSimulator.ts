@@ -3,7 +3,7 @@ import { User, Guild, GuildBossInfo, QuestReward, MannerEffects, GuildResearchId
 import { GUILD_BOSSES, GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index.js';
 import { BOSS_SKILL_ICON_MAP, GUILD_ATTACK_ICON, GUILD_RESEARCH_REGEN_IMG, GUILD_RESEARCH_HEAL_BLOCK_IMG, GUILD_RESEARCH_IGNITE_IMG } from '../assets.js';
 import { calculateUserEffects } from '../utils/statUtils.js';
-import { calculateTotalStats } from '../services/statService.js';
+import { calculateTotalStats } from './services/statService.js';
 
 // Define and export types locally
 export interface BattleLogEntry {

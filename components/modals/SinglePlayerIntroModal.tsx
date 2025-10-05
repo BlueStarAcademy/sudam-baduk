@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { LiveGameSession, GameMode, GameType, Player } from '../../types/index.js';
 import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants/index.js';
 import { BLACK_PATTERN_STONE_IMG, WHITE_PATTERN_STONE_IMG } from '../../assets.js';
@@ -14,7 +13,6 @@ const gameTypeKorean: Record<GameType, string> = {
     'capture': '따내기',
     'survival': '살리기',
     'speed': '스피드',
-    // FIX: Add missile and hidden to gameTypeKorean map
     'missile': '미사일',
     'hidden': '히든'
 };
@@ -31,6 +29,14 @@ const SinglePlayerIntroModal: React.FC<SinglePlayerIntroModalProps> = ({ session
     const stageInfo = isTower
         ? TOWER_STAGES.find(s => s.id === session.stageId)
         : SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId);
+
+    const [isConfirming, setIsConfirming] = useState(false);
+
+    const handleConfirmClick = () => {
+        if (isConfirming) return;
+        setIsConfirming(true);
+        onConfirm();
+    };
 
     if (!stageInfo) return null;
 
@@ -108,8 +114,8 @@ const SinglePlayerIntroModal: React.FC<SinglePlayerIntroModalProps> = ({ session
                 <h2 className="text-2xl font-bold text-highlight mb-2">{title}</h2>
                 <p className="text-secondary mb-4">{description}</p>
                 {content}
-                <Button onClick={onConfirm} className="w-full mt-6">
-                    대국 시작
+                <Button onClick={handleConfirmClick} disabled={isConfirming} className="w-full mt-6">
+                    {isConfirming ? '시작 중...' : '대국 시작'}
                 </Button>
             </div>
         </div>

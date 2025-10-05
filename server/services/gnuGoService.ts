@@ -7,19 +7,13 @@ import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove, Move }
 import * as types from '../../types/index.js';
 import { fileURLToPath } from 'url';
 import * as db from '../db.js';
-import { processMove } from '../goLogic.js';
+import { processMove } from '../../utils/goLogic.js';
+import process from 'process';
+
 
 // --- Configuration ---
-// These paths should be configured for your environment.
-// Based on user's log, assuming this structure.
-const KATAGO_PATH = 'c:/katago/katago.exe';
-const MODEL_PATH = 'c:/katago/kata1-b28c512nbt-s9853922560-d5031756885.bin.gz';
-const CONFIG_PATH = path.resolve('server/temp_katago_config.cfg');
-const KATAGO_HOME_PATH = path.resolve('server/katago_home');
-
 const LETTERS = "ABCDEFGHJKLMNOPQRST";
 
-// FIX: Export pointToGnuGoMove to be used in other modules.
 export const pointToGnuGoMove = (move: Point, boardSize: number): string => {
     if (move.x === -1 || move.y === -1) {
         return 'pass';
@@ -50,10 +44,16 @@ class GnuGoInstance {
     private callbacks = new Map<symbol, (line: string) => void>();
     private isOperational = false;
     private gameId: string;
-    private isInitialized = false;
+    private initialStones: { x: number, y: number, player: Player }[] = [];
+    private boardSize: number;
+    private komi: number;
+    private level: number;
 
-    constructor(gameId: string) {
+    constructor(gameId: string, level: number, boardSize: number, komi: number, initialBoardState?: types.BoardState) {
         this.gameId = gameId;
+        this.boardSize = boardSize;
+        this.komi = komi;
+        this.level = level;
         const isWindows = process.platform === 'win32';
         const exeName = isWindows ? 'gnugo.exe' : 'gnugo';
         
@@ -107,18 +107,74 @@ class GnuGoInstance {
             console.error(`[GnuGoInstance ${this.gameId}] process error: ${err.message}`);
             this.isOperational = false;
         });
-    }
-    
-    async init(level: number, boardSize: number, komi: number) {
-        if (this.isInitialized) return;
-        await this.sendCommand(`boardsize ${boardSize}`);
-        await this.sendCommand(`komi ${komi}`);
-        await this.sendCommand(`level ${level}`);
-        await this.sendCommand('clear_board');
-        this.isInitialized = true;
-        console.log(`[GnuGoInstance ${this.gameId}] Initialized with level ${level}, boardsize ${boardSize}, komi ${komi}`);
+
+        if (initialBoardState) {
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    const player = initialBoardState[y][x];
+                    if (player !== Player.None) {
+                        this.initialStones.push({ x, y, player });
+                    }
+                }
+            }
+        }
+
+        this.setupBoard()
+            .then(() => console.log(`[GnuGoInstance ${this.gameId}] Initialized with level ${level}, boardsize ${boardSize}, komi ${komi}`))
+            .catch(e => console.error(`[GnuGoInstance ${this.gameId}] Failed to initialize board`, e));
     }
 
+    private async setupBoard(): Promise<void> {
+        await this.sendCommand(`boardsize ${this.boardSize}`);
+        await this.sendCommand(`komi ${this.komi}`);
+        await this.sendCommand(`level ${this.level}`);
+        await this.sendCommand('clear_board');
+        
+        if (this.initialStones.length > 0) {
+            console.log(`[GnuGoInstance ${this.gameId}] Setting up ${this.initialStones.length} initial stones via SGF.`);
+            
+            const sgfHeader = `(;GM[1]FF[4]CA[UTF-8]AP[SUDAM]RU[Japanese]SZ[${this.boardSize}]KM[${this.komi}]`;
+            
+            const blackStones = this.initialStones.filter(s => s.player === Player.Black);
+            const whiteStones = this.initialStones.filter(s => s.player === Player.White);
+
+            let sgfBody = '';
+            const sgfCoord = (p: Point) => `${String.fromCharCode(97 + p.x)}${String.fromCharCode(97 + p.y)}`;
+
+            if (blackStones.length > 0) {
+                sgfBody += 'AB' + blackStones.map(s => `[${sgfCoord(s)}]`).join('');
+            }
+            if (whiteStones.length > 0) {
+                sgfBody += 'AW' + whiteStones.map(s => `[${sgfCoord(s)}]`).join('');
+            }
+            
+            // Set the next player to Black, as this is an initial setup.
+            sgfBody += 'PL[B]';
+            
+            const sgfContent = sgfHeader + sgfBody + ')';
+            
+            const tempDir = os.tmpdir();
+            const tempFilePath = path.join(tempDir, `gnugo_setup_${this.gameId}_${randomUUID()}.sgf`);
+
+            try {
+                fs.writeFileSync(tempFilePath, sgfContent);
+                // GnuGo might need path with forward slashes even on Windows for GTP
+                const gtpPath = tempFilePath.replace(/\\/g, '/');
+                await this.sendCommand(`loadsgf ${gtpPath}`);
+            } catch (err) {
+                console.error(`[GnuGoInstance ${this.gameId}] Error during SGF setup:`, err);
+                throw err;
+            } finally {
+                try {
+                    fs.unlinkSync(tempFilePath);
+                } catch (unlinkErr) {
+                    if ((unlinkErr as NodeJS.ErrnoException).code !== 'ENOENT') {
+                        console.error(`[GnuGoInstance ${this.gameId}] Failed to delete temp SGF file:`, unlinkErr);
+                    }
+                }
+            }
+        }
+    }
 
     sendCommand(cmd: string): Promise<string> {
         return new Promise((resolve, reject) => {
@@ -162,24 +218,14 @@ class GnuGoInstance {
         let shouldAvoidPassing = false;
     
         if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
-            // By default, AI should not pass, especially in games that end by turn count.
             shouldAvoidPassing = true;
-
-            // EXCEPTION 1: Allow passing in Capture Go mode, as it has a different win condition.
-            if (game.mode === types.GameMode.Capture) {
-                shouldAvoidPassing = false;
-            }
-            
-            // EXCEPTION 2: Allow passing if the human has already passed, to end the game by agreement.
+    
             if (game.passCount === 1) {
                 shouldAvoidPassing = false;
             }
-            
-            // EXCEPTION 3: Allow passing in specific SP/Tower missions where the goal is met and scoring isn't needed.
-            if ((game.isSinglePlayer || game.isTowerChallenge) && (game.gameType === 'capture' || game.gameType === 'survival')) {
+            else if ((game.isSinglePlayer || game.isTowerChallenge) && (game.gameType === 'capture' || game.gameType === 'survival')) {
                 let goalMet = false;
                 if (game.gameType === 'capture') {
-                    // Check if either player has met their capture target
                     const blackTarget = game.effectiveCaptureTargets?.[Player.Black] || Infinity;
                     const whiteTarget = game.effectiveCaptureTargets?.[Player.White] || Infinity;
                     if (game.captures[Player.Black] >= blackTarget || game.captures[Player.White] >= whiteTarget) {
@@ -197,9 +243,8 @@ class GnuGoInstance {
             }
         }
     
-        // Always avoid resigning. If passing is suggested and should be avoided, find an alternative move.
         if (/resign/i.test(suggestedMoveStr) || (shouldAvoidPassing && /pass/i.test(suggestedMoveStr))) {
-            console.log(`[GnuGoInstance ${this.gameId}] GnuGo suggested pass/resign, but rules require playing on. Checking for alternatives.`);
+            console.log(`[GnuGoInstance ${this.gameId}] GnuGo suggested pass/resign or rules forbid it. Checking for alternatives.`);
             try {
                 const legalMovesStr = await this.sendCommand(`list_moves`);
                 const legalMoves = legalMovesStr.split(' ').filter(m => m.trim() !== '' && !/pass/i.test(m));
@@ -209,7 +254,6 @@ class GnuGoInstance {
                     console.log(`[GnuGoInstance ${this.gameId}] Overriding with alternative move: ${alternativeMove}`);
                     finalMoveStr = alternativeMove;
                 } else {
-                    // If no other moves are possible, AI has no choice but to pass.
                     console.log(`[GnuGoInstance ${this.gameId}] No other legal moves available, allowing pass.`);
                     finalMoveStr = 'pass';
                 }
@@ -222,59 +266,33 @@ class GnuGoInstance {
         return gnuGoMoveToPoint(finalMoveStr, boardSize);
     }
     
-    async resync(moveHistory: Move[], boardSize: number, komi: number): Promise<void> {
-        console.log(`[GnuGoInstance ${this.gameId}] Starting SGF-based resync...`);
+    async resync(moveHistory: Move[], boardSize: number, komi: number, newInitialBoardState?: types.BoardState): Promise<void> {
+        console.log(`[GnuGoInstance ${this.gameId}] Starting resync with ${moveHistory.length} moves...`);
+        this.boardSize = boardSize;
+        this.komi = komi;
         
-        // Reconstruct the board state from move history
-        let tempBoard = Array(boardSize).fill(null).map(() => Array(boardSize).fill(Player.None));
-        let tempKoInfo: LiveGameSession['koInfo'] = null;
-    
-        for (let i = 0; i < moveHistory.length; i++) {
-            const move = moveHistory[i];
-            if (move.x === -1 && move.y === -1) continue; // Skip passes for board state
-    
-            // processMove is a pure function, safe to use here
-            const result = processMove(tempBoard, move, tempKoInfo, i);
-            if (result.isValid) {
-                tempBoard = result.newBoardState;
-                tempKoInfo = result.newKoInfo;
-            } else {
-                console.error(`[GnuGo Resync ${this.gameId}] Invalid move in history at index ${i}: ${JSON.stringify(move)}. SGF state may be corrupt.`);
-            }
-        }
-    
-        // Now, set up this final board state in GnuGo using SGF
-        let sgfString = `(;GM[1]FF[4]CA[UTF-8]AP[SUDAM]RU[Japanese]SZ[${boardSize}]KM[${komi}]`;
-        const blackStones: string[] = [];
-        const whiteStones: string[] = [];
-    
-        for (let y = 0; y < boardSize; y++) {
-            for (let x = 0; x < boardSize; x++) {
-                const player = tempBoard[y][x];
-                const coord = `[${String.fromCharCode(97 + x)}${String.fromCharCode(97 + y)}]`;
-                if (player === Player.Black) {
-                    blackStones.push(coord);
-                } else if (player === Player.White) {
-                    whiteStones.push(coord);
+        if (newInitialBoardState) {
+            this.initialStones = [];
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    const player = newInitialBoardState[y][x];
+                    if (player !== Player.None) {
+                        this.initialStones.push({ x, y, player });
+                    }
                 }
             }
         }
-    
-        if (blackStones.length > 0) sgfString += `AB${blackStones.join('')}`;
-        if (whiteStones.length > 0) sgfString += `AW${whiteStones.join('')}`;
+
+        // Re-run the board setup which includes clearing and applying initial stones.
+        await this.setupBoard();
         
-        const nextPlayer = moveHistory.length > 0 ? (moveHistory[moveHistory.length - 1].player === Player.Black ? Player.White : Player.Black) : Player.Black;
-        sgfString += `PL[${nextPlayer === Player.Black ? 'B' : 'W'}]`;
-        sgfString += ')';
-    
-        const tempFilePath = path.join(os.tmpdir(), `sudam-resync-${this.gameId}.sgf`);
-        try {
-            fs.writeFileSync(tempFilePath, sgfString);
-            await this.sendCommand(`loadsgf ${tempFilePath}`);
-            console.log(`[GnuGoInstance ${this.gameId}] Resync complete from board state with ${moveHistory.length} moves.`);
-        } finally {
-            if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+        // Then apply the moves from history
+        for (const move of moveHistory) {
+            const color = move.player === Player.Black ? 'black' : 'white';
+            const moveStr = pointToGnuGoMove({x: move.x, y: move.y}, boardSize);
+            await this.sendCommand(`play ${color} ${moveStr}`);
         }
+        console.log(`[GnuGoInstance ${this.gameId}] Resync complete with ${this.initialStones.length} initial stones and ${moveHistory.length} moves.`);
     }
 
     kill() {
@@ -288,14 +306,13 @@ class GnuGoInstance {
 class GnuGoManager {
     private games: Map<string, GnuGoInstance> = new Map();
 
-    async create(gameId: string, level: number, boardSize: number, komi: number): Promise<GnuGoInstance | null> {
+    create(gameId: string, level: number, boardSize: number, komi: number, initialBoardState?: types.BoardState): GnuGoInstance | null {
         if (this.games.has(gameId)) {
             console.warn(`[GnuGoManager] GnuGo instance for game ${gameId} already exists. Killing old one.`);
             this.games.get(gameId)?.kill();
         }
         try {
-            const instance = new GnuGoInstance(gameId);
-            await instance.init(level, boardSize, komi);
+            const instance = new GnuGoInstance(gameId, level, boardSize, komi, initialBoardState);
             this.games.set(gameId, instance);
             return instance;
         } catch (error) {
@@ -330,7 +347,7 @@ class GnuGoManager {
                 try {
                     const game = await db.getLiveGame(gameId);
                     if(game) {
-                        const newInstance = await this.create(gameId, game.player2.playfulLevel, game.settings.boardSize, game.finalKomi ?? game.settings.komi);
+                        const newInstance = this.create(gameId, game.player2.playfulLevel, game.settings.boardSize, game.finalKomi ?? game.settings.komi, game.boardState);
                         if (newInstance) {
                             // After creating, we must immediately bring it up to state.
                             await newInstance.resync(game.moveHistory, game.settings.boardSize, game.finalKomi ?? game.settings.komi);

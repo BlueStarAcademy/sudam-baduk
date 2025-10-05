@@ -118,7 +118,7 @@ const LobbyCard: React.FC<{
     return (
         <div 
             onClick={available ? onEnter : undefined}
-            className={`bg-panel border border-color rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${shadowColor} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} text-on-panel h-full`}
+            className={`bg-panel text-on-panel rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${shadowColor} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} h-full panel-glow`}
         >
             {children ? <div className="flex flex-col h-full">{children}</div> : (
                 <>
@@ -153,7 +153,7 @@ const MobileFullWidthCard: React.FC<{
     children?: React.ReactNode;
 }> = ({ title, imageUrl, onClick, notification, hoverColorClass, children }) => {
     return (
-        <div onClick={onClick} className={`relative bg-panel border border-color rounded-lg p-3 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${hoverColorClass} cursor-pointer text-on-panel h-28`}>
+        <div onClick={onClick} className={`relative bg-panel rounded-lg p-3 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${hoverColorClass} cursor-pointer text-on-panel h-28 panel-glow`}>
             {notification && (
                 <div className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-primary z-20"></div>
             )}
@@ -315,7 +315,7 @@ const Profile: React.FC<ProfileProps> = () => {
     }, [handlers, currentUserWithStatus]);
 
     const EquipmentPanelContent = useMemo(() => (
-        <div className="bg-panel border border-color text-on-panel rounded-lg p-2 flex flex-col gap-2 h-full">
+        <div className="bg-panel panel-glow text-on-panel rounded-lg p-2 flex flex-col gap-2 h-full">
             <h3 className="text-center font-semibold text-secondary text-sm">장착 장비</h3>
             <div className="grid grid-cols-3 gap-2">
                 {(['fan', 'top', 'bottom', 'board', 'bowl', 'stones'] as EquipmentSlot[]).map(slot => {
@@ -481,13 +481,13 @@ const Profile: React.FC<ProfileProps> = () => {
                 <div className="hidden lg:flex flex-col h-full gap-2">
                     <div className="flex flex-row gap-2 h-[45%]">
                         <div className="lg:w-[380px] xl:w-[420px] flex-shrink-0 flex flex-col">
-                           <div className="bg-panel border border-color text-on-panel rounded-lg p-2 flex flex-col gap-1 h-full">
+                           <div className="bg-panel panel-glow text-on-panel rounded-lg p-2 flex flex-col gap-1 h-full">
                                 {ProfilePanelContent}
                            </div>
                         </div>
                          <div className="flex-1 flex flex-row gap-2 min-w-0">
                              <div className="w-[280px] flex-shrink-0 h-full">{EquipmentPanelContent}</div>
-                             <div className="flex-1 bg-panel border border-color text-on-panel rounded-lg min-h-0 flex flex-col">
+                             <div className="flex-1 bg-panel panel-glow text-on-panel rounded-lg min-h-0 flex flex-col">
                                 <RankingBoard allUsers={allUsers} currentUser={currentUserWithStatus!} guilds={guilds} />
                              </div>
                         </div>
@@ -496,7 +496,7 @@ const Profile: React.FC<ProfileProps> = () => {
                         </div>
                     </div>
                     <div className="flex-1 flex flex-row gap-2 min-h-0">
-                        <div className="w-full lg:w-[30%] flex-shrink-0 bg-panel border border-color text-on-panel rounded-lg min-h-0 flex flex-col">
+                        <div className="w-full lg:w-[30%] flex-shrink-0 bg-panel panel-glow text-on-panel rounded-lg min-h-0 flex flex-col">
                             <ChatWindow messages={globalChat} mode="global" onAction={handlers.handleAction} onViewUser={handlers.openViewingUser} locationPrefix="[홈]" />
                         </div>
                         <div className="flex-1 min-h-0 flex flex-col">
@@ -507,7 +507,7 @@ const Profile: React.FC<ProfileProps> = () => {
                                 <div className="col-span-3 row-span-2">
                                     <div 
                                         onClick={onSelectSinglePlayerLobby}
-                                        className="relative bg-panel border border-color rounded-lg flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-green-500/30 cursor-pointer text-on-panel h-full overflow-hidden"
+                                        className="relative bg-panel panel-glow rounded-lg flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-green-500/30 cursor-pointer text-on-panel h-full overflow-hidden"
                                     >
                                         {hasFullMissionReward && (
                                             <div className="absolute top-2 right-2 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-primary z-20"></div>
@@ -531,7 +531,7 @@ const Profile: React.FC<ProfileProps> = () => {
                                 <div className="col-span-3 row-span-2">
                                     <div
                                         onClick={() => window.location.hash = '#/towerchallenge'}
-                                        className="relative bg-panel border border-color rounded-lg flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-red-500/30 cursor-pointer text-on-panel h-full overflow-hidden"
+                                        className="relative bg-panel panel-glow rounded-lg flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg hover:shadow-red-500/30 cursor-pointer text-on-panel h-full overflow-hidden"
                                     >
                                         <img src={TOWER_CHALLENGE_LOBBY_IMG} alt="도전의 탑" className="absolute inset-0 w-full h-full object-cover" />
                                         <div className="absolute inset-0 w-full h-full bg-gradient-to-t from-black/80 via-black/50 to-transparent"></div>
@@ -552,7 +552,7 @@ const Profile: React.FC<ProfileProps> = () => {
                 {/* --- MOBILE & TABLET LAYOUT --- */}
                 <div className="lg:hidden flex flex-col flex-1 min-h-0 gap-2 relative p-2">
                     <div className="flex flex-row gap-2 items-stretch">
-                        <div className="flex-1 bg-panel border border-color text-on-panel rounded-lg p-2 flex flex-col gap-1">
+                        <div className="flex-1 bg-panel panel-glow text-on-panel rounded-lg p-2 flex flex-col gap-1">
                             {ProfilePanelContent}
                         </div>
                         <div className="w-20 flex-shrink-0">

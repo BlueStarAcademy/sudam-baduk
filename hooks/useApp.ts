@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 // FIX: Separate type and value imports
 import { GameMode, UserStatus, ShopTab, InventoryTab } from '../types/index';
+// FIX: Removed redundant `type` modifier from named imports within an `import type` statement to resolve a syntax error.
+import type { AuthChangeEvent, Session, UserIdentity } from 'https://aistudiocdn.com/@supabase/supabase-js@2.58.0';
 import type { User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult, SinglePlayerMissionInfo } from '../types/index';
 // FIX: Corrected import path for audioService.
 import { audioService } from '../services/audioService';
@@ -14,6 +16,7 @@ import {
 } from '../constants/index';
 import { defaultSettings } from './useAppSettings';
 import { getMissionInfoWithLevel } from '../utils/questUtils';
+import { supabase } from '../services/supabase';
 
 function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T | undefined>(undefined);
@@ -27,32 +30,6 @@ export const useApp = () => {
     // --- State Management ---
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
-
-    // Refs to hold current user/session for unload handler to prevent stale closures
-    const stateForUnloadRef = useRef({ currentUser, sessionId });
-    useEffect(() => {
-        stateForUnloadRef.current = { currentUser, sessionId };
-    }, [currentUser, sessionId]);
-
-    // Logout on browser/tab close
-    useEffect(() => {
-        const handleUnload = () => {
-            const { currentUser: user, sessionId: sId } = stateForUnloadRef.current;
-            if (user && sId) {
-                // Use navigator.sendBeacon for reliable background sending on page exit.
-                const data = JSON.stringify({
-                    type: 'LOGOUT',
-                    userId: user.id,
-                    sessionId: sId,
-                });
-                navigator.sendBeacon('/api/action', new Blob([data], { type: 'application/json' }));
-            }
-        };
-        window.addEventListener('unload', handleUnload);
-        return () => {
-            window.removeEventListener('unload', handleUnload);
-        };
-    }, []); // Empty dependency array means this effect runs once on mount.
 
     useEffect(() => {
         try {
@@ -275,12 +252,9 @@ export const useApp = () => {
         if (isLoggingOut.current) return;
         isLoggingOut.current = true;
         
-        // Await server confirmation before clearing local state to prevent race conditions
-        await handleAction({ type: 'LOGOUT' });
-
-        // Reset client-side state
-        doLogoutClientSide();
-    }, [handleAction, doLogoutClientSide]);
+        await supabase.auth.signOut();
+        // The onAuthStateChange listener will handle the rest of the logout process.
+    }, []);
     
     useEffect(() => {
         const handler = setTimeout(() => {
@@ -397,7 +371,8 @@ export const useApp = () => {
     const currentUserWithStatus: UserWithStatus | null = useMemo(() => {
         if (!currentUser) return null;
         const statusInfo = onlineUsers.find(u => u.id === currentUser.id);
-        return { ...currentUser, ...(statusInfo || { status: UserStatus.Online }) };
+        // FIX: Add stateEnteredAt to fallback object to conform to UserWithStatus type.
+        return { ...currentUser, ...(statusInfo || { status: UserStatus.Online, stateEnteredAt: Date.now() }) };
     }, [currentUser, onlineUsers]);
 
     const activeGame = useMemo(() => {
@@ -519,6 +494,59 @@ export const useApp = () => {
             localStorage.removeItem('sessionData');
         }
     }, [currentUser, sessionId]);
+
+    useEffect(() => {
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+            const currentKakaoId = currentUser?.kakaoId;
+            const newKakaoId = session?.user?.identities?.find((id: UserIdentity) => id.provider === 'kakao')?.id;
+            
+            if (event === 'SIGNED_IN' && session) {
+                // Prevent re-login if already logged in with the same user
+                if (currentKakaoId && currentKakaoId === newKakaoId) {
+                    return;
+                }
+                try {
+                    const response = await fetch('/api/auth/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ session }),
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Failed to sync user data.');
+                    }
+                    const { user, sessionId: newSessionId } = await response.json();
+                    login(user, newSessionId);
+                    window.location.hash = '#/profile'; // Redirect to profile on successful login
+                } catch (error: any) {
+                    console.error('Error during user sync:', error);
+                    showError(error.message);
+                    await supabase.auth.signOut();
+                }
+            } else if (event === 'SIGNED_OUT') {
+                if (isLoggingOut.current) { // Logout was initiated by user click
+                    await handleAction({ type: 'LOGOUT' });
+                    doLogoutClientSide();
+                }
+            }
+        });
+    
+        // Handle initial load with potential hash from Supabase redirect
+        const hash = window.location.hash;
+        if (hash.includes('access_token') && hash.includes('provider_token')) {
+            // Supabase client handles this automatically, but we might want to clear the hash for a cleaner URL
+            setTimeout(() => {
+                if (window.location.hash.includes('access_token')) {
+                    window.location.hash = '';
+                }
+            }, 500);
+        }
+    
+        return () => {
+            authListener?.subscription.unsubscribe();
+        };
+    }, [login, handleAction, doLogoutClientSide, currentUser?.kakaoId]);
+
 
     // --- State Polling ---
     useEffect(() => {
@@ -772,6 +800,8 @@ export const useApp = () => {
                 mode: statusInfo?.mode,
                 gameId: statusInfo?.gameId,
                 spectatingGameId: statusInfo?.spectatingGameId,
+                // FIX: Add stateEnteredAt to conform to UserWithStatus
+                stateEnteredAt: statusInfo?.stateEnteredAt || Date.now(),
             };
             setViewingUser(finalUser);
         }
@@ -787,6 +817,8 @@ export const useApp = () => {
                 mode: statusInfo?.mode,
                 gameId: statusInfo?.gameId,
                 spectatingGameId: statusInfo?.spectatingGameId,
+                // FIX: Add stateEnteredAt to conform to UserWithStatus
+                stateEnteredAt: statusInfo?.stateEnteredAt || Date.now(),
             };
             setModeratingUser(finalUser);
         }

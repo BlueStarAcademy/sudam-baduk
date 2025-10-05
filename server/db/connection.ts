@@ -1,6 +1,8 @@
 import pg from 'pg';
 import path from 'path';
 import { Player } from '../../types/index.js';
+// FIX: import process to use process.exit
+import process from 'process';
 
 const { Pool } = pg;
 

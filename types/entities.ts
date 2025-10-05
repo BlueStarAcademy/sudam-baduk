@@ -93,6 +93,8 @@ export interface UserWithStatus extends User {
     mode?: GameMode;
     gameId?: string;
     spectatingGameId?: string;
+    // FIX: Add stateEnteredAt to conform to UserStatusInfo
+    stateEnteredAt: number;
 }
 
 export interface PlayerForTournament {

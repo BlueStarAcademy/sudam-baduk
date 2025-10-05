@@ -60,13 +60,14 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
         return { error: 'Permission denied.' };
     }
 
+    const now = Date.now();
+
     switch (type) {
         case 'ADMIN_APPLY_SANCTION': {
             const { targetUserId, sanctionType, durationMinutes } = payload;
             const targetUser = await db.getUser(targetUserId);
             if (!targetUser) return { error: '대상 사용자를 찾을 수 없습니다.' };
 
-            const now = Date.now();
             const banUntil = now + durationMinutes * 60 * 1000;
 
             if (sanctionType === 'chat') {
@@ -140,10 +141,12 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
                 await db.saveGame(activeGame); // Save summary
                 
                 const opponentId = activeGame.player1.id === targetUserId ? activeGame.player2.id : activeGame.player1.id;
-                if(volatileState.userStatuses[opponentId]) {
-                    volatileState.userStatuses[opponentId].status = UserStatus.Waiting;
-                    volatileState.userStatuses[opponentId].mode = activeGame.mode;
-                    delete volatileState.userStatuses[opponentId].gameId;
+                const opponentStatus = volatileState.userStatuses[opponentId];
+                if(opponentStatus) {
+                    opponentStatus.status = UserStatus.Waiting;
+                    opponentStatus.mode = activeGame.mode;
+                    delete opponentStatus.gameId;
+                    opponentStatus.stateEnteredAt = now;
                 }
             }
 
@@ -348,16 +351,19 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
 
             await db.saveGame(game);
             
-            // Return players to the waiting room state
-            if (volatileState.userStatuses[game.player1.id]) {
-                volatileState.userStatuses[game.player1.id].status = UserStatus.Waiting;
-                volatileState.userStatuses[game.player1.id].mode = game.mode;
-                delete volatileState.userStatuses[game.player1.id].gameId;
+            const p1Status = volatileState.userStatuses[game.player1.id];
+            if (p1Status) {
+                p1Status.status = UserStatus.Waiting;
+                p1Status.mode = game.mode;
+                delete p1Status.gameId;
+                p1Status.stateEnteredAt = now;
             }
-            if (volatileState.userStatuses[game.player2.id]) {
-                volatileState.userStatuses[game.player2.id].status = UserStatus.Waiting;
-                volatileState.userStatuses[game.player2.id].mode = game.mode;
-                delete volatileState.userStatuses[game.player2.id].gameId;
+            const p2Status = volatileState.userStatuses[game.player2.id];
+            if (p2Status) {
+                p2Status.status = UserStatus.Waiting;
+                p2Status.mode = game.mode;
+                delete p2Status.gameId;
+                p2Status.stateEnteredAt = now;
             }
 
             await createAdminLog(user, 'force_delete_game', game.player1, { reason: "Admin forced game closure" }, backupData);
@@ -376,15 +382,19 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
 
             await summaryService.endGame(game, winnerEnum, WinReason.Resign);
 
-            if (volatileState.userStatuses[game.player1.id]) {
-                volatileState.userStatuses[game.player1.id].status = UserStatus.Waiting;
-                volatileState.userStatuses[game.player1.id].mode = game.mode;
-                delete volatileState.userStatuses[game.player1.id].gameId;
+            const p1Status = volatileState.userStatuses[game.player1.id];
+            if (p1Status) {
+                p1Status.status = UserStatus.Waiting;
+                p1Status.mode = game.mode;
+                delete p1Status.gameId;
+                p1Status.stateEnteredAt = now;
             }
-            if (volatileState.userStatuses[game.player2.id]) {
-                volatileState.userStatuses[game.player2.id].status = UserStatus.Waiting;
-                volatileState.userStatuses[game.player2.id].mode = game.mode;
-                delete volatileState.userStatuses[game.player2.id].gameId;
+            const p2Status = volatileState.userStatuses[game.player2.id];
+            if (p2Status) {
+                p2Status.status = UserStatus.Waiting;
+                p2Status.mode = game.mode;
+                delete p2Status.gameId;
+                p2Status.stateEnteredAt = now;
             }
             
             await createAdminLog(user, 'force_win', winnerUser, { gameId, winnerId }, null);

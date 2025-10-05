@@ -135,6 +135,14 @@ body {
   -ms-user-select: none;     /* IE10+/Edge */
   user-select: none;         /* Standard */
   -webkit-touch-callout: none; /* iOS Safari */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+
+.panel-glow {
+    border: 1px solid transparent;
+    border-image-slice: 1;
+    border-image-source: linear-gradient(to bottom right, rgb(var(--border-color) / 0.6), rgb(var(--border-color) / 0.1));
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.3), inset 0 1px 1px 0 rgb(255 255 255 / 0.03);
 }
 
 input, textarea {

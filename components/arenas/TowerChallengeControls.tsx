@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { GameProps, Player, ServerAction, Point, GameStatus, GameMode } from '../../types/index.js';
 import Button from '../Button.js';

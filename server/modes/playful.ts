@@ -21,7 +21,6 @@ export const initializePlayfulGame = async (game: LiveGameSession, neg: Negotiat
             break;
         case GameMode.Omok:
         case GameMode.Ttamok:
-            // FIX: Removed extra arguments not accepted by initializeOmok
             initializeOmok(game, neg, now);
             break;
     }

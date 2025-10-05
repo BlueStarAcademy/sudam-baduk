@@ -2,7 +2,7 @@
 
 import { LiveGameSession, Player, User, GameSummary, StatChange, GameMode, InventoryItem, SpecialStat, WinReason, SinglePlayerStageInfo, QuestReward, GameStatus, InventoryItemType, ItemGrade } from '../types/index.js';
 import * as db from './db.js';
-import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, MATERIAL_ITEMS } from '../constants/index.js';
+import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, MATERIAL_ITEMS, NO_CONTEST_MOVE_THRESHOLD } from '../constants/index.js';
 import { updateQuestProgress } from './questService.js';
 import * as mannerService from './services/mannerService.js';
 import { openEquipmentBox1, createItemFromTemplate } from './shop.js';
@@ -337,15 +337,68 @@ const processPlayerSummary = async (
 };
 
 export const processGameSummary = async (game: LiveGameSession): Promise<void> => {
-    const { winner, player1, player2, blackPlayerId, whitePlayerId, noContestInitiatorIds } = game;
+    const { winner, player1, player2, blackPlayerId, whitePlayerId, noContestInitiatorIds, mode, winReason, isAiGame, moveHistory } = game;
     if (!player1 || !player2) {
         console.error(`[Summary] Missing player data for game ${game.id}`);
         return;
     }
-    
-    const isDraw = winner === Player.None;
-    const isNoContest = game.gameStatus === 'no_contest';
 
+    const isEarlyGameAbort = !isAiGame && moveHistory.length < NO_CONTEST_MOVE_THRESHOLD * 2 && (winReason === WinReason.Resign || winReason === WinReason.Disconnect);
+
+    if (isEarlyGameAbort) {
+        console.log(`[Summary] Game ${game.id} is an early-game abort. Processing with penalties.`);
+
+        const p1IsWinner = (winner === Player.Black && player1.id === blackPlayerId) || (winner === Player.White && player1.id === whitePlayerId);
+        
+        const initiatorId = winReason === WinReason.Resign 
+            ? (p1IsWinner ? player2.id : player1.id)
+            : (p1IsWinner ? player2.id : player1.id);
+        
+        const initiator = await db.getUser(initiatorId);
+        const opponentId = player1.id === initiatorId ? player2.id : player1.id;
+        const opponent = await db.getUser(opponentId);
+
+        if (!initiator || !opponent) {
+             console.error(`[Summary] Could not find initiator or opponent for early abort penalty in game ${game.id}`);
+             return;
+        }
+
+        const initialMannerScore = initiator.mannerScore;
+        const initialRating = initiator.stats[mode]?.rankingScore || 1200;
+        
+        initiator.mannerScore = Math.max(0, initiator.mannerScore - NO_CONTEST_MANNER_PENALTY);
+        if (initiator.stats[mode]) {
+            initiator.stats[mode].rankingScore = Math.max(0, initialRating - NO_CONTEST_RANKING_PENALTY);
+        }
+        initiator.pendingPenaltyNotification = { type: 'no_contest', details: { mode, opponentNickname: opponent.nickname, penalty: NO_CONTEST_RANKING_PENALTY } };
+        
+        if (!game.summary) game.summary = {};
+
+        const baseSummary = {
+            xp: { initial: 0, change: 0, final: 0 },
+            level: { initial: 0, final: 0, progress: { initial: 0, final: 0, max: 0 } },
+            gold: 0, items: [], overallRecord: { wins: 0, losses: 0 }
+        };
+
+        game.summary[initiator.id] = {
+            ...baseSummary,
+            rating: { initial: initialRating, change: -NO_CONTEST_RANKING_PENALTY, final: initiator.stats[mode]?.rankingScore ?? initialRating },
+            manner: { initial: initialMannerScore, change: -NO_CONTEST_MANNER_PENALTY, final: initiator.mannerScore },
+        };
+        game.summary[opponent.id] = {
+            ...baseSummary,
+            rating: { initial: opponent.stats[mode]?.rankingScore || 1200, change: 0, final: opponent.stats[mode]?.rankingScore || 1200 },
+            manner: { initial: opponent.mannerScore, change: 0, final: opponent.mannerScore },
+        };
+
+        game.gameStatus = GameStatus.NoContest;
+        game.statsUpdated = true;
+
+        await db.updateUser(initiator);
+        await db.saveGame(game);
+        return;
+    }
+    
     const p1 = player1.id === aiUserId ? getAiUser(game.mode) : await db.getUser(player1.id);
     const p2 = player2.id === aiUserId ? getAiUser(game.mode) : await db.getUser(player2.id);
 
@@ -355,6 +408,9 @@ export const processGameSummary = async (game: LiveGameSession): Promise<void> =
         await db.saveGame(game);
         return;
     }
+
+    const isDraw = winner === Player.None;
+    const isNoContest = game.gameStatus === 'no_contest';
 
     const p1IsWinner = !isDraw && !isNoContest && ((winner === Player.Black && p1.id === blackPlayerId) || (winner === Player.White && p1.id === whitePlayerId));
     const p2IsWinner = !isDraw && !isNoContest && ((winner === Player.Black && p2.id === blackPlayerId) || (winner === Player.White && p2.id === whitePlayerId));

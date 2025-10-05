@@ -1,5 +1,3 @@
-
-
 import { type LiveGameSession, type AlkkagiStone, type Point, AlkkagiLayoutType, Player, AlkkagiPlacementType, type Negotiation, MythicStat, type VolatileState, type ServerAction, type User, type HandleActionResult, GameMode, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';

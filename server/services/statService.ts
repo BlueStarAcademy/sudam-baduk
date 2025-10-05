@@ -1,5 +1,9 @@
+
+
 // server/services/statService.ts
 import { User, CoreStat, Guild } from '../../types/index.js';
+// FIX: Export `calculateUserEffects` to make it available to other modules.
+export { calculateUserEffects } from '../../utils/statUtils.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
 
 export const calculateTotalStats = (user: User, guild: Guild | null): Record<CoreStat, number> => {

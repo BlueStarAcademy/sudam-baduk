@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GameMode } from '../types.js';
+import { GameMode } from '../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
 import Button from './Button.js';
 import { useAppContext } from '../hooks/useAppContext.js';
@@ -13,7 +13,7 @@ const GameCard: React.FC<{ mode: GameMode, description: string, image: string, a
 
     return (
         <div
-            className={`bg-panel text-on-panel rounded-lg p-3 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${hoverColorClass} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            className={`bg-panel text-on-panel rounded-lg p-3 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${hoverColorClass} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} panel-glow`}
             onClick={available ? onSelect : undefined}
         >
             <div className="w-full aspect-[4/3] bg-tertiary rounded-md mb-2 overflow-hidden shadow-inner">
@@ -37,6 +37,34 @@ const GameCard: React.FC<{ mode: GameMode, description: string, image: string, a
         </div>
     );
 };
+
+const LobbyRules: React.FC = () => {
+  const rules = [
+    "새로고침 해도 로그아웃 되지 않습니다.",
+    "브라우저를 끄면 자동으로 로그아웃 처리됩니다.",
+    "한 PC에서는 한 아이디만 동시 접속 가능합니다.",
+    "다른 아이디 로그인 시, 기존 아이디는 로그아웃됩니다.",
+    "동일 아이디로 다른 기기에서 로그인 시, 기존 기기는 로그아웃됩니다.",
+    "경기 중 재접속 시, 해당 경기로 자동 복귀합니다.",
+    "경기 중 연결이 끊어지면 180초(3분)의 재접속 대기시간이 주어집니다.",
+    "경기 중 3회 이상 연결이 끊어지면 기권패 처리됩니다.",
+    "경기 초반(20수 이내) 고의적인 기권/종료 시 페널티가 부과됩니다.",
+    "전략바둑 초반(20수 이내) 3분 이상 무응답 시, 상대방은 페널티 없이 무효처리가 가능합니다.",
+    "대기실에서 30분 이상 활동이 없으면 '휴식 중' 상태로 변경됩니다."
+  ];
+
+  return (
+    <div className="bg-tertiary/50 rounded-lg p-4 mb-6 animate-pulse-border-yellow">
+      <h2 className="text-xl font-bold text-highlight mb-3 text-center">대국실 이용 규칙</h2>
+      <ol className="list-decimal list-inside space-y-1 text-sm text-secondary">
+        {rules.map((rule, index) => (
+          <li key={index}>{rule}</li>
+        ))}
+      </ol>
+    </div>
+  );
+};
+
 
 const Lobby: React.FC<LobbyProps> = ({ lobbyType }) => {
   const { gameModeAvailability, handlers } = useAppContext();
@@ -62,6 +90,7 @@ const Lobby: React.FC<LobbyProps> = ({ lobbyType }) => {
       </header>
 
       <main className="flex-1 min-h-0 overflow-y-auto">
+        <LobbyRules />
         <section>
           <h2 className={`text-2xl font-semibold mb-5 border-l-4 ${sectionBorderColor} pl-4`}>{sectionTitle}</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
