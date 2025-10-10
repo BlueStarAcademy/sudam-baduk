@@ -1,7 +1,5 @@
-
-
 import React, { useState, useMemo } from 'react';
-import { Guild as GuildType, ServerAction, GuildMember, GuildMemberRole } from '../../types.js';
+import { Guild as GuildType, ServerAction, GuildMember, GuildMemberRole } from '../../types/index.js';
 import Button from '../Button.js';
 import DraggableWindow from '../DraggableWindow.js';
 import { useAppContext } from '../../hooks/useAppContext.js';

@@ -1,3 +1,5 @@
+
+
 import { Pool } from 'pg';
 import { getDb, initializeAndGetDb } from './db/connection.js';
 import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank } from '../types/index.js';
@@ -146,7 +148,7 @@ export const getAllData = async (): Promise<Pick<AppState, 'users' | 'userCreden
     
     const adminLogs = await kvRepository.getKV<AdminLog[]>(db, 'adminLogs') || [];
     const announcements = await kvRepository.getKV<Announcement[]>(db, 'announcements') || [];
-    const globalOverrideAnnouncement = await kvRepository.getKV<OverrideAnnouncement | null>(db, 'globalOverrideAnnouncement');
+        const globalOverrideAnnouncement = await kvRepository.getKV<OverrideAnnouncement | null>(db, 'globalOverrideAnnouncement');
     const gameModeAvailability = await kvRepository.getKV<Record<GameMode, boolean>>(db, 'gameModeAvailability') || {} as Record<GameMode, boolean>;
     const announcementInterval = await kvRepository.getKV<number>(db, 'announcementInterval') || 3;
     const guilds = await kvRepository.getKV<Record<string, Guild>>(db, 'guilds') || {};

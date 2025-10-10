@@ -1,8 +1,10 @@
+
+
+// server/services/effectService.ts
 import type { User, Guild, MannerEffects } from '../../types/index.js';
-// FIX: Export `calculateUserEffects` to make it available to other modules.
-export { calculateUserEffects } from '../../utils/statUtils.js';
+// FIX: Import `calculateUserEffects` from the correct utility file.
 import { calculateUserEffects } from '../../utils/statUtils.js';
-import { ACTION_POINT_REGEN_INTERVAL_MS } from '../../constants/index.js';
+import { ACTION_POINT_REGEN_INTERVAL_MS } from '../../constants/rules.js';
 
 export const regenerateActionPoints = (user: User, guild: Guild | null): User => {
     const effects = calculateUserEffects(user, guild);

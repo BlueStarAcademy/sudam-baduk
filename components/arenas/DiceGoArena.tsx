@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 // FIX: Separate enum and type imports, and correct import path.
 import { Player, GameStatus, GameMode } from '../../types/index.js';
 import type { GameProps, Point } from '../../types/index.js';
-import { getGoLogic } from '../../utils/goLogic.js';
+import { getGoLogic } from '../../utils/goLogic';
 import { audioService } from '../../services/audioService.js';
 import GoBoard from '../GoBoard.js';
 
@@ -18,7 +18,7 @@ const DiceGoArena: React.FC<DiceGoArenaProps> = (props) => {
     const { session, onAction, currentUser, isSpectator, isMyTurn, showLastMoveMarker, optimisticStone, setOptimisticStone, setIsSubmittingMove } = props;
     const { id: gameId, boardState, settings, lastMove, winningLine, gameStatus, currentPlayer, blackPlayerId, whitePlayerId, player1, player2, animation } = session;
     
-    const myPlayerEnum = blackPlayerId === currentUser.id ? Player.Black : Player.White;
+    const myPlayerEnum = blackPlayerId === currentUser.id ? Player.Black : (whitePlayerId === currentUser.id ? Player.White : Player.None);
     
     const players = [player1, player2];
     const blackPlayer = players.find(p => p.id === blackPlayerId) || null;

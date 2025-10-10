@@ -1,18 +1,14 @@
 import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS } from '../constants/index.js';
 import { TOWER_STAGES } from '../constants/towerChallengeConstants.js';
 import { SINGLE_PLAYER_STAGES } from '../constants/singlePlayerConstants.js';
-import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild, Move } from '../types/index.js';
+// FIX: Added AnalysisResult to the import to correctly type the analysisResult property.
+import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild, Move, AnalysisResult } from '../types/index.js';
 import { aiUserId, makeAiMove, getAiUser } from './ai/index.js';
 import { initializeStrategicGame, updateStrategicGameState, isFischerGame } from './modes/strategic.js';
 import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.js';
 import * as db from './db.js';
 import * as effectService from '../utils/statUtils.js';
-import { endGame, getGameResult } from './summaryService.js';
-import * as os from 'os';
-import * as fs from 'fs';
-import * as path from 'path';
-import { gnuGoServiceManager } from './services/gnuGoService.js';
-import { pointToGnuGoMove } from './services/gnuGoService.js';
+import * as summaryService from './summaryService.js';
 
 
 export const getNewActionButtons = (game: LiveGameSession): ActionButton[] => {
@@ -87,6 +83,19 @@ export const initializeGame = async (neg: Negotiation, guilds: Record<string, Gu
     const now = Date.now();
     
     const settings: GameSettings = { ...DEFAULT_GAME_SETTINGS, ...settingsFromNeg };
+
+    if (settings.timeControl) {
+        settings.timeLimit = settings.timeControl.mainTime;
+        if (settings.timeControl.type === 'byoyomi') {
+            settings.byoyomiCount = settings.timeControl.byoyomiCount ?? 3;
+            settings.byoyomiTime = settings.timeControl.byoyomiTime ?? 30;
+            settings.timeIncrement = 0; // Ensure no increment for byoyomi
+        } else if (settings.timeControl.type === 'fischer') {
+            settings.timeIncrement = settings.timeControl.increment ?? 5;
+            settings.byoyomiCount = 0;
+            settings.byoyomiTime = 0;
+        }
+    }
     
     const challenger = await db.getUser(neg.challenger.id);
     const opponent = neg.opponent.id === aiUserId ? neg.opponent : await db.getUser(neg.opponent.id);
@@ -157,8 +166,10 @@ export const initializeGame = async (neg: Negotiation, guilds: Record<string, Gu
     
     if (game.gameStatus === GameStatus.Playing && game.currentPlayer === Player.None) {
         game.currentPlayer = Player.Black;
-        if (settings.timeLimit > 0) game.turnDeadline = now + game.blackTimeLeft * 1000;
-        game.turnStartTime = now;
+        if (settings.timeLimit > 0 || settings.timeControl) {
+            game.turnDeadline = now + (settings.timeControl?.mainTime ?? settings.timeLimit) * 60 * 1000;
+            game.turnStartTime = now;
+        }
     }
     
     return game;
@@ -195,7 +206,7 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, vo
                 game.disconnectionCounts[disconnectedId] = (game.disconnectionCounts[disconnectedId] || 0) + 1;
                 if (game.disconnectionCounts[disconnectedId] >= 3) {
                     const winner = disconnectedId === game.blackPlayerId ? Player.White : Player.Black;
-                    await endGame(game, winner, WinReason.Disconnect);
+                    await summaryService.endGame(game, winner, WinReason.Disconnect);
                     updatedGames.push(game);
                     continue;
                 }
@@ -225,7 +236,7 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, vo
 
         if (game.disconnectionState && (now - game.disconnectionState.timerStartedAt > 180000)) {
             const winner = game.blackPlayerId === game.disconnectionState.disconnectedPlayerId ? Player.White : Player.Black;
-            await endGame(game, winner, WinReason.Disconnect);
+            await summaryService.endGame(game, winner, WinReason.Disconnect);
             updatedGames.push(game);
             continue;
         }
@@ -275,7 +286,7 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, vo
             game.gameStatus === GameStatus.Playing
         ) {
             console.log(`[Game Loop] Game ${game.id} reached turn limit (${game.moveHistory.length}/${game.autoEndTurnCount}). Triggering scoring.`);
-            await getGameResult(game);
+            await summaryService.getGameResult(game);
         }
         
         const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge;

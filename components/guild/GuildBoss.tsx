@@ -13,7 +13,6 @@ import GuildShopModal from './GuildShopModal.js';
 import { BOSS_SKILL_ICON_MAP } from '../../assets.js';
 import HelpModal from '../HelpModal.js';
 import { runGuildBossBattle, BattleLogEntry, GuildBossBattleResult } from '../../utils/guildBossSimulator.js';
-// FIX: Import `calculateTotalStats` and `calculateUserEffects` from the correct utility file.
 import { calculateTotalStats, calculateUserEffects } from '../../utils/statUtils.js';
 import Avatar from '../Avatar.js';
 import { GUILD_ATTACK_ICON, GUILD_RESEARCH_HEAL_BLOCK_IMG, GUILD_RESEARCH_IGNITE_IMG, GUILD_RESEARCH_REGEN_IMG } from '../../assets.js';
@@ -193,7 +192,7 @@ const UserStatsPanel: React.FC<UserStatsPanelProps> = ({ user, guild, hp, maxHp,
     };
 
     return (
-        <div className="bg-panel border border-color rounded-lg p-3 flex flex-col h-full">
+        <div className="bg-panel border border-color rounded-lg p-3 flex flex-col flex-1 min-h-0">
             <style>{`
                 @keyframes float-up-and-fade {
                     from { transform: translateY(0) scale(1); opacity: 1; }
@@ -218,7 +217,7 @@ const UserStatsPanel: React.FC<UserStatsPanelProps> = ({ user, guild, hp, maxHp,
                 </div>
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 h-24 w-full overflow-hidden pointer-events-none">
                     {damageNumbers.map(dn => (
-                        <div key={dn.id} className={`absolute bottom-0 left-1/2 -translate-x-1/2 font-bold text-xl damage-number-animation ${dn.color}`} style={{ textShadow: '1px 1px 3px black' }}>
+                        <div key={dn.id} className={`absolute bottom-0 left-1/2 -translate-x-1/2 font-bold text-lg damage-number-animation ${dn.color}`} style={{ textShadow: '1px 1px 3px black' }}>
                             {dn.text}
                         </div>
                     ))}
@@ -263,24 +262,30 @@ const UserStatsPanel: React.FC<UserStatsPanelProps> = ({ user, guild, hp, maxHp,
             
             <div className="mt-2 flex items-center justify-end gap-2">
                 <Button onClick={onOpenEffects} colorScheme="purple" className="flex-1 !text-xs !py-1.5">장비 효과</Button>
-                <div className="flex items-center gap-1">
+                <select
+                    onChange={(e) => {
+                        const index = parseInt(e.target.value, 10);
+                        if (!isNaN(index)) {
+                            handleLoadPreset(index);
+                        }
+                        e.target.value = "";
+                    }}
+                    disabled={isSimulating}
+                    className="bg-secondary border border-color rounded-md p-1.5 text-xs font-semibold text-primary hover:bg-tertiary transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-32"
+                    defaultValue=""
+                >
+                    <option value="" disabled>프리셋 불러오기</option>
                     {presets.map((preset, index) => (
-                        <button
-                            key={index}
-                            onClick={() => handleLoadPreset(index)}
-                            disabled={isSimulating}
-                            className="w-8 h-8 !p-0 flex items-center justify-center bg-secondary rounded-md text-sm font-bold text-primary hover:bg-tertiary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={isSimulating ? "전투 중에는 변경할 수 없습니다." : `불러오기: ${preset.name}`}
-                        >
-                            {index + 1}
-                        </button>
+                        <option key={index} value={index}>
+                            {preset.name}
+                        </option>
                     ))}
-                </div>
+                </select>
             </div>
 
-            <div className="mt-2 pt-2 border-t border-color flex-shrink-0">
-                <h4 className="font-semibold text-sm text-center text-secondary mb-1">연구소 스킬 효과</h4>
-                 <div className="space-y-1 text-xs">
+            <div className="mt-2 pt-2 border-t border-color flex-1 min-h-0 flex flex-col">
+                <h4 className="font-semibold text-sm text-center text-secondary mb-1 flex-shrink-0">연구소 스킬 효과</h4>
+                 <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-1 text-xs">
                     {allBossResearch.map(project => {
                         const currentLevel = guild?.research?.[project.id]?.level || 0;
                         const displayInfo = getResearchSkillDisplay(project.id, currentLevel);
@@ -295,7 +300,7 @@ const UserStatsPanel: React.FC<UserStatsPanelProps> = ({ user, guild, hp, maxHp,
                         return (
                             <div key={project.id} className={`flex items-center gap-2 bg-tertiary/50 p-1 rounded-md ${!displayInfo ? 'opacity-60' : ''}`} title={project.description}>
                                 <div className="flex items-center gap-2 flex-shrink-0 w-28">
-                                    <img src={project.image} alt={displayName} className="w-14 h-14"/>
+                                    <img src={project.image} alt={displayName} className="w-12 h-12"/>
                                     <span className="font-semibold text-primary text-sm">{displayName}</span>
                                 </div>
                                 <div className="flex-grow min-w-0 text-right">
@@ -324,14 +329,13 @@ interface BossPanelProps {
 }
 
 const BossPanel: React.FC<BossPanelProps> = ({ boss, hp, maxHp, damageNumbers }) => {
-    const { handlers } = useAppContext();
     const hpPercent = maxHp > 0 ? (hp / maxHp) * 100 : 0;
 
     return (
-        <div className="flex flex-col gap-4 h-full">
-            <div className="relative rounded-lg overflow-hidden flex-shrink-0 group">
-                <img src={boss.image} alt={boss.name} className="w-full object-contain" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/50"></div>
+        <div className="flex flex-col gap-2 h-full">
+            <div className="relative flex-shrink-0 group">
+                <img src={boss.image} alt={boss.name} className="w-full object-contain rounded-lg" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/50 rounded-lg pointer-events-none"></div>
                 
                 <div className="absolute top-2 left-2 right-2">
                      <div className="w-full bg-tertiary rounded-full h-5 border-2 border-black/50 relative">
@@ -343,7 +347,7 @@ const BossPanel: React.FC<BossPanelProps> = ({ boss, hp, maxHp, damageNumbers })
                             {damageNumbers.map(dn => (
                                 <div 
                                     key={dn.id} 
-                                    className={`absolute top-0 left-1/2 -translate-x-1/2 font-bold ${dn.isCrit ? 'text-4xl' : 'text-2xl'} ${dn.color} ${dn.isHeal ? 'animate-float-up-and-fade' : 'animate-float-down-and-fade'}`}
+                                    className={`absolute top-0 left-1/2 -translate-x-1/2 font-bold ${dn.isCrit ? 'text-3xl' : 'text-xl'} ${dn.color} ${dn.isHeal ? 'animate-float-up-and-fade' : 'animate-float-down-and-fade'}`}
                                     style={{ textShadow: dn.isCrit ? '0 0 5px yellow, 0 0 8px orange' : '1px 1px 3px black' }}
                                 >
                                     {dn.text}
@@ -352,28 +356,25 @@ const BossPanel: React.FC<BossPanelProps> = ({ boss, hp, maxHp, damageNumbers })
                         </div>
                     </div>
                 </div>
-            </div>
-            
-            <div className="flex-1 bg-panel border border-color rounded-lg p-3 flex flex-col gap-2 min-h-0">
-                <div className="flex-shrink-0 text-center">
-                    <h4 className="font-bold text-yellow-300">보스 패턴</h4>
-                    <div className="flex justify-around items-center gap-2 mt-1">
+                
+                <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-4 p-2">
+                    <div className="flex items-center gap-1">
                         {boss.skills.map(skill => (
                             <div key={skill.id} className="relative group/skill">
-                                <img src={BOSS_SKILL_ICON_MAP[skill.id]} alt={skill.name} className="w-14 h-14" />
-                                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-48 bg-black/80 text-white text-xs rounded-lg p-2 opacity-0 group-hover/skill:opacity-100 transition-opacity pointer-events-none z-10">
+                                <img src={BOSS_SKILL_ICON_MAP[skill.id]} alt={skill.name} className="w-10 h-10" />
+                                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-48 bg-black/80 text-white text-xs rounded-lg p-2 opacity-0 group-hover/skill:opacity-100 transition-opacity pointer-events-none z-50">
                                     <p className="font-bold text-yellow-300">{skill.name}</p>
                                     <p>{skill.description}</p>
                                 </div>
                             </div>
                         ))}
                     </div>
-                </div>
-                
-                <div className="flex-grow border-t border-color/50 mt-1 pt-1 flex flex-col justify-center">
-                    <h4 className="font-bold text-yellow-300 mb-1 text-center text-sm">추천 능력치</h4>
-                    <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm text-secondary">
-                        {boss.recommendedStats.map(stat => <span key={stat}>{stat}</span>)}
+                    <div className="w-px h-8 bg-gray-500/50"></div>
+                    <div className="flex items-center gap-2">
+                        <span title="추천 능력치" className="text-xl">💡</span>
+                        <div className="flex flex-wrap gap-x-2 text-sm text-white" style={{ textShadow: '1px 1px 2px black' }}>
+                            {boss.recommendedStats.map(stat => <span key={stat}>{stat}</span>)}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -381,40 +382,27 @@ const BossPanel: React.FC<BossPanelProps> = ({ boss, hp, maxHp, damageNumbers })
     );
 };
 
+
 interface DamageRankingPanelProps {
-    damageRanking: { userId: string; nickname: string; damage: number }[];
+    fullDamageRanking: { userId: string; nickname: string; damage: number }[];
     myRankData: { userId: string; nickname: string; damage: number; rank: number } | null;
     myCurrentBattleDamage: number;
 }
 
 
-const DamageRankingPanel: React.FC<DamageRankingPanelProps> = ({ damageRanking, myRankData, myCurrentBattleDamage }) => {
+const DamageRankingPanel: React.FC<DamageRankingPanelProps> = ({ fullDamageRanking, myRankData, myCurrentBattleDamage }) => {
     const { handlers } = useAppContext();
+    const top3 = fullDamageRanking.slice(0, 3);
+    const amIInTop3 = myRankData ? myRankData.rank <= 3 : false;
 
     return (
         <div className="bg-panel border border-color rounded-lg p-3 flex flex-col min-h-0 h-full">
-            <h4 className="font-bold text-yellow-300 mb-2 text-center flex-shrink-0">누적 랭킹</h4>
-            
-            {myRankData ? (
-                <div className="flex-shrink-0 mb-2 pb-2 border-b border-color/50">
-                    <div className="flex items-center justify-between bg-blue-900/40 p-1.5 rounded-md text-xs">
-                        <div className="flex items-center gap-1.5">
-                            <span className="font-bold w-5 text-center">{myRankData.rank}</span>
-                            <span className="font-semibold truncate">{myRankData.nickname} (나)</span>
-                        </div>
-                        <span className="font-mono text-highlight">{myRankData.damage.toLocaleString()}</span>
-                    </div>
-                </div>
-            ) : (
-                 <div className="flex-shrink-0 mb-2 pb-2 border-b border-color/50">
-                    <p className="text-xs text-tertiary text-center">아직 랭킹 기록이 없습니다.</p>
-                </div>
-            )}
+            <h4 className="font-bold text-yellow-300 mb-2 text-center flex-shrink-0">누적 피해 랭킹 Top 3</h4>
             
             <div className="flex-grow overflow-y-auto pr-1">
-                {damageRanking.length > 0 ? (
+                {top3.length > 0 ? (
                     <ul className="space-y-1">
-                        {damageRanking.map((rank, index) => (
+                        {top3.map((rank, index) => (
                             <li key={rank.userId} onClick={() => handlers.openViewingUser(rank.userId)} className="flex items-center justify-between bg-tertiary/50 p-1.5 rounded-md text-xs cursor-pointer hover:bg-secondary">
                                 <div className="flex items-center gap-1.5">
                                     <span className="font-bold w-5 text-center">{index + 1}.</span>
@@ -428,6 +416,17 @@ const DamageRankingPanel: React.FC<DamageRankingPanelProps> = ({ damageRanking, 
                     <div className="h-full flex items-center justify-center text-tertiary text-sm">기록 없음</div>
                 )}
             </div>
+            {myRankData && !amIInTop3 && (
+                <div className="mt-2 pt-2 border-t border-color/50 flex-shrink-0">
+                    <div className="flex items-center justify-between bg-blue-900/40 p-1.5 rounded-md text-xs">
+                         <div className="flex items-center gap-1.5">
+                            <span className="font-bold w-5 text-center">{myRankData.rank}</span>
+                            <span className="font-semibold truncate">{myRankData.nickname} (나)</span>
+                        </div>
+                        <span className="font-mono text-highlight">{myRankData.damage.toLocaleString()}</span>
+                    </div>
+                </div>
+            )}
             <div className="mt-2 pt-2 border-t border-color/50 flex-shrink-0 text-center">
                 <p className="text-sm">이번 전투 피해량: <span className="font-bold text-yellow-300">{myCurrentBattleDamage.toLocaleString()}</span></p>
             </div>
@@ -439,6 +438,7 @@ const GuildBoss: React.FC = () => {
     const { currentUserWithStatus, guilds, handlers } = useAppContext();
     
     const [isSimulating, setIsSimulating] = useState(false);
+    const simulationInFlight = useRef(false);
     const [simulationResult, setSimulationResult] = useState<GuildBossBattleResult | null>(null);
     const [logIndex, setLogIndex] = useState(0);
     const [battleLog, setBattleLog] = useState<BattleLogEntry[]>([]);
@@ -483,10 +483,12 @@ const GuildBoss: React.FC = () => {
     useEffect(() => { if (!isSimulating) setSimulatedBossHp(currentHp); }, [currentHp, isSimulating]);
 
     const handleBattleStart = useCallback(() => {
-        if (!currentUserWithStatus || !myGuild) return;
-        const attemptsLeft = GUILD_BOSS_MAX_ATTEMPTS - (currentUserWithStatus.guildBossAttempts || 0);
-        if (attemptsLeft <= 0 || isSimulating) return;
+        if (!currentUserWithStatus || !myGuild || simulationInFlight.current) return;
         
+        const attemptsLeft = GUILD_BOSS_MAX_ATTEMPTS - (currentUserWithStatus.guildBossAttempts || 0);
+        if (attemptsLeft <= 0) return;
+
+        simulationInFlight.current = true;
         setIsSimulating(true);
         setBattleLog([]);
         setLogIndex(0);
@@ -502,7 +504,7 @@ const GuildBoss: React.FC = () => {
         setUserHp(result.maxUserHp);
         setMaxUserHp(result.maxUserHp);
         setSimulationResult(result);
-    }, [currentUserWithStatus, myGuild, isSimulating, currentBoss]);
+    }, [currentUserWithStatus, myGuild, currentBoss]);
 
     useEffect(() => {
         if (!isSimulating || !simulationResult) return;
@@ -513,6 +515,7 @@ const GuildBoss: React.FC = () => {
                 setIsSimulating(false);
                 setSimulationResult(null);
                 setActiveDebuffs({});
+                simulationInFlight.current = false;
             }, 1000);
             return () => clearTimeout(timer);
         }
@@ -618,9 +621,6 @@ const GuildBoss: React.FC = () => {
         return { fullDamageRanking: fullRanking, myRankData: myData };
     }, [myGuild?.guildBossState?.totalDamageLog, myGuild?.members, currentUserWithStatus?.id]);
     
-    const top3DamageRanking = fullDamageRanking.slice(0, 3);
-
-
     if (!currentUserWithStatus || !myGuild) {
         return <div className="p-4">길드 정보를 불러오는 중...</div>;
     }
@@ -660,12 +660,12 @@ const GuildBoss: React.FC = () => {
             <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
                 <div className="w-full lg:w-1/4 flex flex-col gap-4">
                     <BossPanel boss={currentBoss} hp={simulatedBossHp} maxHp={currentBoss.maxHp} damageNumbers={bossDamageNumbers} />
-                    <DamageRankingPanel damageRanking={top3DamageRanking} myRankData={myRankData} myCurrentBattleDamage={currentBattleDamage} />
+                    <DamageRankingPanel fullDamageRanking={fullDamageRanking} myRankData={myRankData} myCurrentBattleDamage={currentBattleDamage} />
                 </div>
                 
                 <div className="flex-1 flex flex-col gap-4 min-h-0">
                     <div className="bg-panel border border-color rounded-lg p-4 flex flex-col h-1/2 min-h-[200px] lg:min-h-0">
-                        <h3 className="text-xl font-bold mb-2 flex-shrink-0 text-center text-red-300">보스의 공격</h3>
+                        <h3 className="text-lg font-bold mb-2 flex-shrink-0 text-center text-red-300">보스의 공격</h3>
                         <div ref={bossLogContainerRef} className="flex-grow overflow-y-auto pr-2 bg-tertiary/50 p-2 rounded-md space-y-2 text-sm">
                             {bossLogs.map((entry, index) => (
                                 <div key={index} className="flex items-center gap-2 animate-fade-in">
@@ -677,7 +677,7 @@ const GuildBoss: React.FC = () => {
                         </div>
                     </div>
                      <div className="bg-panel border border-color rounded-lg p-4 flex flex-col h-1/2 min-h-[200px] lg:min-h-0">
-                        <h3 className="text-xl font-bold mb-2 flex-shrink-0 text-center text-blue-300">나의 공격</h3>
+                        <h3 className="text-lg font-bold mb-2 flex-shrink-0 text-center text-blue-300">나의 공격</h3>
                         <div ref={userLogContainerRef} className="flex-grow overflow-y-auto pr-2 bg-tertiary/50 p-2 rounded-md space-y-2 text-sm">
                             {userLogs.map((entry, index) => (
                                 <div key={index} className="flex items-center gap-2 animate-fade-in justify-start">
@@ -717,5 +717,4 @@ const GuildBoss: React.FC = () => {
     );
 };
 
-// FIX: Change to a default export.
 export default GuildBoss;

@@ -1,0 +1,23 @@
+{
+  "name": "SUDAM_The_Ascending_Masters",
+  "short_name": "SUDAM",
+  "description": "Supreme Universe of Dueling Ascending Masters.(S.U.D.A.M) (격돌하는 초인들이 승천하는 최고의 세계) 초인(Master)이 되기 위해 격돌(Duel)하며 자신을 증명하고 승천(Ascend)하는 여정'에 참여하라.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "/images/icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

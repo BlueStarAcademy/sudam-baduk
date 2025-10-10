@@ -13,7 +13,7 @@ import { useAppContext } from '../../hooks/useAppContext.js';
 import DisconnectionModal from '../DisconnectionModal.js';
 import { useClientTimer } from '../../hooks/useClientTimer.js';
 import TurnCounterPanel from '../game/TurnCounterPanel.js';
-import { processMove } from '../../utils/goLogic.js';
+import { processMove } from '../../utils/goLogic';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);

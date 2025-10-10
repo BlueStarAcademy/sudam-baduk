@@ -31,10 +31,15 @@ const gradeBorderStyles: Partial<Record<ItemGrade, string>> = {
 };
 
 const getStarDisplayInfo = (stars: number) => {
-    if (stars >= 10) return { text: `(★${stars})`, colorClass: "prism-text-effect" };
-    if (stars >= 7) return { text: `(★${stars})`, colorClass: "text-blue-400" };
-    if (stars >= 4) return { text: `(★${stars})`, colorClass: "text-amber-400" };
-    if (stars >= 1) return { text: `(★${stars})`, colorClass: "text-white" };
+    if (stars >= 10) {
+        return { text: `(★${stars})`, colorClass: "prism-text-effect" };
+    } else if (stars >= 7) {
+        return { text: `(★${stars})`, colorClass: "text-purple-400" };
+    } else if (stars >= 4) {
+        return { text: `(★${stars})`, colorClass: "text-amber-400" };
+    } else if (stars >= 1) {
+        return { text: `(★${stars})`, colorClass: "text-white" };
+    }
     return { text: "", colorClass: "text-white" };
 };
 

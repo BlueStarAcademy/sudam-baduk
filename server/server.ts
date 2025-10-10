@@ -1,13 +1,7 @@
-
-
-
-
-
-
-
 import 'dotenv/config';
-// FIX: Import Request, Response, NextFunction types from express
-import express from 'express';
+// FIX: Using namespaced Express types to resolve property access errors.
+// FIX: Import Request, Response, and NextFunction types directly from express to fix type errors.
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV } from './db.js';
@@ -15,7 +9,7 @@ import { handleAction } from './actions/gameActions.js';
 import { type VolatileState, type ServerAction, type User, type ChatMessage, Guild, UserStatus, type UserStatusInfo } from '../types/index.js';
 import { createDefaultUser } from './initialData.js';
 import { resetAndGenerateQuests, accumulateMissionRewards } from './questService.js';
-import { runScheduledTasks, processWeeklyLeagueUpdates, performOneTimeReset } from './scheduledTasks.js';
+import { runScheduledTasks, processWeeklyLeagueUpdates, performOneTimeReset, performOneTimeGuildResearchMigration } from './scheduledTasks.js';
 import * as gameModes from './gameModes.js';
 import * as db from './db.js';
 import * as guildService from './guildService.js';
@@ -23,6 +17,9 @@ import { randomUUID } from 'crypto';
 import { GUILD_RESEARCH_PROJECTS } from '../constants/index.js';
 import { regenerateActionPoints } from './services/effectService.js';
 import { getKataGoManager } from './kataGoService.js';
+// FIX: Use 'node:process' to ensure proper type resolution for the process object.
+import process from 'node:process';
+import { containsProfanity } from '../profanity.js';
 
 const volatileState: VolatileState = {
     userStatuses: {},
@@ -52,10 +49,10 @@ declare global {
   }
 }
 
-// FIX: Use namespace-qualified types for Express Request, Response, and NextFunction to resolve type errors.
-const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+// FIX: Used correct Express types to resolve property access errors.
+const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     // For login/register, no session check is needed
-    if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync') {
+    if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync' || req.path === '/api/auth/finalize-kakao') {
         return next();
     }
 
@@ -85,8 +82,8 @@ const userMiddleware = async (req: express.Request, res: express.Response, next:
 
 app.use(userMiddleware);
 
-// FIX: Use namespace-qualified types for Express Request and Response.
-app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
+// FIX: Used correct Express types to resolve property access errors.
+app.post('/api/auth/register', async (req: Request, res: Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
         return res.status(400).json({ message: 'Username, password, and nickname are required.' });
@@ -117,8 +114,8 @@ app.post('/api/auth/register', async (req: express.Request, res: express.Respons
     }
 });
 
-// FIX: Use namespace-qualified types for Express Request and Response.
-app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
+// FIX: Used correct Express types to resolve property access errors.
+app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: '아이디와 비밀번호를 모두 입력해주세요.' });
@@ -159,8 +156,8 @@ app.post('/api/auth/login', async (req: express.Request, res: express.Response) 
     }
 });
 
-// FIX: Use namespace-qualified types for Express Request and Response.
-app.post('/api/auth/sync', async (req: express.Request, res: express.Response) => {
+// FIX: Used correct Express types to resolve property access errors.
+app.post('/api/auth/sync', async (req: Request, res: Response) => {
     const { session } = req.body;
     if (!session || !session.user) {
         return res.status(400).json({ message: 'Session data is required.' });
@@ -179,27 +176,13 @@ app.post('/api/auth/sync', async (req: express.Request, res: express.Response) =
         let user = await db.getUserByKakaoId(kakaoId);
         
         if (!user) {
-            // User does not exist, create a new one.
-            const nickname = supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '카카오 유저';
-            
-            // Ensure nickname is unique
-            let uniqueNickname = nickname;
-            let existingByNickname = await db.getUserByNickname(uniqueNickname);
-            let counter = 1;
-            while(existingByNickname) {
-                uniqueNickname = `${nickname}${counter}`;
-                existingByNickname = await db.getUserByNickname(uniqueNickname);
-                counter++;
-            }
-
-            user = createDefaultUser(
-                `user-${randomUUID()}`, 
-                `kakao_${kakaoId}`, 
-                uniqueNickname, 
-                false, 
-                kakaoId
-            );
-            await db.createUser(user);
+            // New Kakao user. Signal to the client that registration needs to be finalized.
+            res.json({
+                needsRegistration: true,
+                kakaoId: kakaoId,
+                suggestedNickname: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || '카카오 유저',
+            });
+            return;
         }
         
         user = await resetAndGenerateQuests(user);
@@ -217,8 +200,41 @@ app.post('/api/auth/sync', async (req: express.Request, res: express.Response) =
     }
 });
 
-// FIX: Use namespace-qualified types for Express Request and Response.
-app.post('/api/state', async (req: express.Request, res: express.Response) => {
+// FIX: Used correct Express types to resolve property access errors.
+app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
+    const { kakaoId, nickname } = req.body;
+    if (!kakaoId || !nickname) {
+        return res.status(400).json({ message: '카카오 정보 또는 닉네임이 누락되었습니다.' });
+    }
+    try {
+        // Server-side validation
+        if (nickname.trim().length < 2 || nickname.trim().length > 12) {
+            return res.status(400).json({ message: '닉네임은 2-12자여야 합니다.' });
+        }
+        if (containsProfanity(nickname)) {
+            return res.status(400).json({ message: '닉네임에 부적절한 단어가 포함되어 있습니다.' });
+        }
+        const allUsers = await db.getAllUsers();
+        if (allUsers.some(u => u.nickname.toLowerCase() === nickname.toLowerCase())) {
+            return res.status(409).json({ message: '이미 사용 중인 닉네임입니다.' });
+        }
+
+        const newUser = createDefaultUser(`user-${randomUUID()}`, `kakao_${kakaoId}`, nickname.trim(), false, kakaoId);
+        await db.createUser(newUser);
+
+        const sessionId = randomUUID();
+        volatileState.userSessions[newUser.id] = sessionId;
+        volatileState.userStatuses[newUser.id] = { status: UserStatus.Online, stateEnteredAt: Date.now() };
+        
+        res.json({ user: newUser, sessionId });
+    } catch (error: any) {
+        console.error(`[Kakao Finalize Error] for kakaoId ${kakaoId}:`, error);
+        res.status(500).json({ message: 'An internal server error occurred during registration.' });
+    }
+});
+
+// FIX: Used correct Express types to resolve property access errors.
+app.post('/api/state', async (req: Request, res: Response) => {
     const user = req.user;
     let userStatus: UserStatusInfo | undefined;
     if (user) {
@@ -241,8 +257,8 @@ app.post('/api/state', async (req: express.Request, res: express.Response) => {
     res.json({ ...data, userStatuses: volatileState.userStatuses, negotiations: volatileState.negotiations, waitingRoomChats: volatileState.waitingRoomChats, gameChats: volatileState.gameChats });
 });
 
-// FIX: Use namespace-qualified types for Express Request and Response.
-app.post('/api/action', async (req: express.Request, res: express.Response) => {
+// FIX: Used correct Express types to resolve property access errors.
+app.post('/api/action', async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
         if (req.body.type === 'LOGOUT' && req.body.userId) {
@@ -275,6 +291,7 @@ app.post('/api/action', async (req: express.Request, res: express.Response) => {
 const startServer = async () => {
     await initializeDatabase();
     await performOneTimeReset();
+    await performOneTimeGuildResearchMigration();
 
     // Eagerly initialize KataGo to make scoring faster on first game
     getKataGoManager().initialize().catch(err => {
@@ -306,16 +323,25 @@ const startServer = async () => {
             const lastSeen = volatileState.userConnections[userId];
             if (now - lastSeen > CONNECTION_TIMEOUT_MS) {
                 const userStatus = volatileState.userStatuses[userId];
-                // CRITICAL FIX: Do NOT time out users who are currently in a game.
-                // The game itself has its own timers (byoyomi, etc.) which are the only
-                // timers that should apply during a match.
-                if (userStatus?.status === UserStatus.InGame) {
-                    continue; // Skip to the next user in the loop
+                
+                // If user is in a game, check if it's an AI/SP game to be deleted on disconnect.
+                if (userStatus?.status === UserStatus.InGame && userStatus.gameId) {
+                    const game = await db.getLiveGame(userStatus.gameId);
+                    if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
+                        // It's a single player type game, delete it on disconnect.
+                        await db.deleteGame(game.id);
+                        console.log(`[Cleanup] Deleted abandoned AI/SP game ${game.id} for disconnected user ${userId}.`);
+                        // The user's status will be cleaned up below.
+                    } else {
+                        // It's a PvP game, allow for reconnection.
+                        continue;
+                    }
                 }
                 
                 console.log(`[Cleanup] User ${userId} connection timed out. Setting to offline.`);
                 delete volatileState.userConnections[userId];
                 delete volatileState.userStatuses[userId];
+                delete volatileState.userSessions[userId];
             }
         }
         

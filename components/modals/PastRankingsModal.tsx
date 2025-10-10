@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { UserWithStatus, GameMode } from '../../types.js';
 import DraggableWindow from '../DraggableWindow.js';

@@ -1,5 +1,7 @@
+
 // server/services/mannerService.ts
-import { User, MannerEffects, CoreStat, Guild } from '../../types/index.js';
+// FIX: Import missing types from the centralized types file.
+import { User, Guild, MannerEffects, CoreStat } from '../../types/index.js';
 // FIX: Import regenerateActionPoints from effectService
 import { regenerateActionPoints } from './effectService.js';
 import { createDefaultSpentStatPoints } from '../initialData.js';
@@ -40,9 +42,9 @@ export const applyMannerRankChange = async (user: User, oldMannerScore: number):
                 
                 const randomStat = availableStats[Math.floor(Math.random() * availableStats.length)];
                 
-                spentStats[randomStat]--;
-                pointsToRetrieve--;
-                totalSpent--;
+                spentStats[randomStat] -= 1;
+                pointsToRetrieve -= 1;
+                totalSpent -= 1;
             }
         }
         user.spentStatPoints = spentStats;

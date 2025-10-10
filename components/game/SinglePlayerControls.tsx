@@ -49,22 +49,25 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
     const { handlers, settings, isMobile } = useAppContext();
     const { id: gameId, gameStatus, moveHistory, singlePlayerPlacementRefreshesUsed } = session;
     const isWinner = session.winner === Player.Black;
+    
+    // Moved hooks to top level to fix conditional hook call error
+    const currentStageIndex = useMemo(() => SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId), [session.stageId]);
+    const nextStage = useMemo(() => SINGLE_PLAYER_STAGES[currentStageIndex + 1], [currentStageIndex]);
+
+    const canTryNext = useMemo(() => {
+        if (gameStatus !== 'ended' && gameStatus !== 'no_contest') return false;
+        if (!isWinner || !nextStage) return false;
+        const hasAlreadyClearedThisLevel = (currentUser.singlePlayerProgress ?? 0) > currentStageIndex;
+        return isWinner || hasAlreadyClearedThisLevel;
+    }, [gameStatus, isWinner, nextStage, currentUser.singlePlayerProgress, currentStageIndex]);
 
     if (gameStatus === 'ended' || gameStatus === 'no_contest') {
-        const currentStageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId);
-        const nextStage = SINGLE_PLAYER_STAGES[currentStageIndex + 1];
-
-        const canTryNext = useMemo(() => {
-            if (!isWinner || !nextStage) return false;
-            return (currentUser.singlePlayerProgress ?? 0) > currentStageIndex;
-        }, [isWinner, nextStage, currentUser.singlePlayerProgress, currentStageIndex]);
-
         const handleRetry = () => {
             onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: session.stageId! } });
         };
 
         const handleNextStage = () => {
-            if (canTryNext) {
+            if (canTryNext && nextStage) {
                 onAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId: nextStage.id } });
             }
         };

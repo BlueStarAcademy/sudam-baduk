@@ -1,20 +1,9 @@
 import { type AppState, type User, type UserCredentials, type QuestLog, type DailyQuestData, type WeeklyCompetitor, type WeeklyQuestData, type MonthlyQuestData, type Guild, CoreStat, GameMode, LeagueTier, GuildMemberRole, GuildResearchId, type InventoryItem } from '../types/index.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/gameModes.js';
-import { BOT_NAMES } from '../constants/auth.js';
-import { AVATAR_POOL } from '../constants/ui.js';
-// FIX: Corrected import path for GUILD_MISSIONS_POOL.
-import { GUILD_MISSIONS_POOL, GUILD_INITIAL_MEMBER_LIMIT } from '../constants/index.js';
-import { defaultSettings } from '../constants/index.js';
+// FIX: Corrected import paths to resolve circular dependency.
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, BOT_NAMES, AVATAR_POOL, GUILD_MISSIONS_POOL, GUILD_INITIAL_MEMBER_LIMIT, defaultSettings } from '../constants/index.js';
 import crypto from 'crypto';
-
-export const createDefaultBaseStats = (): Record<CoreStat, number> => ({
-    [CoreStat.Concentration]: 100,
-    [CoreStat.ThinkingSpeed]: 100,
-    [CoreStat.Judgment]: 100,
-    [CoreStat.Calculation]: 100,
-    [CoreStat.CombatPower]: 100,
-    [CoreStat.Stability]: 100,
-});
+// FIX: Import createDefaultBaseStats from shared utils.
+import { createDefaultBaseStats } from '../utils/statUtils.js';
 
 export const createDefaultQuests = (): QuestLog => ({
     daily: {
@@ -252,13 +241,14 @@ export const createDefaultGuild = (id: string, name: string, description: string
             towerFloor50Conquerors: [],
             towerFloor100Conquerors: [],
             bossAttempts: 0,
+            epicGearAcquisitions: 0,
         },
         lastMissionReset: now,
         lastWeeklyContributionReset: now,
         chatHistory: [],
         memberLimit: GUILD_INITIAL_MEMBER_LIMIT,
         research: (Object.values(GuildResearchId) as GuildResearchId[]).reduce((acc, researchId) => {
-            (acc as any)[researchId] = { level: 0 };
+            (acc as any)[researchId] = { level: 1 };
             return acc;
         }, {} as Record<GuildResearchId, { level: number }>),
         researchTask: null,

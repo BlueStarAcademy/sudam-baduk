@@ -3,7 +3,6 @@
   "compilerOptions": {
     "useDefineForClassFields": true,
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
-    "types": ["vite/client"],
     "allowJs": false,
     "noEmit": true,
     "jsx": "react-jsx"

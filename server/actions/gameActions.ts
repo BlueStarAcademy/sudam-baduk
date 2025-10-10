@@ -2,8 +2,7 @@ import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Server
 import * as db from '../db.js';
 import { handleStrategicGameAction } from '../modes/strategic.js';
 import { handlePlayfulGameAction } from '../modes/playful.js';
-import { handleSinglePlayerGameStart, handleSinglePlayerRefresh, handleConfirmSPIntro } from '../modes/singlePlayerMode.js';
-import { handleTowerChallengeGameStart, handleTowerChallengeRefresh, handleTowerAddStones } from '../modes/towerChallengeMode.js';
+import { handleAiGameStart, handleAiGameRefresh, handleTowerAddStones, handleConfirmIntro } from '../modes/aiGameActions.js';
 import { handleUserAction } from './userActions.js';
 import { handleNegotiationAction } from './negotiationActions.js';
 import { handleInventoryAction } from './inventoryActions.js';
@@ -56,7 +55,8 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
     const rewardActionTypes: ServerActionType[] = [
         'CLAIM_MAIL_ATTACHMENTS', 'CLAIM_ALL_MAIL_ATTACHMENTS', 'DELETE_MAIL', 'DELETE_ALL_CLAIMED_MAIL', 'MARK_MAIL_AS_READ',
         'CLAIM_QUEST_REWARD', 'CLAIM_ACTIVITY_MILESTONE', 'CLAIM_SINGLE_PLAYER_MISSION_REWARD',
-        'CLAIM_ACTION_POINT_QUIZ_REWARD', 'RESET_SINGLE_PLAYER_REWARDS', 'START_SINGLE_PLAYER_MISSION'
+        'CLAIM_ACTION_POINT_QUIZ_REWARD', 'RESET_SINGLE_PLAYER_REWARDS', 'START_SINGLE_PLAYER_MISSION',
+        'UPGRADE_SINGLE_PLAYER_MISSION'
     ];
     if (rewardActionTypes.includes(type)) {
         return handleRewardAction(volatileState, actionWithUserId, user, guilds);
@@ -92,13 +92,13 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
     }
 
     if (type === 'START_SINGLE_PLAYER_GAME') {
-        return handleSinglePlayerGameStart(volatileState, payload, user, guilds);
+        return handleAiGameStart(volatileState, payload, user, guilds, 'single-player');
     }
     if (type === 'START_TOWER_CHALLENGE_GAME') {
-        return handleTowerChallengeGameStart(volatileState, payload, user, guilds);
+        return handleAiGameStart(volatileState, payload, user, guilds, 'tower-challenge');
     }
     if (type === 'CONFIRM_SP_INTRO') {
-        return handleConfirmSPIntro(gameId, user);
+        return handleConfirmIntro(gameId, user);
     }
 
     // Actions requiring gameId from here
@@ -121,6 +121,7 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
                 game.gameStatus = GameStatus.Playing;
                 game.promptForMoreStones = false; // Always clear prompt on resume
                 if (game.pausedTurnTimeLeft) {
+                    const now = Date.now();
                     game.turnDeadline = now + game.pausedTurnTimeLeft * 1000;
                     game.turnStartTime = now;
                     game.pausedTurnTimeLeft = undefined;
@@ -179,10 +180,10 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
     }
     
     if (type === 'SINGLE_PLAYER_REFRESH_PLACEMENT') {
-        return handleSinglePlayerRefresh(game, user);
+        return handleAiGameRefresh(game, user, 'single-player');
     }
     if (type === 'TOWER_CHALLENGE_REFRESH_PLACEMENT') {
-        return handleTowerChallengeRefresh(game, user);
+        return handleAiGameRefresh(game, user, 'tower-challenge');
     }
     if (type === 'TOWER_CHALLENGE_ADD_STONES') {
         return handleTowerAddStones(game, user);

@@ -13,6 +13,7 @@ export interface BattleLogEntry {
     isUserAction?: boolean;
     damageTaken?: number;
     healingDone?: number;
+    bossHealingDone?: number;
     isCrit?: boolean;
     debuffsApplied?: { type: 'user_combat_power_reduction_percent' | 'user_heal_reduction_percent', value: number, turns: number }[];
 }
@@ -40,11 +41,11 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
     const effects = calculateUserEffects(user, guild);
     const BATTLE_TURNS = 30; // Boss will use finisher on turn 30
     
-    let userHp = 10000 + (totalStats[CoreStat.Concentration] * 10);
+    let maxUserHp = 10000 + (totalStats[CoreStat.Concentration] * 10);
     const hpIncreaseLevel = guild.research?.boss_hp_increase?.level || 0;
-    if (hpIncreaseLevel > 0) userHp *= (1 + (GUILD_RESEARCH_PROJECTS[GuildResearchId.boss_hp_increase].baseEffect * hpIncreaseLevel) / 100);
-    userHp = Math.round(userHp);
-    const maxUserHp = userHp;
+    if (hpIncreaseLevel > 0) maxUserHp *= (1 + (GUILD_RESEARCH_PROJECTS[GuildResearchId.boss_hp_increase].baseEffect * hpIncreaseLevel) / 100);
+    maxUserHp = Math.round(maxUserHp);
+    let userHp = maxUserHp;
 
     let totalDamageDealt = 0;
     let turnsSurvived = 0;
@@ -57,17 +58,16 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
         user_combat_power_reduction_percent: { value: 0, turns: 0 },
         user_heal_reduction_percent: { value: 0, turns: 0 },
     };
-
+    
     const runUserTurn = (isExtra: boolean = false): boolean => {
         let userDamage = (totalStats[CoreStat.CombatPower] * 3.2) + (totalStats[CoreStat.Judgment] * 2.6) + (totalStats[CoreStat.Calculation] * 1.8);
-        const damageBonusPercent = effects.specialStatBonuses[SpecialStat.GuildBossDamage]?.percent || 0;
-        if (damageBonusPercent > 0) userDamage *= (1 + damageBonusPercent / 100);
-        userDamage *= (1 + (Math.random() * 0.2 - 0.1));
-        const critChance = 15 + (totalStats[CoreStat.Judgment] * 0.03);
+        userDamage *= (1 + (Math.random() * 0.2 - 0.1)); // 랜덤(±10%)
+        
+        const critChance = 15 + (totalStats[CoreStat.Judgment] * (Math.random() * 0.0007 + 0.0003)); // 15% + (판단력 * (0.03~0.1)%)
         const isCrit = Math.random() * 100 < critChance;
         if (isCrit) {
-            const critDamagePercent = ((totalStats[CoreStat.CombatPower] * 0.4) + (totalStats[CoreStat.Calculation] * 0.3)) + (Math.random() * 20 - 10);
-            userDamage *= (1 + critDamagePercent / 100);
+            const critDamageBonusPercent = ((totalStats[CoreStat.CombatPower] * 0.1) + (totalStats[CoreStat.Calculation] * 0.5)) + (Math.random() * 100 - 50); // 산출 데미지의 % + 랜덤(±50)%
+            userDamage *= (1 + critDamageBonusPercent / 100);
         }
     
         if(activeDebuffs.user_combat_power_reduction_percent.turns > 0) {
@@ -92,21 +92,34 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
     const runUserFullTurn = (): boolean => {
         let bossDefeated = runUserTurn(false);
         if (bossDefeated) return true;
+        
+        // Per-turn HP Regen
+        const regenAmount = Math.round(maxUserHp * (totalStats[CoreStat.Stability] * (Math.random() * 0.0004 + 0.0001)));
+        if(regenAmount > 0) {
+            const healedHp = Math.min(maxUserHp, userHp + regenAmount);
+            const actualHeal = healedHp - userHp;
+            userHp = healedHp;
+            if(actualHeal > 0) {
+                battleLog.push({ turn: turnsSurvived, icon: '/images/icons/heal_icon.png', message: `[HP 회복] HP +${actualHeal.toLocaleString()}`, isUserAction: true, healingDone: actualHeal });
+            }
+        }
 
-        const extraTurnChance = totalStats[CoreStat.ThinkingSpeed] * 0.02;
-        if (Math.random() * 100 < extraTurnChance) {
+        const extraTurnChance = totalStats[CoreStat.ThinkingSpeed] * 0.0004; // 사고속도 * 0.04%
+        if (Math.random() < extraTurnChance) {
             battleLog.push({ turn: turnsSurvived, icon: '/images/guild/skill/userskill4.png', message: `[추가공격] 빠르고 정확한 사고속도로 추가 턴을 획득합니다.`, isUserAction: true, isCrit: false });
             bossDefeated = runUserTurn(true);
             if (bossDefeated) return true;
         }
         
-        // Research: Ignite
         const igniteLevel = researchLevels?.[GuildResearchId.boss_skill_ignite]?.level || 0;
         if (igniteLevel > 0) {
-            const igniteChance = 10 + (igniteLevel * 15);
-            if (Math.random() * 100 < igniteChance) {
-                let igniteDamage = boss.maxHp * 0.001; // Base fixed damage is 0.1% of max HP.
-                const igniteDamageIncreasePercent = igniteLevel * 10; // +10% damage per level
+            const igniteChances = [0, 10, 25, 40, 55, 70, 85, 100];
+            const damageIncreases = [0, 10, 15, 30, 45, 60, 75, 100];
+            const chance = igniteChances[igniteLevel];
+
+            if (Math.random() * 100 < chance) {
+                let igniteDamage = boss.maxHp * 0.001;
+                const igniteDamageIncreasePercent = damageIncreases[igniteLevel];
                 igniteDamage *= (1 + igniteDamageIncreasePercent / 100);
                 igniteDamage = Math.round(igniteDamage);
 
@@ -120,30 +133,31 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
             }
         }
 
-        // Research: Regen
         const regenLevel = researchLevels?.[GuildResearchId.boss_skill_regen]?.level || 0;
-        const regenChance = 10 + (regenLevel * 15);
-        if (Math.random() * 100 < regenChance) {
-            let healAmount = (totalStats[CoreStat.Stability] * 0.5);
-            const healAmountIncreasePercent = regenLevel >= 1 ? (10 * regenLevel) : 0;
-            healAmount *= (1 + healAmountIncreasePercent / 100);
-            healAmount = Math.round(healAmount);
-            userHp = Math.min(maxUserHp, userHp + healAmount);
-            battleLog.push({ turn: turnsSurvived, icon: GUILD_RESEARCH_REGEN_IMG, message: `[연구-지속회복] 발동! HP +${healAmount.toLocaleString()}`, isUserAction: true, healingDone: healAmount });
+        if (regenLevel > 0) {
+            const regenChances = [0, 10, 25, 40, 55, 70, 85, 100];
+            const healIncreases = [0, 10, 20, 40, 60, 80, 100, 150];
+            const chance = regenChances[regenLevel];
+            if (Math.random() * 100 < chance) {
+                let healAmount = (totalStats[CoreStat.Stability] * 0.5);
+                const healAmountIncreasePercent = healIncreases[regenLevel];
+                healAmount *= (1 + healAmountIncreasePercent / 100);
+                healAmount = Math.round(healAmount);
+                userHp = Math.min(maxUserHp, userHp + healAmount);
+                battleLog.push({ turn: turnsSurvived, icon: GUILD_RESEARCH_REGEN_IMG, message: `[연구-지속회복] 발동! HP +${healAmount.toLocaleString()}`, isUserAction: true, healingDone: healAmount });
+            }
         }
         
         return false;
     };
 
     const runBossFullTurn = (): boolean => {
-        // FIX: Moved performDuel to the top of the function scope
         const performDuel = (stat: CoreStat): boolean => {
             const userStat = totalStats[stat];
             const successRate = (userStat / (userStat + 1000)) + (Math.random() * 0.29 + 0.01);
             return Math.random() < successRate;
         };
 
-        // Active Skill
         const activeSkills = boss.skills.filter((s): s is GuildBossActiveSkill => s.type === 'active');
         if (activeSkills.length > 0) {
             const bossSkill = activeSkills[Math.floor(Math.random() * activeSkills.length)];
@@ -161,7 +175,6 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
             let duelResultMessage = '';
             const debuffsForLog: BattleLogEntry['debuffsApplied'] = [];
 
-            // Special handling for complex skills
             if (bossSkill.id === '녹수_포자확산') {
                 let damageRange: [number, number];
                 if (successfulDuels >= 2) damageRange = [2000, 3000];
@@ -195,31 +208,45 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
                         case 'debuff':
                             if (effect.debuffType) {
                                 const value = getRandom(effect.debuffValue![0], effect.debuffValue![1]);
-                                activeDebuffs[effect.debuffType] = { value, turns: effect.debuffDuration! };
-                                // FIX: 'turns' property was incorrectly assigned an array.
-                                debuffsForLog.push({ type: effect.debuffType, value, turns: effect.debuffDuration! });
+                                activeDebuffs[effect.debuffType] = { value, turns: effect.debuffDuration ?? 0 };
+                                debuffsForLog.push({ type: effect.debuffType, value, turns: effect.debuffDuration ?? 0 });
                             }
                             break;
                     }
                 }
             }
             
-            const finalDamageReduction = 200 / (200 + totalStats[CoreStat.Stability]);
-            const finalBossDamage = Math.round(turnBossDamage * finalDamageReduction);
+            let finalBossDamage = turnBossDamage;
+            let defenseMessage = '';
+            
+            const evasionChance = totalStats[CoreStat.Stability] * 0.00005; // 0.005%
+            const missChance = totalStats[CoreStat.Stability] * 0.0001; // 0.01%
+            const randomDefense = Math.random();
+
+            if (randomDefense < evasionChance) {
+                finalBossDamage = 0;
+                defenseMessage = ' (회피!)';
+            } else if (randomDefense < evasionChance + missChance) {
+                finalBossDamage *= 0.5;
+                defenseMessage = ' (빗맞음!)';
+            } else {
+                finalBossDamage *= (100 / (100 + totalStats[CoreStat.Stability]));
+            }
+
+            finalBossDamage = Math.round(finalBossDamage);
             userHp -= finalBossDamage;
 
             let logMessage = `[${boss.name}]의 ${bossSkill.name}! (대결 ${duelResultMessage})`;
-            if(finalBossDamage > 0) logMessage += ` | 유저 HP -${finalBossDamage.toLocaleString()}`;
+            if(finalBossDamage > 0) logMessage += ` | 유저 HP -${finalBossDamage.toLocaleString()}${defenseMessage}`;
             if(turnBossHeal > 0) {
                 totalDamageDealt -= turnBossHeal;
                 logMessage += ` | 보스 HP +${turnBossHeal.toLocaleString()}`;
             }
-            battleLog.push({ turn: turnsSurvived, icon: bossSkill.image, message: logMessage, isUserAction: false, damageTaken: finalBossDamage, healingDone: turnBossHeal, debuffsApplied: debuffsForLog });
+            battleLog.push({ turn: turnsSurvived, icon: bossSkill.image, message: logMessage, isUserAction: false, damageTaken: finalBossDamage, bossHealingDone: turnBossHeal, debuffsApplied: debuffsForLog });
         }
         
         if (userHp <= 0) return true;
         
-        // --- Passive Skills ---
         const passiveSkills = boss.skills.filter((s): s is GuildBossPassiveSkill => s.type === 'passive');
         for (const pSkill of passiveSkills) {
             const processPassiveEffect = (effect: GuildBossSkillSubEffect) => {
@@ -236,6 +263,34 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
                          };
                          battleLog.push({ turn: turnsSurvived, icon: pSkill.image, message: `[${boss.name}]의 ${pSkill.name} 발동! 유저의 회복량이 감소합니다.`, isUserAction: false });
                         break;
+                    case 'heal': {
+                        let passiveHeal = getRandom(effect.value![0], effect.value![1]);
+                        const healBlockLevel = researchLevels?.[GuildResearchId.boss_skill_heal_block]?.level || 0;
+                        
+                        if (healBlockLevel > 0 && passiveHeal > 0) {
+                            const healBlockChances = [0, 10, 25, 40, 55, 70, 85, 100];
+                            const healReductions =   [0, 0,  10, 20, 30, 40, 50, 0];
+                            const chance = healBlockChances[healBlockLevel];
+                            
+                            if (Math.random() * 100 < chance) {
+                                battleLog.push({ turn: turnsSurvived, icon: GUILD_RESEARCH_HEAL_BLOCK_IMG, message: `[연구-회복불가] 발동! 보스의 회복이 막혔습니다.`, isUserAction: true });
+                                passiveHeal = 0;
+                            } else {
+                                const reduction = healReductions[healBlockLevel];
+                                if (reduction > 0) {
+                                    const reducedAmount = Math.round(passiveHeal * (reduction / 100));
+                                    passiveHeal -= reducedAmount;
+                                    battleLog.push({ turn: turnsSurvived, icon: GUILD_RESEARCH_HEAL_BLOCK_IMG, message: `[연구-회복감소] 발동! 보스의 회복량이 ${reducedAmount.toLocaleString()} 감소했습니다.`, isUserAction: true });
+                                }
+                            }
+                        }
+                        
+                        if (passiveHeal > 0) {
+                            totalDamageDealt -= passiveHeal;
+                            battleLog.push({ turn: turnsSurvived, icon: pSkill.image, message: `[${boss.name}]의 ${pSkill.name} 발동! | 보스 HP +${passiveHeal.toLocaleString()}`, isUserAction: false, bossHealingDone: passiveHeal });
+                        }
+                        break;
+                    }
                 }
             };
             
@@ -254,7 +309,6 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
         
         if (userHp <= 0) return true;
 
-        // Decrement debuffs
         Object.keys(activeDebuffs).forEach(key => {
             if (activeDebuffs[key as keyof typeof activeDebuffs].turns > 0) {
                 activeDebuffs[key as keyof typeof activeDebuffs].turns--;
@@ -264,15 +318,21 @@ export const runGuildBossBattle = (user: User, guild: Guild, boss: GuildBossInfo
         return false;
     };
     
+    // Simulate first attack chance
+    const userGoesFirst = Math.random() < (totalStats[CoreStat.ThinkingSpeed] / (1000 + totalStats[CoreStat.ThinkingSpeed]));
+
+    const firstAttacker = userGoesFirst ? runUserFullTurn : runBossFullTurn;
+    const secondAttacker = userGoesFirst ? runBossFullTurn : runUserFullTurn;
+
     for (let turn = 1; turn <= BATTLE_TURNS; turn++) {
         turnsSurvived = turn;
-        if (runUserFullTurn()) break;
+        if (firstAttacker()) break;
         if (userHp <= 0) break;
-        if (runBossFullTurn()) break;
+        if (secondAttacker()) break;
         if (userHp <= 0) break;
     }
     
-    const rewardCoins = 20 + Math.floor(Math.min(1, totalDamageDealt / 2000000) * 80);
+    const rewardCoins = Math.min(200, Math.floor(totalDamageDealt / 1000));
 
     return {
         damageDealt: Math.max(0, Math.round(totalDamageDealt)),

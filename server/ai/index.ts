@@ -1,8 +1,13 @@
 import * as types from '../../types/index.js';
+// FIX: Import SinglePlayerLevel from types instead of constants.
+import { SinglePlayerLevel } from '../../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, BOT_NAMES, AVATAR_POOL, TOWER_STAGES, defaultSettings, SINGLE_PLAYER_STAGES, aiUserId } from '../../constants/index.js';
-import { createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats, createDefaultQuests } from '../initialData.js';
+import { createDefaultSpentStatPoints, defaultStats, createDefaultQuests } from '../initialData.js';
+// FIX: Import createDefaultBaseStats from shared utils.
+import { createDefaultBaseStats } from '../../utils/statUtils.js';
 import { makePlayfulAiMove } from './playfulAi.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
+import { processMove } from '../../utils/goLogic';
 
 
 export { aiUserId };
@@ -101,7 +106,7 @@ export const getAiUser = (mode: types.GameMode, difficulty: number = 50, stageId
         else aiStage = 10;
         
         const displayLevel = aiStage * 5;
-        botName = `도전의 탑 ${floor}층 AI (${displayLevel}레벨)`;
+        botName = '도전의탑 봇';
         botStrategyLevel = displayLevel;
 
     } else if (stageId) { // Single Player
@@ -109,20 +114,38 @@ export const getAiUser = (mode: types.GameMode, difficulty: number = 50, stageId
         if (stage) {
             const aiStage = stage.katagoLevel; // This is 1-10
             const displayLevel = aiStage * 5;
-            botName = `${stage.name} AI (${displayLevel}레벨)`;
+            
+            let botBaseName = '';
+            switch(stage.level) {
+                case SinglePlayerLevel.입문: botBaseName = '입문봇'; break;
+                case SinglePlayerLevel.초급: botBaseName = '초급봇'; break;
+                case SinglePlayerLevel.중급: botBaseName = '중급봇'; break;
+                case SinglePlayerLevel.고급: botBaseName = '고급봇'; break;
+                case SinglePlayerLevel.유단자: botBaseName = '유단자봇'; break;
+            }
+            botName = botBaseName;
             botStrategyLevel = displayLevel;
         }
     } else { // PvP AI
         const difficultyStep = Math.max(1, Math.min(10, Math.round(difficulty / 10)));
         const displayLevel = difficultyStep * 5;
         const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === mode);
+        const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
 
         if (isPlayful) {
-            botName = `${mode}봇 ${displayLevel}레벨`;
             botPlayfulLevel = displayLevel;
         } else { // Strategic
-            botName = `${mode}봇 ${displayLevel}레벨`;
             botStrategyLevel = displayLevel;
+        }
+
+        switch(mode) {
+            case types.GameMode.Standard: botName = '클래식봇'; break;
+            case types.GameMode.Capture: botName = '따내기봇'; break;
+            case types.GameMode.Speed: botName = '스피드봇'; break;
+            case types.GameMode.Hidden: botName = '히든봇'; break;
+            case types.GameMode.Missile: botName = '미사일봇'; break;
+            case types.GameMode.Mix: botName = '믹스룰봇'; break;
+            default: botName = `${mode}봇`; break;
         }
     }
     
@@ -134,7 +157,7 @@ export const getAiUser = (mode: types.GameMode, difficulty: number = 50, stageId
     return bot;
 };
 
-export const makeAiMove = async (game: types.LiveGameSession): Promise<types.Point> => {
+export const makeAiMove = async (game: types.LiveGameSession): Promise<types.Point & { isHidden?: boolean }> => {
     const aiPlayerId = game.player2.id;
     const aiPlayerEnum = game.blackPlayerId === aiPlayerId ? types.Player.Black : (game.whitePlayerId === aiPlayerId ? types.Player.White : types.Player.None);
     const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge;
@@ -146,5 +169,17 @@ export const makeAiMove = async (game: types.LiveGameSession): Promise<types.Poi
         return {x: -3, y: -3};
     }
     
-    return gnuGoServiceManager.generateMove(game.id, aiPlayerEnum, game.settings.boardSize);
+    // NEW HIDDEN LOGIC for SP/Tower
+    if ((game.isSinglePlayer || game.isTowerChallenge) && game.gameType === 'hidden' && !game.aiHiddenStoneUsedThisGame) {
+        const moveCount = game.moveHistory.length;
+        if (moveCount >= 10 && moveCount <= 20) {
+            // AI will use its hidden stone on its first opportunity within this turn window.
+            const move = await gnuGoServiceManager.generateMove(game.id, aiPlayerEnum, game.settings.boardSize);
+            return { ...move, isHidden: true };
+        }
+    }
+    
+    // Regular move
+    const move = await gnuGoServiceManager.generateMove(game.id, aiPlayerEnum, game.settings.boardSize);
+    return { ...move, isHidden: false };
 };

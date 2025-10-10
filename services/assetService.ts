@@ -2,16 +2,13 @@
 
 // Corrected import paths for constants from their specific files.
 import {
-    emptySlotImages, EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS
-} from '../constants/items';
-import { TOURNAMENT_DEFINITIONS } from '../constants/tournaments';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/gameModes';
-import { LEAGUE_DATA, RANKING_TIERS } from '../constants/ranking';
-import { AVATAR_POOL, BORDER_POOL } from '../constants/ui';
-import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG, STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG } from '../assets';
+    emptySlotImages, EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS, TOURNAMENT_DEFINITIONS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, LEAGUE_DATA, RANKING_TIERS, AVATAR_POOL, BORDER_POOL
+} from '../constants.js';
+import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG, STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG } from '../assets.js';
 // Import ItemGrade to resolve type error.
 // FIX: Corrected import path for types.
-import { ItemGrade } from '../types/index';
+// FIX: Removed GameModeInfo, LeagueData, RankingTier as they are not exported from types.
+import { ItemGrade, type TournamentDefinition, type AvatarInfo, type BorderInfo, type InventoryItem } from '../types/index.js';
 
 const gradeBackgrounds: Record<ItemGrade, string> = {
     [ItemGrade.Normal]: '/images/equipments/normalbgi.png',
@@ -51,15 +48,14 @@ const addUrls = (urls: (string | undefined | null)[]) => {
 };
 
 addUrls(Object.values(emptySlotImages));
-addUrls(Object.values(TOURNAMENT_DEFINITIONS).map(d => d.image));
+addUrls(Object.values(TOURNAMENT_DEFINITIONS).map((d: TournamentDefinition) => d.image));
 addUrls(SPECIAL_GAME_MODES.map(m => m.image));
-// Remove redundant inline type annotation; type is now inferred correctly from the typed constant.
 addUrls(PLAYFUL_GAME_MODES.map(m => m.image));
 addUrls(LEAGUE_DATA.map(l => l.icon));
-addUrls(AVATAR_POOL.map(a => a.url));
-addUrls(BORDER_POOL.map(b => b.url));
+addUrls(AVATAR_POOL.map((a: AvatarInfo) => a.url));
+addUrls(BORDER_POOL.map((b: BorderInfo) => b.url));
 addUrls(RANKING_TIERS.map(t => t.icon));
-addUrls(EQUIPMENT_POOL.map(e => e.image));
+addUrls(EQUIPMENT_POOL.map((e: Omit<InventoryItem, 'id' | 'createdAt' | 'isEquipped' | 'level' | 'options' | 'quantity' | 'stars' | 'enhancementFails'>) => e.image));
 addUrls(Object.values(CONSUMABLE_ITEMS).map(c => c.image));
 addUrls(Object.values(MATERIAL_ITEMS).map(m => m.image));
 addUrls([WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG, STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG]);

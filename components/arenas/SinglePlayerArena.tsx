@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel, GameMode } from '../../types/index.js';
+import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel, GameMode, User, UserWithStatus } from '../../types/index.js';
 import GameArena from '../GameArena.js';
 import Sidebar from '../game/Sidebar.js';
 import PlayerPanel from '../game/PlayerPanel.js';
@@ -15,7 +14,7 @@ import TurnCounterPanel from '../game/TurnCounterPanel.js';
 import { SINGLE_PLAYER_STAGES, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/index.js';
 import TowerStatusPanel from '../game/TowerStatusPanel.js';
 import SinglePlayerIntroModal from '../modals/SinglePlayerIntroModal.js';
-import { processMove } from '../../utils/goLogic.js';
+import { processMove } from '../../utils/goLogic';
 import Button from '../Button.js';
 import CurrencyPanel from '../game/CurrencyPanel.js';
 import ChatWindow from '../waiting-room/ChatWindow.js';
@@ -35,15 +34,36 @@ interface SinglePlayerArenaProps {
 
 const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     const { 
-        currentUser, currentUserWithStatus, handlers, onlineUsers,
-        waitingRoomChats, gameChats, negotiations, activeNegotiation, settings,
+        currentUser,
+        currentUserWithStatus,
+        handlers,
+        waitingRoomChats,
+        gameChats,
+        negotiations,
+        activeNegotiation,
+        onlineUsers,
+        settings,
     } = useAppContext();
 
     const { id: gameId, gameStatus, player1, player2, blackByoyomiPeriodsLeft, blackTimeLeft, settings: gameSettings, mode, currentPlayer, moveHistory } = session;
 
-    if (!player1?.id || !player2?.id || !currentUser || !currentUserWithStatus) {
+    if (!currentUser || !currentUserWithStatus) {
         return <div className="flex items-center justify-center min-h-screen">플레이어 정보를 불러오는 중...</div>;
     }
+    
+    // FIX: Refactored gameProps creation into a useMemo hook to prevent potential redeclaration errors from complex build configurations or file concatenations. This change encapsulates the logic and dependencies for creating game-related props.
+    const gameProps: GameProps = useMemo(() => ({
+        session,
+        onAction: handlers.handleAction,
+        currentUser: currentUserWithStatus!,
+        waitingRoomChat: waitingRoomChats['global'] || [],
+        gameChat: [],
+        isSpectator: false,
+        onlineUsers,
+        activeNegotiation,
+        negotiations: Object.values(negotiations),
+        onViewUser: handlers.openViewingUser,
+    }), [session, handlers, currentUserWithStatus, waitingRoomChats, onlineUsers, activeNegotiation, negotiations]);
 
     const [confirmModalType, setConfirmModalType] = useState<'resign' | null>(null);
     const [showResultModal, setShowResultModal] = useState(false);
@@ -55,7 +75,6 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-    const [hasNewMessage, setHasNewMessage] = useState(false);
     const [isPauseCooldown, setIsPauseCooldown] = useState(false);
 
     const isItemModeActive = useMemo(() => 
@@ -64,7 +83,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     );
     
     const handleIntroConfirm = () => {
-        handlers.handleAction({ type: 'CONFIRM_SP_INTRO', payload: { gameId: session.id } });
+        return handlers.handleAction({ type: 'CONFIRM_SP_INTRO', payload: { gameId: session.id } });
     };
 
     useEffect(() => {
@@ -173,6 +192,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     const handleBoardClick = useCallback(async (x: number, y: number) => {
         if (isSubmittingMove || isSpectator || session.gameStatus === 'missile_animating') return;
 
+        // Client-side move validation for standard Go moves
         if (['playing', 'hidden_placing'].includes(gameStatus) && isMyTurn) {
             const validationResult = processMove(
                 session.boardState,
@@ -249,21 +269,6 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
 
     const handleCancelMove = useCallback(() => setPendingMove(null), []);
     
-    const globalChat = waitingRoomChats['global'] || [];
-
-    const gameProps: GameProps = {
-        session,
-        onAction: handlers.handleAction,
-        currentUser: currentUserWithStatus!,
-        waitingRoomChat: globalChat,
-        gameChat: [],
-        isSpectator: false,
-        onlineUsers,
-        activeNegotiation,
-        negotiations: Object.values(negotiations),
-        onViewUser: handlers.openViewingUser,
-    };
-    
     const stageInfo = useMemo(() => SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId), [session.stageId]);
 
     const backgroundClass = useMemo(() => {
@@ -326,7 +331,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                 <SinglePlayerIntroModal session={session} onConfirm={handleIntroConfirm} />
             )}
             
-            <div className="flex-1 flex flex-col lg:flex-row gap-4 min-h-0">
+            <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4">
                 <main className="flex-1 flex flex-col items-center justify-center min-w-0 min-h-0 gap-2">
                     <div className="w-full flex-shrink-0">
                         <PlayerPanel 
@@ -406,7 +411,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                         {isMobileSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMobileSidebarOpen(false)}></div>}
                     </>
                 )}
-            </div>
+            </main>
 
              <GameModals 
                 {...gameProps}

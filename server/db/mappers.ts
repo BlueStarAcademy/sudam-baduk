@@ -1,8 +1,11 @@
-import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
+import { createDefaultQuests, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
+// FIX: Import createDefaultBaseStats from shared utils.
+import { createDefaultBaseStats } from '../../utils/statUtils.js';
 import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, MonthlyQuestData, EquipmentPreset, AppSettings, SinglePlayerMissionState } from '../../types/index.js';
 import { LeagueTier, Player, GameMode } from '../../types/index.js';
 import { DEFAULT_GAME_SETTINGS } from '../../constants/gameSettings.js';
 import { defaultSettings } from '../../constants/settings.js';
+import { getGoLogic } from '../../utils/goLogic';
 
 // An even safer parsing function. It handles non-string, null, undefined, empty strings, and parsing errors.
 const safeParse = (data: any, defaultValue: any) => {

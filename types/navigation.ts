@@ -1,3 +1,4 @@
+
 // types/navigation.ts
 
 // Removed unused imports to break a circular dependency that was causing module loading failures.

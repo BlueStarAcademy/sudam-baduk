@@ -1,5 +1,10 @@
-// FIX: Corrected import path for types.
-import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason } from '../types/index.js';
+// server/modes/omokLogic.ts
+import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus, Negotiation } from '.././types/index.js';
+import { handleSharedAction, updateSharedGameState, transitionToPlaying } from './modes/shared.js';
+import { endGame } from './summaryService.js';
+// FIX: Corrected import for switchTurnAndUpdateTimers from strategic.js
+import { switchTurnAndUpdateTimers } from './modes/strategic.js';
+
 
 export const getOmokLogic = (game: LiveGameSession) => {
     const { settings: { boardSize } } = game;
@@ -213,4 +218,202 @@ export const getOmokLogic = (game: LiveGameSession) => {
         getLineStats,
         calculateMoveScore,
     };
+};
+
+export const initializeOmok = (game: LiveGameSession, neg: Negotiation, now: number) => {
+    const p1 = game.player1;
+    const p2 = game.player2;
+
+    if (game.isAiGame) {
+        const humanPlayerColor = neg.settings.player1Color || Player.Black;
+        if (humanPlayerColor === Player.Black) {
+            game.blackPlayerId = p1.id;
+            game.whitePlayerId = p2.id;
+        } else {
+            game.whitePlayerId = p1.id;
+            game.blackPlayerId = p2.id;
+        }
+        transitionToPlaying(game, now);
+    } else {
+        game.gameStatus = GameStatus.TurnPreferenceSelection;
+        game.turnChoices = { [p1.id]: null, [p2.id]: null };
+        game.turnChoiceDeadline = now + 30000;
+        game.turnSelectionTiebreaker = 'rps';
+    }
+};
+
+export const updateOmokState = async (game: LiveGameSession, now: number) => {
+    if (updateSharedGameState(game, now)) return;
+
+    const isTimedGame = (game.settings.timeLimit ?? 0) > 0;
+    
+    if (isTimedGame && game.gameStatus === GameStatus.Playing && game.turnDeadline && now > game.turnDeadline) {
+        const timedOutPlayer = game.currentPlayer;
+        const winner = timedOutPlayer === Player.Black ? Player.White : Player.Black;
+        const timeKey = timedOutPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+        const byoyomiKey = timedOutPlayer === Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
+
+        const byoyomiTime = game.settings.byoyomiTime ?? 30;
+        const byoyomiCount = game.settings.byoyomiCount ?? 0;
+
+        const wasInMainTime = game[timeKey] > 0;
+
+        if (wasInMainTime) {
+            game[timeKey] = 0; // Enter byoyomi
+            if (byoyomiCount > 0) {
+                game.turnStartTime = now;
+                game.turnDeadline = now + (byoyomiTime > 0 ? byoyomiTime : 30) * 1000;
+            } else {
+                game.lastTimeoutPlayerId = timedOutPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+                game.lastTimeoutPlayerIdClearTime = now + 5000;
+                await endGame(game, winner, WinReason.Timeout);
+            }
+        } else { // Already in byoyomi
+            if (byoyomiCount > 0) {
+                game[byoyomiKey]--; // Decrement a period
+                if (game[byoyomiKey] >= 0) { // Can be 0 after decrement
+                    game.turnStartTime = now;
+                    game.turnDeadline = now + (byoyomiTime > 0 ? byoyomiTime : 30) * 1000;
+                } else {
+                    game.lastTimeoutPlayerId = timedOutPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+                    game.lastTimeoutPlayerIdClearTime = now + 5000;
+                    await endGame(game, winner, WinReason.Timeout);
+                }
+            } else {
+                game.lastTimeoutPlayerId = timedOutPlayer === Player.Black ? game.blackPlayerId! : game.whitePlayerId!;
+                game.lastTimeoutPlayerIdClearTime = now + 5000;
+                await endGame(game, winner, WinReason.Timeout);
+            }
+        }
+    }
+};
+
+export const handleOmokAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
+    const { type, payload } = action as any;
+    const now = Date.now();
+    const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
+    const isMyTurn = myPlayerEnum === game.currentPlayer;
+
+    const sharedResult = await handleSharedAction(volatileState, game, action, user);
+    if (sharedResult) return sharedResult;
+
+    if (type === 'PLACE_STONE' && (game.mode === GameMode.Omok || game.mode === GameMode.Ttamok)) {
+        if (!isMyTurn || game.gameStatus !== 'playing') {
+            return { error: 'Not your turn.' };
+        }
+
+        const { x, y } = payload;
+        if (game.boardState[y][x] !== Player.None) {
+            return { error: 'Stone already placed there.' };
+        }
+        
+        const logic = getOmokLogic(game);
+        
+        if (game.settings.has33Forbidden && game.currentPlayer === Player.Black && logic.is33(x, y, game.boardState)) {
+            return { error: '3-3 is forbidden for Black.' };
+        }
+
+        game.boardState[y][x] = game.currentPlayer;
+        game.lastMove = { x, y };
+        game.moveHistory.push({ player: game.currentPlayer, ...payload });
+
+        const winCheck = logic.checkWin(x, y, game.boardState);
+        if (winCheck) {
+            game.winningLine = winCheck.line;
+            await endGame(game, game.currentPlayer, WinReason.OmokWin);
+            return {};
+        }
+
+        if (game.mode === GameMode.Ttamok) {
+            const { capturedCount } = logic.performTtamokCapture(x, y);
+            game.captures[game.currentPlayer] += capturedCount;
+            if (game.captures[game.currentPlayer] >= (game.settings.captureTarget || 10)) {
+                await endGame(game, game.currentPlayer, WinReason.CaptureLimit);
+                return {};
+            }
+        }
+        
+        switchTurnAndUpdateTimers(game, now);
+        
+        return {};
+    }
+
+    return null;
+};
+
+export const makeOmokAiMove = async (game: LiveGameSession): Promise<void> => {
+    const aiId = game.player2.id;
+    const myPlayerEnum = game.whitePlayerId === aiId ? Player.White : Player.Black;
+    if (game.currentPlayer !== myPlayerEnum) return;
+
+    const logic = getOmokLogic(game);
+    const emptyPoints: Point[] = [];
+    for (let y = 0; y < game.settings.boardSize; y++) {
+        for (let x = 0; x < game.settings.boardSize; x++) {
+            if (game.boardState[y][x] === Player.None) {
+                emptyPoints.push({ x, y });
+            }
+        }
+    }
+    
+    if (emptyPoints.length === 0) { // Should not happen in Omok
+        game.passCount = (game.passCount || 0) + 1;
+        return;
+    }
+
+    let bestMove: Point | null = null;
+    let bestScore = -Infinity;
+
+    // Evaluate my moves
+    for (const point of emptyPoints) {
+        const score = logic.calculateMoveScore(point.x, point.y, myPlayerEnum, game.boardState);
+        if (score > bestScore) {
+            bestScore = score;
+            bestMove = point;
+        }
+    }
+    
+    // Evaluate opponent's potential moves to block
+    let opponentBestScore = -Infinity;
+    let blockMove: Point | null = null;
+    const opponentPlayerEnum = myPlayerEnum === Player.Black ? Player.White : Player.Black;
+    for (const point of emptyPoints) {
+        const score = logic.calculateMoveScore(point.x, point.y, opponentPlayerEnum, game.boardState);
+        if (score > opponentBestScore) {
+            opponentBestScore = score;
+            blockMove = point;
+        }
+    }
+    
+    // If opponent has a winning move, block it. Otherwise, make my best move.
+    if (opponentBestScore >= 100000 && opponentBestScore > bestScore) {
+        bestMove = blockMove;
+    }
+    
+    if (!bestMove) {
+        bestMove = emptyPoints[Math.floor(Math.random() * emptyPoints.length)];
+    }
+
+    const { x, y } = bestMove!;
+    game.boardState[y][x] = game.currentPlayer;
+    game.lastMove = { x, y };
+    game.moveHistory.push({ player: game.currentPlayer, x, y });
+    
+    const winCheck = logic.checkWin(x, y, game.boardState);
+    if (winCheck) {
+        game.winningLine = winCheck.line;
+        await endGame(game, game.currentPlayer, WinReason.OmokWin);
+        return;
+    }
+    
+    if (game.mode === GameMode.Ttamok) {
+        const { capturedCount } = logic.performTtamokCapture(x, y);
+        game.captures[game.currentPlayer] += capturedCount;
+        if (game.captures[game.currentPlayer] >= (game.settings.captureTarget || 10)) {
+            await endGame(game, game.currentPlayer, WinReason.CaptureLimit);
+            return;
+        }
+    }
+
+    switchTurnAndUpdateTimers(game, Date.now());
 };

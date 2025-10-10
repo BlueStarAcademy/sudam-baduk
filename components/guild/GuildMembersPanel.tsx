@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Guild, GuildMember, GuildMemberRole, User } from '../../types/index.js';
+import { Guild as GuildType, GuildMember, GuildMemberRole } from '../../types/index.js';
 import Button from '../Button.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import Avatar from '../Avatar.js';
@@ -7,7 +7,7 @@ import { AVATAR_POOL, BORDER_POOL, GUILD_INITIAL_MEMBER_LIMIT } from '../../cons
 import { formatLastLogin } from '../../utils/timeUtils.js';
 
 interface GuildMembersPanelProps {
-    guild: Guild;
+    guild: GuildType;
     myMemberInfo: GuildMember | undefined;
 }
 
@@ -18,16 +18,19 @@ const Popover: React.FC<{
     onPromote: () => void;
     onDemote: () => void;
     onKick: () => void;
+    onTransfer: () => void;
     onClose: () => void;
-}> = ({ member, isMaster, isVice, onPromote, onDemote, onKick, onClose }) => {
+}> = ({ member, isMaster, isVice, onPromote, onDemote, onKick, onTransfer, onClose }) => {
     const canPromoteToVice = isMaster && member.role === GuildMemberRole.Member;
     const canDemote = isMaster && member.role === GuildMemberRole.Vice;
     const canKick = (isMaster && member.role !== GuildMemberRole.Master) || (isVice && member.role === GuildMemberRole.Member);
+    const canTransfer = isMaster && member.role !== GuildMemberRole.Master;
 
     return (
         <div className="absolute z-10 -top-1 right-full mr-2 w-32 bg-secondary border border-color rounded-lg shadow-xl p-2 space-y-1">
             {canPromoteToVice && <Button onClick={onPromote} className="w-full !text-xs !py-1">부길드장 임명</Button>}
             {canDemote && <Button onClick={onDemote} colorScheme="yellow" className="w-full !text-xs !py-1">부길드장 해임</Button>}
+            {canTransfer && <Button onClick={onTransfer} colorScheme="orange" className="w-full !text-xs !py-1">길드장 위임</Button>}
             {canKick && <Button onClick={onKick} colorScheme="red" className="w-full !text-xs !py-1">추방</Button>}
             <Button onClick={onClose} colorScheme="gray" className="w-full !text-xs !py-1">닫기</Button>
         </div>
@@ -58,8 +61,8 @@ const GuildMembersPanel: React.FC<GuildMembersPanelProps> = ({ guild, myMemberIn
     const isVice = myMemberInfo?.role === GuildMemberRole.Vice;
     const canManage = isMaster || isVice;
 
-    const handleAction = (type: 'PROMOTE' | 'DEMOTE' | 'KICK', targetMemberId: string) => {
-        let actionType: 'GUILD_PROMOTE_MEMBER' | 'GUILD_DEMOTE_MEMBER' | 'GUILD_KICK_MEMBER';
+    const handleAction = (type: 'PROMOTE' | 'DEMOTE' | 'KICK' | 'TRANSFER', targetMemberId: string) => {
+        let actionType: 'GUILD_PROMOTE_MEMBER' | 'GUILD_DEMOTE_MEMBER' | 'GUILD_KICK_MEMBER' | 'GUILD_TRANSFER_MASTERSHIP';
         let confirmMessage = '';
         const targetMember = guild.members.find(m => m.userId === targetMemberId);
         if (!targetMember) return;
@@ -76,6 +79,10 @@ const GuildMembersPanel: React.FC<GuildMembersPanelProps> = ({ guild, myMemberIn
             case 'KICK':
                 actionType = 'GUILD_KICK_MEMBER';
                 confirmMessage = `${targetMember.nickname}님을 길드에서 추방하시겠습니까?`;
+                break;
+            case 'TRANSFER':
+                actionType = 'GUILD_TRANSFER_MASTERSHIP';
+                confirmMessage = `정말로 길드장 권한을 ${targetMember.nickname}님에게 위임하시겠습니까? 이 작업은 되돌릴 수 없습니다.`;
                 break;
         }
 
@@ -100,11 +107,31 @@ const GuildMembersPanel: React.FC<GuildMembersPanelProps> = ({ guild, myMemberIn
             case GuildMemberRole.Member: return 'text-gray-300';
         }
     };
+    
+    const handleLeaveGuild = () => {
+        if (myMemberInfo?.role === GuildMemberRole.Master && guild.members.length > 1) {
+            alert('길드장이 길드를 떠나려면 먼저 다른 길드원에게 길드장을 위임해야 합니다.');
+            return;
+        }
+        const confirmMessage = myMemberInfo?.role === GuildMemberRole.Master && guild.members.length === 1
+            ? '길드의 마지막 멤버입니다. 길드를 떠나면 길드가 해체됩니다. 정말로 떠나시겠습니까?'
+            : '정말로 길드를 떠나시겠습니까?';
+
+        if (window.confirm(confirmMessage)) {
+            handlers.handleAction({ type: 'GUILD_LEAVE', payload: { guildId: guild.id } });
+        }
+    };
 
     return (
         <div className="flex flex-col h-full">
             <div className="flex justify-between items-center mb-4 flex-shrink-0">
                 <h3 className="text-xl font-bold text-highlight">길드원 목록 ({guild.members.length} / {memberLimit})</h3>
+                {myMemberInfo && myMemberInfo.role !== GuildMemberRole.Master && (
+                    <Button onClick={handleLeaveGuild} colorScheme="red" className="!text-xs !py-1">길드 탈퇴</Button>
+                )}
+                {myMemberInfo && myMemberInfo.role === GuildMemberRole.Master && guild.members.length === 1 && (
+                    <Button onClick={handleLeaveGuild} colorScheme="red" className="!text-xs !py-1">길드 해체</Button>
+                )}
             </div>
              <div className="flex text-xs text-tertiary px-2 py-1 mb-2 font-semibold">
                 <div className="flex-1">길드원</div>
@@ -165,6 +192,7 @@ const GuildMembersPanel: React.FC<GuildMembersPanelProps> = ({ guild, myMemberIn
                                                     onPromote={() => handleAction('PROMOTE', member.userId)}
                                                     onDemote={() => handleAction('DEMOTE', member.userId)}
                                                     onKick={() => handleAction('KICK', member.userId)}
+                                                    onTransfer={() => handleAction('TRANSFER', member.userId)}
                                                     onClose={() => setManagingMember(null)}
                                                 />
                                             )}

@@ -1,10 +1,9 @@
 // server/modes/omokLogic.ts
-import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus } from '../../types/index.js';
+import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus, Negotiation } from '../../types/index.js';
 import { handleSharedAction, updateSharedGameState, transitionToPlaying } from './shared.js';
-import { Negotiation } from '../../types/index.js';
 import { endGame } from '../summaryService.js';
-// FIX: Corrected import for switchTurnAndUpdateTimers from standard.js
-import { switchTurnAndUpdateTimers } from './standard.js';
+// FIX: Corrected import for switchTurnAndUpdateTimers from strategic.js
+import { switchTurnAndUpdateTimers } from './strategic.js';
 
 
 export const getOmokLogic = (game: LiveGameSession) => {

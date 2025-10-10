@@ -1,9 +1,9 @@
-
 import React, { useMemo } from 'react';
 // FIX: Separate enum and type imports, and correct import path.
 import { Player, GameMode, GameStatus } from '../../types/index.js';
 import type { GameProps, Point, Move } from '../../types/index.js';
 import GoBoard from '../GoBoard.js';
+import { getGoLogic } from '../../utils/goLogic';
 
 interface GoGameArenaProps extends GameProps {
     isMyTurn: boolean;

@@ -6,7 +6,7 @@ import Button from '../Button.js';
 
 interface SinglePlayerIntroModalProps {
     session: LiveGameSession;
-    onConfirm: () => void;
+    onConfirm: () => Promise<any>;
 }
 
 const gameTypeKorean: Record<GameType, string> = {
@@ -32,10 +32,14 @@ const SinglePlayerIntroModal: React.FC<SinglePlayerIntroModalProps> = ({ session
 
     const [isConfirming, setIsConfirming] = useState(false);
 
-    const handleConfirmClick = () => {
+    const handleConfirmClick = async () => {
         if (isConfirming) return;
         setIsConfirming(true);
-        onConfirm();
+        const result = await onConfirm();
+        if (result && !result.success) {
+            setIsConfirming(false); // Reset on failure
+        }
+        // On success, the modal will unmount automatically
     };
 
     if (!stageInfo) return null;

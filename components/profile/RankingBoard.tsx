@@ -5,7 +5,7 @@ import Avatar from '../Avatar.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import { calculateTotalStats } from '../../utils/statUtils.js';
 
-type RankingTab = 'combat' | 'championship' | 'strategic' | 'playful' | 'manner';
+export type RankingTab = 'combat' | 'championship' | 'strategic' | 'playful' | 'manner';
 
 const getTier = (score: number, rank: number, totalPlayers: number) => {
     if (totalPlayers === 0) return RANKING_TIERS[RANKING_TIERS.length - 1];
@@ -130,7 +130,7 @@ const useRankingData = (
     }, [tab, allUsers, guilds, currentUser.id]);
 };
 
-const RankingPanel: React.FC<{
+export const RankingPanel: React.FC<{
     title: string;
     tabs: { id: RankingTab, label: string }[];
     activeTab: RankingTab;
@@ -142,7 +142,7 @@ const RankingPanel: React.FC<{
     const { topUsers, myRankData, scoreLabel } = useRankingData(activeTab, allUsers, currentUser, guilds);
     
     return (
-        <div className="bg-panel border border-color text-on-panel rounded-lg p-2 md:p-4 flex flex-col h-full">
+        <div className="bg-panel panel-glow text-on-panel rounded-lg p-2 md:p-4 flex flex-col h-full">
             <h3 className="text-xl font-bold text-center mb-2 text-primary flex-shrink-0">{title}</h3>
             <div className="flex bg-tertiary/70 p-1 rounded-lg mb-2 flex-shrink-0">
                 {tabs.map(tab => (
@@ -168,19 +168,25 @@ const RankingPanel: React.FC<{
 };
 
 
-const RankingBoard: React.FC<{ allUsers: User[]; currentUser: UserWithStatus; guilds: Record<string, Guild> }> = ({ allUsers, currentUser, guilds }) => {
+const RankingBoard: React.FC<{ allUsers: User[]; currentUser: UserWithStatus; guilds: Record<string, Guild>, layout?: 'horizontal' | 'vertical' }> = ({ allUsers, currentUser, guilds, layout = 'horizontal' }) => {
     const [activeTab1, setActiveTab1] = useState<RankingTab>('combat');
     const [activeTab2, setActiveTab2] = useState<RankingTab>('championship');
 
     const tabs1: { id: RankingTab, label: string }[] = [ {id: 'combat', label: '전투력'}, {id: 'manner', label: '매너'} ];
     const tabs2: { id: RankingTab, label: string }[] = [ {id: 'championship', label: '챔피언십'}, {id: 'strategic', label: '전략'}, {id: 'playful', label: '놀이'} ];
+    
+    const containerClass = layout === 'vertical'
+        ? 'flex flex-col h-full min-h-0 gap-2'
+        : 'grid grid-cols-1 lg:grid-cols-2 gap-2 h-full min-h-0';
+        
+    const panelWrapperClass = layout === 'vertical' ? 'flex-1 min-h-0' : 'min-h-0';
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 h-full min-h-0">
-            <div className="min-h-0">
+        <div className={containerClass}>
+            <div className={panelWrapperClass}>
                 <RankingPanel title="종합 랭킹" tabs={tabs1} activeTab={activeTab1} onTabClick={setActiveTab1} allUsers={allUsers} currentUser={currentUser} guilds={guilds} />
             </div>
-            <div className="min-h-0">
+            <div className={panelWrapperClass}>
                 <RankingPanel title="게임 랭킹" tabs={tabs2} activeTab={activeTab2} onTabClick={setActiveTab2} allUsers={allUsers} currentUser={currentUser} guilds={guilds} />
             </div>
         </div>

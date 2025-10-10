@@ -1,22 +1,27 @@
 // server/summaryService.ts
-
-import { LiveGameSession, Player, User, GameSummary, StatChange, GameMode, InventoryItem, SpecialStat, WinReason, SinglePlayerStageInfo, QuestReward, GameStatus, InventoryItemType, ItemGrade } from '../types/index.js';
+import { getGoLogic, processMove } from '../utils/goLogic';
 import * as db from './db.js';
+import * as types from '../types/index.js';
+import { calculateUserEffects, createDefaultBaseStats } from '../utils/statUtils.js';
+import * as mannerService from './services/mannerService.js';
 import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, MATERIAL_ITEMS, NO_CONTEST_MOVE_THRESHOLD } from '../constants/index.js';
 import { updateQuestProgress } from './questService.js';
-import * as mannerService from './services/mannerService.js';
 import { openEquipmentBox1, createItemFromTemplate } from './shop.js';
-import { calculateUserEffects } from '../utils/statUtils.js';
-import { randomUUID } from 'crypto';
-import { aiUserId, getAiUser } from './ai/index.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inventoryUtils.js';
 import { defaultStats } from './initialData.js';
+import { analyzeGame } from './kataGoService.js';
+import { gnuGoServiceManager } from './services/gnuGoService.js';
+import { aiUserId, getAiUser } from './ai/index.js';
+import os from 'os';
+import fs from 'fs';
+import path from 'path';
+
 
 const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
 
-const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
+const processSinglePlayerGameSummary = async (game: types.LiveGameSession) => {
     const user = game.player1; // Human is always player1 in single player
-    const isWinner = game.winner === Player.Black; // Human is always black
+    const isWinner = game.winner === types.Player.Black; // Human is always black
     const stage = SINGLE_PLAYER_STAGES.find(s => s.id === game.stageId);
 
     if (!stage) {
@@ -25,7 +30,7 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
     }
     
     // Base summary structure
-    const summary: GameSummary = {
+    const summary: types.GameSummary = {
         xp: { initial: user.strategyXp, change: 0, final: user.strategyXp },
         rating: { initial: 1200, change: 0, final: 1200 }, // Not applicable
         manner: { initial: user.mannerScore, change: 0, final: user.mannerScore },
@@ -88,7 +93,7 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
                         name: `보너스 스탯`,
                         image: '/images/icons/stat_point.png',
                         type: 'consumable',
-                        grade: ItemGrade.Rare,
+                        grade: types.ItemGrade.Rare,
                         quantity: points,
                         options: undefined,
                     } as any);
@@ -128,19 +133,90 @@ const processSinglePlayerGameSummary = async (game: LiveGameSession) => {
     await db.updateUser(user);
 };
 
-export const getGameResult = async (game: LiveGameSession) => {
-    console.log(`[getGameResult] for game ${game.id}`);
+export const getGameResult = async (game: types.LiveGameSession) => {
+    if (game.gameStatus === types.GameStatus.Ended || game.gameStatus === types.GameStatus.NoContest) return;
+    game.gameStatus = types.GameStatus.Scoring;
+    await db.saveGame(game);
+
+    if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
+        // --- GnuGo Scoring ---
+        const gnuGoScoreStr = await gnuGoServiceManager.get(game.id)?.getScoreString();
+        // Parse score string like "B+3.5" or "W+Resign"
+        let blackScore = 0;
+        let whiteScore = game.settings.komi;
+
+        if (gnuGoScoreStr) {
+            const parts = gnuGoScoreStr.split('+');
+            if (parts.length === 2 && !parts[1].toLowerCase().includes('resign')) {
+                const winnerChar = parts[0].trim().toUpperCase();
+                const margin = parseFloat(parts[1]);
+                if (!isNaN(margin)) {
+                    if (winnerChar === 'B') {
+                        blackScore += margin;
+                    } else if (winnerChar === 'W') {
+                        whiteScore += margin;
+                    }
+                }
+            }
+        }
+        
+        const isSpeedMode = ((game.isSinglePlayer || game.isTowerChallenge) && game.gameType === 'speed');
+        const blackTimeBonus = isSpeedMode ? Math.floor((game.blackTimeLeft || 0) / 5) : 0;
+        const whiteTimeBonus = isSpeedMode ? Math.floor((game.whiteTimeLeft || 0) / 5) : 0;
+        
+        game.finalScores = {
+            black: blackScore + blackTimeBonus,
+            white: whiteScore + whiteTimeBonus,
+        };
+
+        // Create a minimal analysis result for display
+        const analysisResult: Partial<types.AnalysisResult> = {
+            scoreDetails: {
+                black: { territory: blackScore, timeBonus: blackTimeBonus, total: blackScore + blackTimeBonus, captures: 0, liveCaptures: 0, deadStones: 0, baseStoneBonus: 0, hiddenStoneBonus: 0, itemBonus: 0 },
+                white: { territory: whiteScore - game.settings.komi, komi: game.settings.komi, timeBonus: whiteTimeBonus, total: whiteScore + whiteTimeBonus, captures: 0, liveCaptures: 0, deadStones: 0, baseStoneBonus: 0, hiddenStoneBonus: 0, itemBonus: 0 },
+            },
+            areaScore: { black: game.finalScores.black, white: game.finalScores.white },
+        };
+        game.analysisResult = { ...game.analysisResult, system: analysisResult as types.AnalysisResult };
+        
+        const winner = game.finalScores.black > game.finalScores.white ? types.Player.Black : types.Player.White;
+        await endGame(game, winner, types.WinReason.Score);
+
+    } else {
+        // --- KataGo Scoring ---
+        const analysisResult = await analyzeGame(game, { maxVisits: 2000 });
+        
+        const isSpeedMode = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
+        if (isSpeedMode) {
+            const timeBonusSecondsPerPoint = 5;
+            const blackTimeBonus = Math.floor((game.blackTimeLeft || 0) / timeBonusSecondsPerPoint);
+            const whiteTimeBonus = Math.floor((game.whiteTimeLeft || 0) / timeBonusSecondsPerPoint);
+            
+            analysisResult.scoreDetails.black.timeBonus = blackTimeBonus;
+            analysisResult.scoreDetails.white.timeBonus = whiteTimeBonus;
+            analysisResult.areaScore.black += blackTimeBonus;
+            analysisResult.areaScore.white += whiteTimeBonus;
+            analysisResult.scoreDetails.black.total += blackTimeBonus;
+            analysisResult.scoreDetails.white.total += whiteTimeBonus;
+        }
+        
+        game.analysisResult = { ...game.analysisResult, system: analysisResult };
+        game.finalScores = { black: analysisResult.areaScore.black, white: analysisResult.areaScore.white };
+        
+        const winner = game.finalScores.black > game.finalScores.white ? types.Player.Black : types.Player.White;
+        await endGame(game, winner, types.WinReason.Score);
+    }
 };
 
-export const endGame = async (game: LiveGameSession, winner: Player, winReason: WinReason): Promise<void> => {
-    if (game.gameStatus === GameStatus.Ended || game.gameStatus === GameStatus.NoContest) {
+export const endGame = async (game: types.LiveGameSession, winner: types.Player, winReason: types.WinReason): Promise<void> => {
+    if (game.gameStatus === types.GameStatus.Ended || game.gameStatus === types.GameStatus.NoContest) {
         return; // Game already ended, do nothing
     }
     game.winner = winner;
     game.winReason = winReason;
-    game.gameStatus = GameStatus.Ended;
+    game.gameStatus = types.GameStatus.Ended;
 
-    if (game.isSinglePlayer) {
+    if (game.isSinglePlayer || game.isTowerChallenge) {
         await processSinglePlayerGameSummary(game);
     } else {
         const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === game.mode);
@@ -154,7 +230,7 @@ export const endGame = async (game: LiveGameSession, winner: Player, winReason: 
     await db.saveGame(game);
 };
 
-const createConsumableItemInstance = (name: string): InventoryItem | null => {
+const createConsumableItemInstance = (name: string): types.InventoryItem | null => {
     const template = CONSUMABLE_ITEMS.find(item => item.name === name);
     if (!template) {
         console.error(`[Reward] Consumable item template not found for: ${name}`);
@@ -163,7 +239,7 @@ const createConsumableItemInstance = (name: string): InventoryItem | null => {
 
     return {
         ...template,
-        id: `item-${randomUUID()}`,
+        id: `item-${globalThis.crypto.randomUUID()}`,
         quantity: 1,
         createdAt: Date.now(),
         isEquipped: false,
@@ -175,14 +251,14 @@ const createConsumableItemInstance = (name: string): InventoryItem | null => {
 };
 
 const calculateGameRewards = (
-    game: LiveGameSession, 
-    player: User,
+    game: types.LiveGameSession, 
+    player: types.User,
     isWinner: boolean, 
     isDraw: boolean,
     itemDropBonus: number,
     materialDropBonus: number,
     rewardMultiplier: number
-): { gold: number; items: InventoryItem[] } => {
+): { gold: number; items: types.InventoryItem[] } => {
     const { mode, settings, isAiGame } = game;
     const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
     
@@ -196,7 +272,7 @@ const calculateGameRewards = (
 
     goldReward = Math.round(goldReward * rewardMultiplier);
 
-    const itemsDropped: InventoryItem[] = [];
+    const itemsDropped: types.InventoryItem[] = [];
     if (isWinner && !isAiGame) {
         const dropChance = 20 * (1 + itemDropBonus / 100) * rewardMultiplier;
         if (Math.random() * 100 < dropChance) {
@@ -217,17 +293,17 @@ const calculateEloChange = (playerRating: number, opponentRating: number, result
 };
 
 const processPlayerSummary = async (
-    player: User,
-    opponent: User,
+    player: types.User,
+    opponent: types.User,
     isWinner: boolean,
     isDraw: boolean,
-    game: LiveGameSession,
+    game: types.LiveGameSession,
     isNoContest: boolean,
     isInitiator: boolean
-): Promise<{ summary: GameSummary; updatedPlayer: User }> => {
+): Promise<{ summary: types.GameSummary; updatedPlayer: types.User }> => {
     
-    const updatedPlayer: User = JSON.parse(JSON.stringify(player));
-    const { mode, winReason, isAiGame } = game;
+    const updatedPlayer: types.User = JSON.parse(JSON.stringify(player));
+    const { mode, winReason, isAiGame, moveHistory } = game;
 
     const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
     const initialLevel = isStrategic ? updatedPlayer.strategyLevel : updatedPlayer.playfulLevel;
@@ -247,8 +323,8 @@ const processPlayerSummary = async (
     const effects = calculateUserEffects(updatedPlayer, null); 
 
     const xpBonusPercent = isStrategic 
-        ? effects.specialStatBonuses[SpecialStat.StrategyXpBonus].percent 
-        : effects.specialStatBonuses[SpecialStat.PlayfulXpBonus].percent;
+        ? effects.specialStatBonuses[types.SpecialStat.StrategyXpBonus].percent 
+        : effects.specialStatBonuses[types.SpecialStat.PlayfulXpBonus].percent;
     if (xpBonusPercent > 0) xpGain = Math.round(xpGain * (1 + xpBonusPercent / 100));
 
     let currentXp = initialXp + xpGain;
@@ -260,7 +336,7 @@ const processPlayerSummary = async (
         requiredXpForCurrentLevel = getXpForLevel(currentLevel);
     }
     
-    const xpSummary: StatChange = { initial: initialXp, change: xpGain, final: currentXp };
+    const xpSummary: types.StatChange = { initial: initialXp, change: xpGain, final: currentXp };
     const levelSummary = {
         initial: initialLevel,
         final: currentLevel,
@@ -290,7 +366,7 @@ const processPlayerSummary = async (
         ratingChange = calculateEloChange(initialRating, opponentRating, result);
     }
     gameStats.rankingScore = Math.max(0, initialRating + ratingChange);
-    const ratingSummary: StatChange = { initial: initialRating, change: ratingChange, final: gameStats.rankingScore };
+    const ratingSummary: types.StatChange = { initial: initialRating, change: ratingChange, final: gameStats.rankingScore };
 
     const mannerChangeFromActions = game.mannerScoreChanges?.[player.id] || 0;
     const initialMannerBeforeGame = player.mannerScore - mannerChangeFromActions;
@@ -301,7 +377,7 @@ const processPlayerSummary = async (
     const finalMannerScore = player.mannerScore + mannerChangeFromGameEnd;
     updatedPlayer.mannerScore = Math.max(0, finalMannerScore);
     const totalMannerChange = mannerChangeFromActions + mannerChangeFromGameEnd;
-    const mannerSummary: StatChange = { initial: initialMannerBeforeGame, change: totalMannerChange, final: updatedPlayer.mannerScore };
+    const mannerSummary: types.StatChange = { initial: initialMannerBeforeGame, change: totalMannerChange, final: updatedPlayer.mannerScore };
     await mannerService.applyMannerRankChange(updatedPlayer, initialMannerBeforeGame);
 
     if (!isNoContest) {
@@ -310,8 +386,8 @@ const processPlayerSummary = async (
     }
     updatedPlayer.stats[mode] = gameStats;
     
-    const itemDropBonus = effects.specialStatBonuses[SpecialStat.ItemDropRate].percent;
-    const materialDropBonus = effects.specialStatBonuses[SpecialStat.MaterialDropRate].percent;
+    const itemDropBonus = effects.specialStatBonuses[types.SpecialStat.ItemDropRate].percent;
+    const materialDropBonus = effects.specialStatBonuses[types.SpecialStat.MaterialDropRate].percent;
     const rewards = isNoContest ? { gold: 0, items: [] } : calculateGameRewards(game, updatedPlayer, isWinner, isDraw, itemDropBonus, materialDropBonus, 1.0);
     updatedPlayer.gold += rewards.gold ?? 0;
 
@@ -322,7 +398,7 @@ const processPlayerSummary = async (
         if (isWinner) updateQuestProgress(updatedPlayer, 'win', mode, 1);
     }
 
-    const summary: GameSummary = {
+    const summary: types.GameSummary = {
         xp: xpSummary,
         rating: ratingSummary,
         manner: mannerSummary,
@@ -336,21 +412,21 @@ const processPlayerSummary = async (
     return { summary, updatedPlayer };
 };
 
-export const processGameSummary = async (game: LiveGameSession): Promise<void> => {
+export const processGameSummary = async (game: types.LiveGameSession): Promise<void> => {
     const { winner, player1, player2, blackPlayerId, whitePlayerId, noContestInitiatorIds, mode, winReason, isAiGame, moveHistory } = game;
     if (!player1 || !player2) {
         console.error(`[Summary] Missing player data for game ${game.id}`);
         return;
     }
 
-    const isEarlyGameAbort = !isAiGame && moveHistory.length < NO_CONTEST_MOVE_THRESHOLD * 2 && (winReason === WinReason.Resign || winReason === WinReason.Disconnect);
+    const isEarlyGameAbort = !isAiGame && moveHistory.length < NO_CONTEST_MOVE_THRESHOLD * 2 && (winReason === types.WinReason.Resign || winReason === types.WinReason.Disconnect);
 
     if (isEarlyGameAbort) {
         console.log(`[Summary] Game ${game.id} is an early-game abort. Processing with penalties.`);
 
-        const p1IsWinner = (winner === Player.Black && player1.id === blackPlayerId) || (winner === Player.White && player1.id === whitePlayerId);
+        const p1IsWinner = (winner === types.Player.Black && player1.id === blackPlayerId) || (winner === types.Player.White && player1.id === whitePlayerId);
         
-        const initiatorId = winReason === WinReason.Resign 
+        const initiatorId = winReason === types.WinReason.Resign 
             ? (p1IsWinner ? player2.id : player1.id)
             : (p1IsWinner ? player2.id : player1.id);
         
@@ -391,7 +467,7 @@ export const processGameSummary = async (game: LiveGameSession): Promise<void> =
             manner: { initial: opponent.mannerScore, change: 0, final: opponent.mannerScore },
         };
 
-        game.gameStatus = GameStatus.NoContest;
+        game.gameStatus = types.GameStatus.NoContest;
         game.statsUpdated = true;
 
         await db.updateUser(initiator);
@@ -409,11 +485,11 @@ export const processGameSummary = async (game: LiveGameSession): Promise<void> =
         return;
     }
 
-    const isDraw = winner === Player.None;
+    const isDraw = winner === types.Player.None;
     const isNoContest = game.gameStatus === 'no_contest';
 
-    const p1IsWinner = !isDraw && !isNoContest && ((winner === Player.Black && p1.id === blackPlayerId) || (winner === Player.White && p1.id === whitePlayerId));
-    const p2IsWinner = !isDraw && !isNoContest && ((winner === Player.Black && p2.id === blackPlayerId) || (winner === Player.White && p2.id === whitePlayerId));
+    const p1IsWinner = !isDraw && !isNoContest && ((winner === types.Player.Black && p1.id === blackPlayerId) || (winner === types.Player.White && p1.id === whitePlayerId));
+    const p2IsWinner = !isDraw && !isNoContest && ((winner === types.Player.Black && p2.id === blackPlayerId) || (winner === types.Player.White && p2.id === whitePlayerId));
     
     const p1IsNoContestInitiator = isNoContest && (noContestInitiatorIds?.includes(p1.id) ?? false);
     const p2IsNoContestInitiator = isNoContest && (noContestInitiatorIds?.includes(p2.id) ?? false);

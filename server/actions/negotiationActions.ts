@@ -1,15 +1,131 @@
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus, Player, Point, WinReason, UserStatus, Negotiation, GameStatus as GameStatusEnum } from '../../types/index.js';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, Negotiation, GameMode, UserStatus, Player, GameStatus as GameStatusEnum, Guild } from '../../types/index.js';
+import { handleStrategicGameAction } from '../modes/strategic.js';
+import { handlePlayfulGameAction } from '../modes/playful.js';
+import { handleSinglePlayerGameStart, handleSinglePlayerRefresh, handleConfirmSPIntro } from '../modes/singlePlayerMode.js';
+import { handleTowerChallengeGameStart, handleTowerChallengeRefresh, handleTowerAddStones } from '../modes/towerChallengeMode.js';
+import { handleUserAction } from './userActions.js';
+import { handleInventoryAction } from './inventoryActions.js';
+import { handleShopAction } from './shopActions.js';
+import { handleRewardAction } from './rewardActions.js';
+import { handleSocialAction } from './socialActions.js';
+import { handleTournamentAction } from './tournamentActions.js';
+import { handleAdminAction } from './adminActions.js';
+import { handleGuildAction } from './guildActions.js';
+import { handlePresetAction } from './presetActions.js';
+import { TOWER_STAGES } from '../../constants/index.js';
+import * as currencyService from '../currencyService.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_POINT_COST, PLAYFUL_ACTION_POINT_COST, DEFAULT_GAME_SETTINGS } from '../../constants/index.js';
 import { initializeGame } from '../gameModes.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
-import { aiUserId, getAiUser } from '../ai/index.js';
+import { aiUserId, getAiUser, makeAiMove } from '../ai/index.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
+import { processMove } from '../../utils/goLogic';
+import { endGame, getGameResult } from '../summaryService.js';
+// FIX: Imported `switchTurnAndUpdateTimers` from strategic.js to resolve function not found errors.
+import { switchTurnAndUpdateTimers } from '../modes/strategic.js';
 
+export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player) => {
+    try {
+        const gameId = gameFromAction.id;
+        
+        const aiPlayerId = gameFromAction.player2.id;
+        const aiPlayerEnum = gameFromAction.blackPlayerId === aiPlayerId ? Player.Black : (gameFromAction.whitePlayerId === aiPlayerId ? Player.White : Player.None);
 
-type HandleActionResult = { 
-    clientResponse?: any;
-    error?: string;
+        if (gameFromAction.currentPlayer !== aiPlayerEnum) return;
+
+        await gnuGoServiceManager.playUserMove(gameId, userMove, userPlayerEnum, gameFromAction.settings.boardSize, gameFromAction.moveHistory, gameFromAction.finalKomi ?? gameFromAction.settings.komi);
+        
+        const aiMove = await makeAiMove(gameFromAction) as (Point & { isHidden?: boolean });
+
+        const freshGame = await db.getLiveGame(gameId);
+        if (!freshGame || freshGame.currentPlayer !== aiPlayerEnum) {
+            console.log(`[AI Turn] Game state changed or game ended while AI was thinking. Aborting AI move for game ${gameId}.`);
+            return;
+        }
+
+        if (aiMove.isHidden) {
+            freshGame.gameStatus = GameStatus.AiHiddenThinking;
+            freshGame.aiTurnStartTime = Date.now();
+            await db.saveGame(freshGame);
+
+            setTimeout(async () => {
+                try {
+                    const gameAfterWait = await db.getLiveGame(gameId);
+                    if (!gameAfterWait || gameAfterWait.gameStatus !== GameStatus.AiHiddenThinking) return;
+
+                    gameAfterWait.aiHiddenStoneUsedThisGame = true;
+
+                    const result = processMove(gameAfterWait.boardState, { x: aiMove.x, y: aiMove.y, player: aiPlayerEnum }, gameAfterWait.koInfo, gameAfterWait.moveHistory.length);
+                    
+                    if (!result.isValid) {
+                        console.error(`[AI HIDDEN MOVE ERROR] AI generated an invalid move: ${JSON.stringify(aiMove)} for game ${gameAfterWait.id}. Reason: ${result.reason}. AI resigns.`);
+                        const winner = aiPlayerEnum === Player.Black ? Player.White : Player.Black;
+                        await endGame(gameAfterWait, winner, WinReason.Resign);
+                        await db.saveGame(gameAfterWait);
+                        return;
+                    }
+
+                    gameAfterWait.boardState = result.newBoardState;
+                    gameAfterWait.lastMove = { x: aiMove.x, y: aiMove.y };
+                    gameAfterWait.moveHistory.push({ player: aiPlayerEnum, x: aiMove.x, y: aiMove.y });
+                    
+                    if (!gameAfterWait.hiddenMoves) gameAfterWait.hiddenMoves = {};
+                    gameAfterWait.hiddenMoves[gameAfterWait.moveHistory.length - 1] = true;
+
+                    if (result.capturedStones.length > 0) {
+                        gameAfterWait.captures[aiPlayerEnum] += result.capturedStones.length;
+                    }
+
+                    gameAfterWait.koInfo = result.newKoInfo;
+                    gameAfterWait.passCount = 0;
+                    gameAfterWait.gameStatus = GameStatus.Playing;
+                    switchTurnAndUpdateTimers(gameAfterWait, Date.now());
+                    await db.saveGame(gameAfterWait);
+
+                } catch (e) {
+                    console.error(`[AI HIDDEN MOVE ERROR] for game ${gameId}:`, e);
+                }
+            }, 5000); // 5-second thinking delay
+        } else {
+            if (aiMove.x === -3 && aiMove.y === -3) { // Sentinel for playful AI
+                await db.saveGame(freshGame); // Playful AI modifies game state directly
+                return;
+            }
+
+            if (aiMove.x === -1 && aiMove.y === -1) { // AI Passed
+                freshGame.passCount++;
+                freshGame.lastMove = { x: -1, y: -1 };
+                freshGame.moveHistory.push({ player: freshGame.currentPlayer, x: -1, y: -1 });
+                if (freshGame.passCount >= 2) {
+                    await getGameResult(freshGame);
+                    await db.saveGame(freshGame);
+                    return;
+                }
+            } else { // AI made a regular move
+                const result = processMove(freshGame.boardState, { ...aiMove, player: freshGame.currentPlayer }, freshGame.koInfo, freshGame.moveHistory.length);
+                if (!result.isValid) {
+                    console.error(`[AI Error] AI generated an invalid move: ${JSON.stringify(aiMove)} for game ${freshGame.id}. Reason: ${result.reason}. AI resigns.`);
+                    const winner = freshGame.currentPlayer === Player.Black ? Player.White : Player.Black;
+                    await endGame(freshGame, winner, WinReason.Resign);
+                    await db.saveGame(freshGame);
+                    return;
+                }
+                freshGame.boardState = result.newBoardState;
+                freshGame.lastMove = { x: aiMove.x, y: aiMove.y };
+                freshGame.moveHistory.push({ player: freshGame.currentPlayer, ...aiMove });
+                freshGame.koInfo = result.newKoInfo;
+                freshGame.passCount = 0;
+                if (result.capturedStones.length > 0) {
+                     freshGame.captures[freshGame.currentPlayer] += result.capturedStones.length;
+                }
+            }
+            switchTurnAndUpdateTimers(freshGame, Date.now());
+            await db.saveGame(freshGame);
+        }
+    } catch (err) {
+        console.error(`[AI TURN ERROR] for game ${gameFromAction.id}:`, err);
+    }
 };
 
 const getActionPointCost = (mode: GameMode): number => {
@@ -94,7 +210,6 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             volatileState.negotiations[negotiationId] = newNegotiation;
             const userStatusInfo = volatileState.userStatuses[user.id];
             userStatusInfo.status = UserStatus.Negotiating;
-            // FIX: Add missing 'stateEnteredAt' property.
             userStatusInfo.stateEnteredAt = now;
             
             return { clientResponse: { newNegotiation, userStatusUpdate: userStatusInfo } };

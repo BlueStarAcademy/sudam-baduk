@@ -1,14 +1,14 @@
-import { createClient } from 'https://aistudiocdn.com/@supabase/supabase-js@2.58.0';
-import { User } from '../types';
-
-// Extend the Supabase User type with our app-specific metadata if needed in the future
-export type SupabaseUser = User;
+import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL and Anon Key must be provided in environment variables.');
+    const rootEl = document.getElementById('root');
+    if (rootEl) {
+        rootEl.innerHTML = '<div style="color:red;padding:2rem;text-align:center;font-family:sans-serif;"><h2>Configuration Error</h2><p>Supabase environment variables are missing. Please check your .env file and restart the server.</p></div>';
+    }
+    throw new Error('Supabase URL and Anon Key must be provided in environment variables.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

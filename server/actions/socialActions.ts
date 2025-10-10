@@ -10,6 +10,15 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
 
     switch (type) {
         case 'LOGOUT': {
+            const userStatus = volatileState.userStatuses[user.id];
+            if (userStatus && userStatus.status === UserStatus.InGame && userStatus.gameId) {
+                const game = await db.getLiveGame(userStatus.gameId);
+                if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
+                    await db.deleteGame(game.id);
+                    console.log(`[Logout] Deleted active AI game ${game.id} for user ${user.id}.`);
+                }
+            }
+
             delete volatileState.userConnections[user.id];
             delete volatileState.userStatuses[user.id];
             delete volatileState.userSessions[user.id];
@@ -114,7 +123,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             const { gameId } = payload;
             const game = await db.getLiveGame(gameId);
             // Only the player of the AI game should be able to delete it
-            if (game && game.isAiGame && game.player1.id === user.id) {
+            if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) && game.player1.id === user.id) {
                 await db.deleteGame(gameId);
             }
             if (volatileState.userStatuses[user.id]) {

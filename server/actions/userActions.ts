@@ -1,5 +1,8 @@
-import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild } from '../../types/index.js';
+
+
+
 import * as db from '../db.js';
+import { type ServerAction, type User, type VolatileState, HandleActionResult, GameMode, Guild } from '../../types/index.js';
 import { containsProfanity } from '../../profanity.js';
 import { createDefaultSpentStatPoints } from '../initialData.js';
 import * as currencyService from '../currencyService.js';

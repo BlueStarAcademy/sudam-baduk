@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './components/App';
+// FIX: Changed import to a default import as App is exported as default.
+import App from './components/App.js';
 import './index.css';
 import { AppProvider } from './contexts/AppContext';
 
@@ -39,10 +40,13 @@ const AppContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   }, []);
 
   const desktopStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
     width: `${BASE_WIDTH}px`,
     height: `${BASE_HEIGHT}px`,
-    transform: `scale(${scale})`,
-    transformOrigin: 'center center', // Scale from the center
+    transform: `translate(-50%, -50%) scale(${scale})`,
+    transformOrigin: 'center center',
   };
 
   // On mobile, use a standard responsive flow without scaling.

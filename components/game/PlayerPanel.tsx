@@ -241,33 +241,37 @@ interface PlayerPanelProps extends GameProps {
 }
 
 const getTurnDuration = (mode: GameMode, gameStatus: GameStatus, settings: GameSettings): number => {
-    const isFoulMode = PLAYFUL_GAME_MODES.some(m => m.mode === mode) && ![GameMode.Omok, GameMode.Ttamok].includes(mode);
-    if (!isFoulMode) {
-        return settings.timeLimit * 60;
+    // 1. Check for detailed timeControl object first (for SP/Tower and future modes)
+    if (settings.timeControl) {
+        return (settings.timeControl.mainTime || 0) * 60;
     }
 
-    switch (mode) {
-        case GameMode.Alkkagi:
-            if (gameStatus === 'alkkagi_placement') {
-                return ALKKAGI_PLACEMENT_TIME_LIMIT;
-            }
-            if (gameStatus === 'alkkagi_simultaneous_placement') {
-                return ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT;
-            }
-            return ALKKAGI_TURN_TIME_LIMIT;
-        case GameMode.Curling:
-            return CURLING_TURN_TIME_LIMIT;
-        case GameMode.Dice:
-            if (gameStatus === 'dice_rolling') return DICE_GO_MAIN_ROLL_TIME;
-            if (gameStatus === 'dice_placing') return DICE_GO_MAIN_PLACE_TIME;
-            return DICE_GO_MAIN_ROLL_TIME;
-        case GameMode.Thief:
-             if (gameStatus === 'thief_rolling') return DICE_GO_MAIN_ROLL_TIME;
-             if (gameStatus === 'thief_placing') return DICE_GO_MAIN_PLACE_TIME;
-             return DICE_GO_MAIN_ROLL_TIME;
-        default:
-            return settings.timeLimit * 60;
+    // 2. Check for playful modes with specific turn timings
+    const isFoulMode = PLAYFUL_GAME_MODES.some(m => m.mode === mode) && ![GameMode.Omok, GameMode.Ttamok].includes(mode);
+    if (isFoulMode) {
+        switch (mode) {
+            case GameMode.Alkkagi:
+                if (gameStatus === 'alkkagi_placement') return ALKKAGI_PLACEMENT_TIME_LIMIT;
+                if (gameStatus === 'alkkagi_simultaneous_placement') return ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT;
+                return ALKKAGI_TURN_TIME_LIMIT;
+            case GameMode.Curling:
+                return CURLING_TURN_TIME_LIMIT;
+            case GameMode.Dice:
+                if (gameStatus === 'dice_rolling') return DICE_GO_MAIN_ROLL_TIME;
+                if (gameStatus === 'dice_placing') return DICE_GO_MAIN_PLACE_TIME;
+                return DICE_GO_MAIN_ROLL_TIME;
+            case GameMode.Thief:
+                 if (gameStatus === 'thief_rolling') return DICE_GO_MAIN_ROLL_TIME;
+                 if (gameStatus === 'thief_placing') return DICE_GO_MAIN_PLACE_TIME;
+                 return DICE_GO_MAIN_ROLL_TIME;
+            default:
+                // Fallthrough to default timeLimit for other potential playful modes
+                break;
+        }
     }
+
+    // 3. Fallback to simple timeLimit for all other cases (e.g., standard PvP)
+    return settings.timeLimit * 60;
 };
 
 

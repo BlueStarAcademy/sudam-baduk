@@ -1,3 +1,4 @@
+// server/guildService.ts
 import { Guild, GuildMemberRole, GuildMission, GuildMissionProgressKey, ChatMessage, Mail, GuildResearchId } from '../types/index.js';
 import * as db from './db.js';
 import { GUILD_MISSIONS_POOL, GUILD_XP_PER_LEVEL } from '../constants/index.js';
@@ -27,7 +28,7 @@ export const addContribution = (guild: Guild, userId: string, amount: number) =>
 // FIX: Added optional guildsToUpdate parameter to prevent race conditions and allow passing the guilds object from the caller.
 export const updateGuildMissionProgress = async (guildId: string, missionType: GuildMissionProgressKey, amount: number | string, guildsToUpdate?: Record<string, Guild>) => {
     // FIX: Add parentheses to clarify operator precedence between '??' and '||'.
-    const guilds = (guildsToUpdate ?? await db.getKV<Record<string, Guild>>('guilds')) || {};
+    const guilds = ((guildsToUpdate ?? await db.getKV<Record<string, Guild>>('guilds')) || {});
     const guild = guilds[guildId];
     if (!guild || !guild.weeklyMissions) return;
 
@@ -57,45 +58,15 @@ export const updateGuildMissionProgress = async (guildId: string, missionType: G
             // Check for completion here!
             if (!mission.isCompleted && mission.progress >= mission.target) {
                 mission.isCompleted = true;
-                const finalXp = calculateGuildMissionXp(mission.guildReward.guildXp, guild.level);
-                guild.xp += finalXp;
-                checkGuildLevelUp(guild);
                 missionUpdated = true;
                 
-                // Send mail to participating members
-                const allUsers = await db.getAllUsers();
-                const membersToReward = guild.members.filter(m => m.weeklyContribution > 0);
-                for (const member of membersToReward) {
-                    const userToUpdate = allUsers.find(u => u.id === member.userId);
-                    if (userToUpdate) {
-                        const mail: Mail = {
-                            id: `mail-mission-${randomUUID()}`,
-                            from: '길드 시스템',
-                            title: `주간 길드 임무 완료 보상`,
-                            message: `길드 임무 [${mission.title}] 달성을 축하합니다! 모든 참여 길드원에게 개인 보상이 지급되었습니다.`,
-                            attachments: {
-                                guildCoins: mission.personalReward.guildCoins,
-                            },
-                            receivedAt: Date.now(),
-                            expiresAt: Date.now() + 5 * 24 * 60 * 60 * 1000, // 5 days
-                            isRead: false,
-                            attachmentsClaimed: false,
-                        };
-                        if (!userToUpdate.mail) userToUpdate.mail = [];
-                        userToUpdate.mail.unshift(mail);
-                        await db.updateUser(userToUpdate);
-                    }
-                }
-                // Mark as claimed for all members to prevent any legacy UI from trying to claim again
-                mission.claimedBy = guild.members.map(m => m.userId);
-                
-                // Add a system message to guild chat
+                // Add a system message to guild chat to notify users to claim their reward
                 if (!guild.chatHistory) guild.chatHistory = [];
                 const message: ChatMessage = {
                     id: `msg-guild-${randomUUID()}`,
                     user: { id: 'system', nickname: '시스템' },
                     system: true,
-                    text: `주간 임무 [${mission.title}]을(를) 달성했습니다! 길드 경험치 +${finalXp.toLocaleString()} 및 참여자 보상이 지급되었습니다.`,
+                    text: `주간 임무 [${mission.title}]을(를) 달성했습니다! 길드 활동 > 길드 미션 탭에서 보상을 수령하세요.`,
                     timestamp: Date.now(),
                 };
                 guild.chatHistory.push(message);
@@ -131,6 +102,7 @@ export const resetWeeklyGuildMissions = (guild: Guild, now: number) => {
         towerFloor50Conquerors: [],
         towerFloor100Conquerors: [],
         bossAttempts: 0,
+        epicGearAcquisitions: 0,
     };
     guild.lastMissionReset = now;
 };

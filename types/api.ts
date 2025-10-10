@@ -1,3 +1,4 @@
+
 // FIX: Removed AppSettings from this import. It is not directly exported from entities and not directly used in this file.
 import { User, UserWithStatus, LiveGameSession, Negotiation, ChatMessage, Guild, TournamentState, TowerRank } from './entities';
 import { UserStatus, GameMode } from './enums';
@@ -191,8 +192,8 @@ export type ServerActionType =
   | 'GUILD_UPDATE_ANNOUNCEMENT'
   | 'GUILD_CHECK_IN'
   | 'GUILD_CLAIM_CHECK_IN_REWARD'
-  | 'GUILD_UPDATE_PROFILE'
   | 'GUILD_CLAIM_MISSION_REWARD'
+  | 'GUILD_UPDATE_PROFILE'
   | 'GUILD_DONATE_GOLD'
   | 'GUILD_DONATE_DIAMOND'
   | 'GUILD_START_RESEARCH'

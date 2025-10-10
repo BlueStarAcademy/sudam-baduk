@@ -1,13 +1,14 @@
+
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
 import Button from './Button.js';
-import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType, InventoryItem, SinglePlayerStageInfo, SinglePlayerMissionInfo } from '../types/index.js';
+import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType, InventoryItem, SinglePlayerStageInfo } from '../types/index.js';
 import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../constants/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import { getMissionInfoWithLevel } from '../utils/questUtils.js';
 
 interface UpgradeMissionModalProps {
-    mission: SinglePlayerMissionInfo;
+    mission: SinglePlayerStageInfo;
     currentUser: UserWithStatus;
     onClose: () => void;
     onAction: (action: ServerAction) => void;
@@ -20,18 +21,23 @@ const UpgradeMissionModal: React.FC<UpgradeMissionModalProps> = ({ mission, curr
     const currentInfo = getMissionInfoWithLevel(mission, currentLevel);
     const nextInfo = getMissionInfoWithLevel(mission, currentLevel + 1);
 
+    // FIX: Defined progressTowardNextLevel from missionState to resolve reference error.
+    const progressTowardNextLevel = missionState?.progressTowardNextLevel ?? 0;
+
     const goldCost = useMemo(() => {
         if (currentInfo.rewardType === 'gold') {
-            return currentInfo.maxCapacity * 5;
+            return (currentInfo.maxCapacity ?? 0) * 5;
         } else { // diamonds
-            return currentInfo.maxCapacity * 1000;
+            return (currentInfo.maxCapacity ?? 0) * 1000;
         }
     }, [currentInfo]);
 
     const canAfford = currentUser.gold >= goldCost;
+    const upgradeTarget = (currentInfo.maxCapacity ?? 1) * 10;
+    const canUpgrade = progressTowardNextLevel >= upgradeTarget;
 
     const handleConfirm = () => {
-        if (canAfford) {
+        if (canAfford && canUpgrade) {
             onAction({ type: 'UPGRADE_SINGLE_PLAYER_MISSION', payload: { missionId: mission.id } });
             onClose();
         }
@@ -44,16 +50,17 @@ const UpgradeMissionModal: React.FC<UpgradeMissionModalProps> = ({ mission, curr
                 <div className="grid grid-cols-2 gap-4 my-4">
                     <div className="bg-secondary p-3 rounded-lg">
                         <h3 className="font-bold text-lg text-gray-400">현재 레벨 ({currentLevel})</h3>
-                        <p>최대 저장량: {currentInfo.maxCapacity.toLocaleString()}</p>
+                        <p>최대 저장량: {(currentInfo.maxCapacity ?? 0).toLocaleString()}</p>
                         <p>생산 속도: {currentInfo.productionRateMinutes}분 / {currentInfo.rewardAmount}개</p>
                     </div>
                      <div className="bg-secondary p-3 rounded-lg border-2 border-yellow-400">
                         <h3 className="font-bold text-lg text-yellow-300">다음 레벨 ({currentLevel + 1})</h3>
-                        <p>최대 저장량: {nextInfo.maxCapacity.toLocaleString()}</p>
+                        <p>최대 저장량: {(nextInfo.maxCapacity ?? 0).toLocaleString()}</p>
                         <p>생산 속도: {nextInfo.productionRateMinutes}분 / {nextInfo.rewardAmount}개</p>
                     </div>
                 </div>
                 <div className="bg-tertiary p-3 rounded-lg text-sm">
+                    <p>강화 조건: 누적 수령량 {upgradeTarget.toLocaleString()} / {progressTowardNextLevel.toLocaleString()}</p>
                     <p>강화 비용:</p>
                     <div className="flex justify-center gap-4 mt-2">
                         <p className={`font-bold text-lg flex items-center gap-1 ${!canAfford ? 'text-red-400' : 'text-highlight'}`}>
@@ -63,7 +70,7 @@ const UpgradeMissionModal: React.FC<UpgradeMissionModalProps> = ({ mission, curr
                 </div>
                  <div className="flex justify-end gap-4 mt-6">
                     <Button onClick={onClose} colorScheme="gray">취소</Button>
-                    <Button onClick={handleConfirm} colorScheme="green" disabled={!canAfford}>강화</Button>
+                    <Button onClick={handleConfirm} colorScheme="green" disabled={!canAfford || !canUpgrade}>강화</Button>
                 </div>
             </div>
         </DraggableWindow>
@@ -88,7 +95,7 @@ const gameTypeKorean: Record<GameType, string> = {
 };
 
 const StageListItem: React.FC<{
-    stage: typeof SINGLE_PLAYER_STAGES[0];
+    stage: SinglePlayerStageInfo;
     isLocked: boolean;
     isCleared: boolean;
     isCurrent: boolean;
@@ -224,7 +231,7 @@ const MissionCard: React.FC<{
     isUnlocked: boolean;
     onStart: () => void;
     onClaim: () => void;
-    onUpgrade: (mission: SinglePlayerMissionInfo) => void;
+    onUpgrade: (mission: SinglePlayerStageInfo) => void;
 }> = ({ mission, isUnlocked, onStart, onClaim, onUpgrade }) => {
     const { currentUserWithStatus } = useAppContext();
     const missionState = currentUserWithStatus?.singlePlayerMissions?.[mission.id];
@@ -235,33 +242,33 @@ const MissionCard: React.FC<{
     const lastCollectionTime = missionState?.lastCollectionTime ?? 0;
     
     const leveledMissionInfo = useMemo(() => getMissionInfoWithLevel(mission, currentLevel), [mission, currentLevel]);
-    const upgradeTarget = leveledMissionInfo.maxCapacity * 10;
-    const upgradeProgress = Math.min(100, (progressTowardNextLevel / upgradeTarget) * 100);
+    const upgradeTarget = (leveledMissionInfo.maxCapacity ?? 1) * 10;
+    const upgradeProgress = Math.min(100, (progressTowardNextLevel / (upgradeTarget || 1)) * 100);
     const canUpgrade = upgradeProgress >= 100 && currentLevel < 10;
     
     const rewardIcon = mission.rewardType === 'gold' ? '/images/Gold.png' : '/images/Zem.png';
     const [tick, setTick] = useState(0);
 
     useEffect(() => {
-        if (!isStarted || claimableAmount >= leveledMissionInfo.maxCapacity) return;
+        if (!isStarted || claimableAmount >= (leveledMissionInfo.maxCapacity ?? Infinity)) return;
         const timerId = setInterval(() => setTick(t => t + 1), 1000);
         return () => clearInterval(timerId);
     }, [isStarted, claimableAmount, leveledMissionInfo.maxCapacity]);
 
     const { displayAmount, timeToNextReward } = useMemo(() => {
         if (!isStarted) return { displayAmount: 0, timeToNextReward: 0 };
-        const productionIntervalMs = leveledMissionInfo.productionRateMinutes * 60 * 1000;
+        const productionIntervalMs = (leveledMissionInfo.productionRateMinutes ?? 0) * 60 * 1000;
         if (productionIntervalMs <= 0) return { displayAmount: claimableAmount, timeToNextReward: 0 };
 
         const elapsedMs = Date.now() - lastCollectionTime;
         const rewardsGenerated = Math.floor(elapsedMs / productionIntervalMs);
-        const amountGenerated = rewardsGenerated * leveledMissionInfo.rewardAmount;
+        const amountGenerated = rewardsGenerated * (leveledMissionInfo.rewardAmount ?? 0);
         const newAccumulated = claimableAmount + amountGenerated;
         
-        const currentDisplayAmount = Math.min(newAccumulated, leveledMissionInfo.maxCapacity);
+        const currentDisplayAmount = Math.min(newAccumulated, leveledMissionInfo.maxCapacity ?? 0);
 
         let nextRewardTime = 0;
-        if (currentDisplayAmount < leveledMissionInfo.maxCapacity) {
+        if (currentDisplayAmount < (leveledMissionInfo.maxCapacity ?? 0)) {
             const effectiveLastCollection = lastCollectionTime + (rewardsGenerated * productionIntervalMs);
             const elapsedSinceLastTick = Date.now() - effectiveLastCollection;
             nextRewardTime = productionIntervalMs - elapsedSinceLastTick;
@@ -285,14 +292,13 @@ const MissionCard: React.FC<{
         );
     }
     
-    const progressPercent = (displayAmount / leveledMissionInfo.maxCapacity) * 100;
+    const progressPercent = (displayAmount / (leveledMissionInfo.maxCapacity || 1)) * 100;
 
     const formatTime = (ms: number): string => {
         if (ms <= 0) return "00:00";
         const totalSeconds = Math.floor(ms / 1000);
         const minutes = Math.floor(totalSeconds / 60);
         const seconds = totalSeconds % 60;
-        // FIX: Fix "Type 'String' has no call signatures" error by using .toString() method
         return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     };
 
@@ -306,10 +312,17 @@ const MissionCard: React.FC<{
             
             {isStarted ? (
                 <div className="flex-shrink-0 space-y-1 mt-1">
+                    <div className="w-full bg-tertiary rounded-full h-3 relative overflow-hidden border border-black/20" title="수령 가능 보상">
+                        <div className="bg-green-500 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
+                        <span className="absolute inset-0 text-[10px] font-bold text-white flex items-center justify-center" style={{ textShadow: '1px 1px 1px black' }}>
+                            {Math.floor(displayAmount).toLocaleString()}/{(leveledMissionInfo.maxCapacity ?? 0).toLocaleString()}
+                             ({displayAmount < (leveledMissionInfo.maxCapacity ?? 0) ? formatTime(timeToNextReward) : 'MAX'})
+                        </span>
+                    </div>
                     <div className="w-full bg-tertiary rounded-full h-2.5 relative overflow-hidden border border-black/20" title="강화 진행도">
                         <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${upgradeProgress}%` }}></div>
                     </div>
-                     <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-1">
                         <Button onClick={() => onUpgrade(mission)} disabled={!canUpgrade} colorScheme="blue" className="flex-1 !py-1 !text-[10px] lg:!text-xs">
                             강화
                         </Button>
@@ -317,20 +330,12 @@ const MissionCard: React.FC<{
                             수령
                         </Button>
                     </div>
-
-                    <div className="w-full bg-tertiary rounded-full h-3 relative overflow-hidden border border-black/20" title="수령 가능 보상">
-                        <div className="bg-green-500 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
-                        <span className="absolute inset-0 text-[10px] font-bold text-white flex items-center justify-center" style={{ textShadow: '1px 1px 1px black' }}>
-                            {Math.floor(displayAmount).toLocaleString()}/{leveledMissionInfo.maxCapacity.toLocaleString()}
-                             ({displayAmount < leveledMissionInfo.maxCapacity ? formatTime(timeToNextReward) : 'MAX'})
-                        </span>
-                    </div>
                 </div>
             ) : (
                  <div className="flex-shrink-0 mt-auto">
                     <div className="text-[10px] text-tertiary text-center mb-1">
                         <img src={rewardIcon} alt={mission.rewardType} className="w-4 h-4 inline-block mr-1" />
-                        <span>{mission.rewardAmount.toLocaleString()}/{mission.productionRateMinutes}분 (최대: {mission.maxCapacity.toLocaleString()})</span>
+                        <span>{(mission.rewardAmount ?? 0).toLocaleString()}/{(mission.productionRateMinutes ?? 0)}분 (최대: {(mission.maxCapacity ?? 0).toLocaleString()})</span>
                     </div>
                     <Button onClick={onStart} colorScheme="blue" className="w-full mt-auto !py-1 !text-[10px] lg:!text-xs">
                         시작하기
@@ -344,7 +349,7 @@ const MissionCard: React.FC<{
 const SinglePlayerLobby: React.FC = () => {
     const { currentUserWithStatus, handlers } = useAppContext();
     const [activeLevelIndex, setActiveLevelIndex] = useState(0);
-    const [upgradingMission, setUpgradingMission] = useState<SinglePlayerMissionInfo | null>(null);
+    const [upgradingMission, setUpgradingMission] = useState<SinglePlayerStageInfo | null>(null);
     const scrollContainerRef = useRef<HTMLUListElement>(null);
     const stageRefs = useRef<Map<string, HTMLLIElement | null>>(new Map());
 

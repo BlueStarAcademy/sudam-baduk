@@ -23,8 +23,8 @@ type Term = { term: string; meaning: string };
 
 const generateQuizQuestions = (): Question[] => {
     // FIX: Correctly merge arrays of Term objects.
+    // FIX: Add null check for TOWER_PROVERBS before spreading
     const allTerms: Term[] = [
-        // FIX: Add null check for TOWER_PROVERBS before spreading
         ...(TOWER_PROVERBS || []),
         ...Object.values(GO_TERMS_BY_LEVEL).flat(),
     ];

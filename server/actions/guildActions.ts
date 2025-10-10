@@ -21,6 +21,7 @@ import { addItemsToInventory } from '../../utils/inventoryUtils.js';
 import { openGuildGradeBox } from '../shop.js';
 import { randomUUID } from 'crypto';
 import { updateQuestProgress } from '../questService.js';
+import { calculateGuildMissionXp } from '../../utils/guildUtils.js';
 
 const getRandomInt = (min: number, max: number): number => {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -334,6 +335,34 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
 
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
+            return { clientResponse: { updatedUser: user, guilds } };
+        }
+        case 'GUILD_CLAIM_MISSION_REWARD': {
+            const { missionId } = payload;
+            if (!user.guildId) return { error: '길드에 가입되어 있지 않습니다.' };
+            const guild = guilds[user.guildId];
+            if (!guild) return { error: '길드를 찾을 수 없습니다.' };
+        
+            const mission = guild.weeklyMissions.find(m => m.id === missionId);
+        
+            if (!mission) return { error: '미션을 찾을 수 없습니다.' };
+            if (!mission.isCompleted) return { error: '아직 완료되지 않은 미션입니다.' };
+            if (mission.claimedBy.includes(user.id)) return { error: '이미 수령한 보상입니다.' };
+
+            // Grant Guild XP EVERY time a member claims.
+            const finalXp = calculateGuildMissionXp(mission.guildReward.guildXp, guild.level);
+            guild.xp += finalXp;
+            guildService.checkGuildLevelUp(guild);
+            
+            // Grant personal reward (Guild Coins)
+            user.guildCoins = (user.guildCoins || 0) + mission.personalReward.guildCoins;
+        
+            // Mark as claimed by the current user
+            mission.claimedBy.push(user.id);
+            
+            await db.setKV('guilds', guilds);
+            await db.updateUser(user);
+        
             return { clientResponse: { updatedUser: user, guilds } };
         }
         case 'GUILD_DONATE_GOLD':

@@ -94,7 +94,6 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             volatileState.negotiations[negotiationId] = newNegotiation;
             const userStatusInfo = volatileState.userStatuses[user.id];
             userStatusInfo.status = UserStatus.Negotiating;
-            // FIX: Add missing 'stateEnteredAt' property.
             userStatusInfo.stateEnteredAt = now;
             
             return { clientResponse: { newNegotiation, userStatusUpdate: userStatusInfo } };
@@ -229,9 +228,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             const game = await initializeGame(negotiation, guilds);
             await db.saveGame(game);
             
-            // FIX: Add missing 'stateEnteredAt' property to conform to UserStatusInfo
             volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: now };
-            // FIX: Add missing 'stateEnteredAt' property to conform to UserStatusInfo
             volatileState.userStatuses[game.player2.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: now };
             
             if (negotiation.rematchOfGameId) {
@@ -335,7 +332,6 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
 
             await db.saveGame(game);
             
-            // FIX: Add missing 'stateEnteredAt' property to conform to UserStatusInfo
             volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: now };
             
             const draftNegId = Object.keys(volatileState.negotiations).find(id => {

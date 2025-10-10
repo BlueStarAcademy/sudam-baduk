@@ -1,10 +1,11 @@
-import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, SinglePlayerLevel, UserStatus } from '../../types/index.js';
+
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, SinglePlayerLevel, UserStatus, Negotiation } from '../../types/index.js';
 import * as db from '../db.js';
 import { initializeGame } from '../gameModes.js';
-import { Negotiation } from '../../types/index.js';
 import { SINGLE_PLAYER_STAGES } from '../../constants/index.js';
 import * as currencyService from '../currencyService.js';
 import { getAiUser } from '../ai/index.js';
+// FIX: Add missing import for gnuGoServiceManager to resolve reference errors.
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
 
 export const handleSinglePlayerGameStart = async (volatileState: VolatileState, payload: any, user: User, guilds: Record<string, Guild>): Promise<HandleActionResult> => {
@@ -40,7 +41,7 @@ export const handleSinglePlayerGameStart = async (volatileState: VolatileState, 
             komi: 6.5,
             player1Color: Player.Black,
             aiDifficulty: stage.katagoLevel * 10,
-            ...stage.timeControl,
+            timeControl: stage.timeControl,
             autoEndTurnCount: stage.autoEndTurnCount,
             missileCount: stage.missileCount,
             hiddenStoneCount: stage.hiddenStoneCount,
@@ -58,7 +59,7 @@ export const handleSinglePlayerGameStart = async (volatileState: VolatileState, 
 
     // User request: remove turn limit for intro and dan capture/survival stages if not explicitly defined
     if (!stage.autoEndTurnCount) {
-        const stageNum = parseInt(stage.id.split('-')[1]);
+        const stageNum = parseInt(stage.id.split('-')[1], 10);
         if (stage.level === SinglePlayerLevel.입문 || (stage.level === SinglePlayerLevel.유단자 && stageNum <= 5)) {
             if (stage.gameType === 'capture' || stage.gameType === 'survival') {
                 game.autoEndTurnCount = undefined;
@@ -110,7 +111,12 @@ export const handleSinglePlayerGameStart = async (volatileState: VolatileState, 
         }
     }
 
-    await gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi, game.boardState);
+    // FIX: Corrected an invalid call to 'gnuGoServiceManager.create' that was passing too many arguments.
+    // The initial board state is now correctly synced using a subsequent 'resync' call.
+    const gnuGoInstance = gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi);
+    if (gnuGoInstance) {
+        await gnuGoInstance.resync([], game.boardState);
+    }
 
     await db.saveGame(game);
     volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
@@ -178,7 +184,9 @@ export const handleSinglePlayerRefresh = async (game: LiveGameSession, user: Use
         }
     }
     
-    await gnuGoServiceManager.get(game.id)?.resync([], game.settings.boardSize, game.settings.komi, game.boardState);
+    // FIX: Expected 1 arguments, but got 2.
+    // The `resync` method now correctly handles a board state argument, resolving the error.
+    await gnuGoServiceManager.get(game.id)?.resync([], game.boardState);
 
     await db.updateUser(user);
     // Game is already saved by the caller (handleAction)
@@ -194,12 +202,32 @@ export const handleConfirmSPIntro = async (gameId: string, user: User): Promise<
     if (game.gameStatus === GameStatus.SinglePlayerIntro) {
         game.gameStatus = GameStatus.Playing;
         game.currentPlayer = Player.Black;
-        if (game.settings.timeLimit > 0 || game.settings.timeControl) {
-            const now = Date.now();
-            game.turnStartTime = now;
-            const mainTimeSeconds = game.settings.timeControl?.mainTime ? game.settings.timeControl.mainTime * 60 : game.settings.timeLimit * 60;
-            game.turnDeadline = now + mainTimeSeconds * 1000;
+        
+        const now = Date.now();
+        game.turnStartTime = now;
+        
+        const tc = game.settings.timeControl;
+        
+        if (tc) {
+            const mainTimeSeconds = (tc.mainTime || 0) * 60;
+            
+            game.blackTimeLeft = mainTimeSeconds;
+            game.whiteTimeLeft = mainTimeSeconds;
+
+            if (tc.type === 'byoyomi') {
+                game.blackByoyomiPeriodsLeft = tc.byoyomiCount || 3;
+                game.whiteByoyomiPeriodsLeft = tc.byoyomiCount || 3;
+
+                if (mainTimeSeconds > 0) {
+                    game.turnDeadline = now + mainTimeSeconds * 1000;
+                } else {
+                    game.turnDeadline = now + (tc.byoyomiTime || 30) * 1000;
+                }
+            } else if (tc.type === 'fischer') {
+                game.turnDeadline = now + mainTimeSeconds * 1000;
+            }
         }
+        
         await db.saveGame(game);
     }
     return {};

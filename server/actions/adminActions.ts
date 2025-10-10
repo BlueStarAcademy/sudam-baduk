@@ -1,3 +1,4 @@
+
 import * as db from '../db.js';
 import { 
     type ServerAction, 
@@ -17,14 +18,15 @@ import {
     WinReason,
     GameStatus as GameStatusEnum // Use alias to avoid conflict
 } from '../../types/index.js';
-import { defaultStats, createDefaultBaseStats, createDefaultSpentStatPoints, createDefaultUser } from '../initialData.js';
+// FIX: Removed `createDefaultBaseStats` from this import as it's not exported from `initialData.js`.
+import { defaultStats, createDefaultSpentStatPoints, createDefaultUser } from '../initialData.js';
 import * as summaryService from '../summaryService.js';
 import { createItemFromTemplate } from '../shop.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants/items.js';
 import * as mannerService from '../services/mannerService.js';
 import { containsProfanity } from '../../profanity.js';
-// FIX: Import `calculateUserEffects` from the correct utility file.
-import { calculateUserEffects } from '../../utils/statUtils.js';
+// FIX: Import `calculateUserEffects` and `createDefaultBaseStats` from the correct utility file.
+import { calculateUserEffects, createDefaultBaseStats } from '../../utils/statUtils.js';
 import * as currencyService from '../currencyService.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
 // FIX: Add crypto import for password hashing.

@@ -1,5 +1,7 @@
 
-import { createDefaultQuests, createDefaultBaseStats, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
+// FIX: Import createDefaultBaseStats from shared utils as it's not exported from initialData.js.
+import { createDefaultQuests, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
+import { createDefaultBaseStats } from '../../utils/statUtils.js';
 import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, MonthlyQuestData, EquipmentPreset, AppSettings, SinglePlayerMissionState } from '../../types/index.js';
 import { LeagueTier, Player, GameMode } from '../../types/index.js';
 import { DEFAULT_GAME_SETTINGS } from '../../constants/gameSettings.js';

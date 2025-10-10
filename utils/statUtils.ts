@@ -1,7 +1,18 @@
+
 import type { User, Guild, MannerEffects } from '../types/index.js';
 import { CoreStat, SpecialStat, MythicStat, GuildResearchId } from '../types/index.js';
 import { GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index.js';
 import { getMannerEffects } from './mannerUtils.js';
+
+// FIX: Add createDefaultBaseStats function and export it for shared use.
+export const createDefaultBaseStats = (): Record<CoreStat, number> => ({
+    [CoreStat.Concentration]: 100,
+    [CoreStat.ThinkingSpeed]: 100,
+    [CoreStat.Judgment]: 100,
+    [CoreStat.Calculation]: 100,
+    [CoreStat.CombatPower]: 100,
+    [CoreStat.Stability]: 100,
+});
 
 export interface CalculatedEffects extends MannerEffects {
     maxActionPoints: number;

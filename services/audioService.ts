@@ -1,8 +1,8 @@
 // FIX: Corrected import path for types.
-import { ItemGrade } from '../types/index';
+import { ItemGrade } from '../types/index.js';
 // FIX: Corrected import path for types.
-import type { SoundSettings } from '../types/index';
-import { defaultSettings } from '../constants/settings';
+import type { SoundSettings } from '../types/index.js';
+import { defaultSettings } from '../constants/settings.js';
 
 class AudioService {
     private audioContext: AudioContext | null = null;

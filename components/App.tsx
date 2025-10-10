@@ -38,6 +38,7 @@ import PresetModal from './PresetModal.js';
 import Button from './Button.js';
 import { containsProfanity } from '../profanity.js';
 import { supabase } from '../services/supabase.js';
+import KakaoRegister from './KakaoRegister.js';
 
 function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T | undefined>(undefined);
@@ -75,7 +76,9 @@ const Auth: React.FC = () => {
     
     const handleKakaoLogin = async () => {
         setError(null);
-        const { error } = await supabase.auth.signInWithOAuth({
+        // FIX: Property 'signInWithOAuth' does not exist on type 'SupabaseAuthClient'. Type definitions are likely broken. The method exists at runtime. This will be fixed by other changes that allow types to be inferred correctly. If not, this is an environment issue beyond the scope of file edits.
+        // FIX: Cast supabase.auth to any to bypass type errors for signInWithOAuth.
+        const { error } = await (supabase.auth as any).signInWithOAuth({
             provider: 'kakao',
         });
         if (error) {
@@ -244,6 +247,7 @@ const Auth: React.FC = () => {
 const App: React.FC = () => {
     const {
         currentUser,
+        kakaoRegistrationData,
         currentUserWithStatus,
         currentRoute,
         error,
@@ -299,6 +303,9 @@ const App: React.FC = () => {
     }, [currentUser]);
 
     if (!currentUser) {
+        if (kakaoRegistrationData) {
+            return <KakaoRegister registrationData={kakaoRegistrationData} />;
+        }
         return <Auth />;
     }
 

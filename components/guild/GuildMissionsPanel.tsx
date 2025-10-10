@@ -14,9 +14,18 @@ interface GuildMissionsPanelProps {
 }
 
 const MissionItem: React.FC<{ mission: GuildMission; guildLevel: number; }> = ({ mission, guildLevel }) => {
-    const { currentUserWithStatus } = useAppContext();
+    const { currentUserWithStatus, handlers } = useAppContext();
     const isComplete = mission.progress >= mission.target;
     const percentage = mission.target > 0 ? Math.min((mission.progress / mission.target) * 100, 100) : 100;
+    
+    const isClaimed = mission.claimedBy.includes(currentUserWithStatus!.id);
+    const canClaim = isComplete && !isClaimed;
+
+    const handleClaim = () => {
+        if (canClaim) {
+            handlers.handleAction({ type: 'GUILD_CLAIM_MISSION_REWARD', payload: { missionId: mission.id } });
+        }
+    };
     
     const finalXp = calculateGuildMissionXp(mission.guildReward.guildXp, guildLevel);
 
@@ -32,7 +41,7 @@ const MissionItem: React.FC<{ mission: GuildMission; guildLevel: number; }> = ({
             </div>
             <div className="w-36 text-center flex-shrink-0 flex flex-col items-center gap-1 relative">
                 <div className="w-full flex flex-col items-center justify-center bg-tertiary/50 rounded-md p-1">
-                    <p className="text-[10px] text-secondary">개인 보상 (우편 지급)</p>
+                    <p className="text-[10px] text-secondary">개인 보상</p>
                     <div className="flex items-center gap-1 text-sm font-semibold">
                          <img src="/images/guild/tokken.png" alt="Guild Coin" className="w-4 h-4" />
                         <span>{mission.personalReward.guildCoins}</span>
@@ -46,11 +55,12 @@ const MissionItem: React.FC<{ mission: GuildMission; guildLevel: number; }> = ({
                     </div>
                 </div>
                 <Button
-                    disabled={true}
-                    colorScheme={isComplete ? 'green' : 'gray'}
+                    onClick={handleClaim}
+                    disabled={!canClaim}
+                    colorScheme={canClaim ? 'green' : 'gray'}
                     className="w-full !text-sm !py-1"
                 >
-                    {isComplete ? '달성' : '진행 중'}
+                    {isClaimed ? '완료' : (isComplete ? '받기' : '진행 중')}
                 </Button>
             </div>
         </div>
@@ -62,7 +72,7 @@ const GuildMissionsPanel: React.FC<GuildMissionsPanelProps> = ({ guild, onClose 
         <DraggableWindow title="주간 길드 임무" onClose={onClose} windowId="guild-missions" initialWidth={750}>
             <div className="flex flex-col">
                 <div className="flex-shrink-0 mb-4">
-                    <p className="text-sm text-tertiary">길드원들과 협력하여 임무를 완수하고 보상을 획득하세요. 완료 시 모든 길드원에게 보상이 우편으로 지급되며, 매주 월요일에 초기화됩니다.</p>
+                    <p className="text-sm text-tertiary">길드원들과 협력하여 임무를 완수하고 보상을 획득하세요. 완료 시 모든 길드원이 보상을 우편으로 지급되며, 매주 월요일에 초기화됩니다.</p>
                 </div>
                 <div className="flex-grow overflow-y-auto pr-2 max-h-[calc(70vh-100px)]">
                     {guild.weeklyMissions && guild.weeklyMissions.length > 0 ? (

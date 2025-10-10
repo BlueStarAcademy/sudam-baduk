@@ -1,14 +1,11 @@
-
-
-
-
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { LiveGameSession, User, Player, KomiBid, ServerAction, Point } from '../types.js';
+import { LiveGameSession, User, Player, KomiBid, ServerAction, Point, BoardState } from '.././types/index.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
 import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG } from '../assets.js';
 import { DEFAULT_KOMI, aiUserId } from '../constants/index.js';
 import Slider from './ui/Slider.js';
+import { getGoLogic } from '../utils/goLogic';
 
 interface KomiBiddingPanelProps {
     session: LiveGameSession;
@@ -183,7 +180,7 @@ const KomiBiddingPanel: React.FC<KomiBiddingPanelProps> = (props) => {
                     <h3 className="text-lg font-bold mb-2">설정 완료!</h3>
                     <p className="text-gray-400 animate-pulse">상대방의 설정을 기다리고 있습니다...</p>
                     <div className="flex justify-center items-center h-20">
-                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-100"></div>
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-100"></div>
                     </div>
                 </div>
              </DraggableWindow>

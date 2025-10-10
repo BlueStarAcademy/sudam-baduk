@@ -367,32 +367,102 @@ export const runScheduledTasks = async () => {
     if (isDifferentWeekKST(lastGuildResetTime, now)) {
         console.log('[Scheduler] Performing weekly guild resets...');
         const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
+        const allUsers = await db.getAllUsers(); // Fetch all users once
+
         for(const guild of Object.values(guilds)) {
+            // Distribute boss rewards
+            if (guild.guildBossState) {
+                const currentBoss = GUILD_BOSSES.find(b => b.id === guild.guildBossState!.currentBossId);
+                if (currentBoss) {
+                    const damageDealt = currentBoss.maxHp - guild.guildBossState.currentBossHp;
+                    const damagePercent = (damageDealt / currentBoss.maxHp) * 100;
+                    
+                    let guildCoinReward = 0;
+                    if (damagePercent >= 100) guildCoinReward = 500;
+                    else if (damagePercent >= 75) guildCoinReward = 300;
+                    else if (damagePercent >= 50) guildCoinReward = 150;
+                    else if (damagePercent >= 25) guildCoinReward = 75;
+
+                    if (guildCoinReward > 0) {
+                        const participantIds = Object.keys(guild.guildBossState.totalDamageLog);
+                        for (const userId of participantIds) {
+                            const userToReward = allUsers.find(u => u.id === userId);
+                            if (userToReward) {
+                                const mail: Mail = {
+                                    id: `mail-boss-reward-${userId}-${now}`,
+                                    from: '시스템',
+                                    title: '주간 길드 보스 보상',
+                                    message: `지난 주 길드 보스전 참여 보상입니다. 길드원들이 보스에게 총 ${damagePercent.toFixed(1)}%의 피해를 입혔습니다.`,
+                                    attachments: { guildCoins: guildCoinReward },
+                                    receivedAt: now,
+                                    expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+                                    isRead: false,
+                                    attachmentsClaimed: false,
+                                };
+                                if (!userToReward.mail) userToReward.mail = [];
+                                userToReward.mail.unshift(mail);
+                                await db.updateUser(userToReward);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Reset guild state for the new week
             guildService.resetWeeklyGuildMissions(guild, now);
             guild.members.forEach(m => m.weeklyContribution = 0);
             if (!guild.dailyCheckInRewardsClaimed) guild.dailyCheckInRewardsClaimed = [];
             guild.dailyCheckInRewardsClaimed = [];
             
-            if (guild.guildBossState) {
-                const currentBossIndex = GUILD_BOSSES.findIndex(b => b.id === guild.guildBossState!.currentBossId);
-                const nextBossIndex = (currentBossIndex + 1) % GUILD_BOSSES.length;
-                const nextBoss = GUILD_BOSSES[nextBossIndex];
-                
-                guild.guildBossState.currentBossId = nextBoss.id;
-                guild.guildBossState.currentBossHp = nextBoss.maxHp;
-                guild.guildBossState.totalDamageLog = {};
-                guild.guildBossState.lastReset = now;
-            } else {
-                const firstBoss = GUILD_BOSSES[0];
-                guild.guildBossState = {
-                    currentBossId: firstBoss.id,
-                    currentBossHp: firstBoss.maxHp,
-                    totalDamageLog: {},
-                    lastReset: now,
-                };
-            }
+            const firstBoss = GUILD_BOSSES[0];
+            guild.guildBossState = {
+                currentBossId: firstBoss.id,
+                currentBossHp: firstBoss.maxHp,
+                totalDamageLog: {},
+                lastReset: now,
+            };
         }
         await db.setKV('guilds', guilds);
         await db.setKV('lastGuildWeeklyResetTime', now);
     }
+};
+
+export const performOneTimeGuildResearchMigration = async () => {
+    const migrationFlag = await db.getKV('oneTimeGuildResearchMigration_20250916');
+    if (migrationFlag) {
+        return;
+    }
+
+    console.log('[MIGRATION] Performing one-time guild research level migration...');
+    const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
+    let updated = false;
+
+    for (const guildId in guilds) {
+        const guild = guilds[guildId];
+        let guildUpdated = false;
+
+        if (!guild.research) {
+            guild.research = {};
+            guildUpdated = true;
+        }
+
+        for (const researchId of Object.values(GuildResearchId)) {
+            if (!guild.research[researchId] || guild.research[researchId]!.level === 0) {
+                guild.research[researchId] = { level: 1 };
+                guildUpdated = true;
+            }
+        }
+        
+        if (guildUpdated) {
+            updated = true;
+        }
+    }
+
+    if (updated) {
+        await db.setKV('guilds', guilds);
+        console.log(`[MIGRATION] Guild research levels updated for ${Object.keys(guilds).length} guilds.`);
+    }
+
+    await db.setKV('oneTimeGuildResearchMigration_20250916', true);
+    console.log('[MIGRATION] One-time guild research migration complete.');
 };

@@ -3,10 +3,13 @@ import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove } from '../types.js';
-import * as types from '../types.js';
+import * as types from '../types/index.js';
 import { fileURLToPath } from 'url';
-// FIX: import process to use process.platform
-import process from 'process';
+// FIX: Use 'node:process' to ensure proper type resolution for the process object.
+// FIX: Removed explicit import of 'process' to rely on the global Node.js process object.
+// This resolves type errors where properties like 'exit' or 'platform' are not found.
+import { processMove } from '../utils/goLogic';
+
 // FIX: Import Buffer to correctly type stream data.
 import { Buffer } from 'buffer';
 
@@ -14,6 +17,8 @@ import { Buffer } from 'buffer';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename); // .../server
 
+// FIX: Property 'platform' does not exist on type 'Process'.
+// Relying on the global `process` object from Node.js environment.
 const isWindows = process.platform === 'win32';
 const exeName = isWindows ? 'katago.exe' : 'katago';
 const KATAGO_DIR = path.resolve(__dirname, '..', 'katago');

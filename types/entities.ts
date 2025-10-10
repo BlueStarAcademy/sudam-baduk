@@ -677,6 +677,7 @@ export interface TowerRank {
 }
 
 // Single Player Types
+// FIX: Add missing properties from SinglePlayerMissionInfo to SinglePlayerStageInfo
 export interface SinglePlayerStageInfo {
     id: string;
     name: string;
@@ -698,18 +699,14 @@ export interface SinglePlayerStageInfo {
     floor?: number;
     mode?: GameMode;
     mixedModes?: GameMode[];
-}
-
-export interface SinglePlayerMissionInfo {
-    id: string;
-    name: string;
-    description: string;
-    unlockStageId: string;
-    productionRateMinutes: number;
-    rewardType: 'gold' | 'diamonds';
-    rewardAmount: number;
-    maxCapacity: number;
-    image: string;
+    // Properties from SinglePlayerMissionInfo
+    description?: string;
+    unlockStageId?: string;
+    image?: string;
+    productionRateMinutes?: number;
+    rewardType?: 'gold' | 'diamonds';
+    rewardAmount?: number;
+    maxCapacity?: number;
 }
 
 export interface SinglePlayerMissionState {
@@ -790,6 +787,7 @@ export interface GuildMissionProgress {
     towerFloor50Conquerors: string[];
     towerFloor100Conquerors: string[];
     bossAttempts: number;
+    epicGearAcquisitions: number;
 }
 
 export interface GuildResearchProject {
@@ -873,6 +871,7 @@ export interface BattleLogEntry {
     isUserAction?: boolean;
     damageTaken?: number;
     healingDone?: number;
+    bossHealingDone?: number;
     isCrit?: boolean;
 }
 

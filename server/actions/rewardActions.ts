@@ -1,3 +1,4 @@
+
 import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult, Guild } from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
@@ -18,7 +19,14 @@ import {
     SYNTHESIS_COSTS,
     SYNTHESIS_UPGRADE_CHANCES,
     EQUIPMENT_POOL,
-    ENHANCEMENT_LEVEL_REQUIREMENTS
+    ENHANCEMENT_LEVEL_REQUIREMENTS,
+    DAILY_MILESTONE_REWARDS,
+    WEEKLY_MILESTONE_REWARDS,
+    MONTHLY_MILESTONE_REWARDS,
+    DAILY_MILESTONE_THRESHOLDS,
+    WEEKLY_MILESTONE_THRESHOLDS,
+    MONTHLY_MILESTONE_THRESHOLDS,
+    SINGLE_PLAYER_MISSIONS
 } from '../../constants/index.js';
 import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
 // FIX: Import `calculateUserEffects` from the correct utility file.
@@ -26,7 +34,6 @@ import { calculateUserEffects } from '../../utils/statUtils.js';
 import * as currencyService from '../currencyService.js';
 import * as guildService from '../guildService.js';
 import { isSameDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../../utils/timeUtils.js';
-import { DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_REWARDS, DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS, SINGLE_PLAYER_MISSIONS } from '../../constants/index.js';
 import { getMissionInfoWithLevel, accumulateMissionRewards } from '../questService.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../../utils/inventoryUtils.js';
 
@@ -231,7 +238,7 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
             const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
 
             // Check if storage was full before claiming
-            const wasFull = missionState.claimableAmount >= leveledMissionInfo.maxCapacity;
+            const wasFull = missionState.claimableAmount >= (leveledMissionInfo.maxCapacity ?? Infinity);
         
             const amountToClaim = Math.floor(missionState.claimableAmount);
             const reward: QuestReward = {};
@@ -285,16 +292,16 @@ export const handleRewardAction = async (volatileState: VolatileState, action: S
         
             const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, currentLevel);
         
-            const upgradeTarget = leveledMissionInfo.maxCapacity * 10;
+            const upgradeTarget = (leveledMissionInfo.maxCapacity ?? Infinity) * 10;
             if ((missionState.progressTowardNextLevel || 0) < upgradeTarget) {
                 return { error: '강화에 필요한 누적 수령액이 부족합니다.' };
             }
         
             let goldCost: number;
             if (leveledMissionInfo.rewardType === 'gold') {
-                goldCost = leveledMissionInfo.maxCapacity * 5;
+                goldCost = (leveledMissionInfo.maxCapacity ?? 0) * 5;
             } else { // diamonds
-                goldCost = leveledMissionInfo.maxCapacity * 1000;
+                goldCost = (leveledMissionInfo.maxCapacity ?? 0) * 1000;
             }
 
             if (user.gold < goldCost) {

@@ -1,8 +1,9 @@
 
 
+
 import { type LiveGameSession, Player, GameMode, GameStatus, type ServerAction, type User, type HandleActionResult, type Point } from '../../types/index.js';
 // FIX: Corrected import path for getGoLogic
-import { getGoLogic } from '../../utils/goLogic.js';
+import { getGoLogic } from '../../utils/goLogic';
 import { makeAiMove } from '../ai/index.js';
 
 export const initializeMissile = (game: LiveGameSession) => {

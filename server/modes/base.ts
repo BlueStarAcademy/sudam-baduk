@@ -1,6 +1,5 @@
 import { type LiveGameSession, type KomiBid, Player, type Point, type BoardState, type ServerAction, type User, type HandleActionResult, GameStatus } from '../../types/index.js';
-// FIX: Corrected import path for getGoLogic
-import { getGoLogic } from '../../utils/goLogic.js';
+import { getGoLogic } from '../../utils/goLogic';
 import { transitionToPlaying } from './shared.js';
 import { aiUserId } from '../ai/index.js';
 

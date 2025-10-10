@@ -5,7 +5,7 @@ import { useAppContext } from '../hooks/useAppContext';
 import Profile from './Profile.js';
 import Lobby from './Lobby.js';
 import WaitingRoom from './waiting-room/WaitingRoom.js';
-import Game from '../Game.js';
+import Game from './Game.js';
 import Admin from './Admin.js';
 import TournamentLobby from './TournamentLobby.js';
 import SinglePlayerLobby from './SinglePlayerLobby.js';

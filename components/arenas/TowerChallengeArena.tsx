@@ -1,6 +1,5 @@
-
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel, GameMode } from '../../types/index.js';
+import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel, GameMode, User, UserWithStatus } from '../../types/index.js';
 import GameArena from '../GameArena.js';
 import Sidebar from '../game/Sidebar.js';
 import PlayerPanel from '../game/PlayerPanel.js';
@@ -15,7 +14,7 @@ import TurnCounterPanel from '../game/TurnCounterPanel.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, TOWER_STAGES } from '../../constants/index.js';
 import TowerStatusPanel from '../game/TowerStatusPanel.js';
 import SinglePlayerIntroModal from '../modals/SinglePlayerIntroModal.js';
-import { processMove } from '../../utils/goLogic.js';
+import { processMove } from '../../utils/goLogic';
 import Button from '../Button.js';
 import CurrencyPanel from '../game/CurrencyPanel.js';
 import ChatWindow from '../waiting-room/ChatWindow.js';
@@ -35,9 +34,9 @@ interface TowerChallengeArenaProps {
     session: LiveGameSession;
 }
 
-const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) => {
-    const { 
-        currentUser, currentUserWithStatus, handlers, onlineUsers,
+// FIX: Changed to a named export to resolve module loading issue.
+export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) => {
+    const { currentUser, currentUserWithStatus, handlers, onlineUsers,
         waitingRoomChats, gameChats, negotiations, activeNegotiation, settings,
     } = useAppContext();
 
@@ -65,7 +64,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     );
     
     const handleIntroConfirm = () => {
-        handlers.handleAction({ type: 'CONFIRM_SP_INTRO', payload: { gameId: session.id } });
+        return handlers.handleAction({ type: 'CONFIRM_SP_INTRO', payload: { gameId: session.id } });
     };
 
     useEffect(() => {
@@ -159,6 +158,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
             const isFischer = (gameSettings.timeIncrement ?? 0) > 0;
             const isInByoyomi = myMainTimeLeft <= 0 && hasByoyomi && !isFischer;
             
+            // For SP/Tower games, only byoyomi and fischer modes should have warnings.
             const shouldWarn = isInByoyomi || isFischer;
 
             if (shouldWarn && myTime <= 10 && myTime > 0 && !warningSoundPlayedForTurn.current) {
@@ -171,8 +171,9 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
     const isSpectator = false;
 
     const handleBoardClick = useCallback(async (x: number, y: number) => {
-        if (isSubmittingMove || session.gameStatus === 'missile_animating') return;
+        if (isSubmittingMove || isSpectator || session.gameStatus === 'missile_animating') return;
 
+        // Client-side move validation for standard Go moves
         if (['playing', 'hidden_placing'].includes(gameStatus) && isMyTurn) {
             const validationResult = processMove(
                 session.boardState,
@@ -218,7 +219,7 @@ const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) =>
                  setIsSubmittingMove(false);
             }
         }
-    }, [isSubmittingMove, session, gameStatus, isMyTurn, handlers, isMobile, settings.features.mobileConfirm, pendingMove, isItemModeActive, gameId, mode, currentUser, player1.id]);
+    }, [isSubmittingMove, isSpectator, session, gameStatus, isMyTurn, handlers, isMobile, settings.features.mobileConfirm, pendingMove, isItemModeActive, gameId, mode, currentUser, player1.id]);
 
     const handleConfirmMove = useCallback(async () => {
         audioService.stopTimerWarning();

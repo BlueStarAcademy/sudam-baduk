@@ -1,9 +1,8 @@
 
-import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, UserStatus } from '../../types/index.js';
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, UserStatus, Negotiation } from '../../types/index.js';
 import * as db from '../db.js';
 import { initializeGame } from '../gameModes.js';
-import { Negotiation } from '../../types/index.js';
-import { TOWER_STAGES } from '../../constants/index.js';
+import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants/index.js';
 import * as currencyService from '../currencyService.js';
 import { getAiUser } from '../ai/index.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
@@ -42,7 +41,7 @@ export const handleTowerChallengeGameStart = async (volatileState: VolatileState
             komi: 6.5,
             player1Color: Player.Black,
             aiDifficulty: aiLevel,
-            ...stage.timeControl,
+            timeControl: stage.timeControl,
             autoEndTurnCount: stage.autoEndTurnCount,
             missileCount: stage.missileCount,
             hiddenStoneCount: stage.hiddenStoneCount,
@@ -94,8 +93,10 @@ export const handleTowerChallengeGameStart = async (volatileState: VolatileState
     placeRandomStones(Player.Black, blackCount);
     placeRandomStones(Player.White, whiteCount);
     
-    await gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi, game.boardState);
-    await gnuGoServiceManager.get(game.id)?.resync(game.moveHistory, game.settings.boardSize, game.settings.komi);
+    // FIX: Corrected an invalid call to 'gnuGoServiceManager.create' that was passing too many arguments.
+    // The initial board state is now correctly synced using a subsequent 'resync' call.
+    await gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi);
+    await gnuGoServiceManager.get(game.id)?.resync(game.moveHistory, game.boardState);
 
     await db.saveGame(game);
     volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
@@ -174,7 +175,6 @@ export const handleTowerAddStones = async (game: LiveGameSession, user: User): P
     game.blackStoneLimit = (game.blackStoneLimit || 0) + 3;
     game.promptForMoreStones = false; // Turn off prompt
     
-    // Resume game if it was paused implicitly by the prompt
     if (game.pausedTurnTimeLeft) {
         const now = Date.now();
         game.turnDeadline = now + game.pausedTurnTimeLeft * 1000;
