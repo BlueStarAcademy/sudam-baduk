@@ -252,14 +252,36 @@ export const SYNTHESIS_COSTS: Record<ItemGrade, number> = {
     [ItemGrade.Mythic]: 5000,
 };
 
-export const SYNTHESIS_UPGRADE_CHANCES: Record<ItemGrade, number> = {
-    [ItemGrade.Normal]: 50,
-    [ItemGrade.Uncommon]: 30,
-    [ItemGrade.Rare]: 15,
-    [ItemGrade.Epic]: 5,
-    [ItemGrade.Legendary]: 2.5,
-    [ItemGrade.Mythic]: 50, // This is for "great success" to get 2 mythic options
-};
+export interface SynthesisLevelBenefit {
+    level: number;
+    synthesizableGrades: ItemGrade[];
+    upgradeChance: Partial<Record<ItemGrade, number>>;
+    doubleMythicChance: number; // Percentage
+}
+
+export const SYNTHESIS_LEVEL_BENEFITS: SynthesisLevelBenefit[] = [
+    { level: 0, synthesizableGrades: [], upgradeChance: {}, doubleMythicChance: 0 },
+    { level: 1, synthesizableGrades: [ItemGrade.Normal, ItemGrade.Uncommon], upgradeChance: { [ItemGrade.Normal]: 50, [ItemGrade.Uncommon]: 30 }, doubleMythicChance: 0 },
+    { level: 2, synthesizableGrades: [ItemGrade.Normal, ItemGrade.Uncommon, ItemGrade.Rare], upgradeChance: { [ItemGrade.Normal]: 50, [ItemGrade.Uncommon]: 30, [ItemGrade.Rare]: 20 }, doubleMythicChance: 0 },
+    { level: 3, synthesizableGrades: [ItemGrade.Normal, ItemGrade.Uncommon, ItemGrade.Rare, ItemGrade.Epic], upgradeChance: { [ItemGrade.Normal]: 50, [ItemGrade.Uncommon]: 30, [ItemGrade.Rare]: 20, [ItemGrade.Epic]: 10 }, doubleMythicChance: 0 },
+    { level: 4, synthesizableGrades: [ItemGrade.Normal, ItemGrade.Uncommon, ItemGrade.Rare, ItemGrade.Epic, ItemGrade.Legendary], upgradeChance: { [ItemGrade.Normal]: 50, [ItemGrade.Uncommon]: 30, [ItemGrade.Rare]: 20, [ItemGrade.Epic]: 10, [ItemGrade.Legendary]: 1 }, doubleMythicChance: 0 },
+    { level: 5, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 50, [ItemGrade.Uncommon]: 30, [ItemGrade.Rare]: 20, [ItemGrade.Epic]: 10, [ItemGrade.Legendary]: 1.5 }, doubleMythicChance: 25 },
+    { level: 6, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 65, [ItemGrade.Uncommon]: 40, [ItemGrade.Rare]: 25, [ItemGrade.Epic]: 12.5, [ItemGrade.Legendary]: 2 }, doubleMythicChance: 30 },
+    { level: 7, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 80, [ItemGrade.Uncommon]: 50, [ItemGrade.Rare]: 30, [ItemGrade.Epic]: 15, [ItemGrade.Legendary]: 2.5 }, doubleMythicChance: 35 },
+    { level: 8, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 95, [ItemGrade.Uncommon]: 60, [ItemGrade.Rare]: 35, [ItemGrade.Epic]: 17.5, [ItemGrade.Legendary]: 3 }, doubleMythicChance: 40 },
+    { level: 9, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 70, [ItemGrade.Rare]: 40, [ItemGrade.Epic]: 20, [ItemGrade.Legendary]: 3.5 }, doubleMythicChance: 45 },
+    { level: 10, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 80, [ItemGrade.Rare]: 45, [ItemGrade.Epic]: 22.5, [ItemGrade.Legendary]: 4 }, doubleMythicChance: 50 },
+    { level: 11, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 90, [ItemGrade.Rare]: 50, [ItemGrade.Epic]: 25, [ItemGrade.Legendary]: 4.5 }, doubleMythicChance: 55 },
+    { level: 12, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 55, [ItemGrade.Epic]: 27.5, [ItemGrade.Legendary]: 5 }, doubleMythicChance: 60 },
+    { level: 13, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 60, [ItemGrade.Epic]: 30, [ItemGrade.Legendary]: 5.5 }, doubleMythicChance: 65 },
+    { level: 14, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 65, [ItemGrade.Epic]: 32.5, [ItemGrade.Legendary]: 6 }, doubleMythicChance: 70 },
+    { level: 15, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 70, [ItemGrade.Epic]: 35, [ItemGrade.Legendary]: 6.5 }, doubleMythicChance: 75 },
+    { level: 16, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 75, [ItemGrade.Epic]: 37.5, [ItemGrade.Legendary]: 7 }, doubleMythicChance: 80 },
+    { level: 17, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 80, [ItemGrade.Epic]: 40, [ItemGrade.Legendary]: 7.5 }, doubleMythicChance: 85 },
+    { level: 18, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 90, [ItemGrade.Epic]: 42.5, [ItemGrade.Legendary]: 8 }, doubleMythicChance: 90 },
+    { level: 19, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 90, [ItemGrade.Epic]: 45, [ItemGrade.Legendary]: 8.5 }, doubleMythicChance: 95 },
+    { level: 20, synthesizableGrades: Object.values(ItemGrade), upgradeChance: { [ItemGrade.Normal]: 100, [ItemGrade.Uncommon]: 100, [ItemGrade.Rare]: 100, [ItemGrade.Epic]: 50, [ItemGrade.Legendary]: 10 }, doubleMythicChance: 100 }
+];
 
 
 export const ITEM_SELL_PRICES: Record<ItemGrade, number> = {

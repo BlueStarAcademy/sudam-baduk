@@ -25,6 +25,19 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
     const renderContent = () => {
         switch (activeTab) {
             case 'game':
+                const gameRoomRules = [
+                    "새로고침 해도 로그아웃 되지 않습니다.",
+                    "브라우저를 끄면 자동으로 로그아웃 처리됩니다.",
+                    "한 PC에서는 한 아이디만 동시 접속 가능합니다.",
+                    "다른 아이디 로그인 시, 기존 아이디는 로그아웃됩니다.",
+                    "동일 아이디로 다른 기기에서 로그인 시, 기존 기기는 로그아웃됩니다.",
+                    "경기 중 재접속 시, 해당 경기로 자동 복귀합니다.",
+                    "경기 중 연결이 끊어지면 180초(3분)의 재접속 대기시간이 주어집니다.",
+                    "경기 중 3회 이상 연결이 끊어지면 기권패 처리됩니다.",
+                    "경기 초반(20수 이내) 고의적인 기권/종료 시 페널티가 부과됩니다.",
+                    "전략바둑 초반(20수 이내) 3분 이상 무응답 시, 상대방은 페널티 없이 무효처리가 가능합니다.",
+                    "대기실에서 30분 이상 활동이 없으면 '휴식 중' 상태로 변경됩니다."
+                ];
                 return (
                     <div className="space-y-4">
                         <div>
@@ -46,6 +59,12 @@ const InfoModal: React.FC<InfoModalProps> = ({ onClose, isTopmost }) => {
                          <div>
                             <h3 className="font-bold text-lg text-red-300">길드 보스전</h3>
                             <p className="text-sm">길드원들과 협력하여 강력한 보스를 공략하는 레이드 콘텐츠입니다. 보스에게 입힌 피해량에 따라 개인 보상을, 보스 처치 시 모든 길드원이 보상을 받습니다.</p>
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-lg text-gray-200 mt-6 pt-4 border-t border-gray-700">대국실 공통 규칙</h3>
+                            <ul className="list-disc list-inside text-sm space-y-1 pl-2 mt-2">
+                                {gameRoomRules.map((rule, index) => <li key={index}>{rule}</li>)}
+                            </ul>
                         </div>
                     </div>
                 );

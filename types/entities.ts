@@ -20,7 +20,13 @@ export interface User {
     baseStats: Record<CoreStat, number>;
     spentStatPoints: Record<CoreStat, number>;
     inventory: InventoryItem[];
-    inventorySlots: number;
+    inventorySlots: {
+        equipment: number;
+        consumable: number;
+        material: number;
+    };
+    synthesisLevel: number;
+    synthesisXp: number;
     equipment: Partial<Record<EquipmentSlot, string>>;
     equipmentPresets: EquipmentPreset[];
     actionPoints: { current: number; max: number };

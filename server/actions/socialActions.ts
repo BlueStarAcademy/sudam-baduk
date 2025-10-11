@@ -27,6 +27,9 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             delete userStatuses[user.id];
             await db.setKV('userStatuses', userStatuses);
             delete userSessions[user.id];
+            const allSessions = (await db.getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
+            delete allSessions[user.id];
+            await db.setKV('userSessions', allSessions);
             return { clientResponse: { success: true } };
         }
         case 'ENTER_WAITING_ROOM': {

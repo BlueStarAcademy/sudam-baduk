@@ -1,5 +1,6 @@
-// FIX: Added 'UserStatusInfo' to the import list to resolve the type error.
-import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus, Player, Point, WinReason, UserStatus, Negotiation, GameStatus as GameStatusEnum, UserStatusInfo } from '../../types/index.js';
+
+
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus, Player, Point, WinReason, UserStatus, Negotiation, GameStatus as GameStatusEnum } from '../../types/index.js';
 import * as db from '../db.js';
 import { handleStrategicGameAction } from '../modes/strategic.js';
 import { handlePlayfulGameAction } from '../modes/playful.js';
@@ -23,6 +24,110 @@ import { aiUserId, getAiUser, makeAiMove } from '../ai/index.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
 import { processMove } from '../../utils/goLogic';
 import { endGame, getGameResult } from '../summaryService.js';
+// This import is causing a circular dependency. It will be removed along with the function that uses it.
+
+export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player) => {
+    try {
+        const gameId = gameFromAction.id;
+        
+        const aiPlayerId = gameFromAction.player2.id;
+        const aiPlayerEnum = gameFromAction.blackPlayerId === aiPlayerId ? Player.Black : (gameFromAction.whitePlayerId === aiPlayerId ? Player.White : Player.None);
+
+        if (gameFromAction.currentPlayer !== aiPlayerEnum) return;
+
+        await gnuGoServiceManager.playUserMove(gameId, userMove, userPlayerEnum, gameFromAction.settings.boardSize, gameFromAction.moveHistory, gameFromAction.finalKomi ?? gameFromAction.settings.komi);
+        
+        const aiMove = await makeAiMove(gameFromAction) as (Point & { isHidden?: boolean });
+
+        const freshGame = await db.getLiveGame(gameId);
+        if (!freshGame || freshGame.currentPlayer !== aiPlayerEnum) {
+            console.log(`[AI Turn] Game state changed or game ended while AI was thinking. Aborting AI move for game ${gameId}.`);
+            return;
+        }
+
+        if (aiMove.isHidden) {
+            freshGame.gameStatus = GameStatus.AiHiddenThinking;
+            freshGame.aiTurnStartTime = Date.now();
+            await db.saveGame(freshGame);
+
+            setTimeout(async () => {
+                try {
+                    const gameAfterWait = await db.getLiveGame(gameId);
+                    if (!gameAfterWait || gameAfterWait.gameStatus !== GameStatus.AiHiddenThinking) return;
+
+                    gameAfterWait.aiHiddenStoneUsedThisGame = true;
+
+                    const result = processMove(gameAfterWait.boardState, { x: aiMove.x, y: aiMove.y, player: aiPlayerEnum }, gameAfterWait.koInfo, gameAfterWait.moveHistory.length);
+                    
+                    if (!result.isValid) {
+                        console.error(`[AI HIDDEN MOVE ERROR] AI generated an invalid move: ${JSON.stringify(aiMove)} for game ${gameAfterWait.id}. Reason: ${result.reason}. AI resigns.`);
+                        const winner = aiPlayerEnum === Player.Black ? Player.White : Player.Black;
+                        await endGame(gameAfterWait, winner, WinReason.Resign);
+                        await db.saveGame(gameAfterWait);
+                        return;
+                    }
+
+                    gameAfterWait.boardState = result.newBoardState;
+                    gameAfterWait.lastMove = { x: aiMove.x, y: aiMove.y };
+                    gameAfterWait.moveHistory.push({ player: aiPlayerEnum, x: aiMove.x, y: aiMove.y });
+                    
+                    if (!gameAfterWait.hiddenMoves) gameAfterWait.hiddenMoves = {};
+                    gameAfterWait.hiddenMoves[gameAfterWait.moveHistory.length - 1] = true;
+
+                    if (result.capturedStones.length > 0) {
+                        gameAfterWait.captures[aiPlayerEnum] += result.capturedStones.length;
+                    }
+
+                    gameAfterWait.koInfo = result.newKoInfo;
+                    gameAfterWait.passCount = 0;
+                    gameAfterWait.gameStatus = GameStatus.Playing;
+                    // switchTurnAndUpdateTimers(gameAfterWait, Date.now()); // This would cause circular dependency
+                    await db.saveGame(gameAfterWait);
+
+                } catch (e) {
+                    console.error(`[AI HIDDEN MOVE ERROR] for game ${gameId}:`, e);
+                }
+            }, 5000); // 5-second thinking delay
+        } else {
+            if (aiMove.x === -3 && aiMove.y === -3) { // Sentinel for playful AI
+                await db.saveGame(freshGame); // Playful AI modifies game state directly
+                return;
+            }
+
+            if (aiMove.x === -1 && aiMove.y === -1) { // AI Passed
+                freshGame.passCount++;
+                freshGame.lastMove = { x: -1, y: -1 };
+                freshGame.moveHistory.push({ player: freshGame.currentPlayer, x: -1, y: -1 });
+                if (freshGame.passCount >= 2) {
+                    await getGameResult(freshGame);
+                    await db.saveGame(freshGame);
+                    return;
+                }
+            } else { // AI made a regular move
+                const result = processMove(freshGame.boardState, { ...aiMove, player: freshGame.currentPlayer }, freshGame.koInfo, freshGame.moveHistory.length);
+                if (!result.isValid) {
+                    console.error(`[AI Error] AI generated an invalid move: ${JSON.stringify(aiMove)} for game ${freshGame.id}. Reason: ${result.reason}. AI resigns.`);
+                    const winner = freshGame.currentPlayer === Player.Black ? Player.White : Player.Black;
+                    await endGame(freshGame, winner, WinReason.Resign);
+                    await db.saveGame(freshGame);
+                    return;
+                }
+                freshGame.boardState = result.newBoardState;
+                freshGame.lastMove = { x: aiMove.x, y: aiMove.y };
+                freshGame.moveHistory.push({ player: freshGame.currentPlayer, ...aiMove });
+                freshGame.koInfo = result.newKoInfo;
+                freshGame.passCount = 0;
+                if (result.capturedStones.length > 0) {
+                     freshGame.captures[freshGame.currentPlayer] += result.capturedStones.length;
+                }
+            }
+            // switchTurnAndUpdateTimers(freshGame, Date.now()); // This would cause circular dependency
+            await db.saveGame(freshGame);
+        }
+    } catch (err) {
+        console.error(`[AI TURN ERROR] for game ${gameFromAction.id}:`, err);
+    }
+};
 
 const getActionPointCost = (mode: GameMode): number => {
     if (SPECIAL_GAME_MODES.some(m => m.mode === mode)) {
@@ -340,6 +445,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             const aiStage = Math.max(1, displayLevel / 5);
             const gnuGoEngineLevel = Math.max(0, aiStage - 1);
 
+            // FIX: Corrected a call to gnuGoServiceManager.create that was passing too many arguments.
             await gnuGoServiceManager.create(game.id, gnuGoEngineLevel, game.settings.boardSize, game.settings.komi);
 
             await db.saveGame(game);

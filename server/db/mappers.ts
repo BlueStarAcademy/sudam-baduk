@@ -128,6 +128,24 @@ export const rowToUser = (row: any): User | null => {
             };
         }
 
+        // FIX: Handle migration from number to object for inventorySlots
+        const slotsFromDb = safeParse(row.inventorySlots, null);
+        let finalSlots;
+        if (typeof slotsFromDb === 'number') {
+            // Old format, migrate
+            finalSlots = { equipment: slotsFromDb, consumable: 30, material: 30 };
+        } else if (typeof slotsFromDb === 'object' && slotsFromDb !== null) {
+            // New format
+            finalSlots = {
+                equipment: slotsFromDb.equipment ?? 30,
+                consumable: slotsFromDb.consumable ?? 30,
+                material: slotsFromDb.material ?? 30,
+            };
+        } else {
+            // Default for new users or corrupt data
+            finalSlots = { equipment: 30, consumable: 30, material: 30 };
+        }
+
         const user: User = {
             id: row.id,
             username: row.username,
@@ -139,7 +157,9 @@ export const rowToUser = (row: any): User | null => {
             playfulXp: row.playfulXp != null ? Number(row.playfulXp) : 0,
             gold: row.gold != null ? Number(row.gold) : 0,
             diamonds: row.diamonds != null ? Number(row.diamonds) : 0,
-            inventorySlots: row.inventorySlots != null ? Number(row.inventorySlots) : 40,
+            inventorySlots: finalSlots,
+            synthesisLevel: row.synthesisLevel ?? 1,
+            synthesisXp: row.synthesisXp ?? 0,
             chatBanUntil: row.chatBanUntil != null ? Number(row.chatBanUntil) : undefined,
             connectionBanUntil: row.connectionBanUntil != null ? Number(row.connectionBanUntil) : undefined,
             lastActionPointUpdate: row.lastActionPointUpdate != null ? Number(row.lastActionPointUpdate) : 0,
@@ -301,9 +321,9 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             pendingCapture: ensureObject(safeParse(row.pendingCapture, undefined), undefined),
             permanentlyRevealedStones: ensureArray(safeParse(row.permanentlyRevealedStones, undefined), undefined),
             pendingAiMove: undefined, // This is transient
+            missileUsedThisTurn: !!row.missileUsedThisTurn,
             missiles_p1: row.missiles_p1 ?? undefined,
             missiles_p2: row.missiles_p2 ?? undefined,
-            missileUsedThisTurn: !!row.missileUsedThisTurn,
             rpsState: ensureObject(safeParse(row.rpsState, null), null),
             rpsRound: row.rpsRound ?? undefined,
             dice: ensureObject(safeParse(row.dice, null), null),

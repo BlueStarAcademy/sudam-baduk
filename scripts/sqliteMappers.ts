@@ -1,11 +1,11 @@
 // FIX: Split imports to fetch `createDefaultBaseStats` from the correct source file.
 import { createDefaultQuests, createDefaultSpentStatPoints, defaultStats } from '../server/initialData.js';
 import { createDefaultBaseStats } from '../utils/statUtils.js';
-import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, MonthlyQuestData, EquipmentPreset, AppSettings } from '../types/index.js';
+import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, MonthlyQuestData, EquipmentPreset, AppSettings, SinglePlayerMissionState } from '../types/index.js';
 import { LeagueTier, Player, GameMode } from '../types/index.js';
 import { DEFAULT_GAME_SETTINGS } from '../constants/gameSettings.js';
 import { defaultSettings } from '../constants/settings.js';
-import { getGoLogic } from '../utils/goLogic';
+import { getGoLogic } from '../utils/goLogic.js';
 
 // An even safer parsing function. It handles non-string, null, undefined, empty strings, and parsing errors.
 const safeParse = (data: any, defaultValue: any) => {
@@ -116,6 +116,35 @@ export const rowToUser = (row: any): User | null => {
         const dailyDonationsFromDb = ensureObject(safeParse(row.dailyDonations, {}));
         const dailyMissionContributionFromDb = ensureObject(safeParse(row.dailyMissionContribution, {}));
 
+        const spMissionsFromDb = ensureObject(safeParse(row.singlePlayerMissions, {}));
+        const finalSpMissions: Record<string, SinglePlayerMissionState> = {};
+        for (const missionId in spMissionsFromDb) {
+            const state = spMissionsFromDb[missionId];
+            finalSpMissions[missionId] = {
+                isStarted: state.isStarted,
+                lastCollectionTime: state.lastCollectionTime != null ? Number(state.lastCollectionTime) : 0,
+                claimableAmount: state.claimableAmount ?? state.accumulatedAmount ?? 0,
+                progressTowardNextLevel: state.progressTowardNextLevel ?? 0, // Old data won't have this, so it defaults to 0.
+                level: state.level ?? 1,
+            };
+        }
+
+        const slotsFromDb = safeParse(row.inventorySlots, null);
+        let finalSlots;
+        if (typeof slotsFromDb === 'number') {
+            // Old format, migrate
+            finalSlots = { equipment: slotsFromDb, consumable: 30, material: 30 };
+        } else if (typeof slotsFromDb === 'object' && slotsFromDb !== null) {
+            // New format
+            finalSlots = {
+                equipment: slotsFromDb.equipment ?? 30,
+                consumable: slotsFromDb.consumable ?? 30,
+                material: slotsFromDb.material ?? 30,
+            };
+        } else {
+            // Default for new users or corrupt data
+            finalSlots = { equipment: 30, consumable: 30, material: 30 };
+        }
 
         const user: User = {
             id: row.id,
@@ -128,7 +157,9 @@ export const rowToUser = (row: any): User | null => {
             playfulXp: row.playfulXp != null ? Number(row.playfulXp) : 0,
             gold: row.gold != null ? Number(row.gold) : 0,
             diamonds: row.diamonds != null ? Number(row.diamonds) : 0,
-            inventorySlots: row.inventorySlots != null ? Number(row.inventorySlots) : 40,
+            inventorySlots: finalSlots,
+            synthesisLevel: row.synthesisLevel ?? 1,
+            synthesisXp: row.synthesisXp ?? 0,
             chatBanUntil: row.chatBanUntil != null ? Number(row.chatBanUntil) : undefined,
             connectionBanUntil: row.connectionBanUntil != null ? Number(row.connectionBanUntil) : undefined,
             lastActionPointUpdate: row.lastActionPointUpdate != null ? Number(row.lastActionPointUpdate) : 0,
@@ -156,6 +187,17 @@ export const rowToUser = (row: any): User | null => {
             actionPoints,
             mail: ensureArray(safeParse(row.mail, [])),
             quests,
+            lastNeighborhoodPlayedDate: row.lastNeighborhoodPlayedDate != null ? Number(row.lastNeighborhoodPlayedDate) : undefined,
+            neighborhoodRewardClaimed: !!row.neighborhoodRewardClaimed,
+            lastNeighborhoodTournament: ensureObject(safeParse(row.lastNeighborhoodTournament, null), null),
+            lastNationalPlayedDate: row.lastNationalPlayedDate != null ? Number(row.lastNationalPlayedDate) : undefined,
+            nationalRewardClaimed: !!row.nationalRewardClaimed,
+            lastNationalTournament: ensureObject(safeParse(row.lastNationalTournament, null), null),
+            lastWorldPlayedDate: row.lastWorldPlayedDate != null ? Number(row.lastWorldPlayedDate) : undefined,
+            worldRewardClaimed: !!row.worldRewardClaimed,
+            lastWorldTournament: ensureObject(safeParse(row.lastWorldTournament, null), null),
+            dailyChampionshipMatchesPlayed: row.dailyChampionshipMatchesPlayed != null ? Number(row.dailyChampionshipMatchesPlayed) : 0,
+            lastChampionshipMatchDate: row.lastChampionshipMatchDate != null ? Number(row.lastChampionshipMatchDate) : 0,
             weeklyCompetitors: ensureArray(safeParse(row.weeklyCompetitors, [])),
             lastWeeklyCompetitorsUpdate: row.lastWeeklyCompetitorsUpdate != null ? Number(row.lastWeeklyCompetitorsUpdate) : 0,
             lastLeagueUpdate: row.lastLeagueUpdate != null ? Number(row.lastLeagueUpdate) : 0,
@@ -164,7 +206,7 @@ export const rowToUser = (row: any): User | null => {
             isMbtiPublic: !!row.isMbtiPublic,
             singlePlayerProgress: row.singlePlayerProgress != null ? Number(row.singlePlayerProgress) : 0,
             bonusStatPoints: row.bonusStatPoints != null ? Number(row.bonusStatPoints) : 0,
-            singlePlayerMissions: ensureObject(safeParse(row.singlePlayerMissions, {})),
+            singlePlayerMissions: finalSpMissions,
             towerProgress: { highestFloor: 0, lastClearTimestamp: 0, ...towerProgressFromDb },
             claimedFirstClearRewards: ensureArray(safeParse(row.claimedFirstClearRewards, [])),
             currencyLogs: ensureArray(safeParse(row.currencyLogs, [])),
@@ -180,18 +222,6 @@ export const rowToUser = (row: any): User | null => {
             guildShopPurchases: ensureObject(safeParse(row.guildShopPurchases, {})),
             appSettings,
             kakaoId: row.kakaoId ?? undefined,
-            // Tournament progress
-            lastNeighborhoodPlayedDate: row.lastNeighborhoodPlayedDate != null ? Number(row.lastNeighborhoodPlayedDate) : undefined,
-            neighborhoodRewardClaimed: !!row.neighborhoodRewardClaimed,
-            lastNeighborhoodTournament: ensureObject(safeParse(row.lastNeighborhoodTournament, null), null),
-            lastNationalPlayedDate: row.lastNationalPlayedDate != null ? Number(row.lastNationalPlayedDate) : undefined,
-            nationalRewardClaimed: !!row.nationalRewardClaimed,
-            lastNationalTournament: ensureObject(safeParse(row.lastNationalTournament, null), null),
-            lastWorldPlayedDate: row.lastWorldPlayedDate != null ? Number(row.lastWorldPlayedDate) : undefined,
-            worldRewardClaimed: !!row.worldRewardClaimed,
-            lastWorldTournament: ensureObject(safeParse(row.lastWorldTournament, null), null),
-            dailyChampionshipMatchesPlayed: row.dailyChampionshipMatchesPlayed != null ? Number(row.dailyChampionshipMatchesPlayed) : 0,
-            lastChampionshipMatchDate: row.lastChampionshipMatchDate != null ? Number(row.lastChampionshipMatchDate) : 0,
         };
         return user;
     } catch (e) {
@@ -291,9 +321,9 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             pendingCapture: ensureObject(safeParse(row.pendingCapture, undefined), undefined),
             permanentlyRevealedStones: ensureArray(safeParse(row.permanentlyRevealedStones, undefined), undefined),
             pendingAiMove: undefined, // This is transient
+            missileUsedThisTurn: !!row.missileUsedThisTurn,
             missiles_p1: row.missiles_p1 ?? undefined,
             missiles_p2: row.missiles_p2 ?? undefined,
-            missileUsedThisTurn: !!row.missileUsedThisTurn,
             rpsState: ensureObject(safeParse(row.rpsState, null), null),
             rpsRound: row.rpsRound ?? undefined,
             dice: ensureObject(safeParse(row.dice, null), null),

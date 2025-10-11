@@ -101,6 +101,10 @@ const migrations: { [version: number]: string } = {
     57: 'ALTER TABLE live_games ADD COLUMN IF NOT EXISTS "promptForMoreStones" BOOLEAN;',
     58: 'ALTER TABLE user_credentials ADD COLUMN "salt" TEXT; ALTER TABLE user_credentials RENAME COLUMN "passwordHash" TO hash;',
     59: 'ALTER TABLE users ADD COLUMN "kakaoId" TEXT UNIQUE;',
+    60: `
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "synthesisLevel" INTEGER;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS "synthesisXp" INTEGER;
+    `,
 };
 
 
@@ -129,7 +133,8 @@ export const runSchemaAndMigrations = async (pool: pg.Pool) => {
                 diamonds INTEGER,
                 inventory TEXT,
                 equipment TEXT,
-                stats TEXT
+                stats TEXT,
+                "inventorySlots" TEXT
             );
 
             CREATE TABLE IF NOT EXISTS user_credentials (

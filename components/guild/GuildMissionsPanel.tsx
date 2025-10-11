@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 import { Guild as GuildType, GuildMember, GuildMission } from '../../types/index.js';
 import Button from '../Button.js';
@@ -39,26 +37,21 @@ const MissionItem: React.FC<{ mission: GuildMission; guildLevel: number; }> = ({
                 </div>
                 <p className="text-xs text-right text-primary">{mission.progress.toLocaleString()} / {mission.target.toLocaleString()}</p>
             </div>
-            <div className="w-36 text-center flex-shrink-0 flex flex-col items-center gap-1 relative">
-                <div className="w-full flex flex-col items-center justify-center bg-tertiary/50 rounded-md p-1">
-                    <p className="text-[10px] text-secondary">개인 보상</p>
-                    <div className="flex items-center gap-1 text-sm font-semibold">
-                         <img src="/images/guild/tokken.png" alt="Guild Coin" className="w-4 h-4" />
-                        <span>{mission.personalReward.guildCoins}</span>
+            <div className="w-28 text-center flex-shrink-0 flex flex-col items-center gap-2 relative">
+                <div className="flex flex-col items-center text-xs gap-1">
+                    <div className="flex items-center gap-1 font-semibold">
+                        <img src="/images/guild/tokken.png" alt="Guild Coin" className="w-4 h-4" />
+                        <span className="text-primary">{mission.personalReward.guildCoins}</span>
                     </div>
-                </div>
-                <div className="w-full flex flex-col items-center justify-center bg-tertiary/50 rounded-md p-1">
-                    <p className="text-[10px] text-secondary">길드 보상</p>
-                     <div className="flex items-center gap-1 text-sm font-semibold">
-                         <span>XP</span>
-                        <span className="text-green-400">+{finalXp.toLocaleString()}</span>
+                    <div className="flex items-center gap-1 font-semibold">
+                        <span className="text-green-400">XP +{finalXp.toLocaleString()}</span>
                     </div>
                 </div>
                 <Button
                     onClick={handleClaim}
                     disabled={!canClaim}
                     colorScheme={canClaim ? 'green' : 'gray'}
-                    className="w-full !text-sm !py-1"
+                    className="w-full !text-sm !py-1.5"
                 >
                     {isClaimed ? '완료' : (isComplete ? '받기' : '진행 중')}
                 </Button>
@@ -72,7 +65,7 @@ const GuildMissionsPanel: React.FC<GuildMissionsPanelProps> = ({ guild, onClose 
         <DraggableWindow title="주간 길드 임무" onClose={onClose} windowId="guild-missions" initialWidth={750}>
             <div className="flex flex-col">
                 <div className="flex-shrink-0 mb-4">
-                    <p className="text-sm text-tertiary">길드원들과 협력하여 임무를 완수하고 보상을 획득하세요. 완료 시 모든 길드원이 보상을 우편으로 지급되며, 매주 월요일에 초기화됩니다.</p>
+                    <p className="text-sm text-tertiary">길드원들과 협력하여 임무를 완수하고 보상을 획득하세요. 완료된 임무는 각 길드원이 '받기' 버튼을 눌러 개인 보상과 길드 경험치를 획득할 수 있습니다. 매주 월요일에 초기화됩니다.</p>
                 </div>
                 <div className="flex-grow overflow-y-auto pr-2 max-h-[calc(70vh-100px)]">
                     {guild.weeklyMissions && guild.weeklyMissions.length > 0 ? (

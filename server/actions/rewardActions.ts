@@ -1,7 +1,4 @@
 
-
-
-
 import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult, Guild } from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
@@ -20,7 +17,6 @@ import {
     GRADE_SUB_OPTION_RULES,
     SUB_OPTION_POOLS,
     SYNTHESIS_COSTS,
-    SYNTHESIS_UPGRADE_CHANCES,
     EQUIPMENT_POOL,
     ENHANCEMENT_LEVEL_REQUIREMENTS,
     DAILY_MILESTONE_REWARDS,
@@ -194,21 +190,25 @@ export const handleRewardAction = async (action: ServerAction & { userId: string
             };
         }
         case 'CLAIM_ACTIVITY_MILESTONE': {
-            const { milestoneIndex } = payload;
-            const questType = payload.questType as 'daily' | 'weekly' | 'monthly';
+            const { milestoneIndex, questType } = payload;
             if (!['daily', 'weekly', 'monthly'].includes(questType)) {
                 return { error: 'Invalid quest type.' };
             }
             
-            const questData = user.quests[questType];
-            const rewards = { daily: DAILY_MILESTONE_REWARDS, weekly: WEEKLY_MILESTONE_REWARDS, monthly: MONTHLY_MILESTONE_REWARDS }[questType];
-            const thresholds = { daily: DAILY_MILESTONE_THRESHOLDS, weekly: WEEKLY_MILESTONE_THRESHOLDS, monthly: MONTHLY_MILESTONE_THRESHOLDS }[questType];
+            const questData = user.quests[questType as 'daily' | 'weekly' | 'monthly'];
+            const rewards = { daily: DAILY_MILESTONE_REWARDS, weekly: WEEKLY_MILESTONE_REWARDS, monthly: MONTHLY_MILESTONE_REWARDS }[questType as 'daily' | 'weekly' | 'monthly'];
+            const thresholds = { daily: DAILY_MILESTONE_THRESHOLDS, weekly: WEEKLY_MILESTONE_THRESHOLDS, monthly: MONTHLY_MILESTONE_THRESHOLDS }[questType as 'daily' | 'weekly' | 'monthly'];
             
-            if (!questData || questData.claimedMilestones[milestoneIndex] || questData.activityProgress < thresholds[milestoneIndex]) {
+            if (!questData || !Array.isArray(questData.claimedMilestones) || questData.claimedMilestones[milestoneIndex] || (questData.activityProgress || 0) < thresholds[milestoneIndex]) {
                 return { error: "Cannot claim this milestone." };
             }
             
             const reward = rewards[milestoneIndex];
+            if (!reward) {
+                console.error(`[CRITICAL] Invalid milestoneIndex ${milestoneIndex} for questType ${questType} from user ${user.id}.`);
+                return { error: "Invalid milestone index." };
+            }
+
             const addedItems = grantReward(user, reward, `${questType} 활약도 ${thresholds[milestoneIndex]} 보상`);
             questData.claimedMilestones[milestoneIndex] = true;
             

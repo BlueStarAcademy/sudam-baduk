@@ -1,5 +1,4 @@
 
-
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, SinglePlayerLevel, UserStatus, Negotiation, SinglePlayerStageInfo, UserStatusInfo } from '../../types/index.js';
 import * as db from '../db.js';
 import { initializeGame } from '../gameModes.js';
@@ -143,9 +142,7 @@ export const handleAiGameStart = async (
     game.currentPlayer = Player.Black;
 
     await db.saveGame(game);
-    const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
-    userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
-    await db.setKV('userStatuses', userStatuses);
+    volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
     
     await db.updateUser(user);
 

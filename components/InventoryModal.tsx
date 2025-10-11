@@ -2,8 +2,134 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { UserWithStatus, InventoryItem, ServerAction, InventoryItemType, EquipmentSlot, ItemGrade, ItemOption, CoreStat, SpecialStat, MythicStat, InventoryTab } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
-import { emptySlotImages, ENHANCEMENT_COSTS, MATERIAL_ITEMS, GRADE_LEVEL_REQUIREMENTS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SYNTHESIS_COSTS, slotNames } from '../constants.js';
+import { emptySlotImages, ENHANCEMENT_COSTS, MATERIAL_ITEMS, GRADE_LEVEL_REQUIREMENTS, ITEM_SELL_PRICES, MATERIAL_SELL_PRICES, SYNTHESIS_COSTS, slotNames, SYNTHESIS_LEVEL_BENEFITS } from '../constants/index.js';
 import Slider from './ui/Slider.js';
+
+interface SynthesisPanelProps {
+    synthesisSlots: (InventoryItem | null)[];
+    onRemove: (index: number) => void;
+    onSynthesize: () => void;
+    onCancel: () => void;
+    currentUser: UserWithStatus;
+}
+
+const SynthesisPanel: React.FC<SynthesisPanelProps> = ({ synthesisSlots, onRemove, onSynthesize, onCancel, currentUser }) => {
+    const firstItem = useMemo(() => synthesisSlots.find(item => item !== null), [synthesisSlots]);
+    const cost = useMemo(() => {
+        if (!firstItem) return 0;
+        return SYNTHESIS_COSTS[firstItem.grade] || 0;
+    }, [firstItem]);
+
+    const canSynthesize = useMemo(() => {
+        return synthesisSlots.filter(item => item !== null).length === 3 && currentUser.gold >= cost;
+    }, [synthesisSlots, currentUser.gold, cost]);
+    
+    const isMythicSynthesis = firstItem?.grade === 'mythic';
+    const synthesisLevel = currentUser.synthesisLevel || 1;
+    const levelBenefits = SYNTHESIS_LEVEL_BENEFITS.find(b => b.level === synthesisLevel) || SYNTHESIS_LEVEL_BENEFITS[1];
+    const doubleMythicChance = levelBenefits.doubleMythicChance;
+
+    const renderSlot = (item: InventoryItem | null, index: number, isResult = false) => (
+        <div 
+            key={isResult ? 'result' : index}
+            className={`relative w-20 h-20 rounded-lg border-2 ${isResult ? 'border-yellow-400' : 'border-color'} bg-tertiary/50 ${!isResult && item ? 'cursor-pointer' : ''}`}
+            onClick={() => !isResult && item && onRemove(index)}
+            title={!isResult && item ? `${item.name} 제거` : (isResult ? '결과' : '아이템을 선택하세요')}
+        >
+            {item ? (
+                <>
+                    <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-md" />
+                    {renderStarDisplay(item.stars)}
+                    {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-1" />}
+                </>
+            ) : (
+                isResult && <span className="text-4xl flex items-center justify-center h-full text-tertiary">?</span>
+            )}
+        </div>
+    );
+
+    return (
+        <div className="w-full h-full bg-secondary rounded-lg shadow-inner relative p-4 flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-xl text-highlight">장비 합성</h3>
+                <Button onClick={onCancel} colorScheme="gray">돌아가기</Button>
+            </div>
+            <div className="flex-grow flex flex-col items-center justify-center">
+                <div className="flex items-center justify-center gap-2 mb-4">
+                    {synthesisSlots.map((item, index) => (
+                        <React.Fragment key={index}>
+                            {renderSlot(item, index)}
+                            {index < 2 && <span className="text-2xl font-bold text-tertiary mx-1">+</span>}
+                        </React.Fragment>
+                    ))}
+                    <span className="text-4xl font-bold text-highlight mx-2">=</span>
+                    {renderSlot(null, -1, true)}
+                </div>
+                <p className="text-xs text-tertiary text-center mb-4">합성할 동일한 등급의 장비 3개를 선택하세요.<br/>선택된 장비를 다시 클릭하면 등록이 해제됩니다.</p>
+                {isMythicSynthesis && (
+                    <p className="text-sm text-cyan-300 font-semibold">
+                        더블 신화 옵션 장비 획득 확률: {doubleMythicChance}%
+                    </p>
+                )}
+            </div>
+            <div className="flex-shrink-0 flex items-center justify-between mt-4 pt-4 border-t border-color">
+                <div className="text-sm">
+                    <p>비용:</p>
+                    <p className={`font-bold text-lg ${currentUser.gold >= cost ? 'text-yellow-300' : 'text-red-400'}`}>{cost.toLocaleString()} 골드</p>
+                </div>
+                <Button onClick={onSynthesize} disabled={!canSynthesize} colorScheme="green" className="w-40 py-3">합성</Button>
+            </div>
+        </div>
+    );
+};
+
+const CraftingPanel: React.FC<{
+    inventory: InventoryItem[];
+    onStartCraft: (materialName: string, craftType: 'upgrade' | 'downgrade') => void;
+}> = ({ inventory, onStartCraft }) => {
+    const materialTiers = ['하급 강화석', '중급 강화석', '상급 강화석', '최상급 강화석', '신비의 강화석'];
+    
+    const materialCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        inventory.filter(i => i.type === 'material').forEach(i => {
+            counts[i.name] = (counts[i.name] || 0) + (i.quantity || 0);
+        });
+        return counts;
+    }, [inventory]);
+
+    return (
+        <div className="w-full h-full p-4 flex flex-col">
+            <h3 className="font-bold text-xl text-highlight mb-4 text-center flex-shrink-0">재료 변환</h3>
+            <p className="text-xs text-tertiary text-center mb-4 flex-shrink-0">
+                상위 재료 1개 = 하위 재료 5개<br/>
+                하위 재료 10개 = 상위 재료 1개
+            </p>
+            <ul className="space-y-2 overflow-y-auto flex-grow">
+                {materialTiers.map((materialName, index) => {
+                    const template = MATERIAL_ITEMS[materialName as keyof typeof MATERIAL_ITEMS];
+                    const count = materialCounts[materialName] || 0;
+                    const canUpgrade = index < materialTiers.length - 1 && count >= 10;
+                    const canDowngrade = index > 0 && count >= 1;
+                    return (
+                        <li key={materialName} className="flex items-center justify-between bg-tertiary/50 p-2 rounded-md">
+                            <div className="flex items-center gap-3">
+                                <img src={template.image!} alt={materialName} className="w-10 h-10" />
+                                <div>
+                                    <p className="font-semibold text-primary">{materialName}</p>
+                                    <p className="text-xs text-tertiary">보유: {count.toLocaleString()}개</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button onClick={() => onStartCraft(materialName, 'downgrade')} disabled={!canDowngrade} colorScheme="orange" className="!text-xs !py-1">분해</Button>
+                                <Button onClick={() => onStartCraft(materialName, 'upgrade')} disabled={!canUpgrade} colorScheme="blue" className="!text-xs !py-1">합성</Button>
+                            </div>
+                        </li>
+                    );
+                })}
+            </ul>
+        </div>
+    );
+};
 
 interface InventoryModalProps {
     currentUser: UserWithStatus;
@@ -18,7 +144,7 @@ interface InventoryModalProps {
 
 type SortKey = 'createdAt' | 'type' | 'grade';
 
-const MAX_INVENTORY_SIZE = 100;
+const MAX_INVENTORY_SIZE_PER_TAB = 100;
 const EXPANSION_COST_DIAMONDS = 100;
 const EXPANSION_AMOUNT = 10;
 
@@ -452,79 +578,6 @@ const CraftingDetailModal: React.FC<{
     );
 };
 
-const CraftingPanel: React.FC<{
-    inventory: InventoryItem[];
-    onStartCraft: (materialName: string, craftType: 'upgrade' | 'downgrade') => void;
-}> = ({ inventory, onStartCraft }) => {
-    
-    const materialTiers = [
-        { name: '하급 강화석' },
-        { name: '중급 강화석' },
-        { name: '상급 강화석' },
-        { name: '최상급 강화석' },
-        { name: '신비의 강화석' },
-    ];
-
-    const materialCounts = useMemo(() => {
-        const counts: Record<string, number> = {};
-        materialTiers.forEach(tier => {
-            counts[tier.name] = inventory
-                .filter(i => i.name === tier.name)
-                .reduce((sum, i) => sum + (i.quantity || 0), 0);
-        });
-        return counts;
-    }, [inventory]);
-
-    const MaterialDisplay: React.FC<{ name: string }> = ({ name }) => {
-        const template = MATERIAL_ITEMS[name];
-        const count = materialCounts[name] || 0;
-        return (
-            <div className="flex flex-col items-center text-center w-24">
-                <img src={template.image!} alt={name} className="w-12 h-12" />
-                <h4 className="font-bold text-sm mt-1">{name}</h4>
-                <p className="text-xs text-tertiary">보유: {count.toLocaleString()}</p>
-            </div>
-        );
-    };
-
-    const ConversionButtons: React.FC<{ from: string, to: string }> = ({ from, to }) => {
-        const fromCount = materialCounts[from] || 0;
-        const toCount = materialCounts[to] || 0;
-        return (
-            <div className="flex flex-col items-center gap-2 mx-2">
-                <Button onClick={() => onStartCraft(from, 'upgrade')} disabled={fromCount < 10} className="!text-xs !py-1 whitespace-nowrap">합성 →</Button>
-                <Button onClick={() => onStartCraft(to, 'downgrade')} disabled={toCount < 1} className="!text-xs !py-1 whitespace-nowrap" colorScheme="orange">← 분해</Button>
-            </div>
-        );
-    };
-
-    return (
-        <div className="w-full h-full flex flex-col items-center p-4 text-on-panel">
-            <h3 className="text-xl font-bold mb-6">재료 합성/분해</h3>
-            <div className="flex flex-col items-center space-y-4">
-                {/* Row 1 */}
-                <div className="flex items-center justify-center">
-                    <MaterialDisplay name="하급 강화석" />
-                    <ConversionButtons from="하급 강화석" to="중급 강화석" />
-                    <MaterialDisplay name="중급 강화석" />
-                    <ConversionButtons from="중급 강화석" to="상급 강화석" />
-                    <MaterialDisplay name="상급 강화석" />
-                </div>
-                
-                {/* Row 2 */}
-                <div className="flex items-center justify-center mt-4">
-                    <MaterialDisplay name="상급 강화석" />
-                    <ConversionButtons from="상급 강화석" to="최상급 강화석" />
-                    <MaterialDisplay name="최상급 강화석" />
-                    <ConversionButtons from="최상급 강화석" to="신비의 강화석" />
-                    <MaterialDisplay name="신비의 강화석" />
-                </div>
-            </div>
-            <p className="text-xs text-tertiary mt-auto pt-4">* 합성: 하위 재료 10개 → 상위 재료 1개 / 분해: 상위 재료 1개 → 하위 재료 5개</p>
-        </div>
-    );
-};
-
 const AutoSelectModal: React.FC<{
     onClose: () => void;
     onConfirm: (selectedGrades: ItemGrade[]) => void;
@@ -568,85 +621,6 @@ const AutoSelectModal: React.FC<{
                 </div>
             </div>
         </DraggableWindow>
-    );
-};
-
-const SynthesisPanel: React.FC<{
-    synthesisSlots: (InventoryItem | null)[];
-    onRemove: (index: number) => void;
-    onSynthesize: () => void;
-    onCancel: () => void;
-    currentUser: UserWithStatus;
-}> = ({ synthesisSlots, onRemove, onSynthesize, onCancel, currentUser }) => {
-    const itemsInSlots = useMemo(() => synthesisSlots.filter((i): i is InventoryItem => i !== null), [synthesisSlots]);
-    const firstItemGrade = useMemo(() => itemsInSlots[0]?.grade, [itemsInSlots]);
-    const synthesisCost = useMemo(() => (firstItemGrade ? SYNTHESIS_COSTS[firstItemGrade] : 0), [firstItemGrade]);
-    const canSynthesize = itemsInSlots.length === 3;
-    const allSameGrade = itemsInSlots.length > 0 && itemsInSlots.every(i => i.grade === firstItemGrade);
-
-    const possibleSlots = useMemo(() => {
-        if (!allSameGrade) return [];
-        return [...new Set(itemsInSlots.map(i => i.slot))].filter(Boolean) as EquipmentSlot[];
-    }, [itemsInSlots, allSameGrade]);
-
-    const greatSuccessMessage = useMemo(() => {
-        if (!firstItemGrade || !allSameGrade) return "";
-        if (firstItemGrade === 'mythic') {
-            return "신화등급 합성시에는 50%확률로 신화옵션 2개인 장비가 합성됩니다.";
-        }
-        return "낮은 확률로 한 등급 높은 장비가 나올 수 있습니다.";
-    }, [firstItemGrade, allSameGrade]);
-    
-    return (
-        <div className="w-full h-full bg-secondary/50 rounded-lg p-3 flex flex-col items-center text-center">
-            <div>
-                <h3 className="font-bold text-lg text-tertiary mb-2">장비 합성</h3>
-                <p className="text-sm text-tertiary mb-2">합성할 동일 등급의 장비 3개를 아래 슬롯에 올려주세요.</p>
-                <div className="flex gap-4 mb-2">
-                    {synthesisSlots.map((item, index) => (
-                        <div key={index} onClick={() => onRemove(index)} className="w-20 h-20 bg-tertiary/50 rounded-lg border-2 border-dashed border-color flex items-center justify-center cursor-pointer hover:border-accent">
-                            {item ? (
-                                <div className="relative w-full h-full">
-                                    <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-md" />
-                                    {renderStarDisplay(item.stars)}
-                                    {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-2"/>}
-                                </div>
-                            ) : (
-                                <span className="text-3xl text-tertiary">+</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            <div className="w-full bg-tertiary/30 p-3 rounded-md space-y-2 mt-2 flex-grow flex flex-col">
-                <h4 className="font-semibold text-highlight text-left border-b border-color pb-1 flex-shrink-0">예상 결과 부위</h4>
-                <div className="flex-grow overflow-y-auto pr-1">
-                    {possibleSlots.length > 0 ? (
-                        <div className="grid grid-cols-3 gap-2 py-2">
-                            {possibleSlots.map(slot => (
-                                <div key={slot} className="text-center bg-tertiary/50 p-2 rounded">
-                                    <img src={emptySlotImages[slot]} className="w-8 h-8 mx-auto mb-1 opacity-70" />
-                                    <span className="text-xs">{slotNames[slot]}</span>
-                                    <span className="font-mono font-bold block text-sm text-primary">{(100 / possibleSlots.length).toFixed(0)}%</span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : <p className="text-xs text-tertiary pt-4 text-center">합성할 아이템을 올려주세요.</p>}
-                    {greatSuccessMessage && (
-                        <p className="text-xs text-cyan-300 text-center pt-2 mt-2 border-t border-color">{greatSuccessMessage}</p>
-                    )}
-                </div>
-            </div>
-
-            <div className="mt-2 flex-shrink-0 w-full">
-                {firstItemGrade && <p className={`text-sm text-tertiary ${currentUser.gold < synthesisCost ? 'text-red-400' : ''}`}>비용: <span className="font-bold text-yellow-300">{synthesisCost.toLocaleString()} 골드</span></p>}
-                 <div className="flex items-center justify-center gap-4 mt-2">
-                    <Button onClick={onCancel} colorScheme="gray">취소</Button>
-                    <Button onClick={onSynthesize} colorScheme="green" disabled={!canSynthesize}>합성하기</Button>
-                </div>
-            </div>
-        </div>
     );
 };
 
@@ -704,7 +678,7 @@ const BulkUseModal: React.FC<{
                         max={maxQuantity}
                         onChange={handleQuantityChange}
                     />
-                    <div className="grid grid-cols-5 gap-2">
+                     <div className="grid grid-cols-5 gap-2">
                         <Button onClick={() => handleQuantityChange(quantity - 10)} className="!py-1">-10</Button>
                         <Button onClick={() => handleQuantityChange(quantity - 1)} className="!py-1">-1</Button>
                         <Button onClick={() => handleQuantityChange(maxQuantity)} colorScheme="blue" className="!py-1">MAX</Button>
@@ -726,8 +700,27 @@ const BulkUseModal: React.FC<{
 };
 
 
+const SynthesisLevelPanel: React.FC<{ user: UserWithStatus }> = ({ user }) => {
+    const { synthesisLevel, synthesisXp } = user;
+    const requiredXp = synthesisLevel * 10000;
+    const progressPercent = (synthesisXp / requiredXp) * 100;
+    
+    return (
+        <div className="flex-shrink-0">
+            <div className="flex justify-between items-baseline mb-0.5 text-xs">
+                <span className="font-semibold text-primary">장비 합성 레벨 <span className="text-base font-bold">Lv.{synthesisLevel}</span></span>
+                <span className="font-mono text-tertiary">{synthesisXp.toLocaleString()} / {requiredXp.toLocaleString()}</span>
+            </div>
+            <div className="w-full bg-tertiary/50 rounded-full h-3 border border-color">
+                <div className="bg-gradient-to-r from-purple-500 to-fuchsia-500 h-full rounded-full" style={{ width: `${progressPercent}%` }}></div>
+            </div>
+        </div>
+    );
+};
+
+
 const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, onAction, onStartEnhance, enhancementAnimationTarget, onAnimationComplete, isTopmost, initialTab }) => {
-    const { inventory, inventorySlots } = currentUser;
+    const { inventory, inventorySlots, diamonds } = currentUser;
     const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<InventoryTab>(initialTab || 'all');
     const [sortKey, setSortKey] = useState<SortKey>('createdAt');
@@ -741,11 +734,47 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
     const [synthesisMode, setSynthesisMode] = useState(false);
     const [synthesisSlots, setSynthesisSlots] = useState<(InventoryItem | null)[]>([null, null, null]);
 
+    const inventoryCounts = useMemo(() => {
+        return {
+            equipment: inventory.filter(i => i.type === 'equipment').length,
+            consumable: inventory.filter(i => i.type === 'consumable').length,
+            material: inventory.filter(i => i.type === 'material').length,
+        };
+    }, [inventory]);
+    
+    const getTabCount = (tab: InventoryTab) => {
+        if (tab === 'all') {
+            return inventory.length;
+        }
+        return inventoryCounts[tab];
+    };
+    
+    const getTabSlots = (tab: InventoryTab) => {
+        if (tab === 'all') {
+            return inventorySlots.equipment + inventorySlots.consumable + inventorySlots.material;
+        }
+        return inventorySlots[tab];
+    };
+
+    const handleExpand = () => {
+        const tabToExpand = activeTab;
+        if (tabToExpand === 'all') {
+            alert('확장할 인벤토리 탭(장비/소모품/재료)을 선택해주세요.');
+            return;
+        }
+        
+        const tabNameMap = {
+            equipment: '장비',
+            consumable: '소모품',
+            material: '재료',
+        };
+
+        if (window.confirm(`다이아 ${EXPANSION_COST_DIAMONDS}개를 사용하여 ${tabNameMap[tabToExpand]} 가방을 ${EXPANSION_AMOUNT}칸 확장하시겠습니까?`)) {
+            onAction({ type: 'EXPAND_INVENTORY', payload: { tab: tabToExpand } });
+        }
+    };
+
     useEffect(() => {
-        // This effect ensures that whenever we are NOT in synthesis mode,
-        // the synthesis slots are cleared. This is a robust way to handle
-        // leaving the synthesis panel for any reason (switching to disassembly,
-        // crafting, changing filter tabs, etc.).
         if (!synthesisMode) {
             setSynthesisSlots([null, null, null]);
         }
@@ -770,12 +799,6 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
         }
     }, [enhancementAnimationTarget, onAnimationComplete]);
     
-    const handleExpand = () => {
-        if (window.confirm(`다이아 ${EXPANSION_COST_DIAMONDS}개를 사용하여 가방을 ${EXPANSION_AMOUNT}칸 확장하시겠습니까?`)) {
-            onAction({ type: 'EXPAND_INVENTORY' });
-        }
-    };
-
     const handleSell = () => {
         if (!selectedItem) return;
         if (selectedItem.type === 'equipment' && selectedItem.isEquipped) {
@@ -824,9 +847,8 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
         if (selectedItem?.type !== 'equipment' || !selectedItem.slot) return null;
         return inventory.find(item => item.isEquipped && item.slot === selectedItem.slot);
     }, [selectedItem, inventory]);
-
-    const inventoryDisplaySlots = Array.from({ length: inventorySlots }, (_, index) => filteredAndSortedInventory[index] || null);
-    const canExpand = inventorySlots < MAX_INVENTORY_SIZE;
+    
+    const canExpand = activeTab === 'all' ? false : (inventorySlots[activeTab] || 0) < MAX_INVENTORY_SIZE_PER_TAB;
 
     const handleDisassemble = () => {
         if (selectedForDisassembly.size === 0) return;
@@ -896,7 +918,7 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                     {synthesisMode ? <SynthesisPanel synthesisSlots={synthesisSlots} onRemove={handleRemoveFromSynthesis} onSynthesize={handleSynthesize} onCancel={handleExitSynthesisMode} currentUser={currentUser} />
                     : disassembleMode ? <DisassemblyPreviewPanel selectedIds={selectedForDisassembly} inventory={inventory} />
                     : showSynthesis ? <div className="w-full h-full bg-secondary rounded-lg shadow-inner relative"><CraftingPanel inventory={inventory} onStartCraft={(materialName, craftType) => setCraftingDetails({ materialName, craftType })} /></div>
-                    : !selectedItem ? <div className="w-full h-full bg-secondary/50 rounded-lg p-4 flex flex-col items-center justify-center text-center text-tertiary"><h3 className="font-bold text-lg">아이템 정보</h3><p className="text-sm mt-4">아래 목록에서 아이템을 선택하여<br/>상세 정보를 확인하세요.</p></div>
+                    : !selectedItem ? <div className="w-full h-full bg-secondary/50 rounded-lg p-4 flex flex-col items-center justify-center text-center text-tertiary"><h3 className="font-bold text-lg">아이템 정보</h3><p className="text-sm mt-4">아래 목록에서 아이템을 선택하여<br/>상세 정보를 확인하세요.</p><div className="mt-4 w-full"><SynthesisLevelPanel user={currentUser} /></div></div>
                     : !isEquipmentView ? <ItemDisplayCard item={selectedItem} title="선택 아이템" currentUser={currentUser} activeTab={activeTab} isLarge={true} />
                     : <div className="w-full flex flex-row gap-4 h-full"><div className="w-1/2 h-full min-h-0"><ItemDisplayCard item={currentlyEquippedItem} title="현재 장착" slot={selectedItem?.slot} currentUser={currentUser} activeTab={activeTab} /></div><div className="w-1/2 h-full min-h-0"><ItemDisplayCard item={selectedItem} title="선택 아이템" slot={selectedItem?.slot} currentUser={currentUser} activeTab={activeTab} comparisonItem={currentlyEquippedItem} /></div></div>}
                 </div>
@@ -920,11 +942,11 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                 <div className={`flex-shrink-0 flex flex-col pt-2 transition-all duration-300 ${isEquipmentView ? 'h-48' : 'h-[45%]'}`}>
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-2 flex-shrink-0">
                         <div className="flex items-center gap-4">
-                            <h3 className="text-lg font-bold text-on-panel">인벤토리 ({inventory.length} / {inventorySlots})</h3>
                              <div className="flex bg-tertiary/70 p-1 rounded-lg">
                                 {(['all', 'equipment', 'consumable', 'material'] as InventoryTab[]).map(tab => {
                                     const isDisabled = (synthesisMode && tab !== 'equipment') || showSynthesis;
-                                    return <button key={tab} onClick={() => { if (!isDisabled) { setActiveTab(tab); setSynthesisMode(false); setDisassembleMode(false); setShowSynthesis(false); } }} disabled={isDisabled} className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === tab ? 'bg-accent' : 'text-tertiary hover:bg-secondary/50'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>{tab === 'all' ? '전체' : tab === 'equipment' ? '장비' : tab === 'consumable' ? '소모품' : '재료'}</button>;
+                                    const tabNameMap: Record<InventoryTab, string> = { all: '전체', equipment: '장비', consumable: '소모품', material: '재료' };
+                                    return <button key={tab} onClick={() => { if (!isDisabled) { setActiveTab(tab); setSynthesisMode(false); setDisassembleMode(false); setShowSynthesis(false); } }} disabled={isDisabled} className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${activeTab === tab ? 'bg-accent' : 'text-tertiary hover:bg-secondary/50'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}>{tabNameMap[tab]} ({getTabCount(tab)}/{getTabSlots(tab)})</button>;
                                 })}
                             </div>
                         </div>
@@ -936,7 +958,8 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                     
                     <div className="flex-grow overflow-y-auto pr-2 bg-tertiary/30 p-2 rounded-md">
                         <div className="grid grid-cols-[repeat(auto-fill,minmax(clamp(48px,6vh,64px),1fr))] gap-1">
-                            {inventoryDisplaySlots.map((item, index) => {
+                            {Array.from({ length: getTabSlots(activeTab) }).map((_, index) => {
+                                const item = filteredAndSortedInventory[index];
                                 const isDisassemblable = item?.type === 'equipment' && !item.isEquipped;
                                 const isSynthesizable = item?.type === 'equipment' && !item.isEquipped;
                                 const isSelectedForDisassembly = disassembleMode && item && selectedForDisassembly.has(item.id);
@@ -963,8 +986,9 @@ const InventoryModal: React.FC<InventoryModalProps> = ({ currentUser, onClose, o
                             })}
                         </div>
                     </div>
-                    <div className="flex justify-end items-center mt-2 flex-shrink-0 text-sm">
-                        {canExpand ? ( <Button onClick={handleExpand} colorScheme="blue" className="!text-xs !py-1" title={`비용: 💎 ${EXPANSION_COST_DIAMONDS}`}> 확장 (+{EXPANSION_AMOUNT}) </Button> ) : ( <p className="text-xs text-tertiary">최대 확장</p> )}
+                    <div className="flex justify-between items-center mt-2 flex-shrink-0 text-sm">
+                        <SynthesisLevelPanel user={currentUser} />
+                        {canExpand && activeTab !== 'all' ? ( <Button onClick={handleExpand} colorScheme="blue" className="!text-xs !py-1" title={`비용: 💎 ${EXPANSION_COST_DIAMONDS}`}> 확장 (+{EXPANSION_AMOUNT}) </Button> ) : ( <p className="text-xs text-tertiary">최대 확장</p> )}
                     </div>
                 </div>
             </div>

@@ -1,5 +1,3 @@
-
-
 // server/modes/omokLogic.ts
 import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus, Negotiation } from '../../types/index.js';
 import { handleSharedAction, updateSharedGameState, transitionToPlaying } from './shared.js';

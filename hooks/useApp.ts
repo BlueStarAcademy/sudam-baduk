@@ -8,7 +8,8 @@ import {
     WEEKLY_MILESTONE_THRESHOLDS,
     MONTHLY_MILESTONE_THRESHOLDS,
     SLUG_BY_GAME_MODE,
-    SINGLE_PLAYER_MISSIONS
+    SINGLE_PLAYER_MISSIONS,
+    GRADE_LEVEL_REQUIREMENTS
 } from '../constants/index.js';
 import { defaultSettings } from './useAppSettings.js';
 import { getMissionInfoWithLevel } from '../utils/questUtils.js';
@@ -106,6 +107,17 @@ export const useApp = () => {
             });
         }
         if (action.type === 'TOGGLE_EQUIP_ITEM') {
+            const itemToToggle = currentUser?.inventory.find(i => i.id === action.payload.itemId);
+
+            if (currentUser && itemToToggle && !itemToToggle.isEquipped) {
+                const requiredLevel = GRADE_LEVEL_REQUIREMENTS[itemToToggle.grade];
+                const userLevelSum = currentUser.strategyLevel + currentUser.playfulLevel;
+                if (userLevelSum < requiredLevel) {
+                    showError(`착용 레벨 합이 부족합니다. (필요: ${requiredLevel}, 현재: ${userLevelSum})`);
+                    return { success: false, error: `착용 레벨 합이 부족합니다. (필요: ${requiredLevel}, 현재: ${userLevelSum})` };
+                }
+            }
+
             setCurrentUser(prevUser => {
                 if (!prevUser) return null;
                 const { itemId } = action.payload;
@@ -202,7 +214,7 @@ export const useApp = () => {
             showError(err.message);
             return { success: false, error: err.message };
         }
-    }, [currentUser?.id, sessionId, doLogoutClientSide]);
+    }, [currentUser?.id, sessionId, doLogoutClientSide, currentUser]);
 
     const handleLogout = useCallback(async () => {
         if (isLoggingOut.current) return;

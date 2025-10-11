@@ -1,8 +1,5 @@
-
-
 import 'dotenv/config';
-// FIX: Import Request, Response, NextFunction from express to resolve type errors.
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV, setKV } from './db.js';
@@ -15,7 +12,7 @@ import * as gameModes from './gameModes.js';
 import * as db from './db.js';
 import * as guildService from './guildService.js';
 import { randomUUID } from 'crypto';
-import { GUILD_RESEARCH_PROJECTS } from '../constants.js';
+import { GUILD_RESEARCH_PROJECTS } from '../constants/index.js';
 import { regenerateActionPoints } from './services/effectService.js';
 import { getKataGoManager } from './kataGoService.js';
 import { containsProfanity } from '../profanity.js';
@@ -48,8 +45,7 @@ declare global {
   }
 }
 
-// FIX: Update parameter types to use imported Request, Response, NextFunction.
-const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync' || req.path === '/api/auth/finalize-kakao' || req.path === '/api/initial-state') {
         return next();
     }
@@ -60,7 +56,15 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
             return res.status(401).json({ message: 'Session ID is required.' });
         }
         
-        const storedSessionId = volatileState.userSessions[userId];
+        let storedSessionId = volatileState.userSessions[userId];
+        // If not in memory, check the DB to handle server restarts
+        if (!storedSessionId) {
+            const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
+            storedSessionId = allSessions[userId];
+            if (storedSessionId) {
+                volatileState.userSessions[userId] = storedSessionId; // Cache it
+            }
+        }
 
         if (!storedSessionId || storedSessionId !== sessionId) {
             return res.status(401).json({ message: 'Session expired due to new login.' });
@@ -78,8 +82,7 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
 
 app.use(userMiddleware);
 
-// FIX: Update parameter types to use imported Request, Response.
-app.post('/api/auth/register', async (req: Request, res: Response) => {
+app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
         return res.status(400).json({ message: 'Username, password, and nickname are required.' });
@@ -103,6 +106,9 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
 
         const sessionId = randomUUID();
         volatileState.userSessions[newUser.id] = sessionId;
+        const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
+        allSessions[newUser.id] = sessionId;
+        await setKV('userSessions', allSessions);
 
         res.json({ user: newUser, sessionId });
     } catch (error: any) {
@@ -110,8 +116,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Update parameter types to use imported Request, Response.
-app.post('/api/auth/login', async (req: Request, res: Response) => {
+app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: '아이디와 비밀번호를 모두 입력해주세요.' });
@@ -143,6 +148,9 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         const now = Date.now();
         const sessionId = randomUUID();
         volatileState.userSessions[user.id] = sessionId;
+        const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
+        allSessions[user.id] = sessionId;
+        await setKV('userSessions', allSessions);
         
         const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
         userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
@@ -155,8 +163,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Update parameter types to use imported Request, Response.
-app.post('/api/auth/sync', async (req: Request, res: Response) => {
+app.post('/api/auth/sync', async (req: express.Request, res: express.Response) => {
     const { session } = req.body;
     if (!session || !session.user) {
         return res.status(400).json({ message: 'Session data is required.' });
@@ -188,6 +195,9 @@ app.post('/api/auth/sync', async (req: Request, res: Response) => {
         const now = Date.now();
         const sessionId = randomUUID();
         volatileState.userSessions[user.id] = sessionId;
+        const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
+        allSessions[user.id] = sessionId;
+        await setKV('userSessions', allSessions);
         
         const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
         userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
@@ -201,15 +211,14 @@ app.post('/api/auth/sync', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Update parameter types to use imported Request, Response.
-app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
+app.post('/api/auth/finalize-kakao', async (req: express.Request, res: express.Response) => {
     const { kakaoId, nickname } = req.body;
     if (!kakaoId || !nickname) {
         return res.status(400).json({ message: '카카오 정보 또는 닉네임이 누락되었습니다.' });
     }
     try {
         if (nickname.trim().length < 2 || nickname.trim().length > 12) {
-            return res.status(400).json({ message: '닉네임은 2-12자여야 합니다.' });
+            return res.status(400).json({ message: '닉네임은 2자 이상 12자 이하로 입력해주세요.' });
         }
         if (containsProfanity(nickname)) {
             return res.status(400).json({ message: '닉네임에 부적절한 단어가 포함되어 있습니다.' });
@@ -224,6 +233,9 @@ app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
 
         const sessionId = randomUUID();
         volatileState.userSessions[newUser.id] = sessionId;
+        const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
+        allSessions[newUser.id] = sessionId;
+        await setKV('userSessions', allSessions);
         
         const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
         userStatuses[newUser.id] = { status: UserStatus.Online, stateEnteredAt: Date.now() };
@@ -236,8 +248,7 @@ app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Update parameter types to use imported Request, Response.
-app.post('/api/initial-state', async (req: Request, res: Response) => {
+app.post('/api/initial-state', async (req: express.Request, res: express.Response) => {
     const { userId, sessionId } = req.body;
     if (userId && sessionId) {
         volatileState.userConnections[userId] = Date.now();
@@ -267,17 +278,20 @@ app.post('/api/initial-state', async (req: Request, res: Response) => {
     });
 });
 
-// FIX: Update parameter types to use imported Request, Response.
-app.post('/api/action', async (req: Request, res: Response) => {
+app.post('/api/action', async (req: express.Request, res: express.Response) => {
     const user = req.user;
     if (!user) {
         if (req.body.type === 'LOGOUT' && req.body.userId) {
             console.log(`Processing beacon logout for user ${req.body.userId}`);
-            delete volatileState.userConnections[req.body.userId];
-            const userStatuses = await getKV('userStatuses') || {};
-            delete (userStatuses as any)[req.body.userId];
+            const userId = req.body.userId;
+            delete volatileState.userConnections[userId];
+            const userStatuses = (await getKV<Record<string, UserStatusInfo>>('userStatuses') || {}) as Record<string, UserStatusInfo>;
+            delete userStatuses[userId];
             await setKV('userStatuses', userStatuses);
-            delete volatileState.userSessions[req.body.userId];
+            delete volatileState.userSessions[userId];
+            const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
+            delete allSessions[userId];
+            await setKV('userSessions', allSessions);
             return res.json({ success: true });
         }
         return res.status(401).json({ message: 'Authentication required for this action.' });
@@ -449,11 +463,5 @@ const startServer = async () => {
 };
 
 startServer();
-
-if (!process.env.VERCEL) {
-    app.listen(port, () => {
-        console.log(`Server listening on port ${port}`);
-    });
-}
 
 export default app;

@@ -126,8 +126,20 @@ export const processWeeklyLeagueUpdates = async (user: User, allUsers: User[]): 
     if (!user.lastLeagueUpdate || isDifferentWeekKST(user.lastLeagueUpdate, now)) {
         if (user.lastLeagueUpdate) { // Don't give rewards on first-ever run for a user
             let league = user.league;
+
+            // FIX: Add logic to correct league names that are missing the " 리그" suffix.
+            if (league && !league.endsWith(' 리그')) {
+                const correctedLeague = `${league} 리그`;
+                // Check if the corrected version is a valid league tier
+                if (Object.values(LeagueTier).includes(correctedLeague as LeagueTier)) {
+                    console.log(`[Scheduler] Correcting league tier for user ${user.id} from "${league}" to "${correctedLeague}".`);
+                    user.league = correctedLeague as LeagueTier;
+                    league = user.league;
+                }
+            }
+
             if (!league || !Object.values(LeagueTier).includes(league)) {
-                console.warn(`[Scheduler] User ${user.id} has invalid league tier: "${league}". Resetting to Sprout.`);
+                console.warn(`[Scheduler] User ${user.id} has invalid league tier: "${user.league}". Resetting to Sprout.`);
                 user.league = LeagueTier.Sprout;
                 league = user.league;
             }

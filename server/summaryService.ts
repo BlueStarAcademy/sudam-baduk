@@ -1,4 +1,3 @@
-
 // server/summaryService.ts
 import { getGoLogic, processMove } from '../utils/goLogic';
 import * as db from './db.js';
@@ -492,31 +491,16 @@ export const processGameSummary = async (game: types.LiveGameSession): Promise<v
     const p1IsWinner = !isDraw && !isNoContest && ((winner === types.Player.Black && p1.id === blackPlayerId) || (winner === types.Player.White && p1.id === whitePlayerId));
     const p2IsWinner = !isDraw && !isNoContest && ((winner === types.Player.Black && p2.id === blackPlayerId) || (winner === types.Player.White && p2.id === whitePlayerId));
     
-    const p1IsNoContestInitiator = isNoContest && (noContestInitiatorIds?.includes(p1.id) ?? false);
-    const p2IsNoContestInitiator = isNoContest && (noContestInitiatorIds?.includes(p2.id) ?? false);
+    const p1IsNoContestInitiator = !!(isNoContest && noContestInitiatorIds?.includes(p1.id));
+    const p2IsNoContestInitiator = !!(isNoContest && noContestInitiatorIds?.includes(p2.id));
 
-    if (!game.summary) game.summary = {}; // Initialize summary object
+    const { summary: p1Summary, updatedPlayer: updatedP1 } = await processPlayerSummary(p1, p2, p1IsWinner, isDraw, game, isNoContest, p1IsNoContestInitiator);
+    const { summary: p2Summary, updatedPlayer: updatedP2 } = await processPlayerSummary(p2, p1, p2IsWinner, isDraw, game, isNoContest, p2IsNoContestInitiator);
 
-    try {
-        if (p1.id !== aiUserId) {
-            const { summary: p1Summary, updatedPlayer: updatedP1 } = await processPlayerSummary(p1, p2, p1IsWinner, isDraw, game, isNoContest, p1IsNoContestInitiator);
-            await db.updateUser(updatedP1);
-            game.summary[p1.id] = p1Summary;
-        }
-    } catch (e) {
-        console.error(`[Summary] Error processing summary for player 1 (${p1.id}) in game ${game.id}:`, e);
-    }
+    if (!game.summary) game.summary = {};
+    game.summary[p1.id] = p1Summary;
+    game.summary[p2.id] = p2Summary;
     
-    try {
-        if (p2.id !== aiUserId) {
-            const { summary: p2Summary, updatedPlayer: updatedP2 } = await processPlayerSummary(p2, p1, p2IsWinner, isDraw, game, isNoContest, p2IsNoContestInitiator);
-            await db.updateUser(updatedP2);
-            game.summary[p2.id] = p2Summary;
-        }
-    } catch (e) {
-        console.error(`[Summary] Error processing summary for player 2 (${p2.id}) in game ${game.id}:`, e);
-    }
-    
-    game.statsUpdated = true;
-    await db.saveGame(game);
+    if (p1.id !== aiUserId) await db.updateUser(updatedP1);
+    if (p2.id !== aiUserId) await db.updateUser(updatedP2);
 };

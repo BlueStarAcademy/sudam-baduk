@@ -23,7 +23,6 @@ import { aiUserId, getAiUser, makeAiMove } from '../ai/index.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
 import { processMove } from '../../utils/goLogic';
 import { endGame, getGameResult } from '../summaryService.js';
-// FIX: Imported `switchTurnAndUpdateTimers` from strategic.js to resolve function not found errors.
 // This import is causing a circular dependency. It will be removed along with the function that uses it.
 
 export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player) => {

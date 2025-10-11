@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { UserWithStatus, ServerAction, ShopTab } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
@@ -195,7 +194,8 @@ const BulkPurchaseModal: React.FC<BulkPurchaseModalProps> = ({ item, currentUser
         
         // 3. By inventory space (for non-stackable equipment boxes, assume 1 item per box)
         if (item.type === 'equipment') {
-            const space = currentUser.inventorySlots - currentUser.inventory.length;
+            // FIX: Correctly calculate inventory space for equipment.
+            const space = currentUser.inventorySlots.equipment - currentUser.inventory.filter(i => i.type === 'equipment').length;
             let maxBySpace = 0;
             for (let q = 1; q < 200; q++) { // assume max buy is < 200
                 if (q + Math.floor(q / 10) <= space) {

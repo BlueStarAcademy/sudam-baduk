@@ -1,4 +1,3 @@
-
 import * as db from '../db.js';
 import { 
     type ServerAction, 
@@ -364,25 +363,30 @@ export const handleAdminAction = async (action: ServerAction & { user: User }, v
 
             game.gameStatus = GameStatusEnum.NoContest;
             game.winReason = WinReason.Disconnect;
-            game.statsUpdated = true; 
-
+            
+            await summaryService.processGameSummary(game);
             await db.saveGame(game);
             
-            // Update volatile state for immediate effect
-            const p1Status = volatileState.userStatuses[game.player1.id];
-            if (p1Status) {
-                p1Status.status = UserStatus.Waiting;
-                p1Status.mode = game.mode;
-                delete p1Status.gameId;
-                p1Status.stateEnteredAt = now;
-            }
-            const p2Status = volatileState.userStatuses[game.player2.id];
-            if (p2Status) {
-                p2Status.status = UserStatus.Waiting;
-                p2Status.mode = game.mode;
-                delete p2Status.gameId;
-                p2Status.stateEnteredAt = now;
-            }
+            const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+            const p1Id = game.player1.id;
+            const p2Id = game.player2.id;
+            
+            const updateUserStatus = (userId: string) => {
+                if (userStatuses[userId]) {
+                    userStatuses[userId].status = UserStatus.Waiting;
+                    userStatuses[userId].mode = game.mode;
+                    delete userStatuses[userId].gameId;
+                    userStatuses[userId].stateEnteredAt = now;
+                    if (volatileState.userStatuses[userId]) {
+                        volatileState.userStatuses[userId] = { ...userStatuses[userId] };
+                    }
+                }
+            };
+            
+            updateUserStatus(p1Id);
+            updateUserStatus(p2Id);
+
+            await db.setKV('userStatuses', userStatuses);
             
             await createAdminLog(user, 'force_delete_game', game.player1, { reason: "Admin forced game closure" }, backupData);
             return { clientResponse: { success: true } };

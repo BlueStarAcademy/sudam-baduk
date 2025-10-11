@@ -16,7 +16,7 @@ import {
     GRADE_SUB_OPTION_RULES,
     SUB_OPTION_POOLS,
     SYNTHESIS_COSTS,
-    SYNTHESIS_UPGRADE_CHANCES,
+    SYNTHESIS_LEVEL_BENEFITS,
     EQUIPMENT_POOL,
     ENHANCEMENT_LEVEL_REQUIREMENTS
 } from '../../constants/index.js';
@@ -538,11 +538,23 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
             
             const firstItemGrade = itemsToSynthesize[0].grade;
             if (itemsToSynthesize.some(i => i.grade !== firstItemGrade)) {
-                return { error: '같은 등급의 장비만 합성할 수 없습니다.' };
+                return { error: '같은 등급의 장비만 합성할 수 있습니다.' };
             }
             
             if (itemsToSynthesize.some(i => i.isEquipped)) {
                 return { error: '장착 중인 아이템은 합성 재료로 사용할 수 없습니다.' };
+            }
+            
+            const synthesisLevel = user.synthesisLevel || 1;
+            const levelBenefits = SYNTHESIS_LEVEL_BENEFITS.find(b => b.level === synthesisLevel) || SYNTHESIS_LEVEL_BENEFITS[1];
+
+            if (!levelBenefits.synthesizableGrades.includes(firstItemGrade)) {
+                const gradeMap: Record<ItemGrade, string> = {
+                    [ItemGrade.Normal]: '일반', [ItemGrade.Uncommon]: '고급', [ItemGrade.Rare]: '희귀',
+                    [ItemGrade.Epic]: '에픽', [ItemGrade.Legendary]: '전설', [ItemGrade.Mythic]: '신화'
+                };
+                const highestAllowedGradeName = gradeMap[levelBenefits.synthesizableGrades[levelBenefits.synthesizableGrades.length - 1]];
+                return { error: `현재 합성 레벨(${synthesisLevel})에서는 ${highestAllowedGradeName} 등급 이하 장비만 합성할 수 있습니다.` };
             }
         
             const synthesisCost = SYNTHESIS_COSTS[firstItemGrade];
@@ -550,8 +562,8 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
                 return { error: `골드가 부족합니다. (필요: ${synthesisCost})` };
             }
         
-            if ((user.inventory.length - 3 + 1) > user.inventorySlots) {
-                 return { error: '인벤토리 공간이 부족합니다.' };
+            if ((user.inventory.filter(i => i.type === 'equipment').length - 3 + 1) > user.inventorySlots.equipment) {
+                 return { error: '장비 인벤토리 공간이 부족합니다.' };
             }
             
             if (!user.isAdmin) {
@@ -559,29 +571,29 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
             }
             user.inventory = user.inventory.filter(i => !itemIds.includes(i.id));
         
-            const isAllDoubleMythic = firstItemGrade === ItemGrade.Mythic && itemsToSynthesize.every(i => i.options?.mythicSubs.length === 2);
-            
-            const upgradeChance = SYNTHESIS_UPGRADE_CHANCES[firstItemGrade];
+            const upgradeChance = levelBenefits.upgradeChance[firstItemGrade] ?? 0;
             const roll = Math.random() * 100;
             let wasUpgraded = roll < upgradeChance;
             let newGrade: ItemGrade;
             let isDoubleMythic = false;
-        
-            // FIX: Replaced string literals with ItemGrade enum members.
+
+            const isAllDoubleMythic = firstItemGrade === ItemGrade.Mythic && itemsToSynthesize.every(i => i.options?.mythicSubs.length === 2);
+
             const gradeOrder: ItemGrade[] = [ItemGrade.Normal, ItemGrade.Uncommon, ItemGrade.Rare, ItemGrade.Epic, ItemGrade.Legendary, ItemGrade.Mythic];
             const currentGradeIndex = gradeOrder.indexOf(firstItemGrade);
-        
+
             if (isAllDoubleMythic) {
-                wasUpgraded = true; // Always show as great success
+                wasUpgraded = true; 
                 isDoubleMythic = true;
-                // FIX: Replaced string literal with ItemGrade enum member.
                 newGrade = ItemGrade.Mythic;
             } else if (firstItemGrade === ItemGrade.Mythic) {
-                wasUpgraded = roll < upgradeChance; // This represents the chance for double mythic option
-                isDoubleMythic = wasUpgraded;
-                // FIX: Replaced string literal with ItemGrade enum member.
-                newGrade = ItemGrade.Mythic;
+                // For normal mythics, 'upgradeChance' is the double mythic chance from its own column
+                const doubleMythicChance = levelBenefits.doubleMythicChance;
+                isDoubleMythic = Math.random() * 100 < doubleMythicChance;
+                wasUpgraded = isDoubleMythic; // Show "Great Success" if double mythic is created
+                newGrade = ItemGrade.Mythic; // Grade doesn't change
             } else {
+                // Normal grade-up logic for other tiers
                 newGrade = wasUpgraded && currentGradeIndex < gradeOrder.length - 1 
                     ? gradeOrder[currentGradeIndex + 1] 
                     : firstItemGrade;
@@ -612,16 +624,61 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
             
             user.inventory.push(newItem);
 
+            const xpGains: Record<ItemGrade, number> = {
+                [ItemGrade.Normal]: 100,
+                [ItemGrade.Uncommon]: 200,
+                [ItemGrade.Rare]: 300,
+                [ItemGrade.Epic]: 500,
+                [ItemGrade.Legendary]: 1000,
+                [ItemGrade.Mythic]: 2000,
+            };
+
+            const xpGained = xpGains[firstItemGrade] || 0;
+            user.synthesisXp = (user.synthesisXp || 0) + xpGained;
+
+            let xpForNextLevel = (user.synthesisLevel || 1) * 10000;
+            while (user.synthesisXp >= xpForNextLevel) {
+                user.synthesisXp -= xpForNextLevel;
+                user.synthesisLevel = (user.synthesisLevel || 1) + 1;
+                xpForNextLevel = user.synthesisLevel * 10000;
+            }
+
             if (user.guildId) {
-                if (['epic', 'legendary', 'mythic'].includes(newItem.grade)) {
-                    guildService.updateGuildMissionProgress(user.guildId, 'equipmentSyntheses', 1);
-                }
+                guildService.updateGuildMissionProgress(user.guildId, 'equipmentSyntheses', 1);
             }
             
-            updateQuestProgress(user, 'craft_attempt');
+            updateQuestProgress(user, 'craft_attempt'); // This should probably be 'synthesis_attempt'
             await db.updateUser(user);
         
-            return { clientResponse: { synthesisResult: { item: newItem, wasUpgraded: wasUpgraded } } };
+            return { clientResponse: { synthesisResult: { item: newItem, wasUpgraded: wasUpgraded || isDoubleMythic }, updatedUser: user } };
+        }
+
+        case 'EXPAND_INVENTORY': {
+            const { tab } = payload as { tab: 'equipment' | 'consumable' | 'material' };
+            const MAX_INVENTORY_SIZE_PER_TAB = 100;
+            const EXPANSION_COST_DIAMONDS = 100;
+            const EXPANSION_AMOUNT = 10;
+            
+            if (!tab || !user.inventorySlots[tab]) {
+                return { error: '잘못된 인벤토리 탭입니다.' };
+            }
+
+            if (user.inventorySlots[tab] >= MAX_INVENTORY_SIZE_PER_TAB) {
+                return { error: '최대치까지 확장되었습니다.' };
+            }
+
+            if (user.diamonds < EXPANSION_COST_DIAMONDS && !user.isAdmin) {
+                return { error: '다이아가 부족합니다.' };
+            }
+
+            if (!user.isAdmin) {
+                currencyService.spendDiamonds(user, EXPANSION_COST_DIAMONDS, `${tab} 인벤토리 확장`);
+            }
+
+            user.inventorySlots[tab] = Math.min(MAX_INVENTORY_SIZE_PER_TAB, user.inventorySlots[tab] + EXPANSION_AMOUNT);
+
+            await db.updateUser(user);
+            return { clientResponse: { updatedUser: user } };
         }
 
         default:

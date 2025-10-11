@@ -3,7 +3,7 @@ import { type AppState, type User, type UserCredentials, type QuestLog, type Dai
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, BOT_NAMES, AVATAR_POOL, GUILD_MISSIONS_POOL, GUILD_INITIAL_MEMBER_LIMIT, defaultSettings } from '../constants/index.js';
 import crypto from 'crypto';
 // FIX: Import createDefaultBaseStats from shared utils.
-import { createDefaultBaseStats } from '../utils/statUtils.js';
+import { createDefaultBaseStats } from '.././utils/statUtils.js';
 
 export const createDefaultQuests = (): QuestLog => ({
     daily: {
@@ -76,7 +76,13 @@ export const createDefaultUser = (id: string, username: string, nickname: string
         baseStats: createDefaultBaseStats(),
         spentStatPoints: createDefaultSpentStatPoints(),
         inventory: createDefaultInventory(),
-        inventorySlots: 40,
+        inventorySlots: {
+            equipment: 30,
+            consumable: 30,
+            material: 30,
+        },
+        synthesisLevel: 1,
+        synthesisXp: 0,
         equipment: {},
         equipmentPresets: Array(5).fill(null).map((_, i) => ({ name: `프리셋 ${i + 1}`, equipment: {} })),
         actionPoints: { current: 30, max: 30 },

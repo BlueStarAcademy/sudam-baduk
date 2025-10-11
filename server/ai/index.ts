@@ -1,4 +1,5 @@
 
+
 import * as types from '../../types/index.js';
 // FIX: Import SinglePlayerLevel from types instead of constants.
 import { SinglePlayerLevel } from '../../types/index.js';
@@ -25,7 +26,8 @@ const baseAiUser: types.User = {
     baseStats: createDefaultBaseStats(),
     spentStatPoints: createDefaultSpentStatPoints(),
     inventory: [],
-    inventorySlots: 0,
+    // FIX: Changed inventorySlots to be an object to match the User type definition.
+    inventorySlots: { equipment: 30, consumable: 30, material: 30 },
     equipment: {},
     equipmentPresets: [],
     actionPoints: { current: 9999, max: 9999 },
@@ -75,6 +77,8 @@ const baseAiUser: types.User = {
     dailyMissionContribution: { amount: 0, date: 0 },
     guildShopPurchases: {},
     appSettings: defaultSettings,
+    synthesisLevel: 1,
+    synthesisXp: 0,
     lastNeighborhoodTournament: null,
     neighborhoodRewardClaimed: false,
     lastNationalTournament: null,

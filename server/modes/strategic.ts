@@ -16,8 +16,8 @@ import {
 } from '../../types/index.js';
 import { processMove } from '../../utils/goLogic';
 import { getGameResult, endGame } from '../summaryService.js';
-import { gnuGoServiceManager } from '../services/gnuGoService.js';
 import { makeAiMove } from '../ai/index.js';
+import { gnuGoServiceManager } from '../services/gnuGoService.js';
 import * as db from '../db.js';
 import { transitionToPlaying } from './shared.js';
 import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
