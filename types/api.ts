@@ -1,5 +1,4 @@
 
-// FIX: Removed AppSettings from this import. It is not directly exported from entities and not directly used in this file.
 import { User, UserWithStatus, LiveGameSession, Negotiation, ChatMessage, Guild, TournamentState, TowerRank } from './entities';
 import { UserStatus, GameMode } from './enums';
 
@@ -31,15 +30,16 @@ export interface AppState {
 }
 
 export interface VolatileState {
+    userConnections: Record<string, any>; // Maps userId to connection object/timestamp
+    userSessions: Record<string, string>; // Maps userId to a unique session ID for auth
+    activeTournaments?: Record<string, TournamentState>; // In-memory simulation state
+    activeTournamentViewers?: Set<string>; // Users currently watching a simulation
+    // FIX: Add missing properties to align with usage across the server.
     userStatuses: Record<string, UserStatusInfo>;
-    userConnections: Record<string, any>;
     negotiations: Record<string, Negotiation>;
     userLastChatMessage: Record<string, number>;
     waitingRoomChats: Record<string, ChatMessage[]>;
     gameChats: Record<string, ChatMessage[]>;
-    activeTournaments?: Record<string, TournamentState>;
-    activeTournamentViewers?: Set<string>;
-    userSessions: Record<string, string>; // userId -> sessionId
 }
 
 export type ServerActionType =
@@ -156,7 +156,6 @@ export type ServerActionType =
   | 'RENAME_EQUIPMENT_PRESET'
   | 'PAUSE_GAME'
   | 'RESUME_GAME'
-  // FIX: Add 'UPDATE_APP_SETTINGS' to ServerActionType to resolve error in gameActions.ts
   | 'UPDATE_APP_SETTINGS'
   | 'ADMIN_APPLY_SANCTION'
   | 'ADMIN_LIFT_SANCTION'
@@ -218,7 +217,6 @@ export interface HandleActionResult {
 
 export interface GameProps {
     session: LiveGameSession;
-    // FIX: Update onAction to return a Promise, resolving type errors in components that await its result.
     onAction: (action: ServerAction) => Promise<{ success: boolean; error?: string; [key: string]: any; } | undefined>;
     currentUser: UserWithStatus;
     waitingRoomChat: ChatMessage[];

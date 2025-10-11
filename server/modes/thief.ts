@@ -4,12 +4,10 @@
 
 import { type LiveGameSession, type Point, type DiceRoundSummary, Player, type Negotiation, type VolatileState, type ServerAction, type HandleActionResult, type User, GameMode, MythicStat, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
-// FIX: Corrected import path for goLogic
-import { getGoLogic, processMove } from '../../utils/goLogic.js';
+import { getGoLogic, processMove } from '../../utils/goLogic';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';
 import { aiUserId } from '../ai/index.js';
 import { DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_TURN_CHOICE_TIME, DICE_GO_TURN_ROLL_TIME, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
-// FIX: Corrected the import path for effectService to point to the root services directory where calculateUserEffects is exported.
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 
@@ -329,6 +327,7 @@ export const handleThiefAction = async (volatileState: VolatileState, game: Live
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     
+// FIX: The 'volatileState' parameter was missing in the call to 'handleSharedAction', causing an error. It has been added to match the function's signature.
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if(sharedResult) return sharedResult;
 

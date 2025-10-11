@@ -3,7 +3,6 @@ import * as db from '../db.js';
 import { 
     type ServerAction, 
     type User, 
-    type VolatileState, 
     type AdminLog, 
     type Announcement, 
     type OverrideAnnouncement, 
@@ -16,20 +15,18 @@ import {
     UserStatus,
     Player,
     WinReason,
-    GameStatus as GameStatusEnum // Use alias to avoid conflict
+    GameStatus as GameStatusEnum, // Use alias to avoid conflict
+    VolatileState
 } from '../../types/index.js';
-// FIX: Removed `createDefaultBaseStats` from this import as it's not exported from `initialData.js`.
 import { defaultStats, createDefaultSpentStatPoints, createDefaultUser } from '../initialData.js';
 import * as summaryService from '../summaryService.js';
 import { createItemFromTemplate } from '../shop.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants/items.js';
 import * as mannerService from '../services/mannerService.js';
 import { containsProfanity } from '../../profanity.js';
-// FIX: Import `calculateUserEffects` and `createDefaultBaseStats` from the correct utility file.
 import { calculateUserEffects, createDefaultBaseStats } from '../../utils/statUtils.js';
 import * as currencyService from '../currencyService.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
-// FIX: Add crypto import for password hashing.
 import crypto from 'crypto';
 
 type HandleActionResult = { 
@@ -56,7 +53,7 @@ const createAdminLog = async (admin: User, action: AdminLog['action'], target: U
     await db.setKV('adminLogs', logs);
 };
 
-export const handleAdminAction = async (volatileState: VolatileState, action: ServerAction & { user: User }): Promise<HandleActionResult> => {
+export const handleAdminAction = async (action: ServerAction & { user: User }, volatileState: VolatileState): Promise<HandleActionResult> => {
     const { type, payload, user } = action;
     if (!user.isAdmin) {
         return { error: 'Permission denied.' };
@@ -76,8 +73,16 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
                 targetUser.chatBanUntil = banUntil;
             } else if (sanctionType === 'connection') {
                 targetUser.connectionBanUntil = banUntil;
-                delete volatileState.userConnections[targetUserId];
+                
+                // Update volatile state for immediate effect
                 delete volatileState.userStatuses[targetUserId];
+                delete volatileState.userConnections[targetUserId];
+                delete volatileState.userSessions[targetUserId];
+
+                // Update persisted state
+                const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+                delete userStatuses[targetUserId];
+                await db.setKV('userStatuses', userStatuses);
             }
 
             await db.updateUser(targetUser);
@@ -126,21 +131,19 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             if (!targetUser) return { error: '대상 사용자를 찾을 수 없습니다.' };
             if (targetUser.isAdmin) return { error: '관리자 계정은 삭제할 수 없습니다.' };
 
-            // Find and end any active games for this user.
             const allActiveGames = await db.getAllActiveGames();
             const activeGame = allActiveGames.find(g => g.player1.id === targetUserId || g.player2.id === targetUserId);
-
+            
             if (activeGame) {
                 console.log(`[Admin] Ending active game ${activeGame.id} for deleted user ${targetUserId}`);
                 const winner = activeGame.player1.id === targetUserId ? Player.White : Player.Black;
                 
-                // Inlined endGame logic with fix for race condition
                 activeGame.winner = winner;
                 activeGame.winReason = WinReason.Disconnect;
                 activeGame.gameStatus = GameStatusEnum.Ended;
-                await db.saveGame(activeGame); // Save early
+                await db.saveGame(activeGame);
                 await summaryService.processGameSummary(activeGame);
-                await db.saveGame(activeGame); // Save summary
+                await db.saveGame(activeGame);
                 
                 const opponentId = activeGame.player1.id === targetUserId ? activeGame.player2.id : activeGame.player1.id;
                 const opponentStatus = volatileState.userStatuses[opponentId];
@@ -155,8 +158,15 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             const backupData = JSON.parse(JSON.stringify(targetUser));
             await db.deleteUser(targetUserId);
 
-            delete volatileState.userConnections[targetUserId];
+            // Update volatile state
             delete volatileState.userStatuses[targetUserId];
+            delete volatileState.userConnections[targetUserId];
+            delete volatileState.userSessions[targetUserId];
+
+            // Update persisted state
+            const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+            delete userStatuses[targetUserId];
+            await db.setKV('userStatuses', userStatuses);
 
             await createAdminLog(user, 'delete_user', targetUser, null, backupData);
             return { clientResponse: { deletedUserId: targetUserId } };
@@ -175,7 +185,6 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             
             const newUser = createDefaultUser(`user-${globalThis.crypto.randomUUID()}`, username, nickname, false);
             await db.createUser(newUser);
-            // FIX: Hash password and provide correct arguments to createUserCredentials.
             const salt = crypto.randomBytes(16).toString('hex');
             const hash = crypto.pbkdf2Sync(password, salt, 10000, 64, 'sha512').toString('hex');
             await db.createUserCredentials(username, hash, salt, newUser.id);
@@ -186,9 +195,17 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             const targetUser = await db.getUser(targetUserId);
             if (!targetUser) return { error: '대상 사용자를 찾을 수 없습니다.' };
 
-            const backupData = { status: volatileState.userStatuses[targetUserId] };
-            delete volatileState.userConnections[targetUserId];
+            const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+            const backupData = { status: userStatuses[targetUserId] };
+
+            // Update volatile state for immediate effect
             delete volatileState.userStatuses[targetUserId];
+            delete volatileState.userConnections[targetUserId];
+            delete volatileState.userSessions[targetUserId];
+            
+            // Update persisted state
+            delete userStatuses[targetUserId];
+            await db.setKV('userStatuses', userStatuses);
             
             await createAdminLog(user, 'force_logout', targetUser, null, backupData);
             return {};
@@ -337,22 +354,21 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             const game = await db.getLiveGame(gameId);
             if (!game) return { error: 'Game not found.' };
 
-            // Add null check for players to prevent potential crashes from corrupt data
             if (!game.player1 || !game.player2) {
                 console.error(`[Admin] Corrupt game ${gameId} found with missing player data. Deleting record directly to prevent server crash.`);
-                await db.deleteGame(gameId); // Delete corrupt record
+                await db.deleteGame(gameId);
                 return { clientResponse: { success: true } };
             }
 
             const backupData = JSON.parse(JSON.stringify(game));
 
-            // Set final status to remove from active lists, but skip summary processing
             game.gameStatus = GameStatusEnum.NoContest;
-            game.winReason = WinReason.Disconnect; // Using a generic reason for admin actions
-            game.statsUpdated = true; // Explicitly prevent any further summary processing on this game
+            game.winReason = WinReason.Disconnect;
+            game.statsUpdated = true; 
 
             await db.saveGame(game);
             
+            // Update volatile state for immediate effect
             const p1Status = volatileState.userStatuses[game.player1.id];
             if (p1Status) {
                 p1Status.status = UserStatus.Waiting;
@@ -367,7 +383,7 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
                 delete p2Status.gameId;
                 p2Status.stateEnteredAt = now;
             }
-
+            
             await createAdminLog(user, 'force_delete_game', game.player1, { reason: "Admin forced game closure" }, backupData);
             return { clientResponse: { success: true } };
         }
@@ -383,21 +399,22 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             const winnerUser = game.player1.id === winnerId ? game.player1 : game.player2;
 
             await summaryService.endGame(game, winnerEnum, WinReason.Resign);
-
-            const p1Status = volatileState.userStatuses[game.player1.id];
+            const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+            const p1Status = userStatuses[game.player1.id];
             if (p1Status) {
                 p1Status.status = UserStatus.Waiting;
                 p1Status.mode = game.mode;
                 delete p1Status.gameId;
                 p1Status.stateEnteredAt = now;
             }
-            const p2Status = volatileState.userStatuses[game.player2.id];
+            const p2Status = userStatuses[game.player2.id];
             if (p2Status) {
                 p2Status.status = UserStatus.Waiting;
                 p2Status.mode = game.mode;
                 delete p2Status.gameId;
                 p2Status.stateEnteredAt = now;
             }
+             await db.setKV('userStatuses', userStatuses);
             
             await createAdminLog(user, 'force_win', winnerUser, { gameId, winnerId }, null);
             return {};
@@ -480,9 +497,7 @@ export const handleAdminAction = async (volatileState: VolatileState, action: Se
             await db.updateUser(targetUser);
             await createAdminLog(user, 'update_user_details', targetUser, null, backupData);
 
-            // Force the updated user to "reconnect" on their next poll. This appears as a refresh to them,
-            // resetting their status and preventing a disruptive experience for all other users.
-            if (targetUserId !== user.id) { // Do not log out the admin making the change
+            if (targetUserId !== user.id) {
                 delete volatileState.userConnections[targetUserId];
             }
             

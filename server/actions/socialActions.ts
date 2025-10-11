@@ -1,4 +1,6 @@
-import { type VolatileState, type ServerAction, type User, type HandleActionResult, UserStatus, ChatMessage } from '../../types/index.js';
+// server/actions/socialActions.ts
+
+import { type VolatileState, type ServerAction, type User, type HandleActionResult, UserStatus, ChatMessage, UserStatusInfo } from '../../types/index.js';
 import * as db from '../db.js';
 import { randomUUID } from 'crypto';
 import { containsProfanity } from '../../profanity.js';
@@ -8,9 +10,11 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
     const { type, payload, user } = action;
     const now = Date.now();
 
+    const { userStatuses, userConnections, userSessions, userLastChatMessage, waitingRoomChats, gameChats } = volatileState;
+
     switch (type) {
         case 'LOGOUT': {
-            const userStatus = volatileState.userStatuses[user.id];
+            const userStatus = userStatuses[user.id];
             if (userStatus && userStatus.status === UserStatus.InGame && userStatus.gameId) {
                 const game = await db.getLiveGame(userStatus.gameId);
                 if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
@@ -19,14 +23,15 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 }
             }
 
-            delete volatileState.userConnections[user.id];
-            delete volatileState.userStatuses[user.id];
-            delete volatileState.userSessions[user.id];
+            delete userConnections[user.id];
+            delete userStatuses[user.id];
+            await db.setKV('userStatuses', userStatuses);
+            delete userSessions[user.id];
             return { clientResponse: { success: true } };
         }
         case 'ENTER_WAITING_ROOM': {
             const { mode } = payload;
-            const userStatus = volatileState.userStatuses[user.id];
+            const userStatus = userStatuses[user.id];
             if (userStatus) {
                 userStatus.status = UserStatus.Waiting;
                 userStatus.mode = mode;
@@ -34,6 +39,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 delete userStatus.spectatingGameId;
                 userStatus.stateEnteredAt = now;
             }
+            await db.setKV('userStatuses', userStatuses);
             return { clientResponse: { success: true } };
         }
         case 'SET_USER_STATUS': {
@@ -41,11 +47,12 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             if (![UserStatus.Waiting, UserStatus.Resting].includes(status)) {
                 return { error: 'Invalid status update.' };
             }
-            const userStatus = volatileState.userStatuses[user.id];
+            const userStatus = userStatuses[user.id];
             if (userStatus && [UserStatus.Waiting, UserStatus.Resting, UserStatus.Online].includes(userStatus.status)) {
                 userStatus.status = status;
                 userStatus.stateEnteredAt = now;
             }
+            await db.setKV('userStatuses', userStatuses);
             return { clientResponse: { success: true } };
         }
 
@@ -55,23 +62,25 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             if (!game || game.gameStatus === 'ended' || game.gameStatus === 'no_contest') {
                 return { error: 'Game not available for spectating.' };
             }
-            const userStatus = volatileState.userStatuses[user.id];
+            const userStatus = userStatuses[user.id];
             if (userStatus) {
                 userStatus.status = UserStatus.Spectating;
                 userStatus.spectatingGameId = gameId;
                 userStatus.mode = game.mode;
                 userStatus.stateEnteredAt = now;
             }
+            await db.setKV('userStatuses', userStatuses);
             return { clientResponse: { success: true } };
         }
 
         case 'SEND_CHAT_MESSAGE': {
             const { channel, text, emoji, location } = payload;
             
-            const lastMessageTime = volatileState.userLastChatMessage[user.id] || 0;
+            const lastMessageTime = userLastChatMessage[user.id] || 0;
             if (now - lastMessageTime < 5000 && !user.isAdmin) {
                 return { error: '채팅이 너무 빠릅니다. 잠시 후 다시 시도해주세요.' };
             }
+            
             if (text && containsProfanity(text)) {
                 const warningMessage: ChatMessage = {
                     id: `msg-${randomUUID()}`,
@@ -82,11 +91,13 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                     location: location,
                 };
                 if (channel === 'global') {
-                    if (!volatileState.waitingRoomChats['global']) volatileState.waitingRoomChats['global'] = [];
-                    volatileState.waitingRoomChats['global'].push(warningMessage);
+                    if (!waitingRoomChats['global']) waitingRoomChats['global'] = [];
+                    waitingRoomChats['global'].push(warningMessage);
+                    await db.setKV('waitingRoomChats', waitingRoomChats);
                 } else {
-                    if (!volatileState.gameChats[channel]) volatileState.gameChats[channel] = [];
-                    volatileState.gameChats[channel].push(warningMessage);
+                    if (!gameChats[channel]) gameChats[channel] = [];
+                    gameChats[channel].push(warningMessage);
+                    await db.setKV('gameChats', gameChats);
                 }
                 return { clientResponse: { success: true } };
             }
@@ -101,8 +112,11 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             };
             
             if (channel === 'global') {
-                if (!volatileState.waitingRoomChats['global']) volatileState.waitingRoomChats['global'] = [];
-                volatileState.waitingRoomChats['global'].push(message);
+                if (!waitingRoomChats['global']) waitingRoomChats['global'] = [];
+                waitingRoomChats['global'].push(message);
+                if (waitingRoomChats['global'].length > 100) waitingRoomChats['global'].shift();
+                await db.setKV('waitingRoomChats', waitingRoomChats);
+
                 if (text && (text.includes('안녕') || text.includes('하이') || text.includes('반갑'))) {
                     const updatedUser = await db.getUser(user.id);
                     if(updatedUser) {
@@ -112,11 +126,14 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 }
 
             } else { // Game chat
-                if (!volatileState.gameChats[channel]) volatileState.gameChats[channel] = [];
-                volatileState.gameChats[channel].push(message);
+                if (!gameChats[channel]) gameChats[channel] = [];
+                gameChats[channel].push(message);
+                if (gameChats[channel].length > 100) gameChats[channel].shift();
+                await db.setKV('gameChats', gameChats);
             }
             
-            volatileState.userLastChatMessage[user.id] = now;
+            userLastChatMessage[user.id] = now;
+            await db.setKV('userLastChatMessage', userLastChatMessage);
             return { clientResponse: { success: true } };
         }
         case 'LEAVE_AI_GAME': {
@@ -124,29 +141,31 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             const game = await db.getLiveGame(gameId);
             // Only the player of the AI game should be able to delete it
             if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) && game.player1.id === user.id) {
-                await db.deleteGame(gameId);
+                await db.deleteGame(game.id);
             }
-            if (volatileState.userStatuses[user.id]) {
-                const status = volatileState.userStatuses[user.id];
+            if (userStatuses[user.id]) {
+                const status = userStatuses[user.id];
                 status.status = UserStatus.Online; // Go back to general online status, not waiting room
                 delete status.gameId;
                 delete status.mode;
                 status.stateEnteredAt = now;
             }
+            await db.setKV('userStatuses', userStatuses);
             return { clientResponse: { success: true } };
         }
         case 'LEAVE_WAITING_ROOM': {
-            if (volatileState.userStatuses[user.id]) {
-                volatileState.userStatuses[user.id].status = UserStatus.Online;
-                volatileState.userStatuses[user.id].mode = undefined;
-                volatileState.userStatuses[user.id].gameId = undefined;
-                volatileState.userStatuses[user.id].stateEnteredAt = now;
+            if (userStatuses[user.id]) {
+                userStatuses[user.id].status = UserStatus.Online;
+                userStatuses[user.id].mode = undefined;
+                userStatuses[user.id].gameId = undefined;
+                userStatuses[user.id].stateEnteredAt = now;
             }
+            await db.setKV('userStatuses', userStatuses);
             return { clientResponse: { success: true } };
         }
         case 'LEAVE_GAME_ROOM': {
             const { gameId, mode } = payload;
-            const userStatus = volatileState.userStatuses[user.id];
+            const userStatus = userStatuses[user.id];
 
             if (userStatus && userStatus.gameId === gameId) {
                 userStatus.status = UserStatus.Waiting;
@@ -154,11 +173,12 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 delete userStatus.gameId;
                 userStatus.stateEnteredAt = now;
             }
+            await db.setKV('userStatuses', userStatuses);
             return { clientResponse: { success: true } };
         }
         case 'LEAVE_SPECTATING': {
             const { gameId, mode } = payload;
-            const userStatus = volatileState.userStatuses[user.id];
+            const userStatus = userStatuses[user.id];
             
             if (userStatus && userStatus.spectatingGameId === gameId) {
                 userStatus.status = UserStatus.Waiting;
@@ -166,6 +186,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 delete userStatus.spectatingGameId;
                 userStatus.stateEnteredAt = now;
             }
+            await db.setKV('userStatuses', userStatuses);
             return { clientResponse: { success: true } };
         }
         default:

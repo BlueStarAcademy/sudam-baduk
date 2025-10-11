@@ -1,3 +1,5 @@
+
+
 import { type LiveGameSession, type Point, type DiceRoundSummary, Player, type Negotiation, type VolatileState, type ServerAction, type HandleActionResult, type User, GameMode, MythicStat, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../../utils/goLogic';
@@ -303,6 +305,7 @@ export const handleDiceGoAction = async (volatileState: VolatileState, game: Liv
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     
+    // FIX: Pass 'volatileState' to handleSharedAction.
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if(sharedResult) return sharedResult;
 

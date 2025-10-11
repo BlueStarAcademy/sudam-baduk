@@ -1,8 +1,6 @@
 
 // server/services/mannerService.ts
-// FIX: Import missing types from the centralized types file.
 import { User, Guild, MannerEffects, CoreStat } from '../../types/index.js';
-// FIX: Import regenerateActionPoints from effectService
 import { regenerateActionPoints } from './effectService.js';
 import { createDefaultSpentStatPoints } from '../initialData.js';
 import { getMannerRank } from '../../utils/mannerUtils.js';

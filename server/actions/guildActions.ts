@@ -41,7 +41,7 @@ const getResearchTimeMs = (researchId: GuildResearchId, level: number): number =
 };
 
 
-export const handleGuildAction = async (volatileState: VolatileState, action: ServerAction & { user: User }, guilds: Record<string, Guild>): Promise<HandleActionResult> => {
+export const handleGuildAction = async (action: ServerAction & { user: User }, guilds: Record<string, Guild>): Promise<HandleActionResult> => {
     const { type, payload, user } = action;
     let needsSave = false;
     
@@ -88,7 +88,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
 
-            return { clientResponse: { updatedUser: user, guilds } };
+            return { clientResponse: { updatedUser: user } };
         }
 
         case 'JOIN_GUILD': {
@@ -124,7 +124,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
 
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
-            return { clientResponse: { updatedUser: user, guilds } };
+            return { clientResponse: { updatedUser: user } };
         }
 
         case 'GUILD_CANCEL_APPLICATION': {
@@ -138,7 +138,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
                 user.guildApplications = user.guildApplications.filter(id => id !== guildId);
                 await db.updateUser(user);
             }
-            return { clientResponse: { updatedUser: user, guilds } };
+            return { clientResponse: { updatedUser: user } };
         }
         
         case 'GUILD_ACCEPT_APPLICANT': {
@@ -164,7 +164,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
 
             await db.setKV('guilds', guilds);
             await db.updateUser(applicant);
-            return { clientResponse: { guilds } };
+            return {};
         }
 
         case 'GUILD_REJECT_APPLICANT': {
@@ -183,7 +183,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             }
 
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
 
         case 'GUILD_LEAVE': {
@@ -208,7 +208,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
-            return { clientResponse: { updatedUser: user, guilds } };
+            return { clientResponse: { updatedUser: user } };
         }
 
         case 'GUILD_KICK_MEMBER': {
@@ -231,7 +231,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             } else {
                 return { error: '권한이 없습니다.' };
             }
-            return { clientResponse: { guilds } };
+            return {};
         }
         
         case 'GUILD_PROMOTE_MEMBER':
@@ -249,7 +249,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
                 targetMemberInfo.role = GuildMemberRole.Member;
             }
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
         
         case 'GUILD_TRANSFER_MASTERSHIP': {
@@ -269,7 +269,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             targetMemberInfo.role = GuildMemberRole.Master;
             
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
 
         case 'GUILD_UPDATE_PROFILE': {
@@ -284,7 +284,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             if(icon !== undefined) guild.icon = icon;
 
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
 
         case 'GUILD_UPDATE_ANNOUNCEMENT': {
@@ -296,7 +296,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             }
             guild.announcement = announcement;
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
 
         case 'GUILD_CHECK_IN': {
@@ -314,7 +314,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             await guildService.updateGuildMissionProgress(user.guildId, 'checkIns', 1, guilds);
             
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
         case 'GUILD_CLAIM_CHECK_IN_REWARD': {
              const { milestoneIndex } = payload;
@@ -335,7 +335,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
 
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
-            return { clientResponse: { updatedUser: user, guilds } };
+            return { clientResponse: { updatedUser: user } };
         }
         case 'GUILD_CLAIM_MISSION_REWARD': {
             const { missionId } = payload;
@@ -363,7 +363,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
         
-            return { clientResponse: { updatedUser: user, guilds } };
+            return { clientResponse: { updatedUser: user } };
         }
         case 'GUILD_DONATE_GOLD':
         case 'GUILD_DONATE_DIAMOND': {
@@ -420,7 +420,6 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             return { 
                 clientResponse: { 
                     updatedUser: user, 
-                    guilds,
                     donationResult: {
                         coins: gainedGuildCoins,
                         research: gainedResearchPoints,
@@ -453,7 +452,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             };
 
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
 
         case 'GUILD_BUY_SHOP_ITEM': {
@@ -525,7 +524,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
                     items: [],
                     title: '길드 상점 구매'
                 };
-                return { clientResponse: { updatedUser: user, guilds, rewardSummary } };
+                return { clientResponse: { updatedUser: user, rewardSummary } };
             }
             
             // Regular item handling
@@ -558,7 +557,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             
             await db.updateUser(user);
             
-            return { clientResponse: { updatedUser: user, obtainedItemsBulk: itemsToAdd, guilds } };
+            return { clientResponse: { updatedUser: user, obtainedItemsBulk: itemsToAdd } };
         }
 
         case 'SEND_GUILD_CHAT_MESSAGE': {
@@ -580,7 +579,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
                 guild.chatHistory.shift();
             }
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
 
         case 'GUILD_DELETE_CHAT_MESSAGE': {
@@ -617,7 +616,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             guild.chatHistory.splice(messageIndex, 1);
         
             await db.setKV('guilds', guilds);
-            return { clientResponse: { guilds } };
+            return {};
         }
         
         case 'START_GUILD_BOSS_BATTLE': {
@@ -669,7 +668,7 @@ export const handleGuildAction = async (volatileState: VolatileState, action: Se
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
             
-            return { clientResponse: { updatedUser: user, guilds, guildBossBattleResult: result } };
+            return { clientResponse: { updatedUser: user, guildBossBattleResult: result } };
         }
 
 

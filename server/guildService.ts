@@ -1,3 +1,4 @@
+
 // server/guildService.ts
 import { Guild, GuildMemberRole, GuildMission, GuildMissionProgressKey, ChatMessage, Mail, GuildResearchId } from '../types/index.js';
 import * as db from './db.js';
@@ -28,7 +29,7 @@ export const addContribution = (guild: Guild, userId: string, amount: number) =>
 // FIX: Added optional guildsToUpdate parameter to prevent race conditions and allow passing the guilds object from the caller.
 export const updateGuildMissionProgress = async (guildId: string, missionType: GuildMissionProgressKey, amount: number | string, guildsToUpdate?: Record<string, Guild>) => {
     // FIX: Add parentheses to clarify operator precedence between '??' and '||'.
-    const guilds = ((guildsToUpdate ?? await db.getKV<Record<string, Guild>>('guilds')) || {});
+    const guilds = (guildsToUpdate ?? await db.getKV<Record<string, Guild>>('guilds')) || {};
     const guild = guilds[guildId];
     if (!guild || !guild.weeklyMissions) return;
 
@@ -77,7 +78,7 @@ export const updateGuildMissionProgress = async (guildId: string, missionType: G
         }
     }
     
-    if (missionUpdated) {
+    if (missionUpdated && !guildsToUpdate) {
         await db.setKV('guilds', guilds);
     }
 };

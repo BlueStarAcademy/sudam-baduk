@@ -1,7 +1,3 @@
-
-
-
-
 import 'dotenv/config';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
@@ -10,9 +6,6 @@ import { rowToUser as sqliteRowToUser, rowToGame as sqliteRowToGame } from './sq
 import { User, LiveGameSession, UserCredentials, Guild, AdminLog, Announcement, OverrideAnnouncement, GameMode, TowerRank } from '../types/index.js';
 import { runSchemaAndMigrations } from '../server/db/connection.js';
 import crypto from 'crypto';
-// FIX: Use 'node:process' to ensure proper type resolution for the process object.
-// FIX: Removed explicit import of 'process' to rely on the global Node.js process object.
-// This resolves type errors where properties like 'exit' or 'platform' are not found.
 
 
 const { Pool } = pg;
@@ -44,8 +37,6 @@ const migrate = async () => {
             console.error('   - 대괄호 `[]`도 함께 지워야 합니다.');
             console.error('\n4. 파일을 저장한 후, 다시 `npm run migrate` 명령어를 실행하세요.');
             console.error('================================================================================\n');
-// FIX: Property 'exit' does not exist on type 'Process'.
-// Relying on the global `process` object from Node.js environment.
             process.exit(1);
         }
         pgPool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -82,15 +73,11 @@ const migrate = async () => {
         } else {
             console.error('[MIGRATE] HINT: Please check if your DATABASE_URL in the .env file is correct and that you have internet access.');
         }
-// FIX: Property 'exit' does not exist on type 'Process'.
-// Relying on the global `process` object from Node.js environment.
         process.exit(1);
     }
     
     if (!sqliteDb || !pgClient) {
         console.error('[MIGRATE] Database connection failed, exiting.');
-// FIX: Property 'exit' does not exist on type 'Process'.
-// Relying on the global `process` object from Node.js environment.
         process.exit(1);
     }
 

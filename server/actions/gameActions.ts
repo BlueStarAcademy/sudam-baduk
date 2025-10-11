@@ -4,7 +4,7 @@ import { handleStrategicGameAction } from '../modes/strategic.js';
 import { handlePlayfulGameAction } from '../modes/playful.js';
 import { handleAiGameStart, handleAiGameRefresh, handleTowerAddStones, handleConfirmIntro } from '../modes/aiGameActions.js';
 import { handleUserAction } from './userActions.js';
-import { handleNegotiationAction } from './negotiationActions.js';
+import { handleNegotiationAction } from '../modes/negotiationActions.js';
 import { handleInventoryAction } from './inventoryActions.js';
 import { handleShopAction } from './shopActions.js';
 import { handleRewardAction } from './rewardActions.js';
@@ -17,15 +17,17 @@ import { TOWER_STAGES } from '../../constants/index.js';
 import * as currencyService from '../currencyService.js';
 
 
-export const handleAction = async (volatileState: VolatileState, action: ServerAction & { user: User }, guilds: Record<string, Guild>): Promise<HandleActionResult> => {
+export const handleAction = async (action: ServerAction & { user: User }, volatileState: VolatileState): Promise<HandleActionResult> => {
     const { type, payload, user } = action;
     const { gameId } = payload || {};
 
     const actionWithUserId = { ...action, userId: user.id };
 
     if (type.startsWith('ADMIN_')) {
-        return handleAdminAction(volatileState, action);
+        return handleAdminAction(action, volatileState);
     }
+    
+    const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
     
     const guildActionTypes: ServerActionType[] = [
         'CREATE_GUILD', 'JOIN_GUILD', 'GUILD_CANCEL_APPLICATION', 'GUILD_ACCEPT_APPLICANT', 'GUILD_REJECT_APPLICANT', 'GUILD_LEAVE',
@@ -37,7 +39,7 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
     ];
 
     if (guildActionTypes.includes(type)) {
-        return handleGuildAction(volatileState, action, guilds);
+        return handleGuildAction(action, guilds);
     }
     
     const negotiationActionTypes: ServerActionType[] = [
@@ -49,7 +51,7 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
     }
 
     if (type.startsWith('BUY_') || type === 'EXPAND_INVENTORY') {
-        return handleShopAction(volatileState, actionWithUserId, user);
+        return handleShopAction(actionWithUserId, user);
     }
     
     const rewardActionTypes: ServerActionType[] = [
@@ -59,11 +61,11 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
         'UPGRADE_SINGLE_PLAYER_MISSION'
     ];
     if (rewardActionTypes.includes(type)) {
-        return handleRewardAction(volatileState, actionWithUserId, user, guilds);
+        return handleRewardAction(actionWithUserId, user, guilds);
     }
 
     if (type.startsWith('TOGGLE_EQUIP') || type.startsWith('SELL_') || type.startsWith('ENHANCE_') || type.startsWith('DISASSEMBLE_') || type.startsWith('CRAFT_') || type.startsWith('SYNTHESIZE_') || type === 'USE_ITEM' || type === 'USE_ITEM_BULK') {
-        return handleInventoryAction(volatileState, actionWithUserId, user);
+        return handleInventoryAction(actionWithUserId, user);
     }
     
     const userSettingActions: ServerActionType[] = [
@@ -71,7 +73,7 @@ export const handleAction = async (volatileState: VolatileState, action: ServerA
         'CONFIRM_STAT_ALLOCATION', 'CHANGE_PASSWORD', 'DELETE_ACCOUNT', 'RESET_SINGLE_STAT', 'RESET_STATS_CATEGORY', 'UPDATE_APP_SETTINGS'
     ];
     if (userSettingActions.includes(type)) {
-        return handleUserAction(volatileState, actionWithUserId, user);
+        return handleUserAction(actionWithUserId, user);
     }
 
     if (type === 'LOGOUT' || type.startsWith('FRIEND_') || type === 'SET_USER_STATUS' || type === 'ENTER_WAITING_ROOM' || type === 'LEAVE_WAITING_ROOM' || type === 'SPECTATE_GAME' || type === 'LEAVE_SPECTATING' || type === 'SEND_CHAT_MESSAGE' || type === 'LEAVE_AI_GAME' || type === 'LEAVE_GAME_ROOM') {

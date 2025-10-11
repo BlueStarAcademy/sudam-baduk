@@ -24,13 +24,18 @@ export const getUserByKakaoId = async (db: Pool, kakaoId: string): Promise<User 
 };
 
 export const createUser = async (db: Pool, user: User): Promise<void> => {
+    // FIX: Add "kakaoId" to the column list to ensure it's included during user creation.
     const columns = Object.keys(user);
     const placeholders = columns.map((_, i) => `$${i + 1}`).join(',');
     const values = columns.map(key => {
         const value = (user as any)[key];
+        // FIX: Handle undefined values correctly for SQL insert.
+        if (value === undefined) {
+            return null;
+        }
         return typeof value === 'object' && value !== null ? JSON.stringify(value) : value;
     });
-    // FIX: Add "kakaoId" to the column list to ensure it's included during user creation.
+    
     await db.query(`INSERT INTO users (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders})`, values);
 };
 

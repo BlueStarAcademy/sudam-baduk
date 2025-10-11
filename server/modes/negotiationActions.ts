@@ -1,16 +1,28 @@
+// FIX: Added 'UserStatusInfo' to the import list to resolve the type error.
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus, Player, Point, WinReason, UserStatus, Negotiation, GameStatus as GameStatusEnum, UserStatusInfo } from '../../types/index.js';
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, Negotiation, GameMode, UserStatus, Player, GameStatus as GameStatusEnum, Guild } from '../../types/index.js';
+import { handleStrategicGameAction } from '../modes/strategic.js';
+import { handlePlayfulGameAction } from '../modes/playful.js';
+import { handleSinglePlayerGameStart, handleSinglePlayerRefresh, handleConfirmSPIntro } from '../modes/singlePlayerMode.js';
+import { handleTowerChallengeGameStart, handleTowerChallengeRefresh, handleTowerAddStones } from '../modes/towerChallengeMode.js';
+import { handleUserAction } from './userActions.js';
+import { handleInventoryAction } from './inventoryActions.js';
+import { handleShopAction } from './shopActions.js';
+import { handleRewardAction } from './rewardActions.js';
+import { handleSocialAction } from './socialActions.js';
+import { handleTournamentAction } from './tournamentActions.js';
+import { handleAdminAction } from './adminActions.js';
+import { handleGuildAction } from './guildActions.js';
+import { handlePresetAction } from './presetActions.js';
+import { TOWER_STAGES } from '../../constants/index.js';
+import * as currencyService from '../currencyService.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_POINT_COST, PLAYFUL_ACTION_POINT_COST, DEFAULT_GAME_SETTINGS } from '../../constants/index.js';
 import { initializeGame } from '../gameModes.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
-import { aiUserId, getAiUser } from '../ai/index.js';
+import { aiUserId, getAiUser, makeAiMove } from '../ai/index.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
-
-
-type HandleActionResult = { 
-    clientResponse?: any;
-    error?: string;
-};
+import { processMove } from '../../utils/goLogic';
+import { endGame, getGameResult } from '../summaryService.js';
 
 const getActionPointCost = (mode: GameMode): number => {
     if (SPECIAL_GAME_MODES.some(m => m.mode === mode)) {

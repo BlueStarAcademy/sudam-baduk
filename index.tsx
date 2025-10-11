@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Changed import to a default import as App is exported as default.
+// FIX: Changed import to a default import as the error indicates App is exported as default.
 import App from './components/App.js';
 import './index.css';
 import { AppProvider } from './contexts/AppContext';

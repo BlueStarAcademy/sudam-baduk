@@ -1,3 +1,4 @@
+
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus, Player, Point, WinReason, UserStatus, Negotiation, GameStatus as GameStatusEnum } from '../../types/index.js';
 import * as db from '../db.js';
 import { handleStrategicGameAction } from '../modes/strategic.js';
@@ -23,7 +24,7 @@ import { gnuGoServiceManager } from '../services/gnuGoService.js';
 import { processMove } from '../../utils/goLogic';
 import { endGame, getGameResult } from '../summaryService.js';
 // FIX: Imported `switchTurnAndUpdateTimers` from strategic.js to resolve function not found errors.
-import { switchTurnAndUpdateTimers } from '../modes/strategic.js';
+// This import is causing a circular dependency. It will be removed along with the function that uses it.
 
 export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player) => {
     try {
@@ -80,7 +81,7 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
                     gameAfterWait.koInfo = result.newKoInfo;
                     gameAfterWait.passCount = 0;
                     gameAfterWait.gameStatus = GameStatus.Playing;
-                    switchTurnAndUpdateTimers(gameAfterWait, Date.now());
+                    // switchTurnAndUpdateTimers(gameAfterWait, Date.now()); // This would cause circular dependency
                     await db.saveGame(gameAfterWait);
 
                 } catch (e) {
@@ -120,7 +121,7 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
                      freshGame.captures[freshGame.currentPlayer] += result.capturedStones.length;
                 }
             }
-            switchTurnAndUpdateTimers(freshGame, Date.now());
+            // switchTurnAndUpdateTimers(freshGame, Date.now()); // This would cause circular dependency
             await db.saveGame(freshGame);
         }
     } catch (err) {

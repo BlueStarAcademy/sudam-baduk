@@ -1,5 +1,4 @@
 
-
 import * as db from '../db.js';
 import { type User, type ServerAction, type HandleActionResult } from '../../types/index.js';
 import { containsProfanity } from '../../profanity.js';
@@ -8,12 +7,17 @@ export const handlePresetAction = async (user: User, action: ServerAction): Prom
     const { type, payload } = action;
     
     // FIX: Ensure presets exist and initialize if not
-    if (!user.equipmentPresets || user.equipmentPresets.length < 5) {
-        user.equipmentPresets = Array(5).fill(null).map((_, i) => ({
-            name: `프리셋 ${i + 1}`,
-            equipment: user.equipmentPresets?.[i]?.equipment || {}
-        }));
+    if (!user.equipmentPresets) {
+        user.equipmentPresets = [];
     }
+
+    if (user.equipmentPresets.length < 5) {
+        const presetsToAdd = 5 - user.equipmentPresets.length;
+        for (let i = 0; i < presetsToAdd; i++) {
+            user.equipmentPresets.push({ name: `프리셋 ${user.equipmentPresets.length + 1}`, equipment: {} });
+        }
+    }
+
 
     switch (type) {
         case 'SAVE_EQUIPMENT_PRESET': {

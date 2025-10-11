@@ -1,10 +1,13 @@
+
 import React, { useMemo } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import GuildLobby from './GuildLobby.js';
+// FIX: Changed to named import as GuildDashboard is not a default export.
 import { GuildDashboard } from './GuildDashboard.js';
 import type { Guild as GuildType } from '../../types/index.js';
 
 const Guild: React.FC = () => {
+    // Fetched `guildDonationAnimation` from useAppContext to pass to GuildDashboard.
     const { currentUserWithStatus, guilds, guildDonationAnimation } = useAppContext();
 
     const myGuild = useMemo(() => {
@@ -21,9 +24,11 @@ const Guild: React.FC = () => {
     }
 
     if (!myGuild) {
+        // This prevents GuildDashboard from unmounting during brief state inconsistencies
         return <div className="flex items-center justify-center h-full">길드 정보 로딩 중...</div>;
     }
 
+    // Pass the required `guildDonationAnimation` prop to GuildDashboard.
     return <GuildDashboard key={myGuild.id} guild={myGuild} guildDonationAnimation={guildDonationAnimation} />;
 };
 

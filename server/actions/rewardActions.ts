@@ -1,4 +1,7 @@
 
+
+
+
 import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult, Guild } from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
@@ -77,7 +80,7 @@ export const grantReward = (user: User, reward: QuestReward, reason: string): In
 };
 
 // FIX: Add 'guilds' parameter to function signature.
-export const handleRewardAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User, guilds: Record<string, Guild>): Promise<{ 
+export const handleRewardAction = async (action: ServerAction & { userId: string }, user: User, guilds: Record<string, Guild>): Promise<{ 
     clientResponse?: any;
     error?: string;
 }> => {

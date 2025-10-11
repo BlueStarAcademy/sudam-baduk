@@ -4,7 +4,6 @@ import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handleP
 import { aiUserId } from '../ai/index.js';
 import { ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
 import { endGame, processGameSummary } from '../summaryService.js';
-// FIX: Corrected the import path for effectService to point to the root services directory where calculateUserEffects is exported.
 import { calculateUserEffects } from '../../utils/statUtils.js';
 
 // --- Simulation & Scoring Logic ---
@@ -550,6 +549,7 @@ export const handleAlkkagiAction = async (volatileState: VolatileState, game: Li
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     
+    // FIX: Pass 'volatileState' to handleSharedAction to match its signature.
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if (sharedResult) return sharedResult;
     

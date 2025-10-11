@@ -1,4 +1,7 @@
-import { type LiveGameSession, type VolatileState, type ServerAction, type User, type HandleActionResult, Player, GameStatus, WinReason, RPSChoice } from '../../types/index.js';
+
+// server/modes/shared.ts
+
+import { type LiveGameSession, type ServerAction, type User, type HandleActionResult, Player, GameStatus, WinReason, RPSChoice, VolatileState } from '../../types/index.js';
 import * as db from '../db.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 import { PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';

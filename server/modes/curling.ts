@@ -1,12 +1,10 @@
 
 
-
 import { type LiveGameSession, type AlkkagiStone, type Point, Player, type ServerAction, type User, type HandleActionResult, type Negotiation, type VolatileState, MythicStat, GameMode, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';
 import { aiUserId } from '../ai/index.js';
 import { CURLING_TURN_TIME_LIMIT } from '../../constants/index.js';
-// FIX: Corrected the import path for effectService to point to the root services directory where calculateUserEffects is exported.
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 
@@ -435,7 +433,7 @@ export const handleCurlingAction = async (volatileState: VolatileState, game: Li
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     
-    // Delegate to shared handlers first
+    // FIX: Pass 'volatileState' to handleSharedAction.
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if (sharedResult) return sharedResult;
 

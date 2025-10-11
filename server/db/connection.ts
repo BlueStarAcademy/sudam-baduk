@@ -1,13 +1,6 @@
-
-
-
-
 import pg from 'pg';
 import path from 'path';
 import { Player } from '../../types/index.js';
-// FIX: Use 'node:process' to ensure proper type resolution for the process object.
-// FIX: Removed explicit import of 'process' to rely on the global Node.js process object.
-// This resolves type errors where properties like 'exit' or 'platform' are not found.
 
 
 const { Pool } = pg;
@@ -318,8 +311,6 @@ export const initializeAndGetDb = async (): Promise<pg.Pool> => {
 
     pool.on('error', (err) => {
         console.error('Unexpected error on idle PostgreSQL client', err);
-// FIX: Property 'exit' does not exist on type 'Process'.
-// Relying on the global `process` object from Node.js environment.
         process.exit(-1);
     });
 

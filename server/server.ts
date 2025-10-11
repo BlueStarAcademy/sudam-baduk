@@ -1,10 +1,11 @@
+
+
 import 'dotenv/config';
-// FIX: Using namespaced Express types to resolve property access errors.
-// FIX: Import Request, Response, and NextFunction types directly from express to fix type errors.
+// FIX: Import Request, Response, NextFunction from express to resolve type errors.
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
-import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV } from './db.js';
+import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV, setKV } from './db.js';
 import { handleAction } from './actions/gameActions.js';
 import { type VolatileState, type ServerAction, type User, type ChatMessage, Guild, UserStatus, type UserStatusInfo } from '../types/index.js';
 import { createDefaultUser } from './initialData.js';
@@ -14,23 +15,22 @@ import * as gameModes from './gameModes.js';
 import * as db from './db.js';
 import * as guildService from './guildService.js';
 import { randomUUID } from 'crypto';
-import { GUILD_RESEARCH_PROJECTS } from '../constants/index.js';
+import { GUILD_RESEARCH_PROJECTS } from '../constants.js';
 import { regenerateActionPoints } from './services/effectService.js';
 import { getKataGoManager } from './kataGoService.js';
-// FIX: Use 'node:process' to ensure proper type resolution for the process object.
-import process from 'node:process';
 import { containsProfanity } from '../profanity.js';
+import { broadcast } from './services/supabaseService.js';
 
 const volatileState: VolatileState = {
-    userStatuses: {},
     userConnections: {},
+    userSessions: {},
+    userStatuses: {},
     negotiations: {},
     userLastChatMessage: {},
-    waitingRoomChats: { global: [] },
+    waitingRoomChats: {},
     gameChats: {},
     activeTournaments: {},
     activeTournamentViewers: new Set(),
-    userSessions: {},
 };
 
 
@@ -40,7 +40,6 @@ const port = 4000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Extend Express Request type
 declare global {
   namespace Express {
     interface Request {
@@ -49,10 +48,9 @@ declare global {
   }
 }
 
-// FIX: Used correct Express types to resolve property access errors.
+// FIX: Update parameter types to use imported Request, Response, NextFunction.
 const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
-    // For login/register, no session check is needed
-    if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync' || req.path === '/api/auth/finalize-kakao') {
+    if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync' || req.path === '/api/auth/finalize-kakao' || req.path === '/api/initial-state') {
         return next();
     }
 
@@ -65,7 +63,6 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
         const storedSessionId = volatileState.userSessions[userId];
 
         if (!storedSessionId || storedSessionId !== sessionId) {
-            // New login from another tab/device. Invalidate this session.
             return res.status(401).json({ message: 'Session expired due to new login.' });
         }
 
@@ -73,7 +70,6 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
         if (user) {
             req.user = user;
         } else {
-            // User might have been deleted, but session still exists.
             return res.status(401).json({ message: 'User not found.' });
         }
     }
@@ -82,7 +78,7 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
 
 app.use(userMiddleware);
 
-// FIX: Used correct Express types to resolve property access errors.
+// FIX: Update parameter types to use imported Request, Response.
 app.post('/api/auth/register', async (req: Request, res: Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
@@ -114,7 +110,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Used correct Express types to resolve property access errors.
+// FIX: Update parameter types to use imported Request, Response.
 app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -147,7 +143,10 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         const now = Date.now();
         const sessionId = randomUUID();
         volatileState.userSessions[user.id] = sessionId;
-        volatileState.userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
+        
+        const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+        userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
+        await setKV('userStatuses', userStatuses);
 
         res.json({ user, sessionId });
     } catch (error: any) {
@@ -156,7 +155,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Used correct Express types to resolve property access errors.
+// FIX: Update parameter types to use imported Request, Response.
 app.post('/api/auth/sync', async (req: Request, res: Response) => {
     const { session } = req.body;
     if (!session || !session.user) {
@@ -176,7 +175,6 @@ app.post('/api/auth/sync', async (req: Request, res: Response) => {
         let user = await db.getUserByKakaoId(kakaoId);
         
         if (!user) {
-            // New Kakao user. Signal to the client that registration needs to be finalized.
             res.json({
                 needsRegistration: true,
                 kakaoId: kakaoId,
@@ -190,7 +188,10 @@ app.post('/api/auth/sync', async (req: Request, res: Response) => {
         const now = Date.now();
         const sessionId = randomUUID();
         volatileState.userSessions[user.id] = sessionId;
-        volatileState.userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
+        
+        const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+        userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
+        await setKV('userStatuses', userStatuses);
 
         res.json({ user, sessionId });
 
@@ -200,14 +201,13 @@ app.post('/api/auth/sync', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Used correct Express types to resolve property access errors.
+// FIX: Update parameter types to use imported Request, Response.
 app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
     const { kakaoId, nickname } = req.body;
     if (!kakaoId || !nickname) {
         return res.status(400).json({ message: '카카오 정보 또는 닉네임이 누락되었습니다.' });
     }
     try {
-        // Server-side validation
         if (nickname.trim().length < 2 || nickname.trim().length > 12) {
             return res.status(400).json({ message: '닉네임은 2-12자여야 합니다.' });
         }
@@ -224,7 +224,10 @@ app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
 
         const sessionId = randomUUID();
         volatileState.userSessions[newUser.id] = sessionId;
-        volatileState.userStatuses[newUser.id] = { status: UserStatus.Online, stateEnteredAt: Date.now() };
+        
+        const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+        userStatuses[newUser.id] = { status: UserStatus.Online, stateEnteredAt: Date.now() };
+        await setKV('userStatuses', userStatuses);
         
         res.json({ user: newUser, sessionId });
     } catch (error: any) {
@@ -233,20 +236,21 @@ app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
     }
 });
 
-// FIX: Used correct Express types to resolve property access errors.
-app.post('/api/state', async (req: Request, res: Response) => {
-    const user = req.user;
-    let userStatus: UserStatusInfo | undefined;
-    if (user) {
-        volatileState.userConnections[user.id] = Date.now();
-        userStatus = volatileState.userStatuses[user.id];
-        if (!userStatus) {
-            userStatus = { status: UserStatus.Online, stateEnteredAt: Date.now() };
-            volatileState.userStatuses[user.id] = userStatus;
-        }
+// FIX: Update parameter types to use imported Request, Response.
+app.post('/api/initial-state', async (req: Request, res: Response) => {
+    const { userId, sessionId } = req.body;
+    if (userId && sessionId) {
+        volatileState.userConnections[userId] = Date.now();
     }
+    
     const data = await getAllData();
+    
+    const negotiations = await getKV('negotiations') || {};
+    const waitingRoomChats = await getKV('waitingRoomChats') || {};
+    const gameChats = await getKV('gameChats') || {};
+    const userStatuses = await getKV('userStatuses') || {};
 
+    const userStatus = userId ? (userStatuses as any)[userId] : undefined;
     if (userStatus?.status === 'in-game' && userStatus.gameId && !data.liveGames[userStatus.gameId]) {
         const endedGame = await db.getLiveGame(userStatus.gameId);
         if (endedGame) {
@@ -254,29 +258,39 @@ app.post('/api/state', async (req: Request, res: Response) => {
         }
     }
 
-    res.json({ ...data, userStatuses: volatileState.userStatuses, negotiations: volatileState.negotiations, waitingRoomChats: volatileState.waitingRoomChats, gameChats: volatileState.gameChats });
+    res.json({ 
+        ...data, 
+        negotiations, 
+        waitingRoomChats, 
+        gameChats,
+        userStatuses,
+    });
 });
 
-// FIX: Used correct Express types to resolve property access errors.
+// FIX: Update parameter types to use imported Request, Response.
 app.post('/api/action', async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
         if (req.body.type === 'LOGOUT' && req.body.userId) {
             console.log(`Processing beacon logout for user ${req.body.userId}`);
             delete volatileState.userConnections[req.body.userId];
-            delete volatileState.userStatuses[req.body.userId];
+            const userStatuses = await getKV('userStatuses') || {};
+            delete (userStatuses as any)[req.body.userId];
+            await setKV('userStatuses', userStatuses);
             delete volatileState.userSessions[req.body.userId];
             return res.json({ success: true });
         }
         return res.status(401).json({ message: 'Authentication required for this action.' });
     }
+    
+    volatileState.userConnections[user.id] = Date.now();
 
     const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
 
     const action: ServerAction & { user: User } = { ...req.body, user };
     
     try {
-        const result = await handleAction(volatileState, action, guilds);
+        const result = await handleAction(action, volatileState);
         if (result?.error) {
             res.status(400).json({ message: result.error });
         } else {
@@ -293,17 +307,16 @@ const startServer = async () => {
     await performOneTimeReset();
     await performOneTimeGuildResearchMigration();
 
-    // Eagerly initialize KataGo to make scoring faster on first game
     getKataGoManager().initialize().catch(err => {
         console.warn("[Server Start] KataGo analysis engine could not be started. Analysis will be unavailable.", err.message);
     });
 
-    // Game loop
     setInterval(async () => {
         try {
             const allActiveGames = await db.getAllActiveGames();
             const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
-            const updatedGames = await gameModes.updateGameStates(allActiveGames, Date.now(), volatileState, guilds);
+            const updatedGames = await gameModes.updateGameStates(allActiveGames, Date.now(), guilds);
+
             for (const game of updatedGames) {
                 await db.saveGame(game);
             }
@@ -312,61 +325,67 @@ const startServer = async () => {
         }
     }, 1000);
 
-    // Volatile state cleanup & User state updates
     setInterval(async () => {
         const now = Date.now();
-        const CONNECTION_TIMEOUT_MS = 60 * 1000; // 60 seconds
-        const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+        const CONNECTION_TIMEOUT_MS = 60 * 1000;
+        const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
-        // Cleanup disconnected users & check for idle users
-        for (const userId in volatileState.userConnections) {
+        const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+        let statusesChanged = false;
+
+        for (const userId in userStatuses) {
             const lastSeen = volatileState.userConnections[userId];
-            if (now - lastSeen > CONNECTION_TIMEOUT_MS) {
-                const userStatus = volatileState.userStatuses[userId];
+            if (!lastSeen || now - lastSeen > CONNECTION_TIMEOUT_MS) {
+                const userStatus = userStatuses[userId];
                 
-                // If user is in a game, check if it's an AI/SP game to be deleted on disconnect.
                 if (userStatus?.status === UserStatus.InGame && userStatus.gameId) {
                     const game = await db.getLiveGame(userStatus.gameId);
                     if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
-                        // It's a single player type game, delete it on disconnect.
                         await db.deleteGame(game.id);
-                        console.log(`[Cleanup] Deleted abandoned AI/SP game ${game.id} for disconnected user ${userId}.`);
-                        // The user's status will be cleaned up below.
                     } else {
-                        // It's a PvP game, allow for reconnection.
+                        if (!lastSeen) {
+                           console.log(`[Cleanup] User ${userId} connection is gone. Cleaning up status.`);
+                           delete userStatuses[userId];
+                           statusesChanged = true;
+                        }
                         continue;
                     }
                 }
                 
                 console.log(`[Cleanup] User ${userId} connection timed out. Setting to offline.`);
                 delete volatileState.userConnections[userId];
-                delete volatileState.userStatuses[userId];
+                delete userStatuses[userId];
+                statusesChanged = true;
                 delete volatileState.userSessions[userId];
-            }
-        }
-        
-        for (const userId in volatileState.userStatuses) {
-            const userStatus = volatileState.userStatuses[userId];
-            if (userStatus.status === UserStatus.Waiting && userStatus.stateEnteredAt) {
-                if (now - userStatus.stateEnteredAt > IDLE_TIMEOUT_MS) {
-                    console.log(`[Idle Check] User ${userId} idle in waiting room. Setting status to Resting.`);
-                    userStatus.status = UserStatus.Resting;
-                    userStatus.stateEnteredAt = now; // Update timestamp for the new state
+            } else {
+                 const userStatus = userStatuses[userId];
+                if (userStatus.status === UserStatus.Waiting && userStatus.stateEnteredAt) {
+                    if (now - userStatus.stateEnteredAt > IDLE_TIMEOUT_MS) {
+                        console.log(`[Idle Check] User ${userId} idle in waiting room. Setting status to Resting.`);
+                        userStatus.status = UserStatus.Resting;
+                        userStatus.stateEnteredAt = now;
+                        statusesChanged = true;
+                    }
                 }
             }
         }
 
-
-        // Cleanup expired negotiations
-        for (const negId in volatileState.negotiations) {
-            if (now > volatileState.negotiations[negId].deadline) {
-                const neg = volatileState.negotiations[negId];
-                if (neg.challenger.id && volatileState.userStatuses[neg.challenger.id]) {
-                    volatileState.userStatuses[neg.challenger.id].status = UserStatus.Waiting;
+        const negotiations = await getKV<Record<string, any>>('negotiations') || {};
+        let negotiationsChanged = false;
+        for (const negId in negotiations) {
+            if (now > negotiations[negId].deadline) {
+                const neg = negotiations[negId];
+                if (userStatuses[neg.challenger.id]) {
+                    userStatuses[neg.challenger.id].status = UserStatus.Waiting;
+                    statusesChanged = true;
                 }
-                delete volatileState.negotiations[negId];
+                delete negotiations[negId];
+                negotiationsChanged = true;
             }
         }
+        if (negotiationsChanged) await setKV('negotiations', negotiations);
+        if (statusesChanged) await setKV('userStatuses', userStatuses);
+
 
         const guilds = await getKV<Record<string, Guild>>('guilds') || {};
         let guildsUpdated = false;
@@ -392,33 +411,27 @@ const startServer = async () => {
             await db.setKV('guilds', guilds);
         }
         
-        // --- User State Update Loop ---
         const allUserIds = (await db.getAllUsers()).map(u => u.id);
 
         for (const userId of allUserIds) {
-            // Fetch the most up-to-date user object for each iteration to prevent race conditions.
             const user = await db.getUser(userId);
             if (!user) continue;
     
             const originalUserSnapshot = JSON.stringify(user);
-            let userToUpdate = JSON.parse(originalUserSnapshot); // Create a mutable copy to work on
+            let userToUpdate = JSON.parse(originalUserSnapshot);
     
             const guild = user.guildId ? guilds[user.guildId] : null;
     
-            // These functions perform time-based updates (quest resets, AP regen, mission accumulation)
-            // and will only modify the object if a change is needed.
             userToUpdate = await resetAndGenerateQuests(userToUpdate);
             userToUpdate = regenerateActionPoints(userToUpdate, guild);
             userToUpdate = accumulateMissionRewards(userToUpdate);
             
-            // If any of the background tasks modified the user object, save it.
             if (JSON.stringify(userToUpdate) !== originalUserSnapshot) {
                 await db.updateUser(userToUpdate);
             }
         }
     }, 5000);
 
-    // Scheduled tasks (like weekly rewards)
     setInterval(async () => {
         try {
             const allUsers = await db.getAllUsers();
@@ -437,8 +450,6 @@ const startServer = async () => {
 
 startServer();
 
-// For local development, start the server and listen.
-// For Vercel, this block will be ignored and the exported `app` will be used.
 if (!process.env.VERCEL) {
     app.listen(port, () => {
         console.log(`Server listening on port ${port}`);

@@ -1,5 +1,4 @@
 
-
 import { Pool } from 'pg';
 import { getDb, initializeAndGetDb } from './db/connection.js';
 import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank } from '../types/index.js';
@@ -68,7 +67,6 @@ export const getUserByNickname = async (nickname: string): Promise<User | null> 
     return userRepository.getUserByNickname(await getDb(), nickname);
 };
 
-// FIX: Export getUserByKakaoId to be available for Kakao login logic.
 export const getUserByKakaoId = async (kakaoId: string): Promise<User | null> => {
     const userRepository = await import('./repositories/userRepository.js');
     return userRepository.getUserByKakaoId(await getDb(), kakaoId);
@@ -106,7 +104,6 @@ export const createUserCredentials = async (username: string, hash: string, salt
     const credentialsRepository = await import('./repositories/credentialsRepository.js');
     return credentialsRepository.createUserCredentials(await getDb(), username, hash, salt, userId);
 };
-// FIX: Add 'newSalt' argument to the function call to align with the updated method signature.
 export const updateUserPassword = async (userId: string, newHash: string, newSalt: string): Promise<void> => {
     const credentialsRepository = await import('./repositories/credentialsRepository.js');
     return credentialsRepository.updateUserPassword(await getDb(), userId, newHash, newSalt);

@@ -1,17 +1,26 @@
 
-
-
 import * as db from '../db.js';
-import { type ServerAction, type User, type VolatileState, HandleActionResult, GameMode, Guild } from '../../types/index.js';
+import { type ServerAction, type User, type HandleActionResult, GameMode, Guild } from '../../types/index.js';
 import { containsProfanity } from '../../profanity.js';
 import { createDefaultSpentStatPoints } from '../initialData.js';
 import * as currencyService from '../currencyService.js';
 import * as guildService from '../guildService.js';
-// FIX: Add crypto import for password hashing
 import crypto from 'crypto';
 
-export const handleUserAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
+export const handleUserAction = async (action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
+    
+    if (!user.equipmentPresets) {
+        user.equipmentPresets = [];
+    }
+
+    if (user.equipmentPresets.length < 5) {
+        const presetsToAdd = 5 - user.equipmentPresets.length;
+        for (let i = 0; i < presetsToAdd; i++) {
+            user.equipmentPresets.push({ name: `프리셋 ${user.equipmentPresets.length + 1}`, equipment: {} });
+        }
+    }
+
 
     switch(type) {
         case 'UPDATE_AVATAR': {
@@ -125,11 +134,9 @@ export const handleUserAction = async (volatileState: VolatileState, action: Ser
             if (creds.hash !== currentHash) {
                 return { error: '현재 비밀번호가 일치하지 않습니다.' };
             }
-            // FIX: Add password length check
-            if (newPassword.length < 4) {
+            if (newPassword && newPassword.length < 4) {
                  return { error: '새 비밀번호는 4자 이상이어야 합니다.' };
             }
-            // FIX: Generate new salt and hash for the new password and pass all 3 arguments to updateUserPassword.
             const newSalt = crypto.randomBytes(16).toString('hex');
             const newHash = crypto.pbkdf2Sync(newPassword, newSalt, 10000, 64, 'sha512').toString('hex');
             await db.updateUserPassword(user.id, newHash, newSalt);
@@ -142,8 +149,9 @@ export const handleUserAction = async (volatileState: VolatileState, action: Ser
         }
         case 'DELETE_ACCOUNT': {
             await db.deleteUser(user.id);
-            delete volatileState.userConnections[user.id];
-            delete volatileState.userStatuses[user.id];
+            const userStatuses = await db.getKV('userStatuses') || {};
+            delete (userStatuses as any)[user.id];
+            await db.setKV('userStatuses', userStatuses);
             return { clientResponse: { success: true } };
         }
         case 'RESET_STATS_CATEGORY': {

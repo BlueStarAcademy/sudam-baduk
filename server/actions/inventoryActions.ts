@@ -62,7 +62,7 @@ const removeUserItems = (user: User, itemsToRemove: { name: string; amount: numb
 };
 
 
-export const handleInventoryAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
+export const handleInventoryAction = async (action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
 
     switch (type) {

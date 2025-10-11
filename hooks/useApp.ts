@@ -1,8 +1,6 @@
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-// FIX: Separate type and value imports
-// FIX: Replaced SinglePlayerMissionInfo with the correct exported type SinglePlayerStageInfo.
-import { GameMode, UserStatus, ShopTab, InventoryTab, User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult, SinglePlayerStageInfo } from '../types/index.js';
-// FIX: Removed failing Supabase type imports. Types will be inferred as `any`.
+import { GameMode, UserStatus, ShopTab, InventoryTab, User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult, SinglePlayerStageInfo, UserStatusInfo } from '../types/index.js';
 import { audioService } from '../services/audioService.js';
 import { stableStringify, parseHash } from '../utils/appUtils.js';
 import { 
@@ -14,12 +12,9 @@ import {
 } from '../constants/index.js';
 import { defaultSettings } from './useAppSettings.js';
 import { getMissionInfoWithLevel } from '../utils/questUtils.js';
-// FIX: Import supabase client from the dedicated service file to break circular dependency.
 import { supabase } from '../services/supabase.js';
 import { containsProfanity } from '../profanity.js';
-
-// --- Supabase Client Initialization ---
-// This has been moved to services/supabase.ts to resolve a circular dependency.
+import { rowToUser, rowToGame } from '../server/db/mappers.js';
 
 
 function usePrevious<T>(value: T): T | undefined {
@@ -81,7 +76,6 @@ export const useApp = () => {
         return () => window.removeEventListener('resize', checkIsMobile);
     }, []);
     
-    // Fix: create helper function to break circular dependency
     const doLogoutClientSide = useCallback(() => {
         setCurrentUser(null);
         setSessionId(null);
@@ -176,57 +170,13 @@ export const useApp = () => {
                     setSuccessToast(result.successMessage);
                     setTimeout(() => setSuccessToast(null), 3000);
                 }
-
-                // --- Start of new admin action response handling ---
-                if (result.updatedUserDetail) {
-                    const updatedUser = result.updatedUserDetail;
-                    setUsersMap(currentMap => ({
-                        ...currentMap,
-                        [updatedUser.id]: updatedUser
-                    }));
-                    if (currentUser?.id === updatedUser.id) {
-                        setCurrentUser(updatedUser);
-                    }
-                }
-                if (result.deletedUserId) {
-                    const deletedId = result.deletedUserId;
-                    setUsersMap(currentMap => {
-                        const newMap = { ...currentMap };
-                        delete newMap[deletedId];
-                        return newMap;
-                    });
-                }
                 
-                 if (result.newNegotiation) {
-                    setNegotiations(negs => ({ ...negs, [result.newNegotiation.id]: result.newNegotiation }));
-                }
-                if (result.userStatusUpdate && currentUser) {
-                    setOnlineUsers(users => users.map(u => 
-                        u.id === currentUser.id ? { ...u, ...result.userStatusUpdate } : u
-                    ));
-                }
-
-                if (result.guilds) {
-                    setGuilds(result.guilds);
-                }
-                 if (result.obtainedItemsBulk) {
-                    setLastUsedItemResult(result.obtainedItemsBulk);
-                 }
-                 if (result.rewardSummary) setRewardSummary(result.rewardSummary);
-                if (result.claimAllSummary) {
-                    setClaimAllSummary(result.claimAllSummary);
-                    setIsClaimAllSummaryOpen(true);
-                }
-                if (result.disassemblyResult) { 
-                    setDisassemblyResult(result.disassemblyResult);
-                    if (result.disassemblyResult.jackpot) audioService.disassemblyJackpot();
-                }
-                if (result.craftResult) {
-                    setCraftResult(result.craftResult);
-                }
-                if (result.synthesisResult) {
-                    setSynthesisResult(result.synthesisResult);
-                }
+                if (result.obtainedItemsBulk) setLastUsedItemResult(result.obtainedItemsBulk);
+                if (result.rewardSummary) setRewardSummary(result.rewardSummary);
+                if (result.claimAllSummary) { setClaimAllSummary(result.claimAllSummary); setIsClaimAllSummaryOpen(true); }
+                if (result.disassemblyResult) { setDisassemblyResult(result.disassemblyResult); if (result.disassemblyResult.jackpot) audioService.disassemblyJackpot(); }
+                if (result.craftResult) setCraftResult(result.craftResult);
+                if (result.synthesisResult) setSynthesisResult(result.synthesisResult);
                 if (result.enhancementOutcome) {
                     const { message, success, itemBefore, itemAfter } = result.enhancementOutcome;
                     setEnhancementResult({ message, success });
@@ -239,14 +189,14 @@ export const useApp = () => {
                 }
                 if (result.enhancementAnimationTarget) setEnhancementAnimationTarget(result.enhancementAnimationTarget);
                 if (result.guildBossBattleResult) {
-                    const bossName = action.payload?.bossName || '보스'; // Get bossName from payload
+                    const bossName = action.payload?.bossName || '보스'; 
                     setGuildBossBattleResult({ ...result.guildBossBattleResult, bossName });
                 }
                 if (result.donationResult) {
                     setGuildDonationAnimation(result.donationResult);
                     setTimeout(() => setGuildDonationAnimation(null), 2500);
                 }
-                 return result;
+                return result;
             }
         } catch (err: any) {
             showError(err.message);
@@ -258,10 +208,7 @@ export const useApp = () => {
         if (isLoggingOut.current) return;
         isLoggingOut.current = true;
         
-        // FIX: Property 'signOut' does not exist on type 'SupabaseAuthClient'. The type definitions are likely broken in the user's environment. The method exists at runtime. This will be fixed by other changes that allow types to be inferred correctly. If not, this is an environment issue beyond the scope of file edits.
-        // FIX: Cast supabase.auth to any to bypass type errors for signOut.
         await (supabase.auth as any).signOut();
-        // The onAuthStateChange listener will handle the rest of the logout process.
     }, []);
     
     useEffect(() => {
@@ -322,7 +269,7 @@ export const useApp = () => {
 
     // --- Server State ---
     const [usersMap, setUsersMap] = useState<Record<string, User>>({});
-    const [onlineUsers, setOnlineUsers] = useState<UserWithStatus[]>([]);
+    const [userStatuses, setUserStatuses] = useState<Record<string, UserStatusInfo>>({});
     const [liveGames, setLiveGames] = useState<Record<string, LiveGameSession>>({});
     const [negotiations, setNegotiations] = useState<Record<string, Negotiation>>({});
     const [waitingRoomChats, setWaitingRoomChats] = useState<Record<string, ChatMessage[]>>({});
@@ -376,12 +323,21 @@ export const useApp = () => {
     // --- Derived State ---
     const allUsers = useMemo(() => Object.values(usersMap), [usersMap]);
 
+    const onlineUsers: UserWithStatus[] = useMemo(() => {
+        return Object.entries(userStatuses)
+            .map(([id, statusInfo]) => {
+                const user = usersMap[id];
+                if (!user) return null;
+                return { ...user, ...statusInfo };
+            })
+            .filter((u): u is UserWithStatus => u !== null);
+    }, [usersMap, userStatuses]);
+
     const currentUserWithStatus: UserWithStatus | null = useMemo(() => {
         if (!currentUser) return null;
-        const statusInfo = onlineUsers.find(u => u.id === currentUser.id);
-        // FIX: Add stateEnteredAt to fallback object to conform to UserWithStatus type.
+        const statusInfo = userStatuses[currentUser.id];
         return { ...currentUser, ...(statusInfo || { status: UserStatus.Online, stateEnteredAt: Date.now() }) };
-    }, [currentUser, onlineUsers]);
+    }, [currentUser, userStatuses]);
 
     const activeGame = useMemo(() => {
         if (!currentUserWithStatus) return null;
@@ -392,6 +348,11 @@ export const useApp = () => {
         }
         return null;
     }, [currentUserWithStatus, liveGames]);
+
+    const myGuild = useMemo(() => {
+        if (!currentUserWithStatus?.guildId) return null;
+        return guilds[currentUserWithStatus.guildId];
+    }, [currentUserWithStatus?.guildId, guilds]);
 
     const activeNegotiation = useMemo(() => {
         if (!currentUserWithStatus) return null;
@@ -426,8 +387,7 @@ export const useApp = () => {
                checkMilestones(weekly, WEEKLY_MILESTONE_THRESHOLDS) ||
                checkMilestones(monthly, MONTHLY_MILESTONE_THRESHOLDS);
     }, [currentUser?.quests]);
-
-    // FIX: Replaced 'accumulatedAmount' with 'claimableAmount' and added client-side time calculation for accuracy.
+    
     const hasFullMissionReward = useMemo(() => {
         if (!currentUserWithStatus?.singlePlayerMissions) return false;
         
@@ -438,13 +398,10 @@ export const useApp = () => {
             
             if (missionState && missionInfo && missionState.isStarted) {
                 const currentLevel = missionState.level || 1;
-                // FIX: Cast missionInfo to SinglePlayerStageInfo to satisfy getMissionInfoWithLevel's type requirement.
                 const leveledMissionInfo = getMissionInfoWithLevel(missionInfo as SinglePlayerStageInfo, currentLevel);
                 
-                // FIX: Use optional chaining to safely access property 'productionRateMinutes'.
                 const productionIntervalMs = (leveledMissionInfo as any)?.productionRateMinutes * 60 * 1000;
-                if (productionIntervalMs <= 0) {
-                    // FIX: Use optional chaining to safely access property 'maxCapacity'.
+                if (!productionIntervalMs || productionIntervalMs <= 0) {
                     if (missionState.claimableAmount >= (leveledMissionInfo as any)?.maxCapacity) {
                         return true;
                     }
@@ -453,11 +410,9 @@ export const useApp = () => {
                 
                 const elapsedMs = now - missionState.lastCollectionTime;
                 const rewardsGenerated = Math.floor(elapsedMs / productionIntervalMs);
-                // FIX: Use optional chaining to safely access property 'rewardAmount'.
                 const amountGenerated = rewardsGenerated * (leveledMissionInfo as any)?.rewardAmount;
                 const newAccumulated = (missionState.claimableAmount || 0) + amountGenerated;
 
-                // FIX: Use optional chaining to safely access property 'maxCapacity'.
                 if (newAccumulated >= (leveledMissionInfo as any)?.maxCapacity) {
                     return true;
                 }
@@ -466,7 +421,6 @@ export const useApp = () => {
         return false;
     }, [currentUserWithStatus?.singlePlayerMissions]);
     
-    // FIX: Define hasUnclaimedTournamentReward to resolve the error.
     const hasUnclaimedTournamentReward = useMemo(() => {
         if (!currentUser) return false;
         
@@ -498,6 +452,7 @@ export const useApp = () => {
     const login = useCallback((user: User, sid: string) => {
         setCurrentUser(user);
         setSessionId(sid);
+        setKakaoRegistrationData(null); // Clear registration data on successful login/registration.
     }, []);
 
     useEffect(() => {
@@ -509,18 +464,13 @@ export const useApp = () => {
     }, [currentUser, sessionId]);
 
     useEffect(() => {
-        // FIX: Property 'onAuthStateChange' does not exist on type 'SupabaseAuthClient'. Type definitions are likely broken. The method exists at runtime. This will be fixed by other changes that allow types to be inferred correctly. If not, this is an environment issue beyond the scope of file edits.
-        // FIX: Cast supabase.auth to any and add type annotations for event and session to resolve type errors.
-        // FIX: Removed type annotations for `event` and `session` as the imported types are causing errors.
         const { data: authListener } = (supabase.auth as any).onAuthStateChange(async (event: any, session: any) => {
             const currentKakaoId = currentUser?.kakaoId;
             const newKakaoId = session?.user?.identities?.find(
-                // FIX: Removed `UserIdentity` type annotation as it's not being imported correctly.
                 (id: any) => id.provider === 'kakao'
             )?.id;
             
             if (event === 'SIGNED_IN' && session) {
-                // Prevent re-login if already logged in with the same user
                 if (currentKakaoId && currentKakaoId === newKakaoId) {
                     return;
                 }
@@ -544,22 +494,18 @@ export const useApp = () => {
                 } catch (error: any) {
                     console.error('Error during user sync:', error);
                     showError(error.message);
-                    // FIX: Property 'signOut' does not exist on type 'SupabaseAuthClient'. The type definitions are likely broken in the user's environment. The method exists at runtime. This will be fixed by other changes that allow types to be inferred correctly. If not, this is an environment issue beyond the scope of file edits.
-                    // FIX: Cast supabase.auth to any to bypass type errors for signOut.
                     await (supabase.auth as any).signOut();
                 }
             } else if (event === 'SIGNED_OUT') {
-                if (isLoggingOut.current) { // Logout was initiated by user click
+                if (isLoggingOut.current) { 
                     await handleAction({ type: 'LOGOUT' });
                     doLogoutClientSide();
                 }
             }
         });
     
-        // Handle initial load with potential hash from Supabase redirect
         const hash = window.location.hash;
         if (hash.includes('access_token') && hash.includes('provider_token')) {
-            // Supabase client handles this automatically, but we might want to clear the hash for a cleaner URL
             setTimeout(() => {
                 if (window.location.hash.includes('access_token')) {
                     window.location.hash = '';
@@ -573,78 +519,106 @@ export const useApp = () => {
     }, [login, handleAction, doLogoutClientSide, currentUser?.kakaoId]);
 
 
-    // --- State Polling ---
+    // --- State Fetching and Real-time Subscriptions ---
     useEffect(() => {
         if (!currentUser?.id || !sessionId) return;
         let isCancelled = false;
     
-        const poll = async () => {
-            if (isLoggingOut.current || isCancelled) return;
-    
+        const fetchInitialState = async () => {
+            if (isCancelled) return;
             try {
-                const response = await fetch('/api/state', {
+                const response = await fetch('/api/initial-state', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: currentUser.id, sessionId }),
                 });
-    
-                if (isLoggingOut.current || isCancelled) return;
-    
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        showError('다른 기기에서 로그인하여 세션이 만료되었습니다. 다시 로그인해주세요.');
-                        if (!isLoggingOut.current) { // Prevent multiple logout calls
-                            handleLogout();
-                        }
-                        return; // Stop this poll cycle
-                    }
-                    throw new Error('Failed to fetch state');
-                }
-    
-                const data: AppState & { guilds?: Record<string, Guild> } = await response.json();
-                if (isLoggingOut.current || isCancelled) return;
+                if (isCancelled || !response.ok) return;
+                const data = await response.json();
+                if (isCancelled) return;
                 
-                const updateStateIfChanged = <T,>(setter: React.Dispatch<React.SetStateAction<T>>, newData: T) => {
-                    setter(currentData => stableStringify(currentData) !== stableStringify(newData) ? newData : currentData);
-                };
-    
-                if (currentUser?.id) {
-                    updateStateIfChanged<User | null>(setCurrentUser, data.users[currentUser.id] || null);
-                }
-                updateStateIfChanged(setUsersMap, data.users);
-                updateStateIfChanged(setLiveGames, data.liveGames);
-                updateStateIfChanged(setNegotiations, data.negotiations);
-                updateStateIfChanged(setWaitingRoomChats, data.waitingRoomChats);
-                updateStateIfChanged(setGameChats, data.gameChats);
-                updateStateIfChanged(setAdminLogs, data.adminLogs);
-                updateStateIfChanged(setGameModeAvailability, data.gameModeAvailability);
-                updateStateIfChanged(setAnnouncements, data.announcements);
-                updateStateIfChanged(setGlobalOverrideAnnouncement, data.globalOverrideAnnouncement);
-                updateStateIfChanged(setAnnouncementInterval, data.announcementInterval);
-                updateStateIfChanged(setTowerRankings, data.towerRankings || []);
-                updateStateIfChanged(setGuilds, data.guilds || {});
-    
-                const onlineStatuses = Object.entries(data.userStatuses)
-                    .map(([id, statusInfo]) => {
-                        const user = data.users[id];
-                        if (!user) return null;
-                        return { ...user, ...statusInfo };
-                    })
-                    .filter((u): u is UserWithStatus => u !== null);
-                updateStateIfChanged(setOnlineUsers, onlineStatuses);
+                // Set initial data
+                setUsersMap(data.users || {});
+                setLiveGames(data.liveGames || {});
+                setGuilds(data.guilds || {});
+                setAdminLogs(data.adminLogs || []);
+                setAnnouncements(data.announcements || []);
+                setGlobalOverrideAnnouncement(data.globalOverrideAnnouncement || null);
+                setAnnouncementInterval(data.announcementInterval || 3);
+                setTowerRankings(data.towerRankings || []);
+                
+                // Get volatile state from KV store
+                setNegotiations(data.negotiations || {});
+                setWaitingRoomChats(data.waitingRoomChats || {});
+                setGameChats(data.gameChats || {});
+                setUserStatuses(data.userStatuses || {});
+
             } catch (err) {
-                console.error("Polling error:", err);
+                console.error("Initial state fetch error:", err);
             }
         };
-    
-        poll();
-        const interval = setInterval(poll, 1000);
+
+        fetchInitialState();
+        
+        const handleKvUpdate = (payload: any) => {
+             const { key, value } = payload.new;
+             switch(key) {
+                case 'guilds': setGuilds(value); break;
+                case 'negotiations': setNegotiations(value); break;
+                case 'userStatuses': setUserStatuses(value); break;
+                case 'waitingRoomChats': setWaitingRoomChats(value); break;
+                case 'gameChats': setGameChats(value); break;
+                case 'adminLogs': setAdminLogs(value); break;
+                case 'announcements': setAnnouncements(value); break;
+                case 'globalOverrideAnnouncement': setGlobalOverrideAnnouncement(value); break;
+                case 'announcementInterval': setAnnouncementInterval(value); break;
+                case 'gameModeAvailability': setGameModeAvailability(value); break;
+             }
+        }
+
+        const usersChannel = supabase
+            .channel('public:users')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, (payload) => {
+                const updatedUser = rowToUser(payload.new);
+                if(updatedUser) {
+                    setUsersMap(current => ({ ...current, [updatedUser.id]: updatedUser }));
+                    if (updatedUser.id === currentUser.id) {
+                        setCurrentUser(updatedUser);
+                    }
+                }
+            })
+            .subscribe();
+            
+        const gamesChannel = supabase
+            .channel('public:live_games')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'live_games' }, (payload) => {
+                if(payload.eventType === 'DELETE') {
+                    setLiveGames(current => {
+                        const newGames = { ...current };
+                        delete newGames[payload.old.id];
+                        return newGames;
+                    });
+                } else {
+                    const updatedGame = rowToGame(payload.new);
+                    if(updatedGame) {
+                        setLiveGames(current => ({ ...current, [updatedGame.id]: updatedGame }));
+                    }
+                }
+            })
+            .subscribe();
+        
+        const kvChannel = supabase
+            .channel('public:kv')
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'kv' }, handleKvUpdate)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kv' }, handleKvUpdate)
+            .subscribe();
     
         return () => {
             isCancelled = true;
-            clearInterval(interval);
+            supabase.removeChannel(usersChannel);
+            supabase.removeChannel(gamesChannel);
+            supabase.removeChannel(kvChannel);
         };
-    }, [currentUser?.id, sessionId, handleLogout]);
+    }, [currentUser?.id, sessionId]);
 
     // --- Navigation Logic ---
     const initialRedirectHandled = useRef(false);
@@ -825,7 +799,6 @@ export const useApp = () => {
                 mode: statusInfo?.mode,
                 gameId: statusInfo?.gameId,
                 spectatingGameId: statusInfo?.spectatingGameId,
-                // FIX: Add stateEnteredAt to conform to UserWithStatus
                 stateEnteredAt: statusInfo?.stateEnteredAt || Date.now(),
             };
             setViewingUser(finalUser);
@@ -842,7 +815,6 @@ export const useApp = () => {
                 mode: statusInfo?.mode,
                 gameId: statusInfo?.gameId,
                 spectatingGameId: statusInfo?.spectatingGameId,
-                // FIX: Add stateEnteredAt to conform to UserWithStatus
                 stateEnteredAt: statusInfo?.stateEnteredAt || Date.now(),
             };
             setModeratingUser(finalUser);
@@ -850,19 +822,9 @@ export const useApp = () => {
     }, [onlineUsers, allUsers]);
 
     const closeModerationModal = useCallback(() => setModeratingUser(null), []);
-
-    const openEnhancingItem = useCallback((item: InventoryItem) => {
-        setEnhancingItem(item);
-    }, []);
-
-    const openEnhancementFromDetail = useCallback((item: InventoryItem) => {
-        setEnhancingItem(item);
-    }, []);
-
-    const openViewingItem = useCallback((item: InventoryItem, isOwnedByCurrentUser: boolean) => {
-        setViewingItem({ item, isOwnedByCurrentUser });
-    }, []);
-
+    const openEnhancingItem = useCallback((item: InventoryItem) => { setEnhancingItem(item); }, []);
+    const openEnhancementFromDetail = useCallback((item: InventoryItem) => { setEnhancingItem(item); }, []);
+    const openViewingItem = useCallback((item: InventoryItem, isOwnedByCurrentUser: boolean) => { setViewingItem({ item, isOwnedByCurrentUser }); }, []);
     const clearEnhancementOutcome = useCallback(() => {
         if (enhancementOutcome?.success) {
             const enhancedItem = enhancementOutcome.itemAfter;
@@ -884,40 +846,18 @@ export const useApp = () => {
         }
         setEnhancementOutcome(null);
     }, [enhancementOutcome]);
-    
-    const closeEnhancementModal = useCallback(() => {
-        setEnhancingItem(null);
-        setEnhancementOutcome(null);
-    }, []);
-
-    const closeClaimAllSummary = useCallback(() => {
-        setIsClaimAllSummaryOpen(false);
-        setClaimAllSummary(null);
-    }, []);
-
+    const closeEnhancementModal = useCallback(() => { setEnhancingItem(null); setEnhancementOutcome(null); }, []);
+    const closeClaimAllSummary = useCallback(() => { setIsClaimAllSummaryOpen(false); setClaimAllSummary(null); }, []);
     const closeSynthesisResult = useCallback(() => setSynthesisResult(null), []);
-
     const openTowerRewardInfoModal = useCallback(() => setIsTowerRewardInfoOpen(true), []);
     const closeTowerRewardInfoModal = useCallback(() => setIsTowerRewardInfoOpen(false), []);
     const closeLevelUpModal = useCallback(() => setLevelUpInfo(null), []);
     const closeGuildBossBattleResultModal = useCallback(() => setGuildBossBattleResult(null), []);
-
-    const setPostGameRedirect = useCallback((path: string) => {
-        sessionStorage.setItem('postGameRedirect', path);
-    }, []);
-    
+    const setPostGameRedirect = useCallback((path: string) => { sessionStorage.setItem('postGameRedirect', path); }, []);
     const openGuildEffectsModal = useCallback(() => setIsGuildEffectsModalOpen(true), []);
     const closeGuildEffectsModal = useCallback(() => setIsGuildEffectsModalOpen(false), []);
-// FIX: Define openInventory and openShop to resolve shorthand property errors in handlers object.
-    const openInventory = useCallback((initialTab: InventoryTab = 'all') => {
-        setInventoryInitialTab(initialTab);
-        setIsInventoryOpen(true);
-    }, []);
-
-    const openShop = useCallback((initialTab: ShopTab = 'equipment') => {
-        setShopInitialTab(initialTab);
-        setIsShopOpen(true);
-    }, []);
+    const openInventory = useCallback((initialTab: InventoryTab = 'all') => { setInventoryInitialTab(initialTab); setIsInventoryOpen(true); }, []);
+    const openShop = useCallback((initialTab: ShopTab = 'equipment') => { setShopInitialTab(initialTab); setIsShopOpen(true); }, []);
 
     const handlers = {
         handleAction, handleLogout, handleEnterWaitingRoom,
@@ -974,59 +914,16 @@ export const useApp = () => {
     };
 
     return {
-        currentUser,
-        login,
-        currentUserWithStatus,
-        kakaoRegistrationData,
-        currentRoute,
-        error,
-        successToast,
-        allUsers,
-        onlineUsers,
-        liveGames,
-        negotiations,
-        waitingRoomChats,
-        gameChats,
-        adminLogs,
-        gameModeAvailability,
-        announcements,
-        globalOverrideAnnouncement,
-        announcementInterval,
-        towerRankings,
-        guilds,
-        activeGame,
-        activeNegotiation,
-        showExitToast,
-        enhancementResult,
-        enhancementOutcome,
-        unreadMailCount,
-        hasClaimableQuest,
-        hasUnclaimedTournamentReward,
-        hasFullMissionReward,
-        settings,
-        updateTheme,
-        updateSoundSetting,
-        updateFeatureSetting,
-        updatePanelColor,
-        updateTextColor,
-        resetGraphicsToDefault,
-        modals: {
-            isSettingsModalOpen, isInventoryOpen, inventoryInitialTab, isMailboxOpen, isQuestsOpen, isShopOpen, isActionPointQuizOpen, lastUsedItemResult,
+        currentUser, login, currentUserWithStatus, kakaoRegistrationData, currentRoute, error, successToast, allUsers, onlineUsers, liveGames, negotiations,
+        waitingRoomChats, gameChats, adminLogs, gameModeAvailability, announcements, globalOverrideAnnouncement, announcementInterval,
+        towerRankings, guilds, activeGame, activeNegotiation, showExitToast, enhancementResult, enhancementOutcome, unreadMailCount,
+        hasClaimableQuest, hasUnclaimedTournamentReward, hasFullMissionReward, settings, updateTheme, updateSoundSetting,
+        updateFeatureSetting, updatePanelColor, updateTextColor, resetGraphicsToDefault, myGuild,
+        modals: { isSettingsModalOpen, isInventoryOpen, inventoryInitialTab, isMailboxOpen, isQuestsOpen, isShopOpen, isActionPointQuizOpen, lastUsedItemResult,
             disassemblyResult, craftResult, synthesisResult, rewardSummary, viewingUser, isInfoModalOpen, isEncyclopediaOpen, isStatAllocationModalOpen, enhancementAnimationTarget,
-            pastRankingsInfo, enhancingItem, viewingItem, isProfileEditModalOpen, moderatingUser,
-            isClaimAllSummaryOpen,
-            claimAllSummary,
-            isTowerRewardInfoOpen,
-            levelUpInfo,
-            shopInitialTab,
-            isGuildEffectsModalOpen,
-            isEquipmentEffectsModalOpen,
-            isPresetModalOpen,
-            guildBossBattleResult,
-            activeModalIds,
-        },
-        handlers,
-        guildDonationAnimation,
-        isMobile,
+            pastRankingsInfo, enhancingItem, viewingItem, isProfileEditModalOpen, moderatingUser, isClaimAllSummaryOpen, claimAllSummary,
+            isTowerRewardInfoOpen, levelUpInfo, shopInitialTab, isGuildEffectsModalOpen, isEquipmentEffectsModalOpen, isPresetModalOpen,
+            guildBossBattleResult, activeModalIds },
+        handlers, guildDonationAnimation, isMobile,
     };
 };

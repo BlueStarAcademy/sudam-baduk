@@ -38,7 +38,7 @@ const canPurchase = (user: User, item: any, quantity: number = 1): { can: boolea
 };
 
 
-export const handleShopAction = async (volatileState: VolatileState, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
+export const handleShopAction = async (action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
 
     switch(type) {

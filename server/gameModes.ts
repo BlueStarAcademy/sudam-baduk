@@ -1,81 +1,15 @@
 import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS } from '../constants/index.js';
 import { TOWER_STAGES } from '../constants/towerChallengeConstants.js';
 import { SINGLE_PLAYER_STAGES } from '../constants/singlePlayerConstants.js';
-// FIX: Added AnalysisResult to the import to correctly type the analysisResult property.
-import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild, Move, AnalysisResult } from '../types/index.js';
+import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild, Move, type AnalysisResult, type UserStatusInfo } from '../types/index.js';
 import { aiUserId, makeAiMove, getAiUser } from './ai/index.js';
-import { initializeStrategicGame, updateStrategicGameState, isFischerGame } from './modes/strategic.js';
+import * as strategic from './modes/strategic.js';
 import { initializePlayfulGame, updatePlayfulGameState } from './modes/playful.js';
 import * as db from './db.js';
 import * as effectService from '../utils/statUtils.js';
 import * as summaryService from './summaryService.js';
+import { getNewActionButtons } from './services/actionButtonService.js';
 
-
-export const getNewActionButtons = (game: LiveGameSession): ActionButton[] => {
-    const { mode, moveHistory } = game;
-    
-    let phase: 'early' | 'mid' | 'late';
-    const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === mode);
-
-    if (isPlayful) {
-        // Use round-based phase for most playful games
-        const currentRound = game.alkkagiRound || game.curlingRound || game.round || 1;
-        const totalRounds = game.settings.alkkagiRounds || game.settings.curlingRounds || game.settings.diceGoRounds || 2;
-
-        if (currentRound === 1) {
-            phase = 'early';
-        } else if (currentRound === totalRounds) {
-            phase = 'late';
-        } else {
-            phase = 'mid';
-        }
-    } else { // Strategic
-        const moveCount = moveHistory.length;
-        if (moveCount <= 30) {
-            phase = 'early';
-        } else if (moveCount >= 31 && moveCount <= 150) {
-            phase = 'mid';
-        } else { // moveCount >= 151
-            phase = 'late';
-        }
-    }
-
-    let sourceDeck: ActionButton[];
-
-    if (isPlayful) {
-        switch (phase) {
-            case 'early': sourceDeck = PLAYFUL_ACTION_BUTTONS_EARLY; break;
-            case 'mid':   sourceDeck = PLAYFUL_ACTION_BUTTONS_MID; break;
-            case 'late':  sourceDeck = PLAYFUL_ACTION_BUTTONS_LATE; break;
-        }
-    } else { // Strategic
-        switch (phase) {
-            case 'early': sourceDeck = STRATEGIC_ACTION_BUTTONS_EARLY; break;
-            case 'mid':   sourceDeck = STRATEGIC_ACTION_BUTTONS_MID; break;
-            case 'late':  sourceDeck = STRATEGIC_ACTION_BUTTONS_LATE; break;
-        }
-    }
-
-    const shuffledButtons = [...sourceDeck].sort(() => 0.5 - Math.random());
-    const manners = shuffledButtons.filter(b => b.type === 'manner');
-    const unmanners = shuffledButtons.filter(b => b.type === 'unmannerly');
-
-    const mannerCount = Math.random() > 0.5 ? 1 : 2;
-    const selectedManners = manners.slice(0, mannerCount);
-    
-    const neededUnmanners = 3 - selectedManners.length;
-    const selectedUnmanners = unmanners.slice(0, neededUnmanners);
-
-    let result = [...selectedManners, ...selectedUnmanners];
-    
-    if (result.length < 3) {
-        const existingNames = new Set(result.map(b => b.name));
-        const filler = shuffledButtons.filter(b => !existingNames.has(b.name));
-        result.push(...filler.slice(0, 3 - result.length));
-    }
-    
-    return result.slice(0, 3).sort(() => 0.5 - Math.random());
-};
 
 export const initializeGame = async (neg: Negotiation, guilds: Record<string, Guild>): Promise<LiveGameSession> => {
     const gameId = `game-${globalThis.crypto.randomUUID()}`;
@@ -159,7 +93,7 @@ export const initializeGame = async (neg: Negotiation, guilds: Record<string, Gu
     const p2Guild = opponent.id !== aiUserId && opponent.guildId ? guilds[opponent.id] : null;
 
     if (SPECIAL_GAME_MODES.some(m => m.mode === mode) || game.isSinglePlayer || game.isTowerChallenge) {
-        await initializeStrategicGame(game, neg, now);
+        await strategic.initializeStrategicGame(game, neg, now);
     } else if (PLAYFUL_GAME_MODES.some(m => m.mode === mode)) {
         await initializePlayfulGame(game, neg, now, p1Guild, p2Guild);
     }
@@ -175,17 +109,18 @@ export const initializeGame = async (neg: Negotiation, guilds: Record<string, Gu
     return game;
 };
 
-export const updateGameStates = async (games: LiveGameSession[], now: number, volatileState: any, guilds: Record<string, Guild>): Promise<LiveGameSession[]> => {
+export const updateGameStates = async (games: LiveGameSession[], now: number, guilds: Record<string, Guild>): Promise<LiveGameSession[]> => {
     const updatedGames: LiveGameSession[] = [];
+    const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+
     for (const game of games) {
         if (!game.player1 || !game.player2) {
             console.warn(`[Game Loop] Skipping corrupted game ${game.id} with missing player data.`);
             continue;
         }
 
-        // --- Global Disconnection Logic ---
-        const p1Online = volatileState.userConnections[game.player1.id];
-        const p2Online = volatileState.userConnections[game.player2.id];
+        const p1Online = userStatuses[game.player1.id];
+        const p2Online = userStatuses[game.player2.id];
         let disconnectedId: string | null = null;
 
         if (!p1Online && !game.isAiGame && !game.isSinglePlayer && !game.isTowerChallenge) disconnectedId = game.player1.id;
@@ -193,10 +128,8 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, vo
         
         if (disconnectedId) {
             if (!game.disconnectionState || game.disconnectionState.disconnectedPlayerId !== disconnectedId) {
-                // A new disconnection event just occurred.
                 game.disconnectionState = { disconnectedPlayerId: disconnectedId, timerStartedAt: now };
                 
-                // PAUSE THE GAME TIMER on disconnect
                 if (game.turnDeadline) {
                     game.pausedTurnTimeLeft = Math.max(0, (game.turnDeadline - now) / 1000);
                     game.turnDeadline = undefined;
@@ -212,19 +145,14 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, vo
                 }
             }
         } else if (game.disconnectionState) {
-            // Player reconnected.
-            
-            // RESUME THE GAME TIMER on reconnect
             if (game.pausedTurnTimeLeft !== undefined && game.pausedTurnTimeLeft !== null) {
-                const isFischer = isFischerGame(game);
+                const isFischer = strategic.isFischerGame(game);
                 const playerTimeLeft = game.currentPlayer === Player.Black ? game.blackTimeLeft : game.whiteTimeLeft;
                 const isInByoyomi = !isFischer && playerTimeLeft <= 0;
                 
                 if (isInByoyomi) {
-                    // If they were in byoyomi, reset the byoyomi timer to full duration to be fair
                     game.turnDeadline = now + (game.settings.byoyomiTime * 1000);
                 } else {
-                    // If they were in main time, restore their remaining time
                     game.turnDeadline = now + game.pausedTurnTimeLeft * 1000;
                 }
                 game.turnStartTime = now;
@@ -246,21 +174,9 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, vo
             game.lastTimeoutPlayerIdClearTime = undefined;
         }
         
-        // Use the stable player objects already in the game session.
         const players = [game.player1, game.player2];
         
-        // --- Action Buttons Generation ---
-        const playableStatuses: GameStatus[] = [
-            GameStatus.Playing,
-            GameStatus.AlkkagiPlaying,
-            GameStatus.CurlingPlaying,
-            GameStatus.DiceRolling,
-            GameStatus.DicePlacing,
-            GameStatus.ThiefRolling,
-            GameStatus.ThiefPlacing,
-        ];
-        
-        if (!game.isAiGame && playableStatuses.includes(game.gameStatus)) {
+        if (!game.isAiGame && (game.gameStatus === GameStatus.Playing || PLAYFUL_GAME_MODES.some(m => m.mode === game.mode))) {
             for (const player of players) {
                 const deadline = game.actionButtonCooldownDeadline?.[player.id];
                 if (typeof deadline !== 'number' || now >= deadline) {
@@ -293,7 +209,7 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, vo
         const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === game.mode);
 
         if (isStrategic) {
-            await updateStrategicGameState(game, now, volatileState);
+            await strategic.updateStrategicGameState(game, now);
         } else if (isPlayful) {
             await updatePlayfulGameState(game, now);
         }

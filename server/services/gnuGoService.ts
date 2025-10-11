@@ -1,4 +1,3 @@
-
 import { spawn, ChildProcess, ChildProcessWithoutNullStreams } from 'child_process';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
@@ -7,12 +6,8 @@ import os from 'os';
 import { LiveGameSession, AnalysisResult, Player, Point, RecommendedMove, Move } from '../../types/index.js';
 import * as types from '../../types/index.js';
 import { fileURLToPath } from 'url';
-// FIX: Removed explicit import of 'process' to rely on the global Node.js process object.
-// This resolves type errors where properties like 'exit' or 'platform' are not found.
 import { processMove } from '../../utils/goLogic';
-// FIX: Import Buffer to correctly type stream data.
 import { Buffer } from 'buffer';
-// FIX: Import db module to resolve reference errors.
 import * as db from '../db.js';
 
 
@@ -59,8 +54,6 @@ class GnuGoInstance {
         this.boardSize = boardSize;
         this.komi = komi;
         this.level = level;
-// FIX: Property 'platform' does not exist on type 'Process'.
-// Relying on the global `process` object from Node.js environment.
         const isWindows = process.platform === 'win32';
         const exeName = isWindows ? 'gnugo.exe' : 'gnugo';
         
@@ -229,9 +222,6 @@ class GnuGoInstance {
         return gnuGoMoveToPoint(finalMoveStr, boardSize);
     }
     
-    // FIX: Updated the 'resync' method to optionally accept a 'boardState' argument.
-    // This allows resynchronizing the GnuGo engine from either a move history or a direct board state,
-    // which is necessary for the single-player refresh feature where move history is not available.
     async resync(moveHistory: Move[], boardState?: types.BoardState): Promise<void> {
         await this.ready;
         console.log(`[GnuGoInstance ${this.gameId}] Starting resync...`);

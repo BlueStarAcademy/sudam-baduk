@@ -1,4 +1,4 @@
-import { type LiveGameSession, type VolatileState, type ServerAction, type User, type HandleActionResult, Player, GameMode, GameStatus } from '../../types/index.js';
+import { type LiveGameSession, type ServerAction, type User, type HandleActionResult, Player, GameMode, GameStatus } from '../../types/index.js';
 
 export const initializeHidden = (game: LiveGameSession) => {
     const isHiddenMode = game.mode === GameMode.Hidden || (game.mode === GameMode.Mix && game.settings.mixedModes?.includes(GameMode.Hidden));
@@ -106,7 +106,7 @@ export const updateHiddenState = (game: LiveGameSession, now: number) => {
 };
 
 
-export const handleHiddenAction = (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): HandleActionResult | null => {
+export const handleHiddenAction = (game: LiveGameSession, action: ServerAction & { userId: string }, user: User): HandleActionResult | null => {
     const { type, payload } = action;
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);

@@ -1,6 +1,3 @@
-
-
-
 import { LiveGameSession, GameMode } from '../../types/index.js';
 import { makeDiceGoAiMove } from '../modes/diceGo.js';
 import { makeThiefGoAiMove } from '../modes/thief.js';

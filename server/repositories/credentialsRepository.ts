@@ -13,10 +13,9 @@ export const getUserCredentialsByUserId = async (db: Pool, userId: string): Prom
 };
 
 export const createUserCredentials = async (db: Pool, username: string, hash: string, salt: string, userId: string): Promise<void> => {
-    await db.query('INSERT INTO user_credentials (username, hash, salt, "userId") VALUES ($1, $2, $3, $4)', [username.toLowerCase(), hash, salt, userId]);
+    await db.query('INSERT INTO user_credentials (username, hash, salt, "userId") VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING', [username.toLowerCase(), hash, salt, userId]);
 };
 
-// FIX: Update the function signature to accept and set a new salt when updating a user's password.
 export const updateUserPassword = async (db: Pool, userId: string, newHash: string, newSalt: string): Promise<void> => {
     await db.query('UPDATE user_credentials SET hash = $1, salt = $2 WHERE "userId" = $3', [newHash, newSalt, userId]);
 };

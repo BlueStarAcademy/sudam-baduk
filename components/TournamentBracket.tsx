@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { UserWithStatus, TournamentState, PlayerForTournament, ServerAction, User, CoreStat, Match, Round, CommentaryLine, TournamentType, LeagueTier, InventoryItem } from '../types/index.js';
 import Button from './Button.js';
@@ -9,6 +8,7 @@ import SgfViewer from './SgfViewer.js';
 import { audioService } from '../services/audioService.js';
 import DraggableWindow from './DraggableWindow.js';
 import { CommentaryPanel, ScoreGraph, SimulationProgressBar } from './ScoreGraphAndCommentary.js';
+import { calculateRanks } from '../utils/tournamentUtils.js';
 
 // ... (Rest of the components like RandomEventDetails, parseCommentary, etc. remain the same) ...
 const EARLY_GAME_DURATION = 20;
@@ -49,7 +49,7 @@ const RandomEventDetails: React.FC<RandomEventDetailsProps> = ({ details, p1Nick
             </div>
             <div className="flex justify-between mt-0.5">
                 <span className="truncate max-w-[45%]">{p1.nickname}: {p1.stat}</span>
-                <span className="truncate max-w-[45%] text-right">{p2.nickname}: {p2.stat}</span>
+                <span className="truncate max-w-[45%] text-right">{p2.nickname}: ${p2.stat}</span>
             </div>
         </div>
     );
@@ -308,27 +308,6 @@ const PlayerProfilePanel: React.FC<{
     );
 };
 
-const calculateRanks = (tournament: TournamentState): (PlayerForTournament & { rank: number })[] => {
-    const playerWins: Record<string, number> = {};
-    tournament.players.forEach(p => { playerWins[p.id] = p.wins; });
-    
-    const sortedPlayers = [...tournament.players].sort((a, b) => playerWins[b.id] - playerWins[a.id]);
-    
-    let rankedPlayers: (PlayerForTournament & { rank: number })[] = [];
-    let currentRank = 0;
-    let lastWins = -1;
-
-    sortedPlayers.forEach((p, i) => {
-        if (playerWins[p.id] !== lastWins) {
-            currentRank = i + 1;
-        }
-        rankedPlayers.push({ ...p, rank: currentRank });
-        lastWins = playerWins[p.id];
-    });
-
-    return rankedPlayers;
-};
-
 const TournamentResultPanel: React.FC<{
     tournamentState: TournamentState;
     currentUser: UserWithStatus;
@@ -400,7 +379,6 @@ const TournamentResultPanel: React.FC<{
                     title={isClaimed ? '수령 완료' : '클릭하여 보상 수령'}
                 >
                     {isClaimed && <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center text-green-400 font-bold">수령 완료</div>}
-                    {/* FIX: Changed undefined variable `myReward` to the correct `reward` variable to display tournament rewards. */}
                     {reward ? (reward.items || []).map((item, i) => <RewardItemDisplay key={i} item={item} />) : <p className="text-xs text-gray-500">획득한 보상이 없습니다.</p>}
                 </div>
             </div>

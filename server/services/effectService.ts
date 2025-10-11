@@ -1,8 +1,5 @@
-
-
 // server/services/effectService.ts
 import type { User, Guild, MannerEffects } from '../../types/index.js';
-// FIX: Import `calculateUserEffects` from the correct utility file.
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import { ACTION_POINT_REGEN_INTERVAL_MS } from '../../constants/rules.js';
 

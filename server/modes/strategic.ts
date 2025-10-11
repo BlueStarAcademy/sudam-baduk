@@ -1,6 +1,7 @@
+// server/modes/strategic.ts
+
 import {
     type LiveGameSession,
-    type VolatileState,
     type ServerAction,
     type User,
     type HandleActionResult,
@@ -9,7 +10,9 @@ import {
     WinReason,
     GameMode,
     type Move,
-    Point
+    Point,
+    UserStatusInfo,
+    type Negotiation
 } from '../../types/index.js';
 import { processMove } from '../../utils/goLogic';
 import { getGameResult, endGame } from '../summaryService.js';
@@ -24,7 +27,111 @@ import { initializeBase, updateBaseState, handleBaseAction } from './base.js';
 import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidden.js';
 import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
 import { handleSharedAction } from './shared.js';
-import { handleAiTurn } from '../actions/negotiationActions.js';
+import { VolatileState } from '../../types/api.js';
+import { getNewActionButtons } from '../services/actionButtonService.js';
+
+export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player) => {
+    try {
+        const gameId = gameFromAction.id;
+        
+        const aiPlayerId = gameFromAction.player2.id;
+        const aiPlayerEnum = gameFromAction.blackPlayerId === aiPlayerId ? Player.Black : (gameFromAction.whitePlayerId === aiPlayerId ? Player.White : Player.None);
+
+        if (gameFromAction.currentPlayer !== aiPlayerEnum) return;
+
+        await gnuGoServiceManager.playUserMove(gameId, userMove, userPlayerEnum, gameFromAction.settings.boardSize, gameFromAction.moveHistory, gameFromAction.finalKomi ?? gameFromAction.settings.komi);
+        
+        const aiMove = await makeAiMove(gameFromAction) as (Point & { isHidden?: boolean });
+
+        const freshGame = await db.getLiveGame(gameId);
+        if (!freshGame || freshGame.currentPlayer !== aiPlayerEnum) {
+            console.log(`[AI Turn] Game state changed or game ended while AI was thinking. Aborting AI move for game ${gameId}.`);
+            return;
+        }
+
+        if (aiMove.isHidden) {
+            freshGame.gameStatus = GameStatus.AiHiddenThinking;
+            freshGame.aiTurnStartTime = Date.now();
+            await db.saveGame(freshGame);
+
+            setTimeout(async () => {
+                try {
+                    const gameAfterWait = await db.getLiveGame(gameId);
+                    if (!gameAfterWait || gameAfterWait.gameStatus !== GameStatus.AiHiddenThinking) return;
+
+                    gameAfterWait.aiHiddenStoneUsedThisGame = true;
+
+                    const result = processMove(gameAfterWait.boardState, { x: aiMove.x, y: aiMove.y, player: aiPlayerEnum }, gameAfterWait.koInfo, gameAfterWait.moveHistory.length);
+                    
+                    if (!result.isValid) {
+                        console.error(`[AI HIDDEN MOVE ERROR] AI generated an invalid move: ${JSON.stringify(aiMove)} for game ${gameAfterWait.id}. Reason: ${result.reason}. AI resigns.`);
+                        const winner = aiPlayerEnum === Player.Black ? Player.White : Player.Black;
+                        await endGame(gameAfterWait, winner, WinReason.Resign);
+                        await db.saveGame(gameAfterWait);
+                        return;
+                    }
+
+                    gameAfterWait.boardState = result.newBoardState;
+                    gameAfterWait.lastMove = { x: aiMove.x, y: aiMove.y };
+                    gameAfterWait.moveHistory.push({ player: aiPlayerEnum, x: aiMove.x, y: aiMove.y });
+                    
+                    if (!gameAfterWait.hiddenMoves) gameAfterWait.hiddenMoves = {};
+                    gameAfterWait.hiddenMoves[gameAfterWait.moveHistory.length - 1] = true;
+
+                    if (result.capturedStones.length > 0) {
+                        gameAfterWait.captures[aiPlayerEnum] += result.capturedStones.length;
+                    }
+
+                    gameAfterWait.koInfo = result.newKoInfo;
+                    gameAfterWait.passCount = 0;
+                    gameAfterWait.gameStatus = GameStatus.Playing;
+                    switchTurnAndUpdateTimers(gameAfterWait, Date.now());
+                    await db.saveGame(gameAfterWait);
+
+                } catch (e) {
+                    console.error(`[AI HIDDEN MOVE ERROR] for game ${gameId}:`, e);
+                }
+            }, 5000); // 5-second thinking delay
+        } else {
+            if (aiMove.x === -3 && aiMove.y === -3) { // Sentinel for playful AI
+                await db.saveGame(freshGame); // Playful AI modifies game state directly
+                return;
+            }
+
+            if (aiMove.x === -1 && aiMove.y === -1) { // AI Passed
+                freshGame.passCount++;
+                freshGame.lastMove = { x: -1, y: -1 };
+                freshGame.moveHistory.push({ player: freshGame.currentPlayer, x: -1, y: -1 });
+                if (freshGame.passCount >= 2) {
+                    await getGameResult(freshGame);
+                    await db.saveGame(freshGame);
+                    return;
+                }
+            } else { // AI made a regular move
+                const result = processMove(freshGame.boardState, { ...aiMove, player: freshGame.currentPlayer }, freshGame.koInfo, freshGame.moveHistory.length);
+                if (!result.isValid) {
+                    console.error(`[AI Error] AI generated an invalid move: ${JSON.stringify(aiMove)} for game ${freshGame.id}. Reason: ${result.reason}. AI resigns.`);
+                    const winner = freshGame.currentPlayer === Player.Black ? Player.White : Player.Black;
+                    await endGame(freshGame, winner, WinReason.Resign);
+                    await db.saveGame(freshGame);
+                    return;
+                }
+                freshGame.boardState = result.newBoardState;
+                freshGame.lastMove = { x: aiMove.x, y: aiMove.y };
+                freshGame.moveHistory.push({ player: freshGame.currentPlayer, ...aiMove });
+                freshGame.koInfo = result.newKoInfo;
+                freshGame.passCount = 0;
+                if (result.capturedStones.length > 0) {
+                     freshGame.captures[freshGame.currentPlayer] += result.capturedStones.length;
+                }
+            }
+            switchTurnAndUpdateTimers(freshGame, Date.now());
+            await db.saveGame(freshGame);
+        }
+    } catch (err) {
+        console.error(`[AI TURN ERROR] for game ${gameFromAction.id}:`, err);
+    }
+};
 
 export const isFischerGame = (game: LiveGameSession): boolean => {
     const isTimeControlFischer = game.settings.timeControl?.type === 'fischer';
@@ -40,7 +147,6 @@ export const switchTurnAndUpdateTimers = (game: LiveGameSession, now: number) =>
     if (hasTimeLimit && game.turnStartTime) {
         const playerWhoMoved = game.currentPlayer;
         const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        const byoyomiKey = playerWhoMoved === Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
         
         const timeUsed = (now - game.turnStartTime) / 1000;
 
@@ -194,135 +300,6 @@ const handleStandardAction = async (volatileState: VolatileState, game: LiveGame
 };
 
 
-export const initializeStrategicGame = async (game: LiveGameSession, neg: any, now: number) => {
-    const p1 = game.player1;
-    const p2 = game.player2;
-    
-    // Determine black player
-    if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
-        const humanPlayerColor = neg.settings.player1Color || Player.Black;
-        if (humanPlayerColor === Player.Black) {
-            game.blackPlayerId = p1.id;
-            game.whitePlayerId = p2.id;
-        } else {
-            game.whitePlayerId = p1.id;
-            game.blackPlayerId = p2.id;
-        }
-        // transitionToPlaying is now called at the end of the intro modal for SP games
-        if (!game.isSinglePlayer && !game.isTowerChallenge) {
-            transitionToPlaying(game, now);
-        }
-    } else {
-        // Nigiri for player games in standard mode
-        if (game.mode === GameMode.Standard) {
-             initializeNigiri(game, now);
-        } else {
-            // For other strategic modes, default to P1 as black unless specified
-            const p1Color = neg.settings.player1Color || Player.Black;
-            if (p1Color === Player.Black) {
-                game.blackPlayerId = p1.id;
-                game.whitePlayerId = p2.id;
-            } else {
-                game.whitePlayerId = p1.id;
-                game.blackPlayerId = p2.id;
-            }
-            transitionToPlaying(game, now);
-        }
-    }
-    
-    // Mode specific initializations
-    if (game.isSinglePlayer || game.isTowerChallenge) {
-        if (game.settings.missileCount) initializeMissile(game);
-        if (game.settings.hiddenStoneCount) initializeHidden(game);
-    } else {
-        switch (game.mode) {
-            case GameMode.Capture:
-                initializeCapture(game, now);
-                break;
-            case GameMode.Base:
-                initializeBase(game, now);
-                break;
-            case GameMode.Hidden:
-                initializeHidden(game);
-                break;
-            case GameMode.Missile:
-                initializeMissile(game);
-                break;
-            case GameMode.Mix:
-                if (game.settings.mixedModes?.includes(GameMode.Base)) initializeBase(game, now);
-                if (game.settings.mixedModes?.includes(GameMode.Capture)) initializeCapture(game, now);
-                if (game.settings.mixedModes?.includes(GameMode.Hidden)) initializeHidden(game);
-                if (game.settings.mixedModes?.includes(GameMode.Missile)) initializeMissile(game);
-                break;
-        }
-    }
-    
-    if (game.gameStatus === GameStatus.Playing && game.currentPlayer === Player.None) {
-        game.currentPlayer = Player.Black;
-        if (game.settings.timeLimit > 0 || game.settings.timeControl) {
-            game.turnDeadline = now + (game.settings.timeControl?.mainTime ?? game.settings.timeLimit) * 60 * 1000;
-            game.turnStartTime = now;
-        }
-    }
-    
-    return game;
-};
-
-export const updateStrategicGameState = async (game: LiveGameSession, now: number, volatileState: VolatileState) => {
-    if (game.gameStatus === GameStatus.Paused) return;
-
-    if (game.gameStatus === GameStatus.AiHiddenThinking && game.aiTurnStartTime) {
-        if (now > game.aiTurnStartTime + 5000) {
-            // This logic is now handled inside the setTimeout in handleAiTurn.
-            // Leaving a placeholder in case we need to add a failsafe.
-        }
-        return; // Don't process other timers while AI is "thinking"
-    }
-
-    const isTimedGame = !!game.settings.timeControl || (game.settings.timeLimit ?? 0) > 0;
-
-    if (isTimedGame && game.gameStatus === GameStatus.Playing && game.turnDeadline && now > game.turnDeadline) {
-        const timedOutPlayer = game.currentPlayer;
-        const winner = timedOutPlayer === Player.Black ? Player.White : Player.Black;
-        
-        const timeKey = timedOutPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        const byoyomiKey = timedOutPlayer === Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
-
-        const byoyomiTime = game.settings.byoyomiTime ?? 30;
-        const byoyomiCount = game.settings.byoyomiCount ?? 0;
-        
-        if (game[timeKey] > 0) { // Main time ran out
-            game[timeKey] = 0;
-            if (byoyomiCount > 0) {
-                game[byoyomiKey] = byoyomiCount;
-                game.turnStartTime = now;
-                game.turnDeadline = now + (byoyomiTime > 0 ? byoyomiTime : 30) * 1000;
-            } else { // No byoyomi
-                await endGame(game, winner, WinReason.Timeout);
-            }
-        } else { // Byoyomi time ran out
-            if (byoyomiCount > 0) {
-                if (game[byoyomiKey] > 0) {
-                    game[byoyomiKey]--; // Decrement a period
-                    game.turnStartTime = now;
-                    game.turnDeadline = now + (byoyomiTime > 0 ? byoyomiTime : 30) * 1000;
-                } else {
-                    await endGame(game, winner, WinReason.Timeout);
-                }
-            } else { // Should have already been caught by main time, but as a failsafe
-                await endGame(game, winner, WinReason.Timeout);
-            }
-        }
-    }
-
-    // Time-based updates for each mode
-    updateNigiriState(game, now);
-    updateCaptureState(game, now);
-    updateBaseState(game, now);
-    updateHiddenState(game, now);
-    updateMissileState(game, now);
-};
-
 export const handleStrategicGameAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if (sharedResult) return sharedResult;
@@ -339,11 +316,77 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
     const nigiriResult = handleNigiriAction(game, action, user);
     if (nigiriResult) return nigiriResult;
     
-    const hiddenResult = handleHiddenAction(volatileState, game, action, user);
+    const hiddenResult = handleHiddenAction(game, action, user);
     if (hiddenResult) return hiddenResult;
 
     const missileResult = handleMissileAction(game, action, user);
     if (missileResult) return missileResult;
 
     return null;
+};
+
+export const initializeStrategicGame = async (game: LiveGameSession, neg: Negotiation, now: number) => {
+    const { mode, settings } = neg;
+
+    if (game.isAiGame && !settings.player1Color) {
+        settings.player1Color = Player.Black;
+    }
+
+    if (settings.player1Color) {
+        game.blackPlayerId = settings.player1Color === Player.Black ? game.player1.id : game.player2.id;
+        game.whitePlayerId = settings.player1Color === Player.White ? game.player1.id : game.player2.id;
+        transitionToPlaying(game, now);
+    } else {
+        initializeNigiri(game, now);
+    }
+    
+    if (mode === GameMode.Capture || settings.mixedModes?.includes(GameMode.Capture)) {
+        initializeCapture(game, now);
+    }
+    if (mode === GameMode.Base || settings.mixedModes?.includes(GameMode.Base)) {
+        initializeBase(game, now);
+    }
+    if (mode === GameMode.Hidden || settings.mixedModes?.includes(GameMode.Hidden) || game.isSinglePlayer || game.isTowerChallenge) {
+        initializeHidden(game);
+    }
+    if (mode === GameMode.Missile || settings.mixedModes?.includes(GameMode.Missile) || game.isSinglePlayer || game.isTowerChallenge) {
+        initializeMissile(game);
+    }
+};
+
+export const updateStrategicGameState = async (game: LiveGameSession, now: number) => {
+    updateNigiriState(game, now);
+    updateCaptureState(game, now);
+    updateBaseState(game, now);
+    updateHiddenState(game, now);
+    updateMissileState(game, now);
+
+    const isFischer = isFischerGame(game);
+    if (isFischer) {
+        updateSpeedState(game, now);
+    } else if ((game.settings.timeLimit ?? 0) > 0 && game.gameStatus === GameStatus.Playing && game.turnDeadline && now > game.turnDeadline) {
+        const timedOutPlayer = game.currentPlayer;
+        const winner = timedOutPlayer === Player.Black ? Player.White : Player.Black;
+        const timeKey = timedOutPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+        const byoyomiKey = timedOutPlayer === Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
+
+        const wasInMainTime = game[timeKey] > 0;
+        if (wasInMainTime) {
+            game[timeKey] = 0; // Enter byoyomi
+            if ((game.settings.byoyomiCount ?? 0) > 0) {
+                game.turnStartTime = now;
+                game.turnDeadline = now + (game.settings.byoyomiTime * 1000);
+            } else {
+                await endGame(game, winner, WinReason.Timeout);
+            }
+        } else {
+            game[byoyomiKey]--;
+            if (game[byoyomiKey] >= 0) {
+                game.turnStartTime = now;
+                game.turnDeadline = now + (game.settings.byoyomiTime * 1000);
+            } else {
+                await endGame(game, winner, WinReason.Timeout);
+            }
+        }
+    }
 };

@@ -1,8 +1,6 @@
 
-
 import { randomUUID } from 'crypto';
 import * as db from '../db.js';
-// FIX: Removed unused 'types' import that was causing namespace conflicts.
 import { type ServerAction, type User, type VolatileState, TournamentType, PlayerForTournament, InventoryItem, InventoryItemType, TournamentState, LeagueTier, CoreStat, Guild, Round, Match, CommentaryLine } from '../../types/index.js';
 import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, CONSUMABLE_ITEMS, MATERIAL_ITEMS, TOURNAMENT_SCORE_REWARDS, BOT_NAMES, AVATAR_POOL } from '../../constants/index.js';
 import { updateQuestProgress } from '../questService.js';
@@ -59,7 +57,6 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             const definition = TOURNAMENT_DEFINITIONS[type];
             if (!definition) return { error: '유효하지 않은 토너먼트 타입입니다.' };
             
-            // FIX: Use specific literal types for keys to avoid indexing errors.
             let stateKey: 'lastNeighborhoodTournament' | 'lastNationalTournament' | 'lastWorldTournament';
             let playedDateKey: 'lastNeighborhoodPlayedDate' | 'lastNationalPlayedDate' | 'lastWorldPlayedDate';
             switch (type) {
@@ -82,7 +79,6 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
             const existingState = user[stateKey];
 
             if (existingState) {
-                // Session exists. Update the user's stats within it before returning.
                 const userInTournament = existingState.players.find(p => p.id === user.id);
                 if (userInTournament) {
                     const newStats = calculateTotalStats(user, user.guildId ? guilds[user.guildId] : null);
@@ -91,7 +87,7 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
                     userInTournament.avatarId = user.avatarId;
                     userInTournament.borderId = user.borderId;
                 }
-                user[stateKey] = existingState; // Re-assign to mark for update
+                user[stateKey] = existingState; 
                 await db.updateUser(user);
                 return {};
             }
@@ -136,11 +132,11 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
                     avatarId: p.avatarId,
                     borderId: p.borderId,
                     league: p.league,
-                    stats: JSON.parse(JSON.stringify(initialStats)), // Mutable copy for simulation
-                    originalStats: initialStats, // Store the original stats
+                    stats: JSON.parse(JSON.stringify(initialStats)),
+                    originalStats: initialStats,
                     wins: 0,
                     losses: 0,
-                    condition: 1000, // Initialize with a magic number for "not set"
+                    condition: 1000,
                 };
             });
             
@@ -294,8 +290,7 @@ export const handleTournamentAction = async (volatileState: VolatileState, actio
         }
 
         case 'CLAIM_TOURNAMENT_REWARD': {
-// FIX: Pass the 'guilds' parameter to handleRewardAction.
-            return handleRewardAction(volatileState, action, user, guilds);
+            return handleRewardAction(action, user, guilds);
         }
 
         default:

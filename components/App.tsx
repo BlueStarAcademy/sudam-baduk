@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import Header from './Header.js';
 import { useAppContext } from '../hooks/useAppContext.js';
@@ -76,8 +77,6 @@ const Auth: React.FC = () => {
     
     const handleKakaoLogin = async () => {
         setError(null);
-        // FIX: Property 'signInWithOAuth' does not exist on type 'SupabaseAuthClient'. Type definitions are likely broken. The method exists at runtime. This will be fixed by other changes that allow types to be inferred correctly. If not, this is an environment issue beyond the scope of file edits.
-        // FIX: Cast supabase.auth to any to bypass type errors for signInWithOAuth.
         const { error } = await (supabase.auth as any).signInWithOAuth({
             provider: 'kakao',
         });
@@ -260,6 +259,8 @@ const App: React.FC = () => {
         handlers,
         onlineUsers,
         guilds,
+// FIX: Destructure myGuild from useAppContext to make it available in this component.
+        myGuild,
     } = useAppContext();
     
     const [isPreloading, setIsPreloading] = useState(true);
@@ -286,109 +287,77 @@ const App: React.FC = () => {
             document.removeEventListener('pointerdown', initAudio);
         };
         document.addEventListener('pointerdown', initAudio);
+        
+        preloadImages(ALL_IMAGE_URLS).then(() => {
+            console.log("All essential images preloaded.");
+            setIsPreloading(false);
+        });
 
         return () => {
             document.removeEventListener('pointerdown', initAudio);
         };
     }, []);
 
-    useEffect(() => {
-        if (currentUser) {
-            preloadImages(ALL_IMAGE_URLS).then(() => {
-                setIsPreloading(false);
-            });
-        } else {
-            setIsPreloading(false);
-        }
-    }, [currentUser]);
-
-    if (!currentUser) {
-        if (kakaoRegistrationData) {
-            return <KakaoRegister registrationData={kakaoRegistrationData} />;
-        }
-        return <Auth />;
+    if (isPreloading) {
+        return (
+            <div className="h-full w-full flex flex-col items-center justify-center bg-primary text-primary">
+                <div className="w-24 h-24 border-4 border-dashed rounded-full animate-spin border-accent"></div>
+                <p className="mt-4 text-lg">에셋 로딩 중...</p>
+            </div>
+        );
+    }
+    
+    if (kakaoRegistrationData) {
+        return <KakaoRegister registrationData={kakaoRegistrationData} />;
     }
 
-    const topmostModalId = modals.activeModalIds.length > 0 ? modals.activeModalIds[modals.activeModalIds.length - 1] : null;
+    if (!currentUserWithStatus) {
+        return <Auth />;
+    }
     
-    const isGameView = currentRoute.view === 'game';
+    const isTopmost = modals.activeModalIds.length === 0;
 
     return (
-        <div className="font-sans bg-primary text-primary h-full flex flex-col">
-            {isPreloading && (
-                <div className="fixed inset-0 bg-tertiary z-[100] flex flex-col items-center justify-center">
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-primary"></div>
-                    <p className="mt-4 text-primary">에셋 로딩 중...</p>
-                </div>
-            )}
-            {error && (
-                <div className="fixed top-4 left-1/2 -translate-x-1/2 w-full max-w-md z-50 animate-slide-down">
-                    <div className="bg-danger border-2 border-red-500 rounded-lg shadow-2xl p-4 text-white font-bold text-center">{error}</div>
-                </div>
-            )}
-            {successToast && (
-                <div className="fixed top-4 left-1/2 -translate-x-1/2 w-full max-w-md z-50 animate-slide-down">
-                    <div className="bg-success border-2 border-green-500 rounded-lg shadow-2xl p-4 text-white font-bold text-center">{successToast}</div>
-                </div>
-            )}
-            {enhancementResult && !modals.enhancingItem && (
-                <div className="fixed top-4 left-1/2 -translate-x-1/2 w-full max-w-md z-50 animate-slide-down">
-                    <div className={`${enhancementResult.success ? 'bg-accent border-accent' : 'bg-danger border-red-500'} border-2 rounded-lg shadow-2xl p-4 text-white font-bold text-center`}>{enhancementResult.message}</div>
-                </div>
-            )}
-            {showExitToast && (
-                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 w-full max-w-md z-50 animate-slide-down-fast">
-                    <div className="bg-primary border-2 border-color rounded-lg shadow-2xl p-3 text-primary font-semibold text-center">한번 더 뒤로가기를 하면 로그아웃 됩니다.</div>
-                </div>
-            )}
+        <div className="h-full w-full flex flex-col bg-primary text-primary overflow-hidden">
+            {error && <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg animate-slide-down z-50">{error}</div>}
+            {successToast && <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg animate-slide-down z-50">{successToast}</div>}
+            {showExitToast && <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-yellow-600 text-black px-4 py-2 rounded-lg shadow-lg animate-slide-down z-50">한번 더 뒤로가기 시 로그아웃 됩니다.</div>}
             
-            {currentUser && !isGameView && <Header />}
-            
-            <main className="flex-1 flex flex-col min-h-0">
-                <Router />
-            </main>
-            
-            {currentUserWithStatus && (
-                <>
-                    {modals.levelUpInfo && <LevelUpModal levelUpInfo={modals.levelUpInfo} onClose={handlers.closeLevelUpModal} />}
-                    {modals.isSettingsModalOpen && <SettingsModal onClose={handlers.closeSettingsModal} isTopmost={topmostModalId === 'settings'} />}
-                    {modals.isInventoryOpen && <InventoryModal currentUser={currentUserWithStatus} onClose={handlers.closeInventory} onAction={handlers.handleAction} onStartEnhance={handlers.openEnhancingItem} enhancementAnimationTarget={modals.enhancementAnimationTarget} onAnimationComplete={handlers.clearEnhancementAnimation} isTopmost={topmostModalId === 'inventory'} initialTab={modals.inventoryInitialTab} />}
-                    {modals.isMailboxOpen && <MailboxModal currentUser={currentUserWithStatus} onClose={handlers.closeMailbox} onAction={handlers.handleAction} isTopmost={topmostModalId === 'mailbox'} />}
-                    {modals.isQuestsOpen && <QuestsModal currentUser={currentUserWithStatus} onClose={handlers.closeQuests} onAction={handlers.handleAction} isTopmost={topmostModalId === 'quests'} />}
-                    {modals.rewardSummary && <RewardSummaryModal summary={modals.rewardSummary} onClose={handlers.closeRewardSummary} isTopmost={topmostModalId === 'rewardSummary'} />}
-                    {modals.isClaimAllSummaryOpen && modals.claimAllSummary && <ClaimAllSummaryModal summary={modals.claimAllSummary} onClose={handlers.closeClaimAllSummary} isTopmost={topmostModalId === 'claimAllSummary'} />}
-                    {modals.isShopOpen && <ShopModal initialTab={modals.shopInitialTab} currentUser={currentUserWithStatus} onClose={handlers.closeShop} onAction={handlers.handleAction} onStartQuiz={handlers.openActionPointQuiz} isTopmost={topmostModalId === 'shop'} />}
-                    {modals.isActionPointQuizOpen && <ActionPointQuizModal onClose={handlers.closeActionPointQuiz} onAction={handlers.handleAction} isTopmost={topmostModalId === 'actionPointQuiz'} />}
-                    
-                    {modals.lastUsedItemResult && modals.lastUsedItemResult.length === 1 && <ItemObtainedModal item={modals.lastUsedItemResult[0]} onClose={handlers.closeItemObtained} isTopmost={topmostModalId === 'itemObtained'} />}
-                    {modals.lastUsedItemResult && modals.lastUsedItemResult.length > 1 && <BulkItemObtainedModal items={modals.lastUsedItemResult} onClose={handlers.closeItemObtained} isTopmost={topmostModalId === 'itemObtained'} />}
+            {currentRoute.view !== 'game' && <Header />}
 
-                    {modals.disassemblyResult && <DisassemblyResultModal result={modals.disassemblyResult} onClose={handlers.closeDisassemblyResult} isTopmost={topmostModalId === 'disassemblyResult'} />}
-                    {modals.craftResult && <CraftingResultModal result={modals.craftResult} onClose={handlers.closeCraftResult} isTopmost={topmostModalId === 'craftResult'} />}
-                    {modals.synthesisResult && <SynthesisResultModal result={modals.synthesisResult} onClose={handlers.closeSynthesisResult} isTopmost={topmostModalId === 'synthesisResult'} />}
-                    {modals.viewingUser && <UserProfileModal user={modals.viewingUser} onClose={handlers.closeViewingUser} onViewItem={handlers.openViewingItem} isTopmost={topmostModalId === 'viewingUser'} />}
-                    {modals.isInfoModalOpen && <InfoModal onClose={handlers.closeInfoModal} isTopmost={topmostModalId === 'infoModal'} />}
-                    {modals.isEncyclopediaOpen && <EncyclopediaModal onClose={handlers.closeEncyclopedia} isTopmost={topmostModalId === 'encyclopedia'} />}
-                    {modals.isStatAllocationModalOpen && <StatAllocationModal currentUser={currentUserWithStatus} onClose={handlers.closeStatAllocationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'statAllocation'} />}
-                    {modals.isProfileEditModalOpen && <ProfileEditModal currentUser={currentUserWithStatus} onClose={handlers.closeProfileEditModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'profileEdit'} />}
-                    {modals.pastRankingsInfo && <PastRankingsModal info={modals.pastRankingsInfo} onClose={handlers.closePastRankings} isTopmost={topmostModalId === 'pastRankings'} />}
-                    {modals.moderatingUser && <AdminModerationModal user={modals.moderatingUser} currentUser={currentUserWithStatus} onClose={handlers.closeModerationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'moderatingUser'} />}
-                    {modals.viewingItem && <ItemDetailModal item={modals.viewingItem.item} isOwnedByCurrentUser={modals.viewingItem.isOwnedByCurrentUser} onClose={handlers.closeViewingItem} onStartEnhance={handlers.openEnhancementFromDetail} isTopmost={topmostModalId === 'viewingItem'} />}
-                    {modals.enhancingItem && <EnhancementModal item={modals.enhancingItem} currentUser={currentUserWithStatus} onClose={handlers.closeEnhancementModal} onAction={handlers.handleAction} enhancementOutcome={enhancementOutcome} onOutcomeConfirm={handlers.clearEnhancementOutcome} isTopmost={topmostModalId === 'enhancingItem'} />}
-                    {modals.isTowerRewardInfoOpen && <TowerRankingRewardsModal onClose={handlers.closeTowerRewardInfoModal} isTopmost={topmostModalId === 'towerRewardInfo'} />}
-                    {modals.isGuildEffectsModalOpen && currentUserWithStatus.guildId && guilds[currentUserWithStatus.guildId] && (
-                        <GuildEffectsModal
-                            guild={guilds[currentUserWithStatus.guildId]}
-                            onClose={handlers.closeGuildEffectsModal}
-                            isTopmost={topmostModalId === 'guildEffects'}
-                        />
-                    )}
-                    {modals.guildBossBattleResult && <GuildBossBattleResultModal result={{ ...modals.guildBossBattleResult, bossName: modals.guildBossBattleResult.bossName }} onClose={handlers.closeGuildBossBattleResultModal} isTopmost={topmostModalId === 'guildBossBattleResult'} />}
-                    {activeNegotiation && <NegotiationModal negotiation={activeNegotiation} currentUser={currentUserWithStatus} onAction={handlers.handleAction} onlineUsers={onlineUsers} isTopmost={topmostModalId === 'negotiation'} />}
-                    {modals.isEquipmentEffectsModalOpen && <EquipmentEffectsModal user={currentUserWithStatus} guild={currentUserWithStatus.guildId ? guilds[currentUserWithStatus.guildId] ?? null : null} onClose={handlers.closeEquipmentEffectsModal} />}
-                    {modals.isPresetModalOpen && <PresetModal user={currentUserWithStatus} onAction={handlers.handleAction} onClose={handlers.closePresetModal} />}
-                </>
-            )}
+            <div className="flex-1 min-h-0">
+                <Router />
+            </div>
+
+            {/* Modals */}
+            {activeNegotiation && <NegotiationModal negotiation={activeNegotiation} currentUser={currentUserWithStatus} onAction={handlers.handleAction} onlineUsers={onlineUsers} isTopmost={isTopmost} />}
+            {modals.isSettingsModalOpen && <SettingsModal onClose={handlers.closeSettingsModal} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isInventoryOpen && <InventoryModal currentUser={currentUserWithStatus} onClose={handlers.closeInventory} onAction={handlers.handleAction} onStartEnhance={handlers.openEnhancingItem} enhancementAnimationTarget={modals.enhancementAnimationTarget} onAnimationComplete={handlers.clearEnhancementAnimation} isTopmost={modals.activeModalIds.length === 1} initialTab={modals.inventoryInitialTab} />}
+            {modals.isMailboxOpen && <MailboxModal currentUser={currentUserWithStatus} onClose={handlers.closeMailbox} onAction={handlers.handleAction} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isQuestsOpen && <QuestsModal currentUser={currentUserWithStatus} onClose={handlers.closeQuests} onAction={handlers.handleAction} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isShopOpen && <ShopModal currentUser={currentUserWithStatus} onClose={handlers.closeShop} onAction={handlers.handleAction} onStartQuiz={handlers.openActionPointQuiz} isTopmost={modals.activeModalIds.length === 1} initialTab={modals.shopInitialTab} />}
+            {modals.isActionPointQuizOpen && <ActionPointQuizModal onClose={handlers.closeActionPointQuiz} onAction={handlers.handleAction} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.lastUsedItemResult && modals.lastUsedItemResult.length === 1 && <ItemObtainedModal item={modals.lastUsedItemResult[0]} onClose={handlers.closeItemObtained} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.lastUsedItemResult && modals.lastUsedItemResult.length > 1 && <BulkItemObtainedModal items={modals.lastUsedItemResult} onClose={handlers.closeItemObtained} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.rewardSummary && <RewardSummaryModal summary={modals.rewardSummary} onClose={handlers.closeRewardSummary} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isClaimAllSummaryOpen && modals.claimAllSummary && <ClaimAllSummaryModal summary={modals.claimAllSummary} onClose={handlers.closeClaimAllSummary} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.disassemblyResult && <DisassemblyResultModal result={modals.disassemblyResult} onClose={handlers.closeDisassemblyResult} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.craftResult && <CraftingResultModal result={modals.craftResult} onClose={handlers.closeCraftResult} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.synthesisResult && <SynthesisResultModal result={modals.synthesisResult} onClose={handlers.closeSynthesisResult} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.viewingUser && <UserProfileModal user={modals.viewingUser} onClose={handlers.closeViewingUser} onViewItem={handlers.openViewingItem} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.viewingItem && <ItemDetailModal item={modals.viewingItem.item} isOwnedByCurrentUser={modals.viewingItem.isOwnedByCurrentUser} onClose={handlers.closeViewingItem} onStartEnhance={handlers.openEnhancementFromDetail} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isInfoModalOpen && <InfoModal onClose={handlers.closeInfoModal} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isEncyclopediaOpen && <EncyclopediaModal onClose={handlers.closeEncyclopedia} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isStatAllocationModalOpen && <StatAllocationModal currentUser={currentUserWithStatus} onClose={handlers.closeStatAllocationModal} onAction={handlers.handleAction} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isProfileEditModalOpen && <ProfileEditModal currentUser={currentUserWithStatus} onClose={handlers.closeProfileEditModal} onAction={handlers.handleAction} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.enhancingItem && <EnhancementModal item={modals.enhancingItem} currentUser={currentUserWithStatus} onClose={handlers.closeEnhancementModal} onAction={handlers.handleAction} enhancementOutcome={enhancementOutcome} onOutcomeConfirm={handlers.clearEnhancementOutcome} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.pastRankingsInfo && <PastRankingsModal info={modals.pastRankingsInfo} onClose={handlers.closePastRankings} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.moderatingUser && <AdminModerationModal user={modals.moderatingUser} currentUser={currentUserWithStatus} onClose={handlers.closeModerationModal} onAction={handlers.handleAction} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isTowerRewardInfoOpen && <TowerRankingRewardsModal onClose={handlers.closeTowerRewardInfoModal} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.levelUpInfo && <LevelUpModal levelUpInfo={modals.levelUpInfo} onClose={handlers.closeLevelUpModal} />}
+            {modals.guildBossBattleResult && <GuildBossBattleResultModal result={modals.guildBossBattleResult} onClose={handlers.closeGuildBossBattleResultModal} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isGuildEffectsModalOpen && myGuild && <GuildEffectsModal guild={myGuild} onClose={handlers.closeGuildEffectsModal} isTopmost={modals.activeModalIds.length === 1} />}
+            {modals.isEquipmentEffectsModalOpen && <EquipmentEffectsModal user={currentUserWithStatus} guild={myGuild} onClose={handlers.closeEquipmentEffectsModal} />}
         </div>
     );
 };

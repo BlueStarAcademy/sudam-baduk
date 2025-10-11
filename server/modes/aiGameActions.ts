@@ -1,4 +1,6 @@
-import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, SinglePlayerLevel, UserStatus, Negotiation } from '../../types/index.js';
+
+
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, SinglePlayerLevel, UserStatus, Negotiation, SinglePlayerStageInfo, UserStatusInfo } from '../../types/index.js';
 import * as db from '../db.js';
 import { initializeGame } from '../gameModes.js';
 import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants/index.js';
@@ -6,21 +8,41 @@ import * as currencyService from '../currencyService.js';
 import { getAiUser } from '../ai/index.js';
 import { gnuGoServiceManager } from '../services/gnuGoService.js';
 
-const placeRandomStones = (game: LiveGameSession, player: Player, count: number, isPattern: boolean) => {
-    const patternStonesKey = player === Player.Black ? 'blackPatternStones' : 'whitePatternStones';
-    if (isPattern && !game[patternStonesKey]) (game as any)[patternStonesKey] = [];
+const placeInitialStonesRandomly = (game: LiveGameSession, stage: SinglePlayerStageInfo) => {
+    game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(Player.None));
+    game.blackPatternStones = [];
+    game.whitePatternStones = [];
 
-    let placed = 0;
-    let attempts = 0;
-    while (placed < count && attempts < 200) {
-        const x = Math.floor(Math.random() * game.settings.boardSize);
-        const y = Math.floor(Math.random() * game.settings.boardSize);
-        if (game.boardState[y][x] === Player.None) {
-            game.boardState[y][x] = player;
-            if (isPattern) (game as any)[patternStonesKey].push({x,y});
-            placed++;
+    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount, centerBlackStoneChance } = stage.placements;
+    
+    const placeRandomStones = (player: Player, count: number, isPattern: boolean) => {
+        const patternStonesKey = player === Player.Black ? 'blackPatternStones' : 'whitePatternStones';
+        let placed = 0;
+        let attempts = 0;
+        while (placed < count && attempts < 500) {
+            const x = Math.floor(Math.random() * stage.boardSize);
+            const y = Math.floor(Math.random() * stage.boardSize);
+            if (game.boardState[y][x] === Player.None) {
+                game.boardState[y][x] = player;
+                if (isPattern) {
+                    (game as any)[patternStonesKey].push({x,y});
+                }
+                placed++;
+            }
+            attempts++;
         }
-        attempts++;
+    };
+    
+    placeRandomStones(Player.Black, blackCount, false);
+    placeRandomStones(Player.White, whiteCount, false);
+    placeRandomStones(Player.Black, blackPatternCount, true);
+    placeRandomStones(Player.White, whitePatternCount, true);
+
+    if (centerBlackStoneChance && Math.random() * 100 < centerBlackStoneChance) {
+        const center = Math.floor(stage.boardSize / 2);
+        if (game.boardState[center][center] === Player.None) {
+            game.boardState[center][center] = Player.Black;
+        }
     }
 };
 
@@ -87,6 +109,12 @@ export const handleAiGameStart = async (
     game.isSinglePlayer = !isTower;
     game.isTowerChallenge = isTower;
     
+    // If the stage config doesn't specify a turn count (e.g., for capture missions),
+    // make sure the default from initializeGame is removed.
+    if (!stage.autoEndTurnCount && stage.gameType === 'capture') {
+        game.autoEndTurnCount = undefined;
+    }
+
     game.stageId = stage.id;
     game.gameType = stage.gameType;
     game.gameStatus = GameStatus.SinglePlayerIntro;
@@ -104,49 +132,21 @@ export const handleAiGameStart = async (
     } else {
         game.singlePlayerPlacementRefreshesUsed = 0;
     }
-
-    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount } = stage.placements;
-    const totalInitialStones = blackCount + whiteCount + blackPatternCount + whitePatternCount;
+    
+    placeInitialStonesRandomly(game, stage);
 
     const gnuGoInstance = gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi);
-    if (!gnuGoInstance) {
-        return { error: 'AI 엔진을 생성하는데 실패했습니다.' };
-    }
-
-    if (totalInitialStones > 0) {
-        await gnuGoInstance.sendCommand('level 0');
-
-        let currentPlayerForSetup = Player.Black;
-        for (let i = 0; i < totalInitialStones; i++) {
-            const colorStr = currentPlayerForSetup === Player.Black ? 'black' : 'white';
-            const move = await gnuGoInstance.genmove(colorStr, game.settings.boardSize);
-            
-            if (move.x === -1) { 
-                i--; // Retry if AI passes
-                continue;
-            }
-            
-            game.boardState[move.y][move.x] = currentPlayerForSetup;
-            game.moveHistory.push({ player: currentPlayerForSetup, ...move });
-
-            if (i >= blackCount + whiteCount) {
-                if (currentPlayerForSetup === Player.Black) {
-                    if (!game.blackPatternStones) game.blackPatternStones = [];
-                    game.blackPatternStones.push(move);
-                } else {
-                    if (!game.whitePatternStones) game.whitePatternStones = [];
-                    game.whitePatternStones.push(move);
-                }
-            }
-            currentPlayerForSetup = currentPlayerForSetup === Player.Black ? Player.White : Player.Black;
-        }
-        await gnuGoInstance.sendCommand(`level ${stage.katagoLevel}`);
+    if (gnuGoInstance) {
+        await gnuGoInstance.resync([], game.boardState);
     }
 
     game.currentPlayer = Player.Black;
 
     await db.saveGame(game);
-    volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
+    const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+    userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
+    await db.setKV('userStatuses', userStatuses);
+    
     await db.updateUser(user);
 
     return {};
@@ -180,42 +180,11 @@ export const handleAiGameRefresh = async (game: LiveGameSession, user: User, typ
     const stage = stageSource.find(s => s.id === game.stageId);
     if (!stage) return { error: '스테이지 정보를 찾을 수 없습니다.' };
 
-    game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(Player.None));
     game.moveHistory = [];
-    game.blackPatternStones = [];
-    game.whitePatternStones = [];
-
-    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount } = stage.placements;
-    const totalInitialStones = blackCount + whiteCount + blackPatternCount + whitePatternCount;
-
-    const gnuGoInstance = gnuGoServiceManager.get(game.id);
-    if (gnuGoInstance && totalInitialStones > 0) {
-        await gnuGoInstance.sendCommand('level 0');
-
-        let currentPlayerForSetup = Player.Black;
-        for (let i = 0; i < totalInitialStones; i++) {
-            const colorStr = currentPlayerForSetup === Player.Black ? 'black' : 'white';
-            const move = await gnuGoInstance.genmove(colorStr, game.settings.boardSize);
-            
-            if (move.x === -1) { i--; continue; } // Retry on pass
-            
-            game.boardState[move.y][move.x] = currentPlayerForSetup;
-            game.moveHistory.push({ player: currentPlayerForSetup, ...move });
-
-             if (i >= blackCount + whiteCount) {
-                if (currentPlayerForSetup === Player.Black) {
-                    if (!game.blackPatternStones) game.blackPatternStones = [];
-                    game.blackPatternStones.push(move);
-                } else {
-                    if (!game.whitePatternStones) game.whitePatternStones = [];
-                    game.whitePatternStones.push(move);
-                }
-            }
-            currentPlayerForSetup = currentPlayerForSetup === Player.Black ? Player.White : Player.Black;
-        }
-        await gnuGoInstance.sendCommand(`level ${stage.katagoLevel}`);
-    }
+    placeInitialStonesRandomly(game, stage);
     
+    await gnuGoServiceManager.get(game.id)?.resync([], game.boardState);
+
     game.currentPlayer = Player.Black;
 
     await db.updateUser(user);
