@@ -1,4 +1,6 @@
+
 import 'dotenv/config';
+// FIX: Use default import for express and namespaced types to avoid conflicts.
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
@@ -45,6 +47,7 @@ declare global {
   }
 }
 
+// FIX: Add explicit types for req, res, and next.
 const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync' || req.path === '/api/auth/finalize-kakao' || req.path === '/api/initial-state') {
         return next();
@@ -82,6 +85,7 @@ const userMiddleware = async (req: express.Request, res: express.Response, next:
 
 app.use(userMiddleware);
 
+// FIX: Add explicit types for req and res.
 app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
@@ -116,6 +120,7 @@ app.post('/api/auth/register', async (req: express.Request, res: express.Respons
     }
 });
 
+// FIX: Add explicit types for req and res.
 app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
@@ -163,6 +168,7 @@ app.post('/api/auth/login', async (req: express.Request, res: express.Response) 
     }
 });
 
+// FIX: Add explicit types for req and res.
 app.post('/api/auth/sync', async (req: express.Request, res: express.Response) => {
     const { session } = req.body;
     if (!session || !session.user) {
@@ -211,6 +217,7 @@ app.post('/api/auth/sync', async (req: express.Request, res: express.Response) =
     }
 });
 
+// FIX: Add explicit types for req and res.
 app.post('/api/auth/finalize-kakao', async (req: express.Request, res: express.Response) => {
     const { kakaoId, nickname } = req.body;
     if (!kakaoId || !nickname) {
@@ -248,6 +255,7 @@ app.post('/api/auth/finalize-kakao', async (req: express.Request, res: express.R
     }
 });
 
+// FIX: Add explicit types for req and res.
 app.post('/api/initial-state', async (req: express.Request, res: express.Response) => {
     const { userId, sessionId } = req.body;
     if (userId && sessionId) {
@@ -278,6 +286,7 @@ app.post('/api/initial-state', async (req: express.Request, res: express.Respons
     });
 });
 
+// FIX: Add explicit types for req and res.
 app.post('/api/action', async (req: express.Request, res: express.Response) => {
     const user = req.user;
     if (!user) {

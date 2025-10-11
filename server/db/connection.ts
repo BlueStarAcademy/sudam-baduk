@@ -108,8 +108,29 @@ const migrations: { [version: number]: string } = {
 };
 
 
+const connectWithRetry = async (pool: pg.Pool, retries = 5, delay = 3000): Promise<pg.PoolClient> => {
+    let lastError: Error | undefined;
+    for (let i = 0; i < retries; i++) {
+        try {
+            console.log(`[DB] Connection attempt ${i + 1}/${retries}...`);
+            const client = await pool.connect();
+            console.log('[DB] Connection successful.');
+            return client;
+        } catch (err: any) {
+            lastError = err;
+            console.warn(`[DB] Connection attempt ${i + 1} failed: ${err.message}`);
+            if (i < retries - 1) {
+                console.log(`[DB] Retrying in ${delay / 1000} seconds...`);
+                await new Promise(res => setTimeout(res, delay));
+            }
+        }
+    }
+    console.error('[DB] All connection attempts failed.');
+    throw lastError;
+};
+
 export const runSchemaAndMigrations = async (pool: pg.Pool) => {
-    const client = await pool.connect();
+    const client = await connectWithRetry(pool);
     try {
         await client.query('BEGIN');
 
