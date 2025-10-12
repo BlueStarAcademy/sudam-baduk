@@ -4,7 +4,6 @@ import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, 
 import { LeagueTier, Player, GameMode } from '../../types/index.js';
 import { DEFAULT_GAME_SETTINGS } from '../../constants/gameSettings.js';
 import { defaultSettings } from '../../constants/settings.js';
-import { getGoLogic } from '../../utils/goLogic';
 
 // An even safer parsing function. It handles non-string, null, undefined, empty strings, and parsing errors.
 const safeParse = (data: any, defaultValue: any) => {
@@ -355,7 +354,7 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             roleChoiceWinnerId: row.roleChoiceWinnerId ?? undefined,
             thiefRoundSummary: ensureObject(safeParse(row.thiefRoundSummary, null), null),
             thiefDiceRollHistory: ensureObject(safeParse(row.thiefDiceRollHistory, null), null),
-            thiefCapturesThisRound: row.thiefCapturesThisRound ?? undefined,
+            thiefCapturesThisRound: row.thiefCapturesThisTurn ?? undefined,
             alkkagiStones: ensureArray(safeParse(row.alkkagiStones, null), null),
             alkkagiStones_p1: ensureArray(safeParse(row.alkkagiStones_p1, null), null),
             alkkagiStones_p2: ensureArray(safeParse(row.alkkagiStones_p2, null), null),

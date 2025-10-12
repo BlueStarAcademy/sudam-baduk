@@ -10,7 +10,6 @@ import DraggableWindow from './DraggableWindow.js';
 import { CommentaryPanel, ScoreGraph, SimulationProgressBar } from './ScoreGraphAndCommentary.js';
 import { calculateRanks } from '../utils/tournamentUtils.js';
 
-// ... (Rest of the components like RandomEventDetails, parseCommentary, etc. remain the same) ...
 const EARLY_GAME_DURATION = 20;
 const MID_GAME_DURATION = 30;
 const END_GAME_DURATION = 20;
@@ -345,7 +344,7 @@ const TournamentResultPanel: React.FC<{
 
     const handleClaim = () => {
         if (!isClaimed && (isTournamentFullyComplete || isUserEliminated)) {
-            onAction({ type: 'CLAIM_TOURNAMENT_REWARD', payload: { tournamentType: type } })
+            onAction({ type: 'CLAIM_TOURNAMENT_REWARD', payload: { tournamentType: type } });
         }
     };
     

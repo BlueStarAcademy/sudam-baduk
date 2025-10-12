@@ -1,9 +1,9 @@
 
 // server/modes/omokLogic.ts
 import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus, Negotiation } from '.././types/index.js';
-import { handleSharedAction, updateSharedGameState, transitionToPlaying } from './modes/shared.js';
+// FIX: Corrected import path for switchTurnAndUpdateTimers from strategic to shared module.
+import { handleSharedAction, updateSharedGameState, transitionToPlaying, switchTurnAndUpdateTimers } from './modes/shared.js';
 import { endGame } from './summaryService.js';
-import { switchTurnAndUpdateTimers } from './modes/strategic.js';
 
 
 export const getOmokLogic = (game: LiveGameSession) => {

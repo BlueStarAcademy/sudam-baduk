@@ -17,16 +17,14 @@ import {
 import { processMove } from '../../utils/goLogic';
 import { getGameResult, endGame } from '../summaryService.js';
 import { makeAiMove } from '../ai/index.js';
-import { gnuGoServiceManager } from '../services/gnuGoService.js';
 import * as db from '../db.js';
-import { transitionToPlaying } from './shared.js';
+import { transitionToPlaying, handleSharedAction, isFischerGame, switchTurnAndUpdateTimers } from './shared.js';
 import { initializeNigiri, updateNigiriState, handleNigiriAction } from './nigiri.js';
 import { initializeCapture, updateCaptureState, handleCaptureAction } from './capture.js';
 import { updateSpeedState } from './speed.js';
 import { initializeBase, updateBaseState, handleBaseAction } from './base.js';
 import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidden.js';
 import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
-import { handleSharedAction } from './shared.js';
 import { VolatileState } from '../../types/api.js';
 import { getNewActionButtons } from '../services/actionButtonService.js';
 
@@ -39,8 +37,6 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
 
         if (gameFromAction.currentPlayer !== aiPlayerEnum) return;
 
-        await gnuGoServiceManager.playUserMove(gameId, userMove, userPlayerEnum, gameFromAction.settings.boardSize, gameFromAction.moveHistory, gameFromAction.finalKomi ?? gameFromAction.settings.komi);
-        
         const aiMove = await makeAiMove(gameFromAction) as (Point & { isHidden?: boolean });
 
         const freshGame = await db.getLiveGame(gameId);
@@ -130,68 +126,6 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
         }
     } catch (err) {
         console.error(`[AI TURN ERROR] for game ${gameFromAction.id}:`, err);
-    }
-};
-
-export const isFischerGame = (game: LiveGameSession): boolean => {
-    const isTimeControlFischer = game.settings.timeControl?.type === 'fischer';
-    const isLegacyFischer = game.mode === GameMode.Speed || (game.mode === GameMode.Mix && !!game.settings.mixedModes?.includes(GameMode.Speed));
-    return isTimeControlFischer || isLegacyFischer;
-};
-
-export const switchTurnAndUpdateTimers = (game: LiveGameSession, now: number) => {
-    const isFischer = isFischerGame(game);
-    const hasTimeLimit = (game.settings.timeLimit ?? 0) > 0 || !!game.settings.timeControl;
-
-    // 1. Update time for the player who just moved.
-    if (hasTimeLimit && game.turnStartTime) {
-        const playerWhoMoved = game.currentPlayer;
-        const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        
-        const timeUsed = (now - game.turnStartTime) / 1000;
-
-        if (isFischer) {
-            game[timeKey] -= timeUsed;
-            game[timeKey] += (game.settings.timeIncrement ?? 0);
-        } else { // Byoyomi style
-            if (game[timeKey] > 0) {
-                // In main time
-                game[timeKey] -= timeUsed;
-            }
-        }
-        game[timeKey] = Math.max(0, game[timeKey]);
-    }
-
-    // 2. Switch player
-    game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
-    game.missileUsedThisTurn = false;
-    
-    // 3. Set up next turn's deadline
-    if (hasTimeLimit) {
-        game.turnStartTime = now;
-        const nextPlayer = game.currentPlayer;
-        const nextTimeKey = nextPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
-        const nextByoyomiKey = nextPlayer === Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
-        
-        if (isFischer) {
-             game.turnDeadline = now + Math.max(0, game[nextTimeKey]) * 1000;
-        } else { // Byoyomi
-            if (game[nextTimeKey] > 0) {
-                // Next player still has main time
-                game.turnDeadline = now + game[nextTimeKey] * 1000;
-            } else {
-                // Next player is in byoyomi
-                if ((game[nextByoyomiKey] ?? 0) > 0) {
-                    game.turnDeadline = now + (game.settings.byoyomiTime * 1000);
-                } else {
-                    // This player is already out of time. The game loop's timeout check will end the game.
-                    game.turnDeadline = now; 
-                }
-            }
-        }
-    } else {
-        game.turnDeadline = undefined;
-        game.turnStartTime = undefined;
     }
 };
 

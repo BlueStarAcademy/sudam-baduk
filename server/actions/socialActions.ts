@@ -14,15 +14,8 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
 
     switch (type) {
         case 'LOGOUT': {
-            const userStatus = userStatuses[user.id];
-            if (userStatus && userStatus.status === UserStatus.InGame && userStatus.gameId) {
-                const game = await db.getLiveGame(userStatus.gameId);
-                if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
-                    await db.deleteGame(game.id);
-                    console.log(`[Logout] Deleted active AI game ${game.id} for user ${user.id}.`);
-                }
-            }
-
+            // The block that deletes AI games on logout has been removed to ensure game persistence.
+            
             delete userConnections[user.id];
             delete userStatuses[user.id];
             await db.setKV('userStatuses', userStatuses);

@@ -1,11 +1,48 @@
-
-import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, UserStatus, Negotiation } from '../../types/index.js';
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, UserStatus, Negotiation, SinglePlayerStageInfo, UserStatusInfo } from '../../types/index.js';
 import * as db from '../db.js';
 import { initializeGame } from '../gameModes.js';
 import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants/index.js';
 import * as currencyService from '../currencyService.js';
 import { getAiUser } from '../ai/index.js';
-import { gnuGoServiceManager } from '../services/gnuGoService.js';
+
+const placeInitialStonesRandomly = (game: LiveGameSession, stage: SinglePlayerStageInfo) => {
+    game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(Player.None));
+    game.blackPatternStones = [];
+    game.whitePatternStones = [];
+
+    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount, centerBlackStoneChance } = stage.placements;
+    
+    const placeRandomStones = (player: Player, count: number, isPattern: boolean) => {
+        const patternStonesKey = player === Player.Black ? 'blackPatternStones' : 'whitePatternStones';
+        let placed = 0;
+        let attempts = 0;
+        while (placed < count && attempts < 500) {
+            const x = Math.floor(Math.random() * stage.boardSize);
+            const y = Math.floor(Math.random() * stage.boardSize);
+            if (game.boardState[y][x] === Player.None) {
+                game.boardState[y][x] = player;
+                if (isPattern) {
+                    (game as any)[patternStonesKey].push({x,y});
+                }
+                placed++;
+            }
+            attempts++;
+        }
+    };
+    
+    placeRandomStones(Player.Black, blackCount, false);
+    placeRandomStones(Player.White, whiteCount, false);
+    placeRandomStones(Player.Black, blackPatternCount, true);
+    placeRandomStones(Player.White, whitePatternCount, true);
+
+    if (centerBlackStoneChance && Math.random() * 100 < centerBlackStoneChance) {
+        const center = Math.floor(stage.boardSize / 2);
+        if (game.boardState[center][center] === Player.None) {
+            game.boardState[center][center] = Player.Black;
+        }
+    }
+};
+
 
 export const handleTowerChallengeGameStart = async (volatileState: VolatileState, payload: any, user: User, guilds: Record<string, Guild>): Promise<HandleActionResult> => {
     const { floor } = payload;
@@ -74,7 +111,7 @@ export const handleTowerChallengeGameStart = async (volatileState: VolatileState
     game.towerChallengePlacementRefreshesUsed = 0;
     game.towerAddStonesUsed = 0;
 
-    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount, centerBlackStoneChance } = stage.placements;
+    const { black: blackCount, white: whiteCount } = stage.placements;
     
     const placeRandomStones = (player: Player, count: number) => {
         let placed = 0;
@@ -93,10 +130,7 @@ export const handleTowerChallengeGameStart = async (volatileState: VolatileState
     placeRandomStones(Player.Black, blackCount);
     placeRandomStones(Player.White, whiteCount);
     
-    // FIX: Corrected an invalid call to 'gnuGoServiceManager.create' that was passing too many arguments.
-    // The initial board state is now correctly synced using a subsequent 'resync' call.
-    await gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi);
-    await gnuGoServiceManager.get(game.id)?.resync(game.moveHistory, game.boardState);
+    game.currentPlayer = Player.Black;
 
     await db.saveGame(game);
     volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
@@ -173,7 +207,7 @@ export const handleTowerAddStones = async (game: LiveGameSession, user: User): P
     
     game.towerAddStonesUsed = uses + 1;
     game.blackStoneLimit = (game.blackStoneLimit || 0) + 3;
-    game.promptForMoreStones = false; // Turn off prompt
+    game.promptForMoreStones = false;
     
     if (game.pausedTurnTimeLeft) {
         const now = Date.now();
@@ -185,4 +219,43 @@ export const handleTowerAddStones = async (game: LiveGameSession, user: User): P
     await db.updateUser(user);
     // Game is saved by handleAction
     return { clientResponse: { updatedUser: user } };
+};
+
+export const handleConfirmIntro = async (gameId: string, user: User): Promise<HandleActionResult> => {
+    const game = await db.getLiveGame(gameId);
+    if (!game || !(game.isSinglePlayer || game.isTowerChallenge) || game.player1.id !== user.id) {
+        return { error: "Invalid game." };
+    }
+
+    if (game.gameStatus === GameStatus.SinglePlayerIntro) {
+        game.gameStatus = GameStatus.Playing;
+        
+        const now = Date.now();
+        game.turnStartTime = now;
+        
+        const tc = game.settings.timeControl;
+        
+        if (tc) {
+            const mainTimeSeconds = (tc.mainTime || 0) * 60;
+            
+            game.blackTimeLeft = mainTimeSeconds;
+            game.whiteTimeLeft = mainTimeSeconds;
+
+            if (tc.type === 'byoyomi') {
+                game.blackByoyomiPeriodsLeft = tc.byoyomiCount || 3;
+                game.whiteByoyomiPeriodsLeft = tc.byoyomiCount || 3;
+
+                if (mainTimeSeconds > 0) {
+                    game.turnDeadline = now + mainTimeSeconds * 1000;
+                } else {
+                    game.turnDeadline = now + (tc.byoyomiTime || 30) * 1000;
+                }
+            } else if (tc.type === 'fischer') {
+                game.turnDeadline = now + mainTimeSeconds * 1000;
+            }
+        }
+        
+        await db.saveGame(game);
+    }
+    return {};
 };

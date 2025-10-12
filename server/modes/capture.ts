@@ -21,6 +21,8 @@ export const initializeCapture = (game: LiveGameSession, now: number) => {
             [Player.Black]: target,
             [Player.White]: target,
         };
+        
+        transitionToPlaying(game, now);
     } else {
         // For PvP, start the bidding process.
         const p1Id = game.player1.id;

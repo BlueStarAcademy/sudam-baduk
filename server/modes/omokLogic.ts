@@ -1,8 +1,8 @@
+
 // server/modes/omokLogic.ts
 import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus, Negotiation } from '../../types/index.js';
-import { handleSharedAction, updateSharedGameState, transitionToPlaying } from './shared.js';
+import { handleSharedAction, updateSharedGameState, transitionToPlaying, switchTurnAndUpdateTimers } from './shared.js';
 import { endGame } from '../summaryService.js';
-import { switchTurnAndUpdateTimers } from './strategic.js';
 
 
 export const getOmokLogic = (game: LiveGameSession) => {
@@ -287,14 +287,12 @@ export const updateOmokState = async (game: LiveGameSession, now: number) => {
     }
 };
 
-// FIX: Add 'volatileState' parameter to the function signature.
 export const handleOmokAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const { type, payload } = action as any;
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
 
-    // FIX: Pass 'volatileState' to handleSharedAction.
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if (sharedResult) return sharedResult;
 

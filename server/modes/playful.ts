@@ -1,4 +1,3 @@
-
 // server/modes/playful.ts
 
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Negotiation, Guild, LiveGameSession } from '../../types/index.js';

@@ -12,10 +12,14 @@ import TowerStatusPanel from '../game/TowerStatusPanel.js';
 import { useClientTimer } from '../../hooks/useClientTimer.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import TurnCounterPanel from '../game/TurnCounterPanel.js';
-import { TOWER_STAGES, SPECIAL_GAME_MODES } from '../../constants/index.js';
+import { TOWER_STAGES, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/index.js';
 import SinglePlayerIntroModal from '../modals/SinglePlayerIntroModal.js';
 import TowerAddStonesPromptModal from '../modals/TowerAddStonesPromptModal.js';
-import { processMove } from '../../utils/goLogic.js';
+import { processMove } from '../../utils/goLogic';
+import Button from '../Button.js';
+import CurrencyPanel from '../game/CurrencyPanel.js';
+import ChatWindow from '../waiting-room/ChatWindow.js';
+import WisdomPanel from '../game/WisdomPanel.js';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);
@@ -76,7 +80,7 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
         ['hidden_placing', 'scanning', 'missile_selecting', 'ai_hidden_thinking'].includes(session.gameStatus), 
         [session.gameStatus]
     );
-
+    
     const handleIntroConfirm = () => {
         return handlers.handleAction({ type: 'CONFIRM_SP_INTRO', payload: { gameId: session.id } });
     };
@@ -147,9 +151,45 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
         }
     }, [isMyTurn]);
 
-    const handleBoardClick = useCallback(async (x: number, y: number) => {
-        if (isSubmittingMove || session.gameStatus === 'missile_animating') return;
+    const prevMoveCount = usePrevious(moveHistory?.length);
+    const prevByoyomiBlack = usePrevious(blackByoyomiPeriodsLeft);
+    const warningSoundPlayedForTurn = useRef(false);
 
+    useEffect(() => {
+        const isGameOver = ['ended', 'no_contest'].includes(gameStatus);
+        const hasTurnChanged = prevMoveCount !== undefined && moveHistory && moveHistory.length > prevMoveCount;
+        const byoyomiUsed = prevByoyomiBlack !== undefined && blackByoyomiPeriodsLeft < prevByoyomiBlack;
+
+        if (!isMyTurn || hasTurnChanged || isGameOver || byoyomiUsed) {
+            if (warningSoundPlayedForTurn.current) {
+                audioService.stopTimerWarning();
+                warningSoundPlayedForTurn.current = false;
+            }
+        }
+        
+        if (isMyTurn && !isGameOver) {
+            const myTime = clientTimes.black;
+            const myMainTimeLeft = blackTimeLeft;
+            const hasByoyomi = (gameSettings.byoyomiCount ?? 0) > 0;
+            const isFischer = (gameSettings.timeIncrement ?? 0) > 0;
+            const isInByoyomi = myMainTimeLeft <= 0 && hasByoyomi && !isFischer;
+            
+            // For SP/Tower games, only byoyomi and fischer modes should have warnings.
+            const shouldWarn = isInByoyomi || isFischer;
+
+            if (shouldWarn && myTime <= 10 && myTime > 0 && !warningSoundPlayedForTurn.current) {
+                audioService.timerWarning();
+                warningSoundPlayedForTurn.current = true;
+            }
+        }
+    }, [isMyTurn, clientTimes.black, moveHistory, prevMoveCount, gameStatus, blackByoyomiPeriodsLeft, prevByoyomiBlack, blackTimeLeft, gameSettings.byoyomiCount, gameSettings.timeIncrement]);
+
+    const isSpectator = false;
+
+    const handleBoardClick = useCallback(async (x: number, y: number) => {
+        if (isSubmittingMove || isSpectator || session.gameStatus === 'missile_animating') return;
+
+        // Client-side move validation for standard Go moves
         if (['playing', 'hidden_placing'].includes(gameStatus) && isMyTurn) {
             const validationResult = processMove(
                 session.boardState,
@@ -172,11 +212,18 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
         let actionType: ServerAction['type'] | null = null;
         let payload: any = { gameId, x, y };
 
-        if (gameStatus === 'scanning' && isMyTurn) {
+        if ((mode === GameMode.Omok || mode === GameMode.Ttamok) && gameStatus === 'playing' && isMyTurn) {
+            actionType = 'PLACE_STONE';
+        } else if (gameStatus === 'scanning' && isMyTurn) {
+            audioService.stopScanBgm();
             actionType = 'SCAN_BOARD';
+        } else if (gameStatus === 'base_placement') {
+            const myStones = currentUser!.id === player1.id ? session.baseStones_p1 : session.baseStones_p2;
+            if ((myStones?.length || 0) < (session.settings.baseStones || 4)) actionType = 'PLACE_BASE_STONE';
         } else if (['playing', 'hidden_placing'].includes(gameStatus) && isMyTurn) {
             actionType = 'PLACE_STONE'; 
             payload.isHidden = gameStatus === 'hidden_placing';
+            if (payload.isHidden) audioService.stopScanBgm();
         }
 
         if (actionType) {
@@ -188,15 +235,18 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
                  setIsSubmittingMove(false);
             }
         }
-    }, [isSubmittingMove, session, gameStatus, isMyTurn, handlers, isMobile, settings.features.mobileConfirm, pendingMove, isItemModeActive, gameId]);
+    }, [isSubmittingMove, isSpectator, session, gameStatus, isMyTurn, handlers, isMobile, settings.features.mobileConfirm, pendingMove, isItemModeActive, gameId, mode, currentUser, player1.id]);
 
     const handleConfirmMove = useCallback(async () => {
+        audioService.stopTimerWarning();
         if (!pendingMove || isSubmittingMove) return;
         
         let actionType: ServerAction['type'] | null = null;
         let payload: any = { gameId: session.id, x: pendingMove.x, y: pendingMove.y };
 
-        if (['playing', 'hidden_placing'].includes(gameStatus) && isMyTurn) {
+        if ((mode === GameMode.Omok || mode === GameMode.Ttamok) && gameStatus === 'playing' && isMyTurn) {
+            actionType = 'PLACE_STONE';
+        } else if (['playing', 'hidden_placing'].includes(gameStatus) && isMyTurn) {
             actionType = 'PLACE_STONE'; 
             payload.isHidden = gameStatus === 'hidden_placing';
         }
@@ -212,10 +262,10 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
         }
         
         setPendingMove(null);
-    }, [pendingMove, session.id, handlers, gameStatus, isMyTurn, isSubmittingMove]);
+    }, [pendingMove, session.id, handlers, gameStatus, isMyTurn, mode, isSubmittingMove]);
     
     const handleCancelMove = useCallback(() => setPendingMove(null), []);
-
+    
     const backgroundClass = useMemo(() => {
         if (session.floor === 100) return 'bg-tower-100';
         return 'bg-tower-default';
@@ -305,6 +355,34 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
                             onPauseToggle={handlePauseToggle}
                         />
                     </aside>
+                )}
+                {isMobile && (
+                    <>
+                        <div className="absolute top-1/2 -translate-y-1/2 right-0 z-20">
+                            <button 
+                                onClick={() => setIsMobileSidebarOpen(true)} 
+                                className="w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-l-lg flex items-center justify-center text-primary shadow-lg"
+                                aria-label="메뉴 열기"
+                            >
+                                <span className="relative font-bold text-lg">{'<'}</span>
+                            </button>
+                        </div>
+
+                        <div className={`fixed top-0 right-0 h-full w-[280px] bg-primary shadow-2xl z-50 transition-transform duration-300 ease-in-out ${isMobileSidebarOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                            <button onClick={() => setIsMobileSidebarOpen(false)} className="self-end text-2xl font-bold text-tertiary hover:text-primary mb-2">&times;</button>
+                             <Sidebar
+                                {...gameProps}
+                                onLeaveOrResign={handleExitToLobby}
+                                isNoContestLeaveAvailable={false}
+                                onOpenSettings={handlers.openSettingsModal}
+                                isPausable={true}
+                                isPaused={isPaused}
+                                onPauseToggle={handlePauseToggle}
+                                onClose={() => setIsMobileSidebarOpen(false)}
+                            />
+                        </div>
+                        {isMobileSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMobileSidebarOpen(false)}></div>}
+                    </>
                 )}
             </main>
 

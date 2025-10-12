@@ -153,6 +153,10 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
                  const myStones = currentUser!.id === player1.id ? session.baseStones_p1 : session.baseStones_p2;
                  return (myStones?.length || 0) < (session.settings.baseStones || 4);
             }
+            case GameStatus.CaptureBidding:
+                return session.bids?.[currentUser!.id] === null;
+            case GameStatus.KomiBidding:
+                return session.komiBids?.[currentUser!.id] === null;
             default: return false;
         }
     }, [myPlayerEnum, currentPlayer, gameStatus, isSpectator, session, currentUser, player1.id, session.settings]);

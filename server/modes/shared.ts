@@ -1,10 +1,71 @@
-
 // server/modes/shared.ts
 
-import { type LiveGameSession, type ServerAction, type User, type HandleActionResult, Player, GameStatus, WinReason, RPSChoice, VolatileState } from '../../types/index.js';
+import { type LiveGameSession, type ServerAction, type User, type HandleActionResult, Player, GameStatus, WinReason, RPSChoice, VolatileState, GameMode } from '../../types/index.js';
 import * as db from '../db.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 import { PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
+
+export const isFischerGame = (game: LiveGameSession): boolean => {
+    const isTimeControlFischer = game.settings.timeControl?.type === 'fischer';
+    const isLegacyFischer = game.mode === GameMode.Speed || (game.mode === GameMode.Mix && !!game.settings.mixedModes?.includes(GameMode.Speed));
+    return isTimeControlFischer || isLegacyFischer;
+};
+
+export const switchTurnAndUpdateTimers = (game: LiveGameSession, now: number) => {
+    const isFischer = isFischerGame(game);
+    const hasTimeLimit = (game.settings.timeLimit ?? 0) > 0 || !!game.settings.timeControl;
+
+    // 1. Update time for the player who just moved.
+    if (hasTimeLimit && game.turnStartTime) {
+        const playerWhoMoved = game.currentPlayer;
+        const timeKey = playerWhoMoved === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+        
+        const timeUsed = (now - game.turnStartTime) / 1000;
+
+        if (isFischer) {
+            game[timeKey] -= timeUsed;
+            game[timeKey] += (game.settings.timeIncrement ?? 0);
+        } else { // Byoyomi style
+            if (game[timeKey] > 0) {
+                // In main time
+                game[timeKey] -= timeUsed;
+            }
+        }
+        game[timeKey] = Math.max(0, game[timeKey]);
+    }
+
+    // 2. Switch player
+    game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
+    game.missileUsedThisTurn = false;
+    
+    // 3. Set up next turn's deadline
+    if (hasTimeLimit) {
+        game.turnStartTime = now;
+        const nextPlayer = game.currentPlayer;
+        const nextTimeKey = nextPlayer === Player.Black ? 'blackTimeLeft' : 'whiteTimeLeft';
+        const nextByoyomiKey = nextPlayer === Player.Black ? 'blackByoyomiPeriodsLeft' : 'whiteByoyomiPeriodsLeft';
+        
+        if (isFischer) {
+             game.turnDeadline = now + Math.max(0, game[nextTimeKey]) * 1000;
+        } else { // Byoyomi
+            if (game[nextTimeKey] > 0) {
+                // Next player still has main time
+                game.turnDeadline = now + game[nextTimeKey] * 1000;
+            } else {
+                // Next player is in byoyomi
+                if ((game[nextByoyomiKey] ?? 0) > 0) {
+                    game.turnDeadline = now + (game.settings.byoyomiTime * 1000);
+                } else {
+                    // This player is already out of time. The game loop's timeout check will end the game.
+                    game.turnDeadline = now; 
+                }
+            }
+        }
+    } else {
+        game.turnDeadline = undefined;
+        game.turnStartTime = undefined;
+    }
+};
 
 export const transitionToPlaying = (game: LiveGameSession, now: number) => {
     game.gameStatus = GameStatus.Playing;

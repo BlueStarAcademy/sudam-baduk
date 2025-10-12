@@ -2,9 +2,9 @@ import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Server
 import * as db from '../db.js';
 import { handleStrategicGameAction } from '../modes/strategic.js';
 import { handlePlayfulGameAction } from '../modes/playful.js';
-import { handleAiGameStart, handleAiGameRefresh, handleTowerAddStones, handleConfirmIntro } from '../modes/aiGameActions.js';
+import { handleAiGameStart, handleAiGameRefresh, handleTowerAddStones, handleConfirmIntro } from './aiGameActions.js';
 import { handleUserAction } from './userActions.js';
-import { handleNegotiationAction } from '../modes/negotiationActions.js';
+import { handleNegotiationAction } from './negotiationActions.js';
 import { handleInventoryAction } from './inventoryActions.js';
 import { handleShopAction } from './shopActions.js';
 import { handleRewardAction } from './rewardActions.js';

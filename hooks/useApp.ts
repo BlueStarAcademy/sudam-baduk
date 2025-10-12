@@ -1,6 +1,12 @@
-
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { GameMode, UserStatus, ShopTab, InventoryTab, User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult, SinglePlayerStageInfo, UserStatusInfo } from '../types/index.js';
+import { 
+    GameMode, UserStatus, ShopTab, InventoryTab, User, LiveGameSession, UserWithStatus, ServerAction, 
+    Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, 
+    InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, 
+    SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult, 
+    // FIX: Add missing import for SinglePlayerMissionState
+    SinglePlayerStageInfo, UserStatusInfo, QuestLog, CoreStat, Player, LeagueTier, EquipmentPreset, SinglePlayerMissionState 
+} from '../types/index.js';
 import { audioService } from '../services/audioService.js';
 import { stableStringify, parseHash } from '../utils/appUtils.js';
 import { 
@@ -9,14 +15,421 @@ import {
     MONTHLY_MILESTONE_THRESHOLDS,
     SLUG_BY_GAME_MODE,
     SINGLE_PLAYER_MISSIONS,
-    GRADE_LEVEL_REQUIREMENTS
+    GRADE_LEVEL_REQUIREMENTS,
+    SPECIAL_GAME_MODES, 
+    PLAYFUL_GAME_MODES,
+    DEFAULT_GAME_SETTINGS
 } from '../constants/index.js';
 import { defaultSettings } from './useAppSettings.js';
 import { getMissionInfoWithLevel } from '../utils/questUtils.js';
 import { supabase } from '../services/supabase.js';
 import { containsProfanity } from '../profanity.js';
-import { rowToUser, rowToGame } from '../server/db/mappers.js';
+import { createDefaultBaseStats } from '../utils/statUtils.js';
+import { defaultSettings as appDefaultSettings } from '../constants/settings.js';
 
+// --- Start of inlined data mapping logic ---
+
+// Copied from server/initialData.ts to break server dependency
+const createDefaultQuests = (): QuestLog => ({
+    daily: {
+        quests: [],
+        activityProgress: 0,
+        claimedMilestones: [false, false, false, false, false],
+        lastReset: 0,
+    },
+    weekly: {
+        quests: [],
+        activityProgress: 0,
+        claimedMilestones: [false, false, false, false, false],
+        lastReset: 0,
+    },
+    monthly: {
+        quests: [],
+        activityProgress: 0,
+        claimedMilestones: [false, false, false, false, false],
+        lastReset: 0,
+    },
+});
+
+const createDefaultSpentStatPoints = (): Record<CoreStat, number> => ({
+    [CoreStat.Concentration]: 0,
+    [CoreStat.ThinkingSpeed]: 0,
+    [CoreStat.Judgment]: 0,
+    [CoreStat.Calculation]: 0,
+    [CoreStat.CombatPower]: 0,
+    [CoreStat.Stability]: 0,
+});
+
+const allGameModes = [...SPECIAL_GAME_MODES, ...PLAYFUL_GAME_MODES].map(m => m.mode);
+const defaultStats: User['stats'] = allGameModes.reduce((acc, mode) => {
+    acc[mode] = { wins: 0, losses: 0, rankingScore: 0 };
+    return acc;
+}, {} as Record<GameMode, { wins: number; losses: number; rankingScore: number }>);
+
+// Copied from server/db/mappers.ts to break server dependency
+const safeParse = (data: any, defaultValue: any) => {
+    if (data === null || data === undefined) return defaultValue;
+    if (typeof data === 'object') return data;
+    if (typeof data !== 'string' || data.trim() === '') return defaultValue;
+    try {
+        const parsed = JSON.parse(data);
+        return parsed === null ? defaultValue : parsed;
+    } catch (e) {
+        return defaultValue;
+    }
+};
+
+const ensureObject = (value: any, defaultValue: any = {}) => (typeof value === 'object' && value !== null && !Array.isArray(value)) ? value : defaultValue;
+const ensureArray = (value: any, defaultValue: any = []) => Array.isArray(value) ? value : defaultValue;
+
+const rowToUser = (row: any): User | null => {
+    if (!row) return null;
+    try {
+        const defaultQuests = createDefaultQuests();
+        const questsFromDb = ensureObject(safeParse(row.quests, {}));
+        const dailyFromDb = ensureObject(questsFromDb.daily);
+        const weeklyFromDb = ensureObject(questsFromDb.weekly);
+        const monthlyFromDb = ensureObject(questsFromDb.monthly);
+
+        const quests: QuestLog = {
+            daily: { ...defaultQuests.daily, ...dailyFromDb, lastReset: Number(dailyFromDb.lastReset || 0), quests: ensureArray(dailyFromDb.quests), claimedMilestones: ensureArray(dailyFromDb.claimedMilestones, [false,false,false,false,false]) },
+            weekly: { ...defaultQuests.weekly, ...weeklyFromDb, lastReset: Number(weeklyFromDb.lastReset || 0), quests: ensureArray(weeklyFromDb.quests), claimedMilestones: ensureArray(weeklyFromDb.claimedMilestones, [false,false,false,false,false]) },
+            monthly: { ...defaultQuests.monthly, ...monthlyFromDb, lastReset: Number(monthlyFromDb.lastReset || 0), quests: ensureArray(monthlyFromDb.quests), claimedMilestones: ensureArray(monthlyFromDb.claimedMilestones, [false,false,false,false,false]) },
+        };
+        
+        const actionPointsFromDb = ensureObject(safeParse(row.actionPoints, { current: 30, max: 30 }));
+        const actionPoints = {
+            current: typeof actionPointsFromDb.current === 'number' ? actionPointsFromDb.current : 30,
+            max: typeof actionPointsFromDb.max === 'number' ? actionPointsFromDb.max : 30,
+        };
+
+        const defaultPresets: EquipmentPreset[] = Array(5).fill(null).map((_, i) => ({ name: `프리셋 ${i + 1}`, equipment: {} }));
+        const userPresets = ensureArray(safeParse(row.equipmentPresets, defaultPresets));
+        for (let i = 0; i < 5; i++) {
+            if (!userPresets[i]) userPresets[i] = { name: `프리셋 ${i + 1}`, equipment: {} };
+        }
+        
+        const userAppSettingsFromDb = ensureObject(safeParse(row.appSettings, {}));
+        const appSettings: AppSettings = {
+            graphics: { ...appDefaultSettings.graphics, ...ensureObject(userAppSettingsFromDb.graphics) },
+            sound: { ...appDefaultSettings.sound, ...ensureObject(userAppSettingsFromDb.sound) },
+            features: { ...appDefaultSettings.features, ...ensureObject(userAppSettingsFromDb.features) },
+        };
+
+        const statsFromDb = ensureObject(safeParse(row.stats, {}));
+        const finalStats = JSON.parse(JSON.stringify(defaultStats));
+        for (const mode of Object.keys(finalStats)) {
+            const modeKey = mode as GameMode;
+            if (statsFromDb[modeKey] && typeof statsFromDb[modeKey] === 'object') {
+                Object.assign(finalStats[modeKey], statsFromDb[modeKey]);
+            }
+        }
+        
+        const towerProgressFromDb = ensureObject(safeParse(row.towerProgress, {}));
+        const dailyDonationsFromDb = ensureObject(safeParse(row.dailyDonations, {}));
+        const dailyMissionContributionFromDb = ensureObject(safeParse(row.dailyMissionContribution, {}));
+
+        const spMissionsFromDb = ensureObject(safeParse(row.singlePlayerMissions, {}));
+        const finalSpMissions: Record<string, SinglePlayerMissionState> = {};
+        for (const missionId in spMissionsFromDb) {
+            const state = spMissionsFromDb[missionId];
+            finalSpMissions[missionId] = {
+                isStarted: state.isStarted,
+                lastCollectionTime: Number(state.lastCollectionTime || 0),
+                claimableAmount: state.claimableAmount ?? state.accumulatedAmount ?? 0,
+                progressTowardNextLevel: state.progressTowardNextLevel ?? 0,
+                level: state.level ?? 1,
+            };
+        }
+        
+        const slotsFromDb = safeParse(row.inventorySlots, null);
+        let finalSlots;
+        if (typeof slotsFromDb === 'number') {
+            finalSlots = { equipment: slotsFromDb, consumable: 30, material: 30 };
+        } else if (typeof slotsFromDb === 'object' && slotsFromDb !== null) {
+            finalSlots = { equipment: slotsFromDb.equipment ?? 30, consumable: slotsFromDb.consumable ?? 30, material: slotsFromDb.material ?? 30 };
+        } else {
+            finalSlots = { equipment: 30, consumable: 30, material: 30 };
+        }
+
+        const user: User = {
+            id: row.id,
+            username: row.username,
+            nickname: row.nickname,
+            isAdmin: !!row.isAdmin,
+            strategyLevel: Number(row.strategyLevel ?? 1),
+            strategyXp: Number(row.strategyXp ?? 0),
+            playfulLevel: Number(row.playfulLevel ?? 1),
+            playfulXp: Number(row.playfulXp ?? 0),
+            gold: Number(row.gold ?? 0),
+            diamonds: Number(row.diamonds ?? 0),
+            inventorySlots: finalSlots,
+            synthesisLevel: row.synthesisLevel ?? 1,
+            synthesisXp: row.synthesisXp ?? 0,
+            chatBanUntil: row.chatBanUntil ? Number(row.chatBanUntil) : undefined,
+            connectionBanUntil: row.connectionBanUntil ? Number(row.connectionBanUntil) : undefined,
+            lastActionPointUpdate: Number(row.lastActionPointUpdate ?? 0),
+            actionPointPurchasesToday: Number(row.actionPointPurchasesToday ?? 0),
+            lastActionPointPurchaseDate: Number(row.lastActionPointPurchaseDate ?? 0),
+            actionPointQuizzesToday: Number(row.actionPointQuizzesToday ?? 0),
+            lastActionPointQuizDate: Number(row.lastActionPointQuizDate ?? 0),
+            dailyShopPurchases: ensureObject(safeParse(row.dailyShopPurchases, {})),
+            avatarId: row.avatarId || 'profile_1',
+            borderId: row.borderId || 'default',
+            ownedBorders: ensureArray(safeParse(row.ownedBorders, ['default', 'simple_black'])),
+            tournamentScore: Number(row.tournamentScore ?? 0),
+            league: row.league || LeagueTier.Sprout,
+            mannerMasteryApplied: !!row.mannerMasteryApplied,
+            mannerScore: Number(row.mannerScore ?? 200),
+            pendingPenaltyNotification: ensureObject(safeParse(row.pendingPenaltyNotification, null), null),
+            previousSeasonTier: row.previousSeasonTier ?? null,
+            seasonHistory: ensureObject(safeParse(row.seasonHistory, {})),
+            stats: finalStats,
+            baseStats: { ...createDefaultBaseStats(), ...ensureObject(safeParse(row.baseStats, {})) },
+            spentStatPoints: { ...createDefaultSpentStatPoints(), ...ensureObject(safeParse(row.spentStatPoints, {})) },
+            inventory: ensureArray(safeParse(row.inventory, [])),
+            equipment: ensureObject(safeParse(row.equipment, {})),
+            equipmentPresets: userPresets,
+            actionPoints,
+            mail: ensureArray(safeParse(row.mail, [])),
+            quests,
+            lastNeighborhoodPlayedDate: row.lastNeighborhoodPlayedDate ? Number(row.lastNeighborhoodPlayedDate) : undefined,
+            neighborhoodRewardClaimed: !!row.neighborhoodRewardClaimed,
+            lastNeighborhoodTournament: ensureObject(safeParse(row.lastNeighborhoodTournament, null), null),
+            lastNationalPlayedDate: row.lastNationalPlayedDate ? Number(row.lastNationalPlayedDate) : undefined,
+            nationalRewardClaimed: !!row.nationalRewardClaimed,
+            lastNationalTournament: ensureObject(safeParse(row.lastNationalTournament, null), null),
+            lastWorldPlayedDate: row.lastWorldPlayedDate ? Number(row.lastWorldPlayedDate) : undefined,
+            worldRewardClaimed: !!row.worldRewardClaimed,
+            lastWorldTournament: ensureObject(safeParse(row.lastWorldTournament, null), null),
+            dailyChampionshipMatchesPlayed: Number(row.dailyChampionshipMatchesPlayed ?? 0),
+            lastChampionshipMatchDate: Number(row.lastChampionshipMatchDate ?? 0),
+            weeklyCompetitors: ensureArray(safeParse(row.weeklyCompetitors, [])),
+            lastWeeklyCompetitorsUpdate: Number(row.lastWeeklyCompetitorsUpdate ?? 0),
+            lastLeagueUpdate: Number(row.lastLeagueUpdate ?? 0),
+            monthlyGoldBuffExpiresAt: Number(row.monthlyGoldBuffExpiresAt ?? 0),
+            mbti: row.mbti ?? null,
+            isMbtiPublic: !!row.isMbtiPublic,
+            singlePlayerProgress: Number(row.singlePlayerProgress ?? 0),
+            bonusStatPoints: Number(row.bonusStatPoints ?? 0),
+            singlePlayerMissions: finalSpMissions,
+            towerProgress: { highestFloor: 0, lastClearTimestamp: 0, ...towerProgressFromDb },
+            claimedFirstClearRewards: ensureArray(safeParse(row.claimedFirstClearRewards, [])),
+            currencyLogs: ensureArray(safeParse(row.currencyLogs, [])),
+            guildId: row.guildId ?? null,
+            guildApplications: ensureArray(safeParse(row.guildApplications, [])),
+            guildLeaveCooldownUntil: row.guildLeaveCooldownUntil ? Number(row.guildLeaveCooldownUntil) : 0,
+            guildCoins: Number(row.guildCoins ?? 0),
+            guildBossAttempts: Number(row.guildBossAttempts ?? 0),
+            lastGuildBossAttemptDate: Number(row.lastGuildBossAttemptDate ?? 0),
+            lastLoginAt: Number(row.lastLoginAt ?? 0),
+            dailyDonations: { gold: 0, diamond: 0, ...dailyDonationsFromDb, date: Number(dailyDonationsFromDb.date || 0) },
+            dailyMissionContribution: { amount: 0, ...dailyMissionContributionFromDb, date: Number(dailyMissionContributionFromDb.date || 0) },
+            guildShopPurchases: ensureObject(safeParse(row.guildShopPurchases, {})),
+            appSettings,
+            kakaoId: row.kakaoId ?? undefined,
+        };
+        return user;
+    } catch (e) {
+        console.error(`[FATAL] Unrecoverable error processing user data for row ID ${row?.id}:`, e);
+        return null;
+    }
+};
+
+const rowToGame = (row: any): LiveGameSession | null => {
+    if (!row) return null;
+    try {
+        const player1Object = safeParse(row.player1, null);
+        const player2Object = safeParse(row.player2, null);
+
+        if (!player1Object || typeof player1Object !== 'object' || !player2Object || typeof player2Object !== 'object') {
+            console.error(`[DB Mapper] Corrupt or missing player data object for game ID ${row.id}. Discarding game record.`);
+            return null;
+        }
+
+        const player1 = rowToUser(player1Object);
+        const player2 = rowToUser(player2Object);
+        
+        if (!player1?.id || !player2?.id) {
+             console.error(`[DB Mapper] Failed to fully map player data (missing ID) for game ID ${row.id}. Discarding game record.`);
+             return null;
+        }
+        
+        const game: LiveGameSession = {
+            id: row.id,
+            mode: row.mode,
+            description: row.description ?? undefined,
+            player1,
+            player2,
+            blackPlayerId: row.blackPlayerId ?? null,
+            whitePlayerId: row.whitePlayerId ?? null,
+            gameStatus: row.gameStatus,
+            currentPlayer: Number(row.currentPlayer ?? 0),
+            boardState: ensureArray(safeParse(row.boardState, [])),
+            moveHistory: ensureArray(safeParse(row.moveHistory, [])),
+            captures: ensureObject(safeParse(row.captures, { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 })),
+            baseStoneCaptures: ensureObject(safeParse(row.baseStoneCaptures, { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 })),
+            hiddenStoneCaptures: ensureObject(safeParse(row.hiddenStoneCaptures, { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 })),
+            winner: row.winner != null ? Number(row.winner) : null,
+            winReason: row.winReason ?? null,
+            finalScores: ensureObject(safeParse(row.finalScores, null), null),
+            createdAt: Number(row.createdAt ?? 0),
+            lastMove: ensureObject(safeParse(row.lastMove, null), null),
+            lastTurnStones: ensureArray(safeParse(row.lastTurnStones, null), null),
+            stonesPlacedThisTurn: ensureArray(safeParse(row.stonesPlacedThisTurn, null), null),
+            passCount: Number(row.passCount ?? 0),
+            koInfo: ensureObject(safeParse(row.koInfo, null), null),
+            winningLine: ensureArray(safeParse(row.winningLine, null), null),
+            statsUpdated: !!row.statsUpdated,
+            summary: ensureObject(safeParse(row.summary, undefined), undefined),
+            animation: ensureObject(safeParse(row.animation, undefined), undefined),
+            blackTimeLeft: Number(row.blackTimeLeft ?? 0),
+            whiteTimeLeft: Number(row.whiteTimeLeft ?? 0),
+            blackByoyomiPeriodsLeft: Number(row.blackByoyomiPeriodsLeft ?? 0),
+            whiteByoyomiPeriodsLeft: Number(row.whiteByoyomiPeriodsLeft ?? 0),
+            turnDeadline: row.turnDeadline ? Number(row.turnDeadline) : undefined,
+            turnStartTime: row.turnStartTime ? Number(row.turnStartTime) : undefined,
+            disconnectionState: ensureObject(safeParse(row.disconnectionState, null), null),
+            disconnectionCounts: ensureObject(safeParse(row.disconnectionCounts, {})),
+            noContestInitiatorIds: ensureArray(safeParse(row.noContestInitiatorIds, undefined), undefined),
+            currentActionButtons: ensureObject(safeParse(row.currentActionButtons, {})),
+            actionButtonCooldownDeadline: ensureObject(safeParse(row.actionButtonCooldownDeadline, undefined), undefined),
+            actionButtonUses: ensureObject(safeParse(row.actionButtonUses, undefined), undefined),
+            maxActionButtonUses: row.maxActionButtonUses ?? undefined,
+            actionButtonUsedThisCycle: ensureObject(safeParse(row.actionButtonUsedThisCycle, undefined), undefined),
+            mannerScoreChanges: ensureObject(safeParse(row.mannerScoreChanges, undefined), undefined),
+            nigiri: ensureObject(safeParse(row.nigiri, undefined), undefined),
+            guessDeadline: row.guessDeadline ? Number(row.guessDeadline) : undefined,
+            bids: ensureObject(safeParse(row.bids, undefined), undefined),
+            biddingRound: row.biddingRound ?? undefined,
+            captureBidDeadline: row.captureBidDeadline ? Number(row.captureBidDeadline) : undefined,
+            effectiveCaptureTargets: ensureObject(safeParse(row.effectiveCaptureTargets, undefined), undefined),
+            baseStones: ensureArray(safeParse(row.baseStones, undefined), undefined),
+            baseStones_p1: ensureArray(safeParse(row.baseStones_p1, undefined), undefined),
+            baseStones_p2: ensureArray(safeParse(row.baseStones_p2, undefined), undefined),
+            basePlacementDeadline: row.basePlacementDeadline ? Number(row.basePlacementDeadline) : undefined,
+            komiBids: ensureObject(safeParse(row.komiBids, undefined), undefined),
+            komiBiddingDeadline: row.komiBiddingDeadline ? Number(row.komiBiddingDeadline) : undefined,
+            komiBiddingRound: row.komiBiddingRound ?? undefined,
+            komiBidRevealProcessed: !!row.komiBidRevealProcessed,
+            finalKomi: row.finalKomi ? Number(row.finalKomi) : undefined,
+            hiddenMoves: ensureObject(safeParse(row.hiddenMoves, undefined), undefined),
+            scans_p1: row.scans_p1 ?? undefined,
+            scans_p2: row.scans_p2 ?? undefined,
+            revealedStones: ensureObject(safeParse(row.revealedStones, {}), {}),
+            revealedHiddenMoves: ensureObject(safeParse(row.revealedHiddenMoves, {}), {}),
+            newlyRevealed: ensureArray(safeParse(row.newlyRevealed, undefined), undefined),
+            justCaptured: ensureArray(safeParse(row.justCaptured, undefined), undefined),
+            hidden_stones_used_p1: row.hidden_stones_used_p1 ?? undefined,
+            hidden_stones_used_p2: row.hidden_stones_used_p2 ?? undefined,
+            pendingCapture: ensureObject(safeParse(row.pendingCapture, undefined), undefined),
+            permanentlyRevealedStones: ensureArray(safeParse(row.permanentlyRevealedStones, undefined), undefined),
+            pendingAiMove: undefined,
+            missileUsedThisTurn: !!row.missileUsedThisTurn,
+            missiles_p1: row.missiles_p1 ?? undefined,
+            missiles_p2: row.missiles_p2 ?? undefined,
+            rpsState: ensureObject(safeParse(row.rpsState, null), null),
+            rpsRound: row.rpsRound ?? undefined,
+            dice: ensureObject(safeParse(row.dice, null), null),
+            stonesToPlace: row.stonesToPlace ?? undefined,
+            turnOrderRolls: ensureObject(safeParse(row.turnOrderRolls, null), null),
+            turnOrderRollReady: ensureObject(safeParse(row.turnOrderRollReady, null), null),
+            turnOrderRollResult: row.turnOrderRollResult ?? undefined,
+            turnOrderRollTies: row.turnOrderRollTies ?? undefined,
+            turnOrderRollDeadline: row.turnOrderRollDeadline ? Number(row.turnOrderRollDeadline) : undefined,
+            turnOrderAnimationEndTime: row.turnOrderAnimationEndTime ? Number(row.turnOrderAnimationEndTime) : undefined,
+            turnChoiceDeadline: row.turnChoiceDeadline ? Number(row.turnChoiceDeadline) : undefined,
+            turnChooserId: row.turnChooserId ?? undefined,
+            turnChoices: ensureObject(safeParse(row.turnChoices, null), null),
+            turnSelectionTiebreaker: row.turnSelectionTiebreaker ?? undefined,
+            diceRollHistory: ensureObject(safeParse(row.diceRollHistory, null), null),
+            diceRoundSummary: ensureObject(safeParse(row.diceRoundSummary, null), null),
+            lastWhiteGroupInfo: ensureObject(safeParse(row.lastWhiteGroupInfo, null), null),
+            diceGoItemUses: ensureObject(safeParse(row.diceGoItemUses, {})),
+            diceGoBonuses: ensureObject(safeParse(row.diceGoBonuses, {})),
+            diceCapturesThisTurn: row.diceCapturesThisTurn ?? undefined,
+            diceLastCaptureStones: ensureArray(safeParse(row.diceLastCaptureStones, null), null),
+            round: row.round ?? 1,
+            isDeathmatch: !!row.isDeathmatch,
+            turnInRound: row.turnInRound ?? 1,
+            scores: ensureObject(safeParse(row.scores, {})),
+            thiefPlayerId: row.thiefPlayerId ?? undefined,
+            policePlayerId: row.policePlayerId ?? undefined,
+            roleChoices: ensureObject(safeParse(row.roleChoices, {})),
+            roleChoiceWinnerId: row.roleChoiceWinnerId ?? undefined,
+            thiefRoundSummary: ensureObject(safeParse(row.thiefRoundSummary, null), null),
+            thiefDiceRollHistory: ensureObject(safeParse(row.thiefDiceRollHistory, null), null),
+            thiefCapturesThisRound: row.thiefCapturesThisTurn ?? undefined,
+            alkkagiStones: ensureArray(safeParse(row.alkkagiStones, null), null),
+            alkkagiStones_p1: ensureArray(safeParse(row.alkkagiStones_p1, null), null),
+            alkkagiStones_p2: ensureArray(safeParse(row.alkkagiStones_p2, null), null),
+            alkkagiTurnDeadline: row.alkkagiTurnDeadline ? Number(row.alkkagiTurnDeadline) : undefined,
+            alkkagiPlacementDeadline: row.alkkagiPlacementDeadline ? Number(row.alkkagiPlacementDeadline) : undefined,
+            alkkagiItemUses: ensureObject(safeParse(row.alkkagiItemUses, {})),
+            activeAlkkagiItems: ensureObject(safeParse(row.activeAlkkagiItems, {})),
+            alkkagiRound: row.alkkagiRound ?? undefined,
+            alkkagiRefillsUsed: ensureObject(safeParse(row.alkkagiRefillsUsed, {})),
+            alkkagiStonesPlacedThisRound: ensureObject(safeParse(row.alkkagiStonesPlacedThisRound, {})),
+            alkkagiRoundSummary: ensureObject(safeParse(row.alkkagiRoundSummary, null), null),
+            curlingStones: ensureArray(safeParse(row.curlingStones, null), null),
+            curlingTurnDeadline: row.curlingTurnDeadline ? Number(row.curlingTurnDeadline) : undefined,
+            curlingScores: ensureObject(safeParse(row.curlingScores, {})),
+            curlingRound: row.curlingRound ?? undefined,
+            curlingRoundSummary: ensureObject(safeParse(row.curlingRoundSummary, null), null),
+            curlingItemUses: ensureObject(safeParse(row.curlingItemUses, {})),
+            activeCurlingItems: ensureObject(safeParse(row.activeCurlingItems, {})),
+            hammerPlayerId: row.hammerPlayerId ?? undefined,
+            isTiebreaker: !!row.isTiebreaker,
+            tiebreakerStonesThrown: row.tiebreakerStonesThrown ?? undefined,
+            stonesThrownThisRound: ensureObject(safeParse(row.stonesThrownThisRound, {})),
+            preGameConfirmations: ensureObject(safeParse(row.preGameConfirmations, null), null),
+            roundEndConfirmations: ensureObject(safeParse(row.roundEndConfirmations, null), null),
+            rematchRejectionCount: ensureObject(safeParse(row.rematchRejectionCount, null), null),
+            timeoutFouls: ensureObject(safeParse(row.timeoutFouls, {})),
+            curlingStonesLostToFoul: ensureObject(safeParse(row.curlingStonesLostToFoul, {})),
+            foulInfo: ensureObject(safeParse(row.foulInfo, null), null),
+            isAnalyzing: !!row.isAnalyzing,
+            analysisResult: ensureObject(safeParse(row.analysisResult, null), null),
+            previousAnalysisResult: ensureObject(safeParse(row.previousAnalysisResult, null), null),
+            settings: { ...DEFAULT_GAME_SETTINGS, ...ensureObject(safeParse(row.settings, {})) },
+            canRequestNoContest: ensureObject(safeParse(row.canRequestNoContest, undefined), undefined),
+            pausedTurnTimeLeft: row.pausedTurnTimeLeft ? Number(row.pausedTurnTimeLeft) : undefined,
+            itemUseDeadline: row.itemUseDeadline ? Number(row.itemUseDeadline) : undefined,
+            lastTimeoutPlayerId: row.lastTimeoutPlayerId ?? undefined,
+            lastTimeoutPlayerIdClearTime: row.lastTimeoutPlayerIdClearTime ? Number(row.lastTimeoutPlayerIdClearTime) : undefined,
+            revealAnimationEndTime: row.revealAnimationEndTime ? Number(row.revealAnimationEndTime) : undefined,
+            revealEndTime: row.revealEndTime ? Number(row.revealEndTime) : undefined,
+            isAiGame: !!row.isAiGame,
+            aiTurnStartTime: row.aiTurnStartTime ? Number(row.aiTurnStartTime) : undefined,
+            mythicBonuses: ensureObject(safeParse(row.mythicBonuses, {})),
+            lastPlayfulGoldCheck: ensureObject(safeParse(row.lastPlayfulGoldCheck, {})),
+            pendingSystemMessages: ensureArray(safeParse(row.pendingSystemMessages, undefined), undefined),
+            isSinglePlayer: !!row.isSinglePlayer,
+            stageId: row.stageId ?? undefined,
+            blackPatternStones: ensureArray(safeParse(row.blackPatternStones, null), null),
+            whitePatternStones: ensureArray(safeParse(row.whitePatternStones, null), null),
+            singlePlayerPlacementRefreshesUsed: Number(row.singlePlayerPlacementRefreshesUsed ?? 0),
+            towerChallengePlacementRefreshesUsed: Number(row.towerChallengePlacementRefreshesUsed ?? 0),
+            towerAddStonesUsed: Number(row.towerAddStonesUsed ?? 0),
+            towerItemPurchases: ensureObject(safeParse(row.towerItemPurchases, {})),
+            blackStonesPlaced: row.blackStonesPlaced ?? undefined,
+            blackStoneLimit: row.blackStoneLimit ?? undefined,
+            isTowerChallenge: !!row.isTowerChallenge,
+            floor: row.floor ?? undefined,
+            gameType: row.gameType ?? undefined,
+            whiteStonesPlaced: row.whiteStonesPlaced ?? undefined,
+            whiteStoneLimit: row.whiteStoneLimit ?? undefined,
+            autoEndTurnCount: row.autoEndTurnCount ?? undefined,
+            promptForMoreStones: !!row.promptForMoreStones,
+        };
+        return game;
+    } catch (e) {
+        console.error(`[FATAL] Error processing game data for row ID ${row?.id}:`, e);
+        return null;
+    }
+};
+
+// --- End of inlined data mapping logic ---
 
 function usePrevious<T>(value: T): T | undefined {
     const ref = useRef<T | undefined>(undefined);
@@ -790,7 +1203,7 @@ export const useApp = () => {
         disassemblyResult, craftResult, synthesisResult, viewingUser, isInfoModalOpen,
         isEncyclopediaOpen, isStatAllocationModalOpen, isProfileEditModalOpen, pastRankingsInfo,
         moderatingUser, viewingItem, enhancingItem, isTowerRewardInfoOpen, isGuildEffectsModalOpen,
-        isEquipmentEffectsModalOpen, isPresetModalOpen, levelUpInfo, guildBossBattleResult
+        isPresetModalOpen, levelUpInfo, guildBossBattleResult
     ]);
 
     const handleEnterWaitingRoom = (mode: GameMode) => {

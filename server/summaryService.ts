@@ -1,20 +1,19 @@
 // server/summaryService.ts
-import { getGoLogic, processMove } from '../utils/goLogic';
+import { getGoLogic, processMove } from '../utils/goLogic.js';
 import * as db from './db.js';
 import * as types from '../types/index.js';
 import { calculateUserEffects, createDefaultBaseStats } from '../utils/statUtils.js';
 import * as mannerService from './services/mannerService.js';
-import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, MATERIAL_ITEMS, NO_CONTEST_MOVE_THRESHOLD } from '../constants/index.js';
+import { SPECIAL_GAME_MODES, NO_CONTEST_MANNER_PENALTY, NO_CONTEST_RANKING_PENALTY, CONSUMABLE_ITEMS, PLAYFUL_GAME_MODES, SINGLE_PLAYER_STAGES, MATERIAL_ITEMS, NO_CONTEST_MOVE_THRESHOLD, TOWER_STAGES } from '../constants/index.js';
 import { updateQuestProgress } from './questService.js';
 import { openEquipmentBox1, createItemFromTemplate } from './shop.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inventoryUtils.js';
 import { defaultStats } from './initialData.js';
-import { analyzeGame } from './kataGoService.js';
-import { gnuGoServiceManager } from './services/gnuGoService.js';
 import { aiUserId, getAiUser } from './ai/index.js';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
+import { calculateScores } from './scoring.js';
 
 
 const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
@@ -22,14 +21,15 @@ const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
 const processSinglePlayerGameSummary = async (game: types.LiveGameSession) => {
     const user = game.player1; // Human is always player1 in single player
     const isWinner = game.winner === types.Player.Black; // Human is always black
-    const stage = SINGLE_PLAYER_STAGES.find(s => s.id === game.stageId);
+    
+    const stageSource = game.isTowerChallenge ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
+    const stage = stageSource.find(s => s.id === game.stageId);
 
     if (!stage) {
         console.error(`[SP Summary] Could not find stage with id: ${game.stageId}`);
         return;
     }
     
-    // Base summary structure
     const summary: types.GameSummary = {
         xp: { initial: user.strategyXp, change: 0, final: user.strategyXp },
         rating: { initial: 1200, change: 0, final: 1200 }, // Not applicable
@@ -48,21 +48,31 @@ const processSinglePlayerGameSummary = async (game: types.LiveGameSession) => {
     };
     
     if (isWinner) {
-        const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
-        const currentProgress = user.singlePlayerProgress ?? 0;
+        let isFirstClear = false;
+        if (game.isTowerChallenge) {
+            isFirstClear = !user.claimedFirstClearRewards?.includes(stage.id);
+            if (isFirstClear) {
+                user.claimedFirstClearRewards.push(stage.id);
+            }
+            if (stage.floor! > (user.towerProgress.highestFloor || 0)) {
+                user.towerProgress.highestFloor = stage.floor!;
+            }
+            user.towerProgress.lastClearTimestamp = Date.now();
+        } else { // Single player
+            const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
+            const currentProgress = user.singlePlayerProgress ?? 0;
+            isFirstClear = !user.claimedFirstClearRewards?.includes(stage.id);
 
-        const isFirstClear = !user.claimedFirstClearRewards?.includes(stage.id);
-
-        if (currentProgress === stageIndex) {
-            user.singlePlayerProgress = currentProgress + 1;
+            if (currentProgress === stageIndex) {
+                user.singlePlayerProgress = currentProgress + 1;
+            }
+            if (isFirstClear) {
+                user.claimedFirstClearRewards.push(stage.id);
+            }
         }
 
         const rewards = isFirstClear ? stage.rewards.firstClear : stage.rewards.repeatClear;
         
-        if (isFirstClear) {
-            user.claimedFirstClearRewards.push(stage.id);
-        }
-
         const itemsToCreate = rewards.items ? createItemInstancesFromReward(rewards.items) : [];
         const { success } = addItemsToInventory([...user.inventory], user.inventorySlots, itemsToCreate);
         
@@ -102,7 +112,6 @@ const processSinglePlayerGameSummary = async (game: types.LiveGameSession) => {
         }
     }
 
-    // Handle level up logic after potentially adding XP
     const initialLevel = user.strategyLevel;
     let currentLevel = user.strategyLevel;
     let currentXp = user.strategyXp;
@@ -138,79 +147,32 @@ export const getGameResult = async (game: types.LiveGameSession) => {
     game.gameStatus = types.GameStatus.Scoring;
     await db.saveGame(game);
 
-    if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
-        // --- GnuGo Scoring ---
-        const gnuGoScoreStr = await gnuGoServiceManager.get(game.id)?.getScoreString();
-        // Parse score string like "B+3.5" or "W+Resign"
-        let blackScore = 0;
-        let whiteScore = game.settings.komi;
+    const result = calculateScores(game.boardState, game.settings.komi, game.captures);
+    
+    game.finalScores = {
+        black: result.black,
+        white: result.white,
+    };
+    
+    const analysisResult: Partial<types.AnalysisResult> = {
+        scoreDetails: {
+            black: { territory: result.black - game.captures[types.Player.Black], liveCaptures: game.captures[types.Player.Black], total: result.black, deadStones: (result.deadStones.filter(s => game.boardState[s.y][s.x] === types.Player.White).length) } as types.ScoreDetails,
+            white: { territory: result.white - game.captures[types.Player.White] - game.settings.komi, liveCaptures: game.captures[types.Player.White], komi: game.settings.komi, total: result.white, deadStones: (result.deadStones.filter(s => game.boardState[s.y][s.x] === types.Player.Black).length) } as types.ScoreDetails,
+        },
+        areaScore: { black: result.black, white: result.white },
+        deadStones: result.deadStones,
+    };
 
-        if (gnuGoScoreStr) {
-            const parts = gnuGoScoreStr.split('+');
-            if (parts.length === 2 && !parts[1].toLowerCase().includes('resign')) {
-                const winnerChar = parts[0].trim().toUpperCase();
-                const margin = parseFloat(parts[1]);
-                if (!isNaN(margin)) {
-                    if (winnerChar === 'B') {
-                        blackScore += margin;
-                    } else if (winnerChar === 'W') {
-                        whiteScore += margin;
-                    }
-                }
-            }
-        }
-        
-        const isSpeedMode = ((game.isSinglePlayer || game.isTowerChallenge) && game.gameType === 'speed');
-        const blackTimeBonus = isSpeedMode ? Math.floor((game.blackTimeLeft || 0) / 5) : 0;
-        const whiteTimeBonus = isSpeedMode ? Math.floor((game.whiteTimeLeft || 0) / 5) : 0;
-        
-        game.finalScores = {
-            black: blackScore + blackTimeBonus,
-            white: whiteScore + whiteTimeBonus,
-        };
-
-        // Create a minimal analysis result for display
-        const analysisResult: Partial<types.AnalysisResult> = {
-            scoreDetails: {
-                black: { territory: blackScore, timeBonus: blackTimeBonus, total: blackScore + blackTimeBonus, captures: 0, liveCaptures: 0, deadStones: 0, baseStoneBonus: 0, hiddenStoneBonus: 0, itemBonus: 0 },
-                white: { territory: whiteScore - game.settings.komi, komi: game.settings.komi, timeBonus: whiteTimeBonus, total: whiteScore + whiteTimeBonus, captures: 0, liveCaptures: 0, deadStones: 0, baseStoneBonus: 0, hiddenStoneBonus: 0, itemBonus: 0 },
-            },
-            areaScore: { black: game.finalScores.black, white: game.finalScores.white },
-        };
-        game.analysisResult = { ...game.analysisResult, system: analysisResult as types.AnalysisResult };
-        
-        const winner = game.finalScores.black > game.finalScores.white ? types.Player.Black : types.Player.White;
-        await endGame(game, winner, types.WinReason.Score);
-
-    } else {
-        // --- KataGo Scoring ---
-        const analysisResult = await analyzeGame(game, { maxVisits: 2000 });
-        
-        const isSpeedMode = game.mode === types.GameMode.Speed || (game.mode === types.GameMode.Mix && game.settings.mixedModes?.includes(types.GameMode.Speed));
-        if (isSpeedMode) {
-            const timeBonusSecondsPerPoint = 5;
-            const blackTimeBonus = Math.floor((game.blackTimeLeft || 0) / timeBonusSecondsPerPoint);
-            const whiteTimeBonus = Math.floor((game.whiteTimeLeft || 0) / timeBonusSecondsPerPoint);
-            
-            analysisResult.scoreDetails.black.timeBonus = blackTimeBonus;
-            analysisResult.scoreDetails.white.timeBonus = whiteTimeBonus;
-            analysisResult.areaScore.black += blackTimeBonus;
-            analysisResult.areaScore.white += whiteTimeBonus;
-            analysisResult.scoreDetails.black.total += blackTimeBonus;
-            analysisResult.scoreDetails.white.total += whiteTimeBonus;
-        }
-        
-        game.analysisResult = { ...game.analysisResult, system: analysisResult };
-        game.finalScores = { black: analysisResult.areaScore.black, white: analysisResult.areaScore.white };
-        
-        const winner = game.finalScores.black > game.finalScores.white ? types.Player.Black : types.Player.White;
-        await endGame(game, winner, types.WinReason.Score);
-    }
+    if (!game.analysisResult) game.analysisResult = {};
+    game.analysisResult['system'] = analysisResult as types.AnalysisResult;
+    
+    const winner = game.finalScores.black > game.finalScores.white ? types.Player.Black : types.Player.White;
+    await endGame(game, winner, types.WinReason.Score);
 };
 
 export const endGame = async (game: types.LiveGameSession, winner: types.Player, winReason: types.WinReason): Promise<void> => {
     if (game.gameStatus === types.GameStatus.Ended || game.gameStatus === types.GameStatus.NoContest) {
-        return; // Game already ended, do nothing
+        return;
     }
     game.winner = winner;
     game.winReason = winReason;

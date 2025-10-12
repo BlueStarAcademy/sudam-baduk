@@ -1,3 +1,7 @@
+
+
+
+
 // FIX: Import createDefaultBaseStats from shared utils as it's not exported from initialData.js.
 import { createDefaultQuests, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
 import { createDefaultBaseStats } from '../../utils/statUtils.js';
@@ -128,6 +132,7 @@ export const rowToUser = (row: any): User | null => {
             };
         }
 
+        // FIX: Handle migration from number to object for inventorySlots
         const slotsFromDb = safeParse(row.inventorySlots, null);
         let finalSlots;
         if (typeof slotsFromDb === 'number') {
@@ -354,7 +359,7 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             roleChoiceWinnerId: row.roleChoiceWinnerId ?? undefined,
             thiefRoundSummary: ensureObject(safeParse(row.thiefRoundSummary, null), null),
             thiefDiceRollHistory: ensureObject(safeParse(row.thiefDiceRollHistory, null), null),
-            thiefCapturesThisRound: row.thiefCapturesThisRound ?? undefined,
+            thiefCapturesThisRound: row.thiefCapturesThisTurn ?? undefined,
             alkkagiStones: ensureArray(safeParse(row.alkkagiStones, null), null),
             alkkagiStones_p1: ensureArray(safeParse(row.alkkagiStones_p1, null), null),
             alkkagiStones_p2: ensureArray(safeParse(row.alkkagiStones_p2, null), null),

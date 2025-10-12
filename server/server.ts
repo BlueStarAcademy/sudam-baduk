@@ -1,7 +1,10 @@
-
-import 'dotenv/config';
-// FIX: Use default import for express and namespaced types to avoid conflicts.
+// server/server.ts
+// FIX: To resolve numerous Express type errors, import Request, Response, and NextFunction
+// directly and use them to explicitly type all middleware and route handler arguments.
+// FIX: Consolidated express imports to resolve type issues.
 import express from 'express';
+// FIX: Separated Express type imports from the value import to resolve type conflicts.
+import type { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV, setKV } from './db.js';
@@ -16,7 +19,6 @@ import * as guildService from './guildService.js';
 import { randomUUID } from 'crypto';
 import { GUILD_RESEARCH_PROJECTS } from '../constants/index.js';
 import { regenerateActionPoints } from './services/effectService.js';
-import { getKataGoManager } from './kataGoService.js';
 import { containsProfanity } from '../profanity.js';
 import { broadcast } from './services/supabaseService.js';
 
@@ -34,7 +36,7 @@ const volatileState: VolatileState = {
 
 
 const app = express();
-const port = 4000;
+const port = process.env.PORT || 4000;
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -47,8 +49,8 @@ declare global {
   }
 }
 
-// FIX: Add explicit types for req, res, and next.
-const userMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+// FIX: Explicitly typed handler arguments to resolve overload errors.
+const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync' || req.path === '/api/auth/finalize-kakao' || req.path === '/api/initial-state') {
         return next();
     }
@@ -60,12 +62,11 @@ const userMiddleware = async (req: express.Request, res: express.Response, next:
         }
         
         let storedSessionId = volatileState.userSessions[userId];
-        // If not in memory, check the DB to handle server restarts
         if (!storedSessionId) {
             const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
             storedSessionId = allSessions[userId];
             if (storedSessionId) {
-                volatileState.userSessions[userId] = storedSessionId; // Cache it
+                volatileState.userSessions[userId] = storedSessionId;
             }
         }
 
@@ -77,7 +78,7 @@ const userMiddleware = async (req: express.Request, res: express.Response, next:
         if (user) {
             req.user = user;
         } else {
-            return res.status(401).json({ message: 'User not found.' });
+            return res.status(404).json({ message: 'User not found.' });
         }
     }
     next();
@@ -85,8 +86,8 @@ const userMiddleware = async (req: express.Request, res: express.Response, next:
 
 app.use(userMiddleware);
 
-// FIX: Add explicit types for req and res.
-app.post('/api/auth/register', async (req: express.Request, res: express.Response) => {
+// FIX: Explicitly typed handler arguments to resolve overload errors.
+app.post('/api/auth/register', async (req: Request, res: Response) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
         return res.status(400).json({ message: 'Username, password, and nickname are required.' });
@@ -120,8 +121,8 @@ app.post('/api/auth/register', async (req: express.Request, res: express.Respons
     }
 });
 
-// FIX: Add explicit types for req and res.
-app.post('/api/auth/login', async (req: express.Request, res: express.Response) => {
+// FIX: Explicitly typed handler arguments to resolve overload errors.
+app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: '아이디와 비밀번호를 모두 입력해주세요.' });
@@ -168,8 +169,8 @@ app.post('/api/auth/login', async (req: express.Request, res: express.Response) 
     }
 });
 
-// FIX: Add explicit types for req and res.
-app.post('/api/auth/sync', async (req: express.Request, res: express.Response) => {
+// FIX: Explicitly typed handler arguments to resolve overload errors.
+app.post('/api/auth/sync', async (req: Request, res: Response) => {
     const { session } = req.body;
     if (!session || !session.user) {
         return res.status(400).json({ message: 'Session data is required.' });
@@ -217,8 +218,8 @@ app.post('/api/auth/sync', async (req: express.Request, res: express.Response) =
     }
 });
 
-// FIX: Add explicit types for req and res.
-app.post('/api/auth/finalize-kakao', async (req: express.Request, res: express.Response) => {
+// FIX: Explicitly typed handler arguments to resolve overload errors.
+app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
     const { kakaoId, nickname } = req.body;
     if (!kakaoId || !nickname) {
         return res.status(400).json({ message: '카카오 정보 또는 닉네임이 누락되었습니다.' });
@@ -255,8 +256,8 @@ app.post('/api/auth/finalize-kakao', async (req: express.Request, res: express.R
     }
 });
 
-// FIX: Add explicit types for req and res.
-app.post('/api/initial-state', async (req: express.Request, res: express.Response) => {
+// FIX: Explicitly typed handler arguments to resolve overload errors.
+app.post('/api/initial-state', async (req: Request, res: Response) => {
     const { userId, sessionId } = req.body;
     if (userId && sessionId) {
         volatileState.userConnections[userId] = Date.now();
@@ -286,8 +287,8 @@ app.post('/api/initial-state', async (req: express.Request, res: express.Respons
     });
 });
 
-// FIX: Add explicit types for req and res.
-app.post('/api/action', async (req: express.Request, res: express.Response) => {
+// FIX: Explicitly typed handler arguments to resolve overload errors.
+app.post('/api/action', async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {
         if (req.body.type === 'LOGOUT' && req.body.userId) {
@@ -330,9 +331,7 @@ const startServer = async () => {
     await performOneTimeReset();
     await performOneTimeGuildResearchMigration();
 
-    getKataGoManager().initialize().catch(err => {
-        console.warn("[Server Start] KataGo analysis engine could not be started. Analysis will be unavailable.", err.message);
-    });
+    console.log('[AI] Self-contained AI active, external engines disabled.');
 
     setInterval(async () => {
         try {
@@ -471,6 +470,16 @@ const startServer = async () => {
     }, 60 * 60 * 1000);
 };
 
-startServer();
+app.listen(port, () => {
+    console.log(`[Server] Listening on port ${port}`);
+    startServer().catch(err => {
+        console.error('[Server] Failed to start server:', err);
+        process.exit(1);
+    });
+});
+
+['SIGINT', 'SIGTERM', 'SIGQUIT'].forEach(signal => process.on(signal, () => {
+    process.exit();
+}));
 
 export default app;

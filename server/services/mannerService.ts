@@ -1,10 +1,9 @@
-
 // server/services/mannerService.ts
 import { User, Guild, MannerEffects, CoreStat } from '../../types/index.js';
-import { regenerateActionPoints } from './effectService.js';
 import { createDefaultSpentStatPoints } from '../initialData.js';
 import { getMannerRank } from '../../utils/mannerUtils.js';
 import * as db from '../db.js';
+import { regenerateActionPoints } from './effectService.js';
 
 export const applyMannerRankChange = async (user: User, oldMannerScore: number): Promise<void> => {
     const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};

@@ -9,6 +9,8 @@ import * as db from './db.js';
 import * as effectService from '../utils/statUtils.js';
 import * as summaryService from './summaryService.js';
 import { getNewActionButtons } from './services/actionButtonService.js';
+// FIX: Import 'isFischerGame' from shared utilities.
+import { isFischerGame } from './modes/shared.js';
 
 
 export const initializeGame = async (neg: Negotiation, guilds: Record<string, Guild>): Promise<LiveGameSession> => {
@@ -146,7 +148,8 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, gu
             }
         } else if (game.disconnectionState) {
             if (game.pausedTurnTimeLeft !== undefined && game.pausedTurnTimeLeft !== null) {
-                const isFischer = strategic.isFischerGame(game);
+                // FIX: Use imported isFischerGame function directly.
+                const isFischer = isFischerGame(game);
                 const playerTimeLeft = game.currentPlayer === Player.Black ? game.blackTimeLeft : game.whiteTimeLeft;
                 const isInByoyomi = !isFischer && playerTimeLeft <= 0;
                 

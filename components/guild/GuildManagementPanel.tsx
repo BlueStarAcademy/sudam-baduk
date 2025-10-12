@@ -3,7 +3,6 @@ import { Guild as GuildType, ServerAction, GuildMember, GuildMemberRole } from '
 import Button from '../Button.js';
 import DraggableWindow from '../DraggableWindow.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
-import { GUILD_NAME_CHANGE_COST, GUILD_NAME_CHANGE_COOLDOWN_MS } from '../../constants/index.js';
 import ToggleSwitch from '../ui/ToggleSwitch.js';
 
 interface GuildManagementPanelProps {
