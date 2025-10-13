@@ -3,7 +3,7 @@ import { type AppState, type User, type UserCredentials, type QuestLog, type Dai
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, BOT_NAMES, AVATAR_POOL, GUILD_MISSIONS_POOL, GUILD_INITIAL_MEMBER_LIMIT, defaultSettings } from '../constants/index.js';
 import crypto from 'crypto';
 // FIX: Import createDefaultBaseStats from shared utils.
-import { createDefaultBaseStats } from '.././utils/statUtils.js';
+import { createDefaultBaseStats } from '../utils/statUtils.js';
 
 export const createDefaultQuests = (): QuestLog => ({
     daily: {

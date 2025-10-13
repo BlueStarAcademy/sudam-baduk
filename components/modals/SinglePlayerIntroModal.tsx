@@ -9,6 +9,7 @@ interface SinglePlayerIntroModalProps {
     onConfirm: () => Promise<any>;
 }
 
+// FIX: Moved 'gameTypeKorean' object here to resolve a circular dependency.
 const gameTypeKorean: Record<GameType, string> = {
     'capture': '따내기',
     'survival': '살리기',

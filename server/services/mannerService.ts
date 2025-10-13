@@ -1,11 +1,14 @@
+
 // server/services/mannerService.ts
 import { User, Guild, MannerEffects, CoreStat } from '../../types/index.js';
-import { createDefaultSpentStatPoints } from '../initialData.js';
+import { ACTION_POINT_REGEN_INTERVAL_MS } from '../../constants/rules.js';
 import { getMannerRank } from '../../utils/mannerUtils.js';
 import * as db from '../db.js';
 import { regenerateActionPoints } from './effectService.js';
+import { getDb } from '.././db/connection.js';
 
 export const applyMannerRankChange = async (user: User, oldMannerScore: number): Promise<void> => {
+    // FIX: Removed dbPool argument. db.getKV takes no arguments.
     const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
     const guild = user.guildId ? (guilds[user.guildId] ?? null) : null;
     const tempUserWithOldScore = { ...user, mannerScore: oldMannerScore };
@@ -22,28 +25,5 @@ export const applyMannerRankChange = async (user: User, oldMannerScore: number):
         user.mannerMasteryApplied = true;
     } else if (newRank !== '마스터' && oldRank === '마스터' && user.mannerMasteryApplied) {
         user.mannerMasteryApplied = false;
-        
-        const spentStats = user.spentStatPoints || createDefaultSpentStatPoints();
-        const statKeys = Object.keys(spentStats) as CoreStat[];
-        const levelPoints = (user.strategyLevel - 1) * 2 + (user.playfulLevel - 1) * 2;
-        const bonusStatPoints = user.bonusStatPoints || 0;
-        const totalAvailablePoints = levelPoints + bonusStatPoints;
-        let totalSpent = statKeys.reduce((sum, key) => sum + spentStats[key], 0);
-
-        let pointsToRetrieve = totalSpent - totalAvailablePoints;
-
-        if (pointsToRetrieve > 0) {
-             while (pointsToRetrieve > 0 && totalSpent > 0) {
-                const availableStats = statKeys.filter(key => spentStats[key] > 0);
-                if (availableStats.length === 0) break;
-                
-                const randomStat = availableStats[Math.floor(Math.random() * availableStats.length)];
-                
-                spentStats[randomStat] -= 1;
-                pointsToRetrieve -= 1;
-                totalSpent -= 1;
-            }
-        }
-        user.spentStatPoints = spentStats;
     }
 };

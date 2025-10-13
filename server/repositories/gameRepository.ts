@@ -1,6 +1,7 @@
 import { Pool } from 'pg';
 import { LiveGameSession } from '../../types/index.js';
-import { rowToGame } from './mappers.js';
+// FIX: Corrected import path for `rowToGame` to point to the correct mapper file.
+import { rowToGame } from '../db/mappers.js';
 
 const serializeGame = (game: LiveGameSession) => {
     const serialized: any = {};

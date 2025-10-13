@@ -1,11 +1,14 @@
 
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
+import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../constants/singlePlayerConstants.js';
+import { SinglePlayerLevel, GameType } from '../types/enums.js';
+import type { ServerAction, UserWithStatus, InventoryItem, SinglePlayerStageInfo } from '../types/index.js';
 import Button from './Button.js';
-import { SinglePlayerLevel, ServerAction, UserWithStatus, GameType, InventoryItem, SinglePlayerStageInfo } from '../types/index.js';
-import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS, CONSUMABLE_ITEMS } from '../constants/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import { getMissionInfoWithLevel } from '../utils/questUtils.js';
+// FIX: Add missing import for CONSUMABLE_ITEMS
+import { CONSUMABLE_ITEMS } from '../constants/items.js';
 
 interface UpgradeMissionModalProps {
     mission: SinglePlayerStageInfo;
@@ -21,7 +24,6 @@ const UpgradeMissionModal: React.FC<UpgradeMissionModalProps> = ({ mission, curr
     const currentInfo = getMissionInfoWithLevel(mission, currentLevel);
     const nextInfo = getMissionInfoWithLevel(mission, currentLevel + 1);
 
-    // FIX: Defined progressTowardNextLevel from missionState to resolve reference error.
     const progressTowardNextLevel = missionState?.progressTowardNextLevel ?? 0;
 
     const goldCost = useMemo(() => {
@@ -76,15 +78,6 @@ const UpgradeMissionModal: React.FC<UpgradeMissionModalProps> = ({ mission, curr
         </DraggableWindow>
     );
 };
-
-
-const LEVEL_DATA: { id: SinglePlayerLevel; name: string; unlockRequirement: number; image: string; }[] = [
-    { id: SinglePlayerLevel.입문, name: '입문반', unlockRequirement: 0, image: '/images/single/Academy.png' },
-    { id: SinglePlayerLevel.초급, name: '초급반', unlockRequirement: 20, image: '/images/single/Academy1.png' },
-    { id: SinglePlayerLevel.중급, name: '중급반', unlockRequirement: 40, image: '/images/single/Academy2.png' },
-    { id: SinglePlayerLevel.고급, name: '고급반', unlockRequirement: 60, image: '/images/single/Academy3.png' },
-    { id: SinglePlayerLevel.유단자, name: '유단자', unlockRequirement: 80, image: '/images/single/Academy4.png' },
-];
 
 const gameTypeKorean: Record<GameType, string> = {
     'capture': '따내기',
@@ -206,28 +199,9 @@ const StageListItem: React.FC<{
     );
 };
 
-const getRequiredProgressForStageId = (stageId: string): number => {
-    const index = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stageId);
-    if (index !== -1) return index + 1;
-    const parts = stageId.split('-');
-    if (parts.length !== 2) return Infinity; 
-    const levelPart = parts[0];
-    const stageNum = parseInt(parts[1], 10);
-    if (isNaN(stageNum)) return Infinity;
-    let baseProgress = 0;
-    switch (levelPart) {
-        case '입문': baseProgress = 0; break;
-        case '초급': baseProgress = 20; break;
-        case '중급': baseProgress = 40; break;
-        case '고급': baseProgress = 60; break;
-        case '유단자': baseProgress = 80; break;
-        default: return Infinity;
-    }
-    return baseProgress + stageNum;
-};
 
 const MissionCard: React.FC<{
-    mission: typeof SINGLE_PLAYER_MISSIONS[0];
+    mission: SinglePlayerStageInfo;
     isUnlocked: boolean;
     onStart: () => void;
     onClaim: () => void;
@@ -346,6 +320,35 @@ const MissionCard: React.FC<{
     );
 };
 
+
+const LEVEL_DATA: { id: SinglePlayerLevel; name: string; unlockRequirement: number; image: string; }[] = [
+    { id: SinglePlayerLevel.입문, name: '입문반', unlockRequirement: 0, image: '/images/single/Academy.png' },
+    { id: SinglePlayerLevel.초급, name: '초급반', unlockRequirement: 20, image: '/images/single/Academy1.png' },
+    { id: SinglePlayerLevel.중급, name: '중급반', unlockRequirement: 40, image: '/images/single/Academy2.png' },
+    { id: SinglePlayerLevel.고급, name: '고급반', unlockRequirement: 60, image: '/images/single/Academy3.png' },
+    { id: SinglePlayerLevel.유단자, name: '유단자', unlockRequirement: 80, image: '/images/single/Academy4.png' },
+];
+
+const getRequiredProgressForStageId = (stageId: string): number => {
+    const index = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stageId);
+    if (index !== -1) return index + 1;
+    const parts = stageId.split('-');
+    if (parts.length !== 2) return Infinity; 
+    const levelPart = parts[0];
+    const stageNum = parseInt(parts[1], 10);
+    if (isNaN(stageNum)) return Infinity;
+    let baseProgress = 0;
+    switch (levelPart) {
+        case '입문': baseProgress = 0; break;
+        case '초급': baseProgress = 20; break;
+        case '중급': baseProgress = 40; break;
+        case '고급': baseProgress = 60; break;
+        case '유단자': baseProgress = 80; break;
+        default: return Infinity;
+    }
+    return baseProgress + stageNum;
+};
+
 const SinglePlayerLobby: React.FC = () => {
     const { currentUserWithStatus, handlers } = useAppContext();
     const [activeLevelIndex, setActiveLevelIndex] = useState(0);
@@ -394,6 +397,22 @@ const SinglePlayerLobby: React.FC = () => {
     const handleNextLevel = useCallback(() => setActiveLevelIndex(prev => (prev + 1) % LEVEL_DATA.length), []);
     const handlePrevLevel = useCallback(() => setActiveLevelIndex(prev => (prev - 1 + LEVEL_DATA.length) % LEVEL_DATA.length), []);
 
+    const handleStart = (stageId: string | undefined) => {
+        if (!stageId) {
+            return;
+        }
+        if (!currentUserWithStatus) return;
+
+        const stage = SINGLE_PLAYER_STAGES.find(s => s.id === stageId);
+        if (!stage) return;
+        if (currentUserWithStatus.actionPoints.current < stage.actionPointCost) {
+            alert('행동력이 부족합니다.');
+            return;
+        }
+        
+        handlers.handleAction({ type: 'START_SINGLE_PLAYER_GAME', payload: { stageId } });
+    };
+
     if (!currentUserWithStatus) return null;
 
     return (
@@ -409,7 +428,16 @@ const SinglePlayerLobby: React.FC = () => {
             <header className="flex justify-between items-center flex-shrink-0 px-4 pt-4">
                  <Button onClick={() => window.location.hash = '#/profile'} colorScheme="gray">&larr; 프로필로</Button>
                 <h1 className="text-[clamp(1.75rem,1.25rem+2.5vw,2.25rem)] font-bold whitespace-nowrap">싱글플레이</h1>
-                <div className="w-32"></div>
+                <div className="w-32 text-right">
+                    <Button
+                        onClick={() => handleStart(currentUserWithStatus?.lastSinglePlayerStageId)}
+                        colorScheme="yellow"
+                        className="!text-sm"
+                        disabled={!currentUserWithStatus?.lastSinglePlayerStageId}
+                    >
+                        이어하기
+                    </Button>
+                </div>
             </header>
 
             <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-4">
@@ -455,7 +483,7 @@ const SinglePlayerLobby: React.FC = () => {
                         <h2 className="text-xl font-bold text-highlight text-center mb-2 lg:mb-4 flex-shrink-0">수련 과제</h2>
                         <div className="grid grid-cols-2 grid-rows-3 gap-2 lg:gap-3 flex-grow lg:flex-grow-0 overflow-y-auto lg:overflow-visible pr-1 lg:pr-0">
                             {SINGLE_PLAYER_MISSIONS.map(mission => {
-                                const requiredProgress = getRequiredProgressForStageId(mission.unlockStageId);
+                                const requiredProgress = mission.unlockStageId ? getRequiredProgressForStageId(mission.unlockStageId) : 0;
                                 const isUnlocked = userProgress >= requiredProgress;
                                 
                                 return (
@@ -476,5 +504,4 @@ const SinglePlayerLobby: React.FC = () => {
         </div>
     );
 };
-
 export default SinglePlayerLobby;

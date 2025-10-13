@@ -1,34 +1,9 @@
 // server/guildBossSimulator.ts
-import { User, Guild, GuildBossInfo, QuestReward, MannerEffects, GuildResearchId, GuildBossSkill, GuildBossActiveSkill, GuildBossPassiveSkill, GuildBossSkillEffect, GuildBossSkillSubEffect, CoreStat, SpecialStat, MythicStat } from '../types/index.js';
+import { User, Guild, GuildBossInfo, QuestReward, MannerEffects, GuildResearchId, GuildBossSkill, GuildBossActiveSkill, GuildBossPassiveSkill, GuildBossSkillEffect, GuildBossSkillSubEffect, CoreStat, SpecialStat, MythicStat, BattleLogEntry, GuildBossBattleResult } from '../types/index.js';
 import { GUILD_BOSSES, GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index.js';
 import { BOSS_SKILL_ICON_MAP, GUILD_ATTACK_ICON, GUILD_RESEARCH_REGEN_IMG, GUILD_RESEARCH_HEAL_BLOCK_IMG, GUILD_RESEARCH_IGNITE_IMG } from '../assets.js';
 import { calculateUserEffects } from '../utils/statUtils.js';
 import { calculateTotalStats } from './services/statService.js';
-
-// Define and export types locally
-export interface BattleLogEntry {
-    turn: number;
-    icon?: string;
-    message: string;
-    isUserAction?: boolean;
-    damageTaken?: number;
-    healingDone?: number;
-    bossHealingDone?: number;
-    isCrit?: boolean;
-    debuffsApplied?: { type: 'user_combat_power_reduction_percent' | 'user_heal_reduction_percent', value: number, turns: number }[];
-}
-
-export interface GuildBossBattleResult {
-    damageDealt: number;
-    turnsSurvived: number;
-    rewards: { guildCoins: number };
-    battleLog: BattleLogEntry[];
-    bossHpBefore: number;
-    bossHpAfter: number;
-    bossMaxHp: number;
-    userHp: number;
-    maxUserHp: number;
-}
 
 const getRandom = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 

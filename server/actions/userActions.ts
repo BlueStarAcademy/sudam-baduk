@@ -1,4 +1,3 @@
-
 import * as db from '../db.js';
 import { type ServerAction, type User, type HandleActionResult, GameMode, Guild } from '../../types/index.js';
 import { containsProfanity } from '../../profanity.js';
@@ -6,6 +5,7 @@ import { createDefaultSpentStatPoints } from '../initialData.js';
 import * as currencyService from '../currencyService.js';
 import * as guildService from '../guildService.js';
 import crypto from 'crypto';
+import { grantReward } from './rewardActions.js';
 
 export const handleUserAction = async (action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {
     const { type, payload } = action;
@@ -119,10 +119,21 @@ export const handleUserAction = async (action: ServerAction & { userId: string }
             return { clientResponse: { success: true, cost }};
         }
         case 'UPDATE_MBTI': {
-            user.mbti = payload.mbti;
-            user.isMbtiPublic = payload.isMbtiPublic;
+            const { mbti } = payload;
+            const isFirstTime = !user.mbti;
+            let rewardSummary = null;
+
+            user.mbti = mbti;
+            user.isMbtiPublic = true; // Always public now
+
+            if (isFirstTime) {
+                const reward = { diamonds: 100 };
+                const addedItems = grantReward(user, reward, 'MBTI 최초 설정 보상');
+                rewardSummary = { reward, items: addedItems, title: 'MBTI 설정 완료!' };
+            }
+            
             await db.updateUser(user);
-            return { clientResponse: { updatedUser: user } };
+            return { clientResponse: { updatedUser: user, rewardSummary } };
         }
         case 'CHANGE_PASSWORD': {
             const { currentPassword, newPassword } = payload;

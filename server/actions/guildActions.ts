@@ -1,3 +1,4 @@
+
 import * as db from '../db.js';
 import { 
     type ServerAction, 
@@ -587,6 +588,9 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             if (!user.guildId) return { error: "길드에 가입되어 있지 않습니다." };
             const guild = guilds[user.guildId];
             if (!guild) return { error: "길드를 찾을 수 없습니다." };
+            if (!guild.chatHistory) {
+                return { error: "메시지를 찾을 수 없습니다." };
+            }
         
             let messageIndex = -1;
             

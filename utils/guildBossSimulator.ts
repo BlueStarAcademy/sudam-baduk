@@ -1,7 +1,8 @@
+
 // utils/guildBossSimulator.ts
 // FIX: Split type and value imports to resolve namespace collision errors
 // FIX: Changed imports to point to specific files to avoid namespace conflicts
-import type { User, Guild, GuildBossInfo, QuestReward, MannerEffects, GuildBossSkill, GuildBossActiveSkill, GuildBossPassiveSkill, GuildBossSkillEffect, GuildBossSkillSubEffect } from '../types/entities.js';
+import type { User, Guild, GuildBossInfo, QuestReward, MannerEffects, GuildBossSkill, GuildBossActiveSkill, GuildBossPassiveSkill, GuildBossSkillEffect, GuildBossSkillSubEffect, BattleLogEntry, GuildBossBattleResult } from '../types/index.js';
 import { GuildResearchId, CoreStat, SpecialStat, MythicStat } from '../types/enums.js';
 import { GUILD_BOSSES, GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index.js';
 import { BOSS_SKILL_ICON_MAP, GUILD_RESEARCH_IGNITE_IMG, GUILD_RESEARCH_HEAL_BLOCK_IMG, GUILD_RESEARCH_REGEN_IMG, GUILD_ATTACK_ICON } from '../assets.js';
@@ -9,30 +10,7 @@ import { calculateUserEffects, calculateTotalStats } from './statUtils.js';
 import { getMannerEffects } from './mannerUtils.js';
 
 
-// Define and export types locally
-export interface BattleLogEntry {
-    turn: number;
-    icon?: string;
-    message: string;
-    isUserAction?: boolean;
-    damageTaken?: number;
-    healingDone?: number;
-    bossHealingDone?: number;
-    isCrit?: boolean;
-    debuffsApplied?: { type: 'user_combat_power_reduction_percent' | 'user_heal_reduction_percent', value: number, turns: number }[];
-}
-
-export interface GuildBossBattleResult {
-    damageDealt: number;
-    turnsSurvived: number;
-    rewards: { guildCoins: number };
-    battleLog: BattleLogEntry[];
-    bossHpBefore: number;
-    bossHpAfter: number;
-    bossMaxHp: number;
-    userHp: number;
-    maxUserHp: number;
-}
+// FIX: Removed local type definitions, now imported from types/index.js
 
 const normalAttackCommentaries = ['침착한 한수로 응수합니다.', '정확하게 약점을 노립니다.', '흐름을 가져오는 일격입니다.', '단단하게 지켜냅니다.'];
 const criticalAttackCommentaries = ['사활문제를 풀어냈습니다!', '엄청난 집중력으로 좋은 한수를 둡니다.', '예리한 묘수로 허를 찌릅니다!', '신의 한수!'];

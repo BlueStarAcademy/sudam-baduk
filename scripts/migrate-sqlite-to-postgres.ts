@@ -9,6 +9,8 @@ import * as pgUserRepo from '../server/repositories/userRepository.js';
 import * as pgGameRepo from '../server/repositories/gameRepository.js';
 import * as pgKvRepo from '../server/repositories/kvRepository.js';
 import * as pgCredRepo from '../server/repositories/credentialsRepository.js';
+// FIX: Import process from 'process' to make Node.js globals available.
+import process from 'process';
 
 const pgPool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -40,7 +42,7 @@ const migrateCredentials = async (sqliteDb: any) => {
     const creds = await sqliteDb.all('SELECT * FROM user_credentials');
     for (const row of creds) {
         // FIX: Separate 'username' from the typed object literal to match the UserCredentials type and the createUserCredentials function signature.
-        const userCreds: UserCredentials = {
+        const userCreds = {
             userId: row.userId,
             hash: row.hash,
             salt: row.salt,

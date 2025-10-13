@@ -1,7 +1,10 @@
 
+
+
+
 import { type LiveGameSession, Player, GameMode, GameStatus, type ServerAction, type User, type HandleActionResult, type Point } from '../../types/index.js';
 // FIX: Corrected import path for getGoLogic
-import { getGoLogic } from '../../utils/goLogic';
+import { getGoLogic, processMove } from '../../utils/goLogic.js';
 import { makeAiMove } from '../ai/index.js';
 
 export const initializeMissile = (game: LiveGameSession) => {
@@ -171,7 +174,7 @@ export const handleMissileAction = (game: LiveGameSession, action: ServerAction 
             game.boardState[from.y][from.x] = Player.None;
             game.boardState[to.y][to.x] = myPlayerEnum;
 
-            const logic = getGoLogic(game);
+            const logic = getGoLogic(game.settings);
             const opponentEnum = myPlayerEnum === Player.Black ? Player.White : Player.Black;
             let totalCapturedStones: Point[] = [];
 

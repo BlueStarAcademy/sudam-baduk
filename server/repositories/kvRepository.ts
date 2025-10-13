@@ -3,7 +3,10 @@ import { Pool } from 'pg';
 export const getKV = async <T>(db: Pool, key: string): Promise<T | null> => {
     const res = await db.query('SELECT value FROM kv WHERE key = $1', [key]);
     const row = res.rows[0];
-    return row && row.value ? JSON.parse(row.value) : null;
+    // The 'pg' driver automatically parses JSONB columns into JS objects.
+    // Calling JSON.parse on an object that's already parsed will cause an error.
+    // We can just return the value directly.
+    return row?.value ?? null;
 };
 
 export const setKV = async <T>(db: Pool, key: string, value: T): Promise<void> => {

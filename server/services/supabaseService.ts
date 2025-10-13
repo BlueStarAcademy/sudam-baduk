@@ -1,5 +1,8 @@
+
+
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
+import process from 'process';
 
 // These should be set in the Vercel environment variables
 const supabaseUrl = process.env.VITE_SUPABASE_URL;

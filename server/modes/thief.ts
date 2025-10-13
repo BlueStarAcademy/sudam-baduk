@@ -3,14 +3,16 @@
 
 
 
-import { type LiveGameSession, type Point, type DiceRoundSummary, Player, type Negotiation, type VolatileState, type ServerAction, type HandleActionResult, type User, GameMode, MythicStat, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
+
+import { type LiveGameSession, type AlkkagiStone, type Point, AlkkagiLayoutType, Player, AlkkagiPlacementType, type Negotiation, MythicStat, type VolatileState, type ServerAction, type HandleActionResult, type User, GameMode, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../../utils/goLogic';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';
 import { aiUserId } from '../ai/index.js';
-import { DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_TURN_CHOICE_TIME, DICE_GO_TURN_ROLL_TIME, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
-import { calculateUserEffects } from '../../utils/statUtils.js';
+import { ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES, PLAYFUL_MODE_FOUL_LIMIT, DICE_GO_MAIN_ROLL_TIME, DICE_GO_MAIN_PLACE_TIME } from '../../constants/index.js';
 import { endGame, processGameSummary } from '../summaryService.js';
+import { calculateUserEffects } from '../../utils/statUtils.js';
+import { getDb } from '../db/connection.js';
 
 export function finishThiefPlacingTurn(game: LiveGameSession, userId: string) {
     const now = Date.now();
@@ -323,12 +325,12 @@ export const updateThiefState = (game: LiveGameSession, now: number) => {
 };
 
 export const handleThiefAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
+    const dbPool = await getDb();
     const { type, payload } = action;
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     
-// FIX: The 'volatileState' parameter was missing in the call to 'handleSharedAction', causing an error. It has been added to match the function's signature.
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if(sharedResult) return sharedResult;
 
@@ -365,7 +367,7 @@ export const handleThiefAction = async (volatileState: VolatileState, game: Live
             if ((game.stonesToPlace ?? 0) <= 0) return { error: "No stones left to place."};
             
             const { x, y } = payload;
-            const goLogic = getGoLogic(game);
+            const goLogic = getGoLogic(game.settings);
             const myRole = user.id === game.thiefPlayerId ? 'thief' : 'police';
             let liberties: Point[];
 
@@ -413,6 +415,7 @@ export const handleThiefAction = async (volatileState: VolatileState, game: Live
 };
 
 export const makeThiefGoAiMove = async (game: LiveGameSession): Promise<void> => {
+    const dbPool = await getDb();
     const aiId = game.player2.id;
     const myPlayerEnum = game.whitePlayerId === aiId ? Player.White : Player.Black;
     if (game.currentPlayer !== myPlayerEnum) return;
@@ -432,7 +435,7 @@ export const makeThiefGoAiMove = async (game: LiveGameSession): Promise<void> =>
             return;
         }
 
-        const logic = getGoLogic(game);
+        const logic = getGoLogic(game.settings);
         let liberties: Point[];
         if (myRole === 'thief') {
             const noBlackStonesOnBoard = !game.boardState.flat().includes(Player.Black);

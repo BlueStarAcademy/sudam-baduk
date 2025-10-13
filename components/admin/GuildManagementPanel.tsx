@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Guild as GuildType, ServerAction } from '../../types/index.js';
+import type { Guild as GuildType, ServerAction } from '../../types/index.js';
 import Button from '../Button.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import ToggleSwitch from '../ui/ToggleSwitch.js';

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Changed import to a default import as the error indicates App is exported as default.
-import App from './components/App.js';
+// FIX: App.tsx가 기본 내보내기(default export)되므로, 확장자를 .js에서 .tsx로 변경하여 올바르게 가져오도록 수정했습니다.
+import App from './components/App';
 import './index.css';
 import { AppProvider } from './contexts/AppContext';
 

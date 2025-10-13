@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { GuildBossBattleResult as GuildBossBattleResultType } from '../../utils/guildBossSimulator.js';
+import type { GuildBossBattleResult as GuildBossBattleResultType } from '../../types/index.js';
 import DraggableWindow from '../DraggableWindow.js';
 import Button from '../Button.js';
 

@@ -38,7 +38,7 @@ const ThiefGoArena: React.FC<ThiefGoArenaProps> = (props) => {
     const highlightedPoints = useMemo(() => {
         if (gameStatus !== 'thief_placing' || !isMyTurn) return [];
     
-        const logic = getGoLogic(session);
+        const logic = getGoLogic(session.settings);
         const allEmptyPoints = () => {
             const points: Point[] = [];
             for (let y = 0; y < settings.boardSize; y++) {

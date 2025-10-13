@@ -26,6 +26,26 @@ export const performOneTimeReset = async () => {
     console.log('[RESET] One-time ranking score reset complete.');
 };
 
+export const performOneTimeMbtiReset = async () => {
+    const resetFlag = await db.getKV('oneTimeMbtiReset_20240916');
+    if (resetFlag) {
+        return;
+    }
+    console.log('[RESET] Performing one-time MBTI reset for all users...');
+    const allUsers = await db.getAllUsers();
+    let updatedCount = 0;
+    for (const user of allUsers) {
+        if (user.mbti) {
+            user.mbti = null;
+            user.isMbtiPublic = false; // also reset this
+            await db.updateUser(user);
+            updatedCount++;
+        }
+    }
+    await db.setKV('oneTimeMbtiReset_20240916', true);
+    console.log(`[RESET] One-time MBTI reset complete for ${updatedCount} users.`);
+};
+
 export const processRankingRewards = async () => {
     const lastRewardTime = await db.getKV<number>('lastSeasonalRewardTime');
     const now = Date.now();

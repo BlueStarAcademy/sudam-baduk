@@ -102,6 +102,7 @@ export const addItemsToInventory = (
                          stars: 0, 
                          level: 1,
                          slot: null,
+// FIX: Add missing 'options' property to created item object to satisfy InventoryItem type.
                          options: undefined,
                      };
                      inventory.push(newItem);

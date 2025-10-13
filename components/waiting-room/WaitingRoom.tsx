@@ -146,16 +146,17 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
   const ongoingGames = (Object.values(liveGames) as LiveGameSession[]).filter(g => g.mode === mode && !g.isAiGame);
   
   const usersInThisRoom = useMemo(() => {
-    // Filter for users whose status indicates they are associated with this game mode.
-    // This includes users waiting, in-game, or spectating games of this mode.
-    const all = onlineUsers.filter(u => u.mode === mode);
+    // Get all other users who are in this waiting room.
+    const othersInRoom = onlineUsers.filter(u => u.id !== currentUserWithStatus.id && u.mode === mode);
     
-    // Find the current user in the filtered list
-    const me = all.find(u => u.id === currentUserWithStatus.id);
+    // Show myself in the list only if my status correctly reflects I'm in this waiting room.
+    if (currentUserWithStatus.status === 'waiting' && currentUserWithStatus.mode === mode) {
+        return [currentUserWithStatus, ...othersInRoom];
+    }
     
-    // Return the list with the current user at the top, if present.
-    return me ? [me, ...all.filter(u => u.id !== currentUserWithStatus.id)] : all;
-  }, [onlineUsers, mode, currentUserWithStatus.id]);
+    // Otherwise, I'm probably just transitioning, so only show other confirmed users.
+    return othersInRoom;
+  }, [onlineUsers, mode, currentUserWithStatus]);
 
   const isStrategic = useMemo(() => SPECIAL_GAME_MODES.some(m => m.mode === mode), [mode]);
   const lobbyType = isStrategic ? '전략' : '놀이';

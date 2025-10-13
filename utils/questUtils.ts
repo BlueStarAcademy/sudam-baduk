@@ -49,7 +49,7 @@ export const accumulateMissionRewards = (user: types.User): types.User => {
         
         const currentAmount = missionState.claimableAmount || 0;
         const level = missionState.level || 1;
-        const leveledMissionInfo = getMissionInfoWithLevel(missionInfo, level);
+        const leveledMissionInfo = getMissionInfoWithLevel(missionInfo as types.SinglePlayerStageInfo, level);
 
         if (currentAmount >= (leveledMissionInfo.maxCapacity ?? Infinity)) {
             continue;

@@ -1,3 +1,4 @@
+
 import * as db from '../db.js';
 import { 
     type ServerAction, 
@@ -15,8 +16,10 @@ import {
     Player,
     WinReason,
     GameStatus as GameStatusEnum, // Use alias to avoid conflict
-    VolatileState
+    VolatileState,
 } from '../../types/index.js';
+// FIX: The type 'Pool' is not exported from '../../types/index.js'. It should be imported from 'pg'.
+import { type Pool } from 'pg';
 import { defaultStats, createDefaultSpentStatPoints, createDefaultUser } from '../initialData.js';
 import * as summaryService from '../summaryService.js';
 import { createItemFromTemplate } from '../shop.js';
@@ -27,6 +30,7 @@ import { calculateUserEffects, createDefaultBaseStats } from '../../utils/statUt
 import * as currencyService from '../currencyService.js';
 import { isSameDayKST } from '../../utils/timeUtils.js';
 import crypto from 'crypto';
+import process from 'process';
 
 type HandleActionResult = { 
     clientResponse?: any;
@@ -45,7 +49,7 @@ const createAdminLog = async (admin: User, action: AdminLog['action'], target: U
         details: details,
         backupData: backupData
     };
-
+    
     const logs = await db.getKV<AdminLog[]>('adminLogs') || [];
     logs.unshift(log);
     if (logs.length > 200) logs.length = 200;
@@ -129,7 +133,7 @@ export const handleAdminAction = async (action: ServerAction & { user: User }, v
             const targetUser = await db.getUser(targetUserId);
             if (!targetUser) return { error: '대상 사용자를 찾을 수 없습니다.' };
             if (targetUser.isAdmin) return { error: '관리자 계정은 삭제할 수 없습니다.' };
-
+            
             const allActiveGames = await db.getAllActiveGames();
             const activeGame = allActiveGames.find(g => g.player1.id === targetUserId || g.player2.id === targetUserId);
             
@@ -166,17 +170,17 @@ export const handleAdminAction = async (action: ServerAction & { user: User }, v
             const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
             delete userStatuses[targetUserId];
             await db.setKV('userStatuses', userStatuses);
-
+            
             await createAdminLog(user, 'delete_user', targetUser, null, backupData);
             return { clientResponse: { deletedUserId: targetUserId } };
         }
         case 'ADMIN_CREATE_USER': {
             const { username, password, nickname } = payload;
             if (!username || !password || !nickname) { return { error: '모든 필드를 입력해야 합니다.' }; }
-
+            
             const existingByUsername = await db.getUserCredentials(username);
             if (existingByUsername) return { error: '이미 사용 중인 아이디입니다.' };
-
+            
             const allUsers = await db.getAllUsers();
             if (allUsers.some(u => u.nickname.toLowerCase() === nickname.toLowerCase())) {
                 return { error: '이미 사용 중인 닉네임입니다.' };
@@ -193,7 +197,7 @@ export const handleAdminAction = async (action: ServerAction & { user: User }, v
             const { targetUserId } = payload;
             const targetUser = await db.getUser(targetUserId);
             if (!targetUser) return { error: '대상 사용자를 찾을 수 없습니다.' };
-
+            
             const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
             const backupData = { status: userStatuses[targetUserId] };
 
@@ -385,7 +389,7 @@ export const handleAdminAction = async (action: ServerAction & { user: User }, v
             
             updateUserStatus(p1Id);
             updateUserStatus(p2Id);
-
+            
             await db.setKV('userStatuses', userStatuses);
             
             await createAdminLog(user, 'force_delete_game', game.player1, { reason: "Admin forced game closure" }, backupData);
@@ -537,7 +541,7 @@ export const handleAdminAction = async (action: ServerAction & { user: User }, v
                      guildToSanction.recruitmentBanUntil = Date.now() + durationHours * 60 * 60 * 1000;
                 }
             }
-
+            
             await db.setKV('guilds', guilds);
             await createAdminLog(user, 'apply_guild_sanction', { id: guildId, nickname: guildToSanction.name }, { sanctionType, durationHours }, null);
             return { clientResponse: { guilds } };
@@ -550,7 +554,7 @@ export const handleAdminAction = async (action: ServerAction & { user: User }, v
             if (!guildToDelete) {
                 return { error: '길드를 찾을 수 없습니다.' };
             }
-
+            
             const allUsers = await db.getAllUsers();
             for (const member of guildToDelete.members) {
                 const userToUpdate = allUsers.find(u => u.id === member.userId);

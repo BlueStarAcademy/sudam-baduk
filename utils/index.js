@@ -3,4 +3,4 @@
 export * from './appUtils.js';
 export * from './inventoryUtils.js';
 export * from './timeUtils.js';
-export * from './goLogic.js';
+export * from './goLogic.ts';

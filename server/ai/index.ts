@@ -1,4 +1,3 @@
-
 // server/ai/index.ts
 import { LiveGameSession, GameMode, User, Player, Point } from '../../types/index.js';
 import { aiUserId } from '../../constants/index.js';

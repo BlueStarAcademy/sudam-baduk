@@ -1,7 +1,19 @@
+
 import { Pool } from 'pg';
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import process from 'process';
+
+// Explicitly load .env file. tsx runner might not do this automatically.
+dotenv.config();
 
 let db: Pool | null = null;
+
+export const getDb = async (): Promise<Pool> => {
+    if (db) {
+        return db;
+    }
+    return initializeAndGetDb();
+};
 
 export const initializeAndGetDb = async (): Promise<Pool> => {
     if (db) {
@@ -108,7 +120,8 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
                     "worldRewardClaimed" BOOLEAN,
                     "lastWorldTournament" JSONB,
                     "dailyChampionshipMatchesPlayed" INTEGER,
-                    "lastChampionshipMatchDate" BIGINT
+                    "lastChampionshipMatchDate" BIGINT,
+                    "lastSinglePlayerStageId" TEXT
                 );
             `;
 
@@ -172,19 +185,19 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
                     "komiBidRevealProcessed" BOOLEAN,
                     "finalKomi" REAL,
                     "hiddenMoves" JSONB,
-                    scans_p1 INTEGER,
-                    scans_p2 INTEGER,
+                    "scans_p1" INTEGER,
+                    "scans_p2" INTEGER,
                     "revealedStones" JSONB,
                     "revealedHiddenMoves" JSONB,
                     "newlyRevealed" JSONB,
                     "justCaptured" JSONB,
-                    hidden_stones_used_p1 INTEGER,
-                    hidden_stones_used_p2 INTEGER,
+                    "hidden_stones_used_p1" INTEGER,
+                    "hidden_stones_used_p2" INTEGER,
                     "pendingCapture" JSONB,
                     "permanentlyRevealedStones" JSONB,
                     "missileUsedThisTurn" BOOLEAN,
-                    missiles_p1 INTEGER,
-                    missiles_p2 INTEGER,
+                    "missiles_p1" INTEGER,
+                    "missiles_p2" INTEGER,
                     "rpsState" JSONB,
                     "rpsRound" INTEGER,
                     dice JSONB,
@@ -258,7 +271,6 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
                     "revealEndTime" BIGINT,
                     "isAiGame" BOOLEAN,
                     "aiTurnStartTime" BIGINT,
-                    "aiHiddenStoneUsedThisGame" BOOLEAN,
                     "mythicBonuses" JSONB,
                     "lastPlayfulGoldCheck" JSONB,
                     "pendingSystemMessages" JSONB,
@@ -278,10 +290,20 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
                     "whiteStonesPlaced" INTEGER,
                     "whiteStoneLimit" INTEGER,
                     "autoEndTurnCount" INTEGER,
-                    "promptForMoreStones" BOOLEAN
+                    "promptForMoreStones" BOOLEAN,
+                    "aiHiddenStoneUsedThisGame" BOOLEAN
                 );
             `;
 
+            const userCredentialsTableSchema = `
+                CREATE TABLE IF NOT EXISTS user_credentials (
+                    username TEXT PRIMARY KEY,
+                    hash TEXT,
+                    salt TEXT,
+                    "userId" TEXT UNIQUE NOT NULL
+                );
+            `;
+            
             const kvTableSchema = `
                 CREATE TABLE IF NOT EXISTS kv (
                     key TEXT PRIMARY KEY,
@@ -289,26 +311,38 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
                 );
             `;
 
-            const credentialsTableSchema = `
-                CREATE TABLE IF NOT EXISTS user_credentials (
-                    "userId" TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                    username TEXT UNIQUE,
-                    hash TEXT,
-                    salt TEXT
-                );
-            `;
-
             await client.query(userTableSchema);
             await client.query(liveGamesTableSchema);
+            await client.query(userCredentialsTableSchema);
             await client.query(kvTableSchema);
-            await client.query(credentialsTableSchema);
-            console.log('[DB] Tables ensured.');
 
+            // --- MIGRATION LOGIC ---
+            const checkColumnQuery = `
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'live_games' AND column_name = 'aiHiddenStoneUsedThisGame'
+            `;
+            const colRes = await client.query(checkColumnQuery);
+            if (colRes.rowCount === 0) {
+                console.log('[DB Migration] Adding column "aiHiddenStoneUsedThisGame" to live_games table.');
+                await client.query('ALTER TABLE live_games ADD COLUMN "aiHiddenStoneUsedThisGame" BOOLEAN');
+            }
+
+            // Migration for kv.value column type
+            const checkKvColumnQuery = `
+                SELECT data_type FROM information_schema.columns
+                WHERE table_name = 'kv' AND column_name = 'value';
+            `;
+            const colResKv = await client.query(checkKvColumnQuery);
+            if (colResKv.rows.length > 0 && colResKv.rows[0].data_type !== 'jsonb') {
+                console.log('[DB Migration] Changing column "value" in "kv" table from TEXT to JSONB.');
+                await client.query('ALTER TABLE kv ALTER COLUMN value TYPE JSONB USING value::jsonb;');
+            }
+            
             await client.query('COMMIT');
-        } catch (err) {
+        } catch (e) {
             await client.query('ROLLBACK');
-            console.error('[DB] Failed to run schema and migrations:', err);
-            throw err;
+            throw e;
         } finally {
             client.release();
         }
@@ -317,12 +351,5 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
     await runSchemaAndMigrations();
 
     db = pool;
-    return db;
-};
-
-export const getDb = async (): Promise<Pool> => {
-    if (!db) {
-        return initializeAndGetDb();
-    }
     return db;
 };

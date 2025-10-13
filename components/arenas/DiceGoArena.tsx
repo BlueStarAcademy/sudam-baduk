@@ -39,7 +39,8 @@ const DiceGoArena: React.FC<DiceGoArenaProps> = (props) => {
             }
             return points;
         }
-        return getGoLogic(session).getAllLibertiesOfPlayer(Player.White, boardState);
+        // FIX: Pass game.settings to getGoLogic instead of the entire game session.
+        return getGoLogic(session.settings).getAllLibertiesOfPlayer(Player.White, boardState);
     }, [session, gameStatus, isMyTurn, boardState, settings.boardSize]);
 
     const handleBoardClick = async (x: number, y: number) => {

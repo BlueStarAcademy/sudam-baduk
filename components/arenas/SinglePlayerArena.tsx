@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel, GameMode, User, UserWithStatus } from '../../types/index.js';
+import { Player, GameStatus, SinglePlayerLevel, GameMode } from '../../types/index.js';
+import type { Point, GameProps, LiveGameSession, ServerAction, User, UserWithStatus } from '../../types/index.js';
 import GameArena from '../GameArena.js';
 import Sidebar from '../game/Sidebar.js';
 import PlayerPanel from '../game/PlayerPanel.js';
@@ -266,7 +267,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         
         setPendingMove(null);
     }, [pendingMove, session.id, handlers, gameStatus, isMyTurn, mode, isSubmittingMove]);
-
+    
     const handleCancelMove = useCallback(() => setPendingMove(null), []);
     
     const stageInfo = useMemo(() => SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId), [session.stageId]);

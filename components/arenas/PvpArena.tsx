@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Player, GameMode, GameStatus, Point, GameProps, LiveGameSession, AlkkagiStone, ServerAction, User, UserWithStatus, WinReason } from '../../types/index.js';
+import { Player, GameMode, GameStatus, WinReason } from '../../types/index.js';
+import type { Point, GameProps, LiveGameSession, AlkkagiStone, ServerAction, User, UserWithStatus } from '../../types/index.js';
 import GameArena from '../GameArena.js';
 import Sidebar from '../game/Sidebar.js';
 import PlayerPanel from '../game/PlayerPanel.js';
@@ -379,7 +380,7 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
 
     const gameControlsProps = {
         session, isMyTurn, isSpectator, onAction: handlers.handleAction, setShowResultModal, setConfirmModalType, currentUser: currentUserWithStatus!,
-        onlineUsers, pendingMove, onConfirmMove: handleConfirmMove, onCancelMove: handleCancelMove, settings, isMobile,
+        onlineUsers, pendingMove, onConfirmMove: handleConfirmMove, onCancelMove: handleCancelMove, settings, isMobile, isNoContestLeaveAvailable
     };
 
     const middlePanelComponent = useMemo(() => {

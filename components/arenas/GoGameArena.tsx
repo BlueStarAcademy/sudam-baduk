@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 // FIX: Separate enum and type imports, and correct import path.
 import { Player, GameMode, GameStatus } from '../../types/index.js';
@@ -108,8 +109,8 @@ const GoGameArena: React.FC<GoGameArenaProps> = (props) => {
                     isItemModeActive={isItemModeActive}
                     animation={session.animation}
                     isMobile={isMobile}
-                    blackPatternStones={blackPatternStones}
-                    whitePatternStones={whitePatternStones}
+                    blackPatternStones={blackPatternStones || undefined}
+                    whitePatternStones={whitePatternStones || undefined}
                     optimisticStone={props.optimisticStone ?? null}
                     isBiddingPhase={isBiddingPhase}
                 />

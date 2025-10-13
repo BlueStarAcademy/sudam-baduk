@@ -1,6 +1,4 @@
 
-
-
 import { useContext } from 'react';
 // Changed to relative import path
 import { AppContext } from '../contexts/AppContext.js';

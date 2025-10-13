@@ -30,7 +30,8 @@ import SynthesisResultModal from './SynthesisResultModal.js';
 import TowerRankingRewardsModal from './TowerRankingRewardsModal.js';
 import LevelUpModal from './LevelUpModal.js';
 import ActionPointQuizModal from './modals/ActionPointQuizModal.js';
-import { UserStatus, User } from '../types/index.js';
+import { GameMode, UserStatus, CoreStat, Player, LeagueTier } from '../types/index.js';
+import type { ShopTab, InventoryTab, User, LiveGameSession, UserWithStatus, ServerAction, Negotiation, ChatMessage, AdminLog, Announcement, OverrideAnnouncement, InventoryItem, AppState, InventoryItemType, AppRoute, QuestReward, DailyQuestData, WeeklyQuestData, MonthlyQuestData, Theme, SoundSettings, FeatureSettings, AppSettings, TowerRank, TournamentState, Guild, GuildBossBattleResult, SinglePlayerStageInfo, UserStatusInfo, QuestLog, EquipmentPreset, SinglePlayerMissionState } from '../types/index.js';
 import GuildEffectsModal from './guild/GuildEffectsModal.js';
 import GuildBossBattleResultModal from './guild/GuildBossBattleResultModal.js';
 import EquipmentEffectsModal from './EquipmentEffectsModal.js';
@@ -253,8 +254,6 @@ const App: React.FC = () => {
         activeNegotiation,
         modals,
         showExitToast,
-        enhancementResult,
-        enhancementOutcome,
         handlers,
         onlineUsers,
         guilds,
@@ -349,7 +348,7 @@ const App: React.FC = () => {
             {modals.isEncyclopediaOpen && <EncyclopediaModal onClose={handlers.closeEncyclopedia} isTopmost={topmostModalId === 'encyclopedia'} />}
             {modals.isStatAllocationModalOpen && <StatAllocationModal currentUser={currentUserWithStatus} onClose={handlers.closeStatAllocationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'statAllocation'} />}
             {modals.isProfileEditModalOpen && <ProfileEditModal currentUser={currentUserWithStatus} onClose={handlers.closeProfileEditModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'profileEdit'} />}
-            {modals.enhancingItem && <EnhancementModal item={modals.enhancingItem} currentUser={currentUserWithStatus} onClose={handlers.closeEnhancementModal} onAction={handlers.handleAction} enhancementOutcome={enhancementOutcome} onOutcomeConfirm={handlers.clearEnhancementOutcome} isTopmost={topmostModalId === 'enhancingItem'} />}
+            {modals.enhancingItem && <EnhancementModal item={modals.enhancingItem} currentUser={currentUserWithStatus} onClose={handlers.closeEnhancementModal} onAction={handlers.handleAction} enhancementOutcome={modals.enhancementOutcome} onOutcomeConfirm={handlers.clearEnhancementOutcome} isTopmost={topmostModalId === 'enhancingItem'} />}
             {modals.pastRankingsInfo && <PastRankingsModal info={modals.pastRankingsInfo} onClose={handlers.closePastRankings} isTopmost={topmostModalId === 'pastRankings'} />}
             {modals.moderatingUser && <AdminModerationModal user={modals.moderatingUser} currentUser={currentUserWithStatus} onClose={handlers.closeModerationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'moderatingUser'} />}
             {modals.isTowerRewardInfoOpen && <TowerRankingRewardsModal onClose={handlers.closeTowerRewardInfoModal} isTopmost={topmostModalId === 'towerRewardInfo'} />}

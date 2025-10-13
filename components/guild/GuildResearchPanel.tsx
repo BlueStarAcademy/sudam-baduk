@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Guild, GuildMember, GuildMemberRole, GuildResearchId, GuildResearchCategory } from '../../types/index.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
@@ -172,7 +173,8 @@ const ResearchItemPanel: React.FC<{
 };
 
 const GuildResearchPanel: React.FC<GuildResearchPanelProps & { onClose: () => void }> = ({ guild, myMemberInfo, onClose }) => {
-    const [activeTab, setActiveTab] = useState<GuildResearchCategory>('development');
+    // FIX: Replaced string literal with GuildResearchCategory enum member for initial state.
+    const [activeTab, setActiveTab] = useState<GuildResearchCategory>(GuildResearchCategory.development);
     const researchInProgressId = guild.researchTask?.researchId;
 
     const researchProjectsForTab = useMemo(() => {
@@ -182,10 +184,11 @@ const GuildResearchPanel: React.FC<GuildResearchPanelProps & { onClose: () => vo
     }, [activeTab]);
     
     const tabs: { id: GuildResearchCategory; label: string }[] = [
-        { id: 'development', label: '길드 발전' },
-        { id: 'boss', label: '보스전' },
-        { id: 'stats', label: '능력치 증가' },
-        { id: 'rewards', label: '보상 증가' },
+        // FIX: Replaced string literals with GuildResearchCategory enum members.
+        { id: GuildResearchCategory.development, label: '길드 발전' },
+        { id: GuildResearchCategory.boss, label: '보스전' },
+        { id: GuildResearchCategory.stats, label: '능력치 증가' },
+        { id: GuildResearchCategory.rewards, label: '보상 증가' },
     ];
 
     return (

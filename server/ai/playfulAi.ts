@@ -1,8 +1,12 @@
+
+
+
 import { LiveGameSession, GameMode } from '../../types/index.js';
 import { makeDiceGoAiMove } from '../modes/diceGo.js';
 import { makeThiefGoAiMove } from '../modes/thief.js';
 import { makeAlkkagiAiMove } from '../modes/alkkagi.js';
 import { makeCurlingAiMove } from '../modes/curling.js';
+// FIX: Correct import path for omok AI logic.
 import { makeOmokAiMove } from '../modes/omokLogic.js';
 
 // This file centralizes AI move logic for all playful modes.

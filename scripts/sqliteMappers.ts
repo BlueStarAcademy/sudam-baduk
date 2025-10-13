@@ -1,7 +1,4 @@
 
-
-
-
 // FIX: Split imports to fetch `createDefaultBaseStats` from the correct source file.
 import { createDefaultQuests, createDefaultSpentStatPoints, defaultStats } from '../server/initialData.js';
 import { createDefaultBaseStats } from '../utils/statUtils.js';
@@ -261,7 +258,7 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             blackPlayerId: row.blackPlayerId ?? null,
             whitePlayerId: row.whitePlayerId ?? null,
             gameStatus: row.gameStatus,
-            currentPlayer: row.currentPlayer != null ? Number(row.currentPlayer) : 0,
+            currentPlayer: Number(row.currentPlayer ?? 0),
             boardState: ensureArray(safeParse(row.boardState, [])),
             moveHistory: ensureArray(safeParse(row.moveHistory, [])),
             captures: ensureObject(safeParse(row.captures, { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 })),
@@ -321,7 +318,7 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             hidden_stones_used_p2: row.hidden_stones_used_p2 ?? undefined,
             pendingCapture: ensureObject(safeParse(row.pendingCapture, undefined), undefined),
             permanentlyRevealedStones: ensureArray(safeParse(row.permanentlyRevealedStones, undefined), undefined),
-            pendingAiMove: undefined,
+            pendingAiMove: undefined, // This is transient
             missileUsedThisTurn: !!row.missileUsedThisTurn,
             missiles_p1: row.missiles_p1 ?? undefined,
             missiles_p2: row.missiles_p2 ?? undefined,
@@ -398,6 +395,7 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             revealEndTime: row.revealEndTime ? Number(row.revealEndTime) : undefined,
             isAiGame: !!row.isAiGame,
             aiTurnStartTime: row.aiTurnStartTime ? Number(row.aiTurnStartTime) : undefined,
+            aiHiddenStoneUsedThisGame: !!row.aiHiddenStoneUsedThisGame,
             mythicBonuses: ensureObject(safeParse(row.mythicBonuses, {})),
             lastPlayfulGoldCheck: ensureObject(safeParse(row.lastPlayfulGoldCheck, {})),
             pendingSystemMessages: ensureArray(safeParse(row.pendingSystemMessages, undefined), undefined),

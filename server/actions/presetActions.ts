@@ -1,4 +1,3 @@
-
 import * as db from '../db.js';
 import { type User, type ServerAction, type HandleActionResult } from '../../types/index.js';
 import { containsProfanity } from '../../profanity.js';

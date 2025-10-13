@@ -1,3 +1,4 @@
+// server/actions/aiGameActions.ts
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, Guild, LiveGameSession, GameStatus, Player, SinglePlayerLevel, UserStatus, Negotiation, SinglePlayerStageInfo, UserStatusInfo } from '../../types/index.js';
 import * as db from '../db.js';
 import { initializeGame } from '../gameModes.js';
@@ -5,18 +6,18 @@ import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants/index.js';
 import * as currencyService from '../currencyService.js';
 import { getAiUser } from '../ai/index.js';
 
-const placeInitialStonesRandomly = (game: LiveGameSession, stage: SinglePlayerStageInfo) => {
+const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo) => {
     game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(Player.None));
     game.blackPatternStones = [];
     game.whitePatternStones = [];
 
     const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount, centerBlackStoneChance } = stage.placements;
     
-    const placeRandomStones = (player: Player, count: number, isPattern: boolean) => {
+    const placeStones = (player: Player, count: number, isPattern: boolean) => {
         const patternStonesKey = player === Player.Black ? 'blackPatternStones' : 'whitePatternStones';
         let placed = 0;
         let attempts = 0;
-        while (placed < count && attempts < 500) {
+        while (placed < count && attempts < 1000) {
             const x = Math.floor(Math.random() * stage.boardSize);
             const y = Math.floor(Math.random() * stage.boardSize);
             if (game.boardState[y][x] === Player.None) {
@@ -30,15 +31,17 @@ const placeInitialStonesRandomly = (game: LiveGameSession, stage: SinglePlayerSt
         }
     };
     
-    placeRandomStones(Player.Black, blackCount, false);
-    placeRandomStones(Player.White, whiteCount, false);
-    placeRandomStones(Player.Black, blackPatternCount, true);
-    placeRandomStones(Player.White, whitePatternCount, true);
+    placeStones(Player.Black, blackCount, false);
+    placeStones(Player.White, whiteCount, false);
+    placeStones(Player.Black, blackPatternCount, true);
+    placeStones(Player.White, whitePatternCount, true);
 
-    if (centerBlackStoneChance && Math.random() * 100 < centerBlackStoneChance) {
-        const center = Math.floor(stage.boardSize / 2);
-        if (game.boardState[center][center] === Player.None) {
-            game.boardState[center][center] = Player.Black;
+    if (centerBlackStoneChance) {
+        if (Math.random() * 100 < centerBlackStoneChance) {
+            const center = Math.floor(stage.boardSize / 2);
+            if (game.boardState[center][center] === Player.None) {
+                game.boardState[center][center] = Player.Black;
+            }
         }
     }
 };
@@ -130,12 +133,15 @@ export const handleAiGameStart = async (
         game.singlePlayerPlacementRefreshesUsed = 0;
     }
     
-    placeInitialStonesRandomly(game, stage);
+    placeInitialStones(game, stage);
     
     game.currentPlayer = Player.Black;
 
     await db.saveGame(game);
-    volatileState.userStatuses[game.player1.id] = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
+    
+    const statusInfo: UserStatusInfo = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
+    await db.updateUserStatus(game.player1.id, statusInfo);
+    volatileState.userStatuses[game.player1.id] = statusInfo;
     
     await db.updateUser(user);
 
@@ -171,7 +177,7 @@ export const handleAiGameRefresh = async (game: LiveGameSession, user: User, typ
     if (!stage) return { error: '스테이지 정보를 찾을 수 없습니다.' };
 
     game.moveHistory = [];
-    placeInitialStonesRandomly(game, stage);
+    placeInitialStones(game, stage);
     
     game.currentPlayer = Player.Black;
 

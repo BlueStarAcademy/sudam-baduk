@@ -1,7 +1,7 @@
 
 import { Pool } from 'pg';
-import { getDb, initializeAndGetDb } from './db/connection.js';
-import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank } from '../types/index.js';
+import { initializeAndGetDb, getDb } from './db/connection.js';
+import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank, UserStatusInfo } from '../types/index.js';
 import { getInitialState } from './initialData.js';
 
 // --- Initialization and Seeding ---
@@ -52,6 +52,28 @@ export const setKV = async <T>(key: string, value: T): Promise<void> => {
     const kvRepository = await import('./repositories/kvRepository.js');
     return kvRepository.setKV(await getDb(), key, value);
 };
+
+// --- Atomic Status Updates ---
+export const updateUserStatus = async (userId: string, statusInfo: UserStatusInfo): Promise<void> => {
+    const db = await getDb();
+    await db.query(
+        `INSERT INTO kv (key, value)
+         VALUES ('userStatuses', jsonb_build_object($1::text, $2::jsonb))
+         ON CONFLICT (key) DO UPDATE
+         SET value = kv.value || jsonb_build_object($1::text, $2::jsonb);`,
+        [userId, JSON.stringify(statusInfo)]
+    );
+};
+
+export const removeUserStatus = async (userId: string): Promise<void> => {
+    const db = await getDb();
+    await db.query(`
+        UPDATE kv
+        SET value = value - $1::text
+        WHERE key = 'userStatuses';
+    `, [userId]);
+};
+
 
 // --- User Functions ---
 export const getAllUsers = async (): Promise<User[]> => {

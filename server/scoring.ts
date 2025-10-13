@@ -1,3 +1,4 @@
+
 // server/scoring.ts
 import { BoardState, Player, Point } from '../types/index.js';
 
@@ -10,16 +11,19 @@ const getNeighbors = (x: number, y: number, boardSize: number): Point[] => {
     return neighbors;
 };
 
-const findGroup = (x: number, y: number, board: BoardState, visited: boolean[][]): { stones: Point[], liberties: Set<string> } | null => {
-    const player = board[y][x];
-    if (player === Player.None || visited[y][x]) {
+const findGroup = (startX: number, startY: number, board: BoardState, visited: boolean[][]): { stones: Point[], liberties: Set<string> } | null => {
+    // FIX: Use startX and startY for initial check.
+    const player = board[startY][startX];
+    // FIX: Use startX and startY for initial check.
+    if (player === Player.None || visited[startY][startX]) {
         return null;
     }
 
     const stones: Point[] = [];
     const liberties = new Set<string>();
-    const queue: Point[] = [{ x, y }];
-    visited[y][x] = true;
+    // FIX: Use startX and startY for initial queue.
+    const queue: Point[] = [{ x: startX, y: startY }];
+    visited[startY][startX] = true;
     const boardSize = board.length;
 
     while (queue.length > 0) {

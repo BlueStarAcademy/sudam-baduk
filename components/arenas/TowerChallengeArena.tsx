@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { Player, GameStatus, Point, GameProps, LiveGameSession, ServerAction, SinglePlayerLevel, GameMode, User, UserWithStatus, TowerRank } from '../../types/index.js';
+import { Player, GameStatus, SinglePlayerLevel, GameMode, GameType } from '../../types/index.js';
+import type { Point, GameProps, LiveGameSession, ServerAction, User, UserWithStatus, TowerRank, InventoryItem, SinglePlayerStageInfo } from '../../types/index.js';
 import GameArena from '../GameArena.js';
 import Sidebar from '../game/Sidebar.js';
 import PlayerPanel from '../game/PlayerPanel.js';
@@ -32,6 +33,16 @@ function usePrevious<T>(value: T): T | undefined {
 interface TowerChallengeArenaProps {
     session: LiveGameSession;
 }
+
+// FIX: Moved the 'gameTypeKorean' object here to resolve a circular dependency issue with 'TowerChallengeLobby.tsx'.
+const gameTypeKorean: Record<GameType, string> = {
+    'capture': '따내기',
+    'survival': '살리기',
+    'speed': '스피드',
+    'missile': '미사일',
+    'hidden': '히든'
+};
+
 
 export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ session }) => {
     const { 

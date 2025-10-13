@@ -48,7 +48,7 @@ const addUrls = (urls: (string | undefined | null)[]) => {
 };
 
 addUrls(Object.values(emptySlotImages));
-addUrls(Object.values(TOURNAMENT_DEFINITIONS).map((d: TournamentDefinition) => d.image));
+addUrls(Object.values(TOURNAMENT_DEFINITIONS).map((d) => (d as TournamentDefinition).image));
 addUrls(SPECIAL_GAME_MODES.map(m => m.image));
 addUrls(PLAYFUL_GAME_MODES.map(m => m.image));
 addUrls(LEAGUE_DATA.map(l => l.icon));

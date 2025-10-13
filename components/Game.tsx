@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { GameProps } from '../types/index.js';
 import PvpArena from './arenas/PvpArena.js';

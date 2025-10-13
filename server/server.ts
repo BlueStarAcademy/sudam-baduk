@@ -1,18 +1,14 @@
 // server/server.ts
-// FIX: To resolve numerous Express type errors, import Request, Response, and NextFunction
-// directly and use them to explicitly type all middleware and route handler arguments.
-// FIX: Consolidated express imports to resolve type issues.
-import express from 'express';
-// FIX: Separated Express type imports from the value import to resolve type conflicts.
-import type { Request, Response, NextFunction } from 'express';
+// FIX: Changed import to use RequestHandler for correct type inference, resolving issues with Express types.
+import express, { RequestHandler } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
-import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV, setKV } from './db.js';
+import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV, setKV, updateUserStatus, removeUserStatus } from './db.js';
 import { handleAction } from './actions/gameActions.js';
 import { type VolatileState, type ServerAction, type User, type ChatMessage, Guild, UserStatus, type UserStatusInfo } from '../types/index.js';
 import { createDefaultUser } from './initialData.js';
 import { resetAndGenerateQuests, accumulateMissionRewards } from './questService.js';
-import { runScheduledTasks, processWeeklyLeagueUpdates, performOneTimeReset, performOneTimeGuildResearchMigration } from './scheduledTasks.js';
+import { runScheduledTasks, processWeeklyLeagueUpdates, performOneTimeReset, performOneTimeGuildResearchMigration, performOneTimeMbtiReset } from './scheduledTasks.js';
 import * as gameModes from './gameModes.js';
 import * as db from './db.js';
 import * as guildService from './guildService.js';
@@ -21,6 +17,8 @@ import { GUILD_RESEARCH_PROJECTS } from '../constants/index.js';
 import { regenerateActionPoints } from './services/effectService.js';
 import { containsProfanity } from '../profanity.js';
 import { broadcast } from './services/supabaseService.js';
+// FIX: Import process from 'process' to make Node.js globals available.
+import process from 'process';
 
 const volatileState: VolatileState = {
     userConnections: {},
@@ -39,6 +37,8 @@ const app = express();
 const port = process.env.PORT || 4000;
 
 app.use(cors());
+// FIX: The `express.json()` middleware should be applied to all routes without a path argument. Using `app.use('/', ...)` causes a TypeScript overload resolution error.
+// FIX: Removed path argument from app.use() to fix overload error.
 app.use(express.json({ limit: '10mb' }));
 
 declare global {
@@ -48,9 +48,7 @@ declare global {
     }
   }
 }
-
-// FIX: Explicitly typed handler arguments to resolve overload errors.
-const userMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+const userMiddleware: RequestHandler = async (req, res, next) => {
     if (req.path === '/api/auth/login' || req.path === '/api/auth/register' || req.path === '/api/auth/sync' || req.path === '/api/auth/finalize-kakao' || req.path === '/api/initial-state') {
         return next();
     }
@@ -73,7 +71,7 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
         if (!storedSessionId || storedSessionId !== sessionId) {
             return res.status(401).json({ message: 'Session expired due to new login.' });
         }
-
+        
         const user = await getUser(userId);
         if (user) {
             req.user = user;
@@ -84,10 +82,11 @@ const userMiddleware = async (req: Request, res: Response, next: NextFunction) =
     next();
 };
 
+// FIX: The userMiddleware should be applied to all routes without a path argument. Using `app.use('/', ...)` causes a TypeScript overload resolution error.
+// FIX: Removed path argument from app.use() to fix overload error.
 app.use(userMiddleware);
 
-// FIX: Explicitly typed handler arguments to resolve overload errors.
-app.post('/api/auth/register', async (req: Request, res: Response) => {
+app.post('/api/auth/register', async (req, res) => {
     const { username, password, nickname } = req.body;
     if (!username || !password || !nickname) {
         return res.status(400).json({ message: 'Username, password, and nickname are required.' });
@@ -120,9 +119,7 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
         res.status(500).json({ message: error.message });
     }
 });
-
-// FIX: Explicitly typed handler arguments to resolve overload errors.
-app.post('/api/auth/login', async (req: Request, res: Response) => {
+app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: '아이디와 비밀번호를 모두 입력해주세요.' });
@@ -143,7 +140,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         if (credentials.hash !== hashToCompare) {
             return res.status(401).json({ message: '잘못된 아이디 또는 비밀번호입니다.' });
         }
-
+        
         let user = await getUser(credentials.userId);
         if (!user) {
             return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
@@ -158,9 +155,9 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         allSessions[user.id] = sessionId;
         await setKV('userSessions', allSessions);
         
-        const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
-        userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
-        await setKV('userStatuses', userStatuses);
+        const statusInfo: UserStatusInfo = { status: UserStatus.Online, stateEnteredAt: now };
+        await updateUserStatus(user.id, statusInfo);
+        volatileState.userStatuses[user.id] = statusInfo;
 
         res.json({ user, sessionId });
     } catch (error: any) {
@@ -168,9 +165,7 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
         res.status(500).json({ message: 'A server error occurred during login.' });
     }
 });
-
-// FIX: Explicitly typed handler arguments to resolve overload errors.
-app.post('/api/auth/sync', async (req: Request, res: Response) => {
+app.post('/api/auth/sync', async (req, res) => {
     const { session } = req.body;
     if (!session || !session.user) {
         return res.status(400).json({ message: 'Session data is required.' });
@@ -206,9 +201,9 @@ app.post('/api/auth/sync', async (req: Request, res: Response) => {
         allSessions[user.id] = sessionId;
         await setKV('userSessions', allSessions);
         
-        const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
-        userStatuses[user.id] = { status: UserStatus.Online, stateEnteredAt: now };
-        await setKV('userStatuses', userStatuses);
+        const statusInfo: UserStatusInfo = { status: UserStatus.Online, stateEnteredAt: now };
+        await updateUserStatus(user.id, statusInfo);
+        volatileState.userStatuses[user.id] = statusInfo;
 
         res.json({ user, sessionId });
 
@@ -217,9 +212,7 @@ app.post('/api/auth/sync', async (req: Request, res: Response) => {
         res.status(500).json({ message: 'Failed to sync user.' });
     }
 });
-
-// FIX: Explicitly typed handler arguments to resolve overload errors.
-app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
+app.post('/api/auth/finalize-kakao', async (req, res) => {
     const { kakaoId, nickname } = req.body;
     if (!kakaoId || !nickname) {
         return res.status(400).json({ message: '카카오 정보 또는 닉네임이 누락되었습니다.' });
@@ -245,9 +238,9 @@ app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
         allSessions[newUser.id] = sessionId;
         await setKV('userSessions', allSessions);
         
-        const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
-        userStatuses[newUser.id] = { status: UserStatus.Online, stateEnteredAt: Date.now() };
-        await setKV('userStatuses', userStatuses);
+        const statusInfo: UserStatusInfo = { status: UserStatus.Online, stateEnteredAt: Date.now() };
+        await updateUserStatus(newUser.id, statusInfo);
+        volatileState.userStatuses[newUser.id] = statusInfo;
         
         res.json({ user: newUser, sessionId });
     } catch (error: any) {
@@ -255,9 +248,7 @@ app.post('/api/auth/finalize-kakao', async (req: Request, res: Response) => {
         res.status(500).json({ message: 'An internal server error occurred during registration.' });
     }
 });
-
-// FIX: Explicitly typed handler arguments to resolve overload errors.
-app.post('/api/initial-state', async (req: Request, res: Response) => {
+app.post('/api/initial-state', async (req, res) => {
     const { userId, sessionId } = req.body;
     if (userId && sessionId) {
         volatileState.userConnections[userId] = Date.now();
@@ -286,18 +277,14 @@ app.post('/api/initial-state', async (req: Request, res: Response) => {
         userStatuses,
     });
 });
-
-// FIX: Explicitly typed handler arguments to resolve overload errors.
-app.post('/api/action', async (req: Request, res: Response) => {
+app.post('/api/action', async (req, res) => {
     const user = req.user;
     if (!user) {
         if (req.body.type === 'LOGOUT' && req.body.userId) {
             console.log(`Processing beacon logout for user ${req.body.userId}`);
             const userId = req.body.userId;
             delete volatileState.userConnections[userId];
-            const userStatuses = (await getKV<Record<string, UserStatusInfo>>('userStatuses') || {}) as Record<string, UserStatusInfo>;
-            delete userStatuses[userId];
-            await setKV('userStatuses', userStatuses);
+            await removeUserStatus(userId);
             delete volatileState.userSessions[userId];
             const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
             delete allSessions[userId];
@@ -308,9 +295,7 @@ app.post('/api/action', async (req: Request, res: Response) => {
     }
     
     volatileState.userConnections[user.id] = Date.now();
-
-    const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
-
+    
     const action: ServerAction & { user: User } = { ...req.body, user };
     
     try {
@@ -330,6 +315,7 @@ const startServer = async () => {
     await initializeDatabase();
     await performOneTimeReset();
     await performOneTimeGuildResearchMigration();
+    await performOneTimeMbtiReset();
 
     console.log('[AI] Self-contained AI active, external engines disabled.');
 
@@ -351,9 +337,8 @@ const startServer = async () => {
         const now = Date.now();
         const CONNECTION_TIMEOUT_MS = 60 * 1000;
         const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-
+        
         const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
-        let statusesChanged = false;
 
         for (const userId in userStatuses) {
             const lastSeen = volatileState.userConnections[userId];
@@ -365,50 +350,43 @@ const startServer = async () => {
                     if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
                         await db.deleteGame(game.id);
                     } else {
-                        if (!lastSeen) {
-                           console.log(`[Cleanup] User ${userId} connection is gone. Cleaning up status.`);
-                           delete userStatuses[userId];
-                           statusesChanged = true;
-                        }
-                        continue;
+                        continue; 
                     }
                 }
                 
                 console.log(`[Cleanup] User ${userId} connection timed out. Setting to offline.`);
                 delete volatileState.userConnections[userId];
-                delete userStatuses[userId];
-                statusesChanged = true;
+                await removeUserStatus(userId);
                 delete volatileState.userSessions[userId];
             } else {
-                 const userStatus = userStatuses[userId];
+                const userStatus = userStatuses[userId];
                 if (userStatus.status === UserStatus.Waiting && userStatus.stateEnteredAt) {
                     if (now - userStatus.stateEnteredAt > IDLE_TIMEOUT_MS) {
                         console.log(`[Idle Check] User ${userId} idle in waiting room. Setting status to Resting.`);
                         userStatus.status = UserStatus.Resting;
                         userStatus.stateEnteredAt = now;
-                        statusesChanged = true;
+                        await updateUserStatus(userId, userStatus);
                     }
                 }
             }
         }
-
+        
         const negotiations = await getKV<Record<string, any>>('negotiations') || {};
         let negotiationsChanged = false;
         for (const negId in negotiations) {
             if (now > negotiations[negId].deadline) {
                 const neg = negotiations[negId];
-                if (userStatuses[neg.challenger.id]) {
-                    userStatuses[neg.challenger.id].status = UserStatus.Waiting;
-                    statusesChanged = true;
+                const challengerStatus = userStatuses[neg.challenger.id];
+                if (challengerStatus) {
+                    challengerStatus.status = UserStatus.Waiting;
+                    await updateUserStatus(neg.challenger.id, challengerStatus);
                 }
                 delete negotiations[negId];
                 negotiationsChanged = true;
             }
         }
         if (negotiationsChanged) await setKV('negotiations', negotiations);
-        if (statusesChanged) await setKV('userStatuses', userStatuses);
-
-
+        
         const guilds = await getKV<Record<string, Guild>>('guilds') || {};
         let guildsUpdated = false;
         for (const guild of Object.values(guilds)) {

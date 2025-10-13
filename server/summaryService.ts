@@ -1,3 +1,4 @@
+
 // server/summaryService.ts
 import { getGoLogic, processMove } from '../utils/goLogic.js';
 import * as db from './db.js';
@@ -14,6 +15,7 @@ import os from 'os';
 import fs from 'fs';
 import path from 'path';
 import { calculateScores } from './scoring.js';
+import { getDb } from './db/connection.js';
 
 
 const getXpForLevel = (level: number): number => 1000 + (level - 1) * 200;
@@ -381,7 +383,11 @@ export const processGameSummary = async (game: types.LiveGameSession): Promise<v
         return;
     }
 
-    const isEarlyGameAbort = !isAiGame && moveHistory.length < NO_CONTEST_MOVE_THRESHOLD * 2 && (winReason === types.WinReason.Resign || winReason === types.WinReason.Disconnect);
+    const isEarlyGameAbort =
+        !game.noContestInitiatorIds?.length && // Don't apply penalty if it's a mutually agreed no-contest
+        !isAiGame &&
+        moveHistory.length < NO_CONTEST_MOVE_THRESHOLD * 2 &&
+        (winReason === types.WinReason.Resign || winReason === types.WinReason.Disconnect);
 
     if (isEarlyGameAbort) {
         console.log(`[Summary] Game ${game.id} is an early-game abort. Processing with penalties.`);
@@ -431,7 +437,7 @@ export const processGameSummary = async (game: types.LiveGameSession): Promise<v
 
         game.gameStatus = types.GameStatus.NoContest;
         game.statsUpdated = true;
-
+        
         await db.updateUser(initiator);
         await db.saveGame(game);
         return;
@@ -463,6 +469,12 @@ export const processGameSummary = async (game: types.LiveGameSession): Promise<v
     game.summary[p1.id] = p1Summary;
     game.summary[p2.id] = p2Summary;
     
-    if (p1.id !== aiUserId) await db.updateUser(updatedP1);
-    if (p2.id !== aiUserId) await db.updateUser(updatedP2);
+    if (p1.id !== aiUserId) {
+        await db.updateUser(updatedP1);
+        await db.updateUserStatus(p1.id, { status: types.UserStatus.Waiting, mode: game.mode, stateEnteredAt: Date.now() });
+    }
+    if (p2.id !== aiUserId) {
+        await db.updateUser(updatedP2);
+        await db.updateUserStatus(p2.id, { status: types.UserStatus.Waiting, mode: game.mode, stateEnteredAt: Date.now() });
+    }
 };

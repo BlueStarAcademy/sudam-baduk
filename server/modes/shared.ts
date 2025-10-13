@@ -5,6 +5,7 @@ import * as db from '../db.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 import { PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
 
+// FIX: Export the function to make it accessible to other modules.
 export const isFischerGame = (game: LiveGameSession): boolean => {
     const isTimeControlFischer = game.settings.timeControl?.type === 'fischer';
     const isLegacyFischer = game.mode === GameMode.Speed || (game.mode === GameMode.Mix && !!game.settings.mixedModes?.includes(GameMode.Speed));

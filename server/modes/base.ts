@@ -1,7 +1,9 @@
 import { type LiveGameSession, type KomiBid, Player, type Point, type BoardState, type ServerAction, type User, type HandleActionResult, GameStatus } from '../../types/index.js';
-import { getGoLogic } from '../../utils/goLogic';
+import { getGoLogic } from '../../utils/goLogic.js';
 import { transitionToPlaying } from './shared.js';
 import { aiUserId } from '../ai/index.js';
+// FIX: Import DEFAULT_GAME_SETTINGS to create a valid GameSettings object.
+import { DEFAULT_GAME_SETTINGS } from '../../constants/index.js';
 
 export const initializeBase = (game: LiveGameSession, now: number) => {
     game.gameStatus = GameStatus.BasePlacement;
@@ -92,8 +94,9 @@ const resolveBasePlacementAndTransition = (game: LiveGameSession, now: number) =
         const tempBoard: BoardState = Array(boardSize).fill(0).map(() => Array(boardSize).fill(Player.None));
         validP1Stones.forEach(p => tempBoard[p.y][p.x] = Player.Black);
         validP2Stones.forEach(p => tempBoard[p.y][p.x] = Player.White);
-        const tempGame = { boardState: tempBoard, settings: { boardSize } } as LiveGameSession;
-        const logic = getGoLogic(tempGame);
+        // FIX: Pass a complete GameSettings object to getGoLogic.
+        const tempGameSettings = { ...DEFAULT_GAME_SETTINGS, boardSize };
+        const logic = getGoLogic(tempGameSettings);
         const stonesToRemove = new Set<string>();
         const allStones = [
             ...validP1Stones.map(p => ({ ...p, player: Player.Black })),

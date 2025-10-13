@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { GameMode, LiveGameSession, ServerAction, GameProps, Player, User, Point, GameStatus, AppSettings } from '../../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/index.js';
@@ -19,6 +21,7 @@ interface GameControlsProps {
     onCancelMove: () => void;
     isMobile: boolean;
     settings: AppSettings;
+    isNoContestLeaveAvailable: boolean;
 }
 
 const formatCooldown = (ms: number) => {
@@ -354,7 +357,7 @@ const CurlingItemPanel: React.FC<{ session: LiveGameSession; isMyTurn: boolean; 
 
 
 const GameControls: React.FC<GameControlsProps> = (props) => {
-    const { session, isMyTurn, isSpectator, onAction, setShowResultModal, setConfirmModalType, currentUser, onlineUsers, pendingMove, onConfirmMove, onCancelMove, isMobile, settings } = props;
+    const { session, isMyTurn, isSpectator, onAction, setShowResultModal, setConfirmModalType, currentUser, onlineUsers, pendingMove, onConfirmMove, onCancelMove, isMobile, settings, isNoContestLeaveAvailable } = props;
     const { id: gameId, mode, gameStatus, blackPlayerId, whitePlayerId, player1, player2 } = session;
     const isMixMode = mode === GameMode.Mix;
     const isGameEnded = ['ended', 'no_contest', 'rematch_pending'].includes(gameStatus);

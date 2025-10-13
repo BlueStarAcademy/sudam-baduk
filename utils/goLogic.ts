@@ -1,7 +1,7 @@
 // utils/goLogic.ts
 // FIX: Implemented Go logic here and removed circular dependency.
 
-import { Point, Player, LiveGameSession, BoardState, KoInfo, Move } from '../types/index.js';
+import { Point, Player, LiveGameSession, BoardState, KoInfo, Move, GameSettings } from '../types/index.js';
 
 const getNeighbors = (x: number, y: number, boardSize: number): Point[] => {
   const neighbors: Point[] = [];
@@ -41,8 +41,9 @@ const findGroup = (startX: number, startY: number, playerColor: Player, board: B
   return { stones, liberties: libertyPoints.size, libertyPoints };
 };
 
-export const getGoLogic = (game: Pick<LiveGameSession, 'settings'>) => {
-    const { boardSize } = game.settings;
+// FIX: Change game parameter type to GameSettings as it is what's used.
+export const getGoLogic = (gameSettings: GameSettings) => {
+    const { boardSize } = gameSettings;
     return {
         findGroup: (x: number, y: number, player: Player, board: BoardState) => findGroup(x, y, player, board),
         getNeighbors: (x: number, y: number) => getNeighbors(x, y, boardSize),

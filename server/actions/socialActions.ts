@@ -10,33 +10,41 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
     const { type, payload, user } = action;
     const now = Date.now();
 
-    const { userStatuses, userConnections, userSessions, userLastChatMessage, waitingRoomChats, gameChats } = volatileState;
+    const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+    let statusesChanged = false;
+
+    const { userConnections, userSessions, userLastChatMessage, waitingRoomChats, gameChats } = volatileState;
 
     switch (type) {
         case 'LOGOUT': {
-            // The block that deletes AI games on logout has been removed to ensure game persistence.
-            
             delete userConnections[user.id];
             delete userStatuses[user.id];
-            await db.setKV('userStatuses', userStatuses);
+            statusesChanged = true;
+
             delete userSessions[user.id];
             const allSessions = (await db.getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
             delete allSessions[user.id];
             await db.setKV('userSessions', allSessions);
+            
+            if (statusesChanged) {
+                volatileState.userStatuses = userStatuses;
+                await db.setKV('userStatuses', userStatuses);
+            }
             return { clientResponse: { success: true } };
         }
         case 'ENTER_WAITING_ROOM': {
             const { mode } = payload;
-            const userStatus = userStatuses[user.id];
-            if (userStatus) {
-                userStatus.status = UserStatus.Waiting;
-                userStatus.mode = mode;
-                delete userStatus.gameId;
-                delete userStatus.spectatingGameId;
-                userStatus.stateEnteredAt = now;
-            }
-            await db.setKV('userStatuses', userStatuses);
-            return { clientResponse: { success: true } };
+            const userStatus = userStatuses[user.id] || { status: UserStatus.Online, stateEnteredAt: now };
+            
+            userStatus.status = UserStatus.Waiting;
+            userStatus.mode = mode;
+            delete userStatus.gameId;
+            delete userStatus.spectatingGameId;
+            userStatus.stateEnteredAt = now;
+            
+            userStatuses[user.id] = userStatus;
+            statusesChanged = true;
+            break;
         }
         case 'SET_USER_STATUS': {
             const { status } = payload;
@@ -47,9 +55,9 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             if (userStatus && [UserStatus.Waiting, UserStatus.Resting, UserStatus.Online].includes(userStatus.status)) {
                 userStatus.status = status;
                 userStatus.stateEnteredAt = now;
+                statusesChanged = true;
             }
-            await db.setKV('userStatuses', userStatuses);
-            return { clientResponse: { success: true } };
+            break;
         }
 
         case 'SPECTATE_GAME': {
@@ -58,15 +66,14 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             if (!game || game.gameStatus === 'ended' || game.gameStatus === 'no_contest') {
                 return { error: 'Game not available for spectating.' };
             }
-            const userStatus = userStatuses[user.id];
-            if (userStatus) {
-                userStatus.status = UserStatus.Spectating;
-                userStatus.spectatingGameId = gameId;
-                userStatus.mode = game.mode;
-                userStatus.stateEnteredAt = now;
-            }
-            await db.setKV('userStatuses', userStatuses);
-            return { clientResponse: { success: true } };
+            const userStatus = userStatuses[user.id] || { status: UserStatus.Online, stateEnteredAt: now };
+            userStatus.status = UserStatus.Spectating;
+            userStatus.spectatingGameId = gameId;
+            userStatus.mode = game.mode;
+            userStatus.stateEnteredAt = now;
+            userStatuses[user.id] = userStatus;
+            statusesChanged = true;
+            break;
         }
 
         case 'SEND_CHAT_MESSAGE': {
@@ -130,24 +137,23 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             
             userLastChatMessage[user.id] = now;
             await db.setKV('userLastChatMessage', userLastChatMessage);
-            return { clientResponse: { success: true } };
+            break;
         }
         case 'LEAVE_AI_GAME': {
             const { gameId } = payload;
             const game = await db.getLiveGame(gameId);
-            // Only the player of the AI game should be able to delete it
             if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) && game.player1.id === user.id) {
                 await db.deleteGame(game.id);
             }
             if (userStatuses[user.id]) {
                 const status = userStatuses[user.id];
-                status.status = UserStatus.Online; // Go back to general online status, not waiting room
+                status.status = UserStatus.Online;
                 delete status.gameId;
                 delete status.mode;
                 status.stateEnteredAt = now;
+                statusesChanged = true;
             }
-            await db.setKV('userStatuses', userStatuses);
-            return { clientResponse: { success: true } };
+            break;
         }
         case 'LEAVE_WAITING_ROOM': {
             if (userStatuses[user.id]) {
@@ -155,9 +161,9 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 userStatuses[user.id].mode = undefined;
                 userStatuses[user.id].gameId = undefined;
                 userStatuses[user.id].stateEnteredAt = now;
+                statusesChanged = true;
             }
-            await db.setKV('userStatuses', userStatuses);
-            return { clientResponse: { success: true } };
+            break;
         }
         case 'LEAVE_GAME_ROOM': {
             const { gameId, mode } = payload;
@@ -168,9 +174,9 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 userStatus.mode = mode;
                 delete userStatus.gameId;
                 userStatus.stateEnteredAt = now;
+                statusesChanged = true;
             }
-            await db.setKV('userStatuses', userStatuses);
-            return { clientResponse: { success: true } };
+            break;
         }
         case 'LEAVE_SPECTATING': {
             const { gameId, mode } = payload;
@@ -181,11 +187,18 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 userStatus.mode = mode;
                 delete userStatus.spectatingGameId;
                 userStatus.stateEnteredAt = now;
+                statusesChanged = true;
             }
-            await db.setKV('userStatuses', userStatuses);
-            return { clientResponse: { success: true } };
+            break;
         }
         default:
              return { error: 'Unknown social action type.' };
     }
+    
+    if (statusesChanged) {
+        volatileState.userStatuses = userStatuses;
+        await db.setKV('userStatuses', userStatuses);
+    }
+    
+    return { clientResponse: { success: true } };
 };

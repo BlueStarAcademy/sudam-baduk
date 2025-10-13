@@ -4,7 +4,10 @@ import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, Handle
 // FIX: Corrected import path for switchTurnAndUpdateTimers from strategic to shared module.
 import { handleSharedAction, updateSharedGameState, transitionToPlaying, switchTurnAndUpdateTimers } from './modes/shared.js';
 import { endGame } from './summaryService.js';
-
+// FIX: Corrected import path from ./db/connection.js to ../db/connection.js
+import { getDb } from './db/connection.js';
+// FIX: Corrected import path from ../../ to ../ to match file location.
+import { getGoLogic, processMove } from '../utils/goLogic.js';
 
 export const getOmokLogic = (game: LiveGameSession) => {
     const { settings: { boardSize } } = game;
@@ -344,6 +347,8 @@ export const handleOmokAction = async (volatileState: VolatileState, game: LiveG
 };
 
 export const makeOmokAiMove = async (game: LiveGameSession): Promise<void> => {
+    // FIX: Get database pool
+    const dbPool = await getDb();
     const aiId = game.player2.id;
     const myPlayerEnum = game.whitePlayerId === aiId ? Player.White : Player.Black;
     if (game.currentPlayer !== myPlayerEnum) return;

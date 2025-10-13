@@ -1,13 +1,13 @@
-
-
 import React, { useState, useMemo, useCallback } from 'react';
-import { UserWithStatus, ServerAction, AvatarInfo, BorderInfo } from '../types.js';
-import { AVATAR_POOL, BORDER_POOL, RANKING_TIERS, SHOP_BORDER_ITEMS } from '../constants.js';
+// Import EquipmentSlot enum to use its members instead of string literals.
+import { UserWithStatus, ServerAction, AvatarInfo, BorderInfo, EquipmentSlot } from '../types/index.js';
+import { AVATAR_POOL, BORDER_POOL, RANKING_TIERS, SHOP_BORDER_ITEMS } from '../constants/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import Avatar from './Avatar.js';
 import { containsProfanity } from '../profanity.js';
 import ToggleSwitch from './ui/ToggleSwitch.js';
+import MbtiQuestionnaireModal from './modals/MbtiQuestionnaireModal.js';
 
 
 interface ProfileEditModalProps {
@@ -43,6 +43,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
     const [selectedAvatarId, setSelectedAvatarId] = useState(currentUser.avatarId);
     const [selectedBorderId, setSelectedBorderId] = useState(currentUser.borderId);
     const [newNickname, setNewNickname] = useState(currentUser.nickname);
+    const [isMbtiQuestionnaireOpen, setIsMbtiQuestionnaireOpen] = useState(false);
     
     const parseMbti = (mbtiString: string | null | undefined): MbtiState => {
         if (mbtiString && mbtiString.length === 4) {
@@ -57,7 +58,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
     };
 
     const [mbti, setMbti] = useState<MbtiState>(parseMbti(currentUser.mbti));
-    const [isMbtiPublic, setIsMbtiPublic] = useState(currentUser.isMbtiPublic ?? false);
     
     const nicknameChangeCost = 150;
     const canAffordNicknameChange = currentUser.diamonds >= nicknameChangeCost;
@@ -91,7 +91,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
                 const newMbtiString = `${mbti.ei}${mbti.sn}${mbti.tf}${mbti.jp}`;
                 onAction({
                     type: 'UPDATE_MBTI',
-                    payload: { mbti: newMbtiString, isMbtiPublic: isMbtiPublic }
+                    payload: { mbti: newMbtiString }
                 });
                 break;
         }
@@ -103,12 +103,13 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
             case 'border': return selectedBorderId === currentUser.borderId;
             case 'nickname': return newNickname === currentUser.nickname || !canAffordNicknameChange || newNickname.trim().length < 2 || newNickname.trim().length > 12;
             case 'mbti': {
+                if (!currentUser.mbti) return true; // Can't save from pre-setup view
                 const newMbtiString = `${mbti.ei}${mbti.sn}${mbti.tf}${mbti.jp}`;
-                return newMbtiString === (currentUser.mbti || '') && isMbtiPublic === (currentUser.isMbtiPublic ?? false);
+                return newMbtiString === (currentUser.mbti || '');
             }
             default: return true;
         }
-    }, [activeTab, selectedAvatarId, selectedBorderId, newNickname, currentUser, canAffordNicknameChange, mbti, isMbtiPublic]);
+    }, [activeTab, selectedAvatarId, selectedBorderId, newNickname, currentUser, canAffordNicknameChange, mbti]);
 
     const categorizedBorders = useMemo(() => {
         const isShopItem = (b: BorderInfo) => SHOP_BORDER_ITEMS.some(sb => sb.id === b.id);
@@ -280,6 +281,24 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
                     </div>
                 );
             case 'mbti': {
+                if (!currentUser.mbti) {
+                    return (
+                        <div className="text-center p-4 flex flex-col items-center justify-center h-full">
+                            <h3 className="text-2xl font-bold text-yellow-300">MBTI 성향 설정</h3>
+                            <p className="text-sm text-gray-300 mt-4 max-w-md">
+                                MBTI는 4가지 선호 지표를 조합하여 16가지 성격 유형으로 분류하는 자기보고식 성격 유형 검사입니다.
+                                간단한 질문을 통해 자신의 성향을 알아보고 다른 유저들과 공유해보세요.
+                            </p>
+                            <Button onClick={() => setIsMbtiQuestionnaireOpen(true)} colorScheme="blue" className="mt-8 !py-3 !text-lg">
+                                MBTI 설정 시작하기
+                            </Button>
+                            <p className="text-sm text-green-400 font-semibold mt-4">
+                                최초 설정 완료 시 보상: <span className="flex items-center justify-center gap-1">💎 100</span>
+                            </p>
+                        </div>
+                    );
+                }
+
                 const DichotomySelector: React.FC<{
                     title: string;
                     options: ('E' | 'I' | 'S' | 'N' | 'T' | 'F' | 'J' | 'P')[];
@@ -308,10 +327,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
 
                 return (
                      <div className="space-y-4">
-                        <div className="p-3 bg-gray-900/50 rounded-lg text-center">
-                            <h3 className="text-lg font-bold text-yellow-300">MBTI란?</h3>
-                            <p className="text-sm text-gray-300 mt-1">MBTI는 4가지 선호 지표를 조합하여 16가지 성격 유형으로 분류하는 자기보고식 성격 유형 검사입니다. 자신의 성향을 선택하고 다른 사람들과 공유해보세요!</p>
-                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <DichotomySelector title="에너지 방향" options={['E', 'I']} selected={mbti.ei} onSelect={v => setMbti(p => ({ ...p, ei: v as 'E' | 'I' }))} />
                             <DichotomySelector title="인식 기능" options={['S', 'N']} selected={mbti.sn} onSelect={v => setMbti(p => ({ ...p, sn: v as 'S' | 'N' }))} />
@@ -323,11 +338,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
                                 <span className="font-semibold text-lg">나의 MBTI:</span>
                                 <span className="font-bold text-2xl text-green-400">{finalMbti}</span>
                             </div>
-                            <ToggleSwitch
-                                label="내 MBTI 프로필에 공개하기"
-                                checked={isMbtiPublic}
-                                onChange={setIsMbtiPublic}
-                            />
+                            <p className="text-xs text-tertiary">MBTI는 항상 프로필에 공개됩니다.</p>
                         </div>
                     </div>
                 );
@@ -346,6 +357,13 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
 
     return (
         <DraggableWindow title="프로필" onClose={onClose} windowId="profile-edit" initialWidth={750} isTopmost={isTopmost}>
+            {isMbtiQuestionnaireOpen && (
+                <MbtiQuestionnaireModal
+                    onClose={() => setIsMbtiQuestionnaireOpen(false)}
+                    onAction={onAction}
+                    isTopmost={true}
+                />
+            )}
             <div className="flex flex-col h-[70vh]">
                 <div className="flex bg-gray-900/70 p-1 rounded-lg mb-4 flex-shrink-0">
                     {tabs.map(tab => (
@@ -355,9 +373,10 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
                     ))}
                 </div>
                 <div className="flex-grow overflow-y-auto pr-2">
+                    {/* FIX: Changed renderContent to renderTabContent */}
                     {renderTabContent()}
                 </div>
-                <div className="flex justify-end gap-4 mt-4 pt-4 border-t border-gray-700 flex-shrink-0">
+                 <div className="flex justify-end gap-4 mt-4 pt-4 border-t border-gray-700 flex-shrink-0">
                     <Button onClick={onClose} colorScheme="gray">취소</Button>
                     <Button onClick={handleSave} colorScheme="green" disabled={isSaveDisabled}>
                         {activeTab === 'nickname' && !canAffordNicknameChange ? '다이아 부족' : '저장'}

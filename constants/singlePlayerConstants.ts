@@ -1,7 +1,14 @@
 // @ts-nocheck
-import { SinglePlayerLevel } from '../types/enums.js';
-import type { GameType } from '../types/enums.js';
+import { SinglePlayerLevel, GameType, GameMode } from '../types/enums.js';
 import type { SinglePlayerStageInfo, SinglePlayerMissionInfo, QuestReward } from '../types/entities.js';
+
+const gameTypeToModeMap: Record<GameType, GameMode> = {
+    [GameType.Capture]: GameMode.Capture,
+    [GameType.Survival]: GameMode.Standard, // Survival is standard go with a turn limit
+    [GameType.Speed]: GameMode.Speed,
+    [GameType.Missile]: GameMode.Missile,
+    [GameType.Hidden]: GameMode.Hidden,
+};
 
 // Added GO_TERMS_BY_LEVEL constant for use in other components.
 export const GO_TERMS_BY_LEVEL: Record<SinglePlayerLevel, { term: string; meaning: string }[]> = {
@@ -174,7 +181,7 @@ export const SINGLE_PLAYER_STAGES: SinglePlayerStageInfo[] = [
         { id: '입문-8', bTarget: 6, wTarget: 5, ai: 1, bLimit: 15, placements: { b: 3, w: 7, bP: 3, wP: 2 }, fcReward: '골드100', fcExp: 20, rcReward: '골드10', rcExp: 10 },
         { id: '입문-9', bTarget: 6, wTarget: 5, ai: 1, bLimit: 15, placements: { b: 3, w: 6, bP: 3, wP: 3 }, fcReward: '골드100', fcExp: 20, rcReward: '골드10', rcExp: 10 },
         { id: '입문-10', bTarget: 7, wTarget: 5, ai: 1, bLimit: 15, placements: { b: 4, w: 7, bP: 2, wP: 3 }, fcReward: '장비상자1', fcExp: 100, rcReward: '골드15', rcExp: 10 },
-    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.입문, gameType: 'capture', actionPointCost: 2, boardSize: 7, targetScore: { black: d.bTarget, white: d.wTarget } })),
+    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.입문, gameType: 'capture', mode: gameTypeToModeMap['capture'], actionPointCost: 2, boardSize: 7, targetScore: { black: d.bTarget, white: d.wTarget }, blackStoneLimit: d.bLimit })),
     
     // 입문 11-20 (살리기)
     ...[
@@ -188,7 +195,7 @@ export const SINGLE_PLAYER_STAGES: SinglePlayerStageInfo[] = [
         { id: '입문-18', bTarget: 999, wTarget: 5, ai: 2, wLimit: 18, placements: { b: 4, w: 16, bP: 3, wP: 2 }, fcReward: '골드150', fcExp: 30, rcReward: '골드15', rcExp: 10 },
         { id: '입문-19', bTarget: 999, wTarget: 5, ai: 2, wLimit: 19, placements: { b: 5, w: 17, bP: 3, wP: 3 }, fcReward: '골드150', fcExp: 30, rcReward: '골드15', rcExp: 10 },
         { id: '입문-20', bTarget: 999, wTarget: 5, ai: 2, wLimit: 20, placements: { b: 5, w: 18, bP: 2, wP: 3 }, fcReward: '다이아꾸러미1', fcExp: 30, rcReward: '골드15', rcExp: 10 },
-    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.입문, gameType: 'survival', actionPointCost: 2, boardSize: 9, targetScore: { black: d.bTarget, white: d.wTarget }, whiteStoneLimit: d.wLimit })),
+    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.입문, gameType: 'survival', mode: gameTypeToModeMap['survival'], actionPointCost: 2, boardSize: 9, targetScore: { black: d.bTarget, white: d.wTarget }, whiteStoneLimit: d.wLimit })),
 
     // 초급 1-20 (스피드)
     ...[
@@ -212,7 +219,7 @@ export const SINGLE_PLAYER_STAGES: SinglePlayerStageInfo[] = [
         { id: '초급-18', ai: 4, placements: { b: 5, w: 10 }, fcReward: '골드250', fcExp: 60, rcReward: '골드30', rcExp: 20 },
         { id: '초급-19', ai: 4, placements: { b: 4, w: 9 }, fcReward: '골드250', fcExp: 60, rcReward: '골드30', rcExp: 20 },
         { id: '초급-20', ai: 4, placements: { b: 5, w: 12 }, fcReward: '다이아꾸러미2', fcExp: 150, rcReward: '골드40', rcExp: 20 },
-    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.초급, gameType: 'speed', actionPointCost: 3, boardSize: 9, autoEndTurnCount: 40, timeControl: fischerTimeControl, placements: { ...d.placements, bP: 0, wP: 0 } })),
+    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.초급, gameType: 'speed', mode: gameTypeToModeMap['speed'], actionPointCost: 3, boardSize: 9, autoEndTurnCount: 40, timeControl: fischerTimeControl, placements: { ...d.placements, bP: 0, wP: 0 } })),
 
     // 중급 1-20 (미사일)
     ...[
@@ -236,7 +243,7 @@ export const SINGLE_PLAYER_STAGES: SinglePlayerStageInfo[] = [
         { id: '중급-18', ai: 6, missile: 1, placements: { b: 5, w: 11 }, fcReward: '골드400', fcExp: 150, rcReward: '골드50', rcExp: 30 },
         { id: '중급-19', ai: 6, missile: 1, placements: { b: 4, w: 11 }, fcReward: '골드400', fcExp: 150, rcReward: '골드50', rcExp: 30 },
         { id: '중급-20', ai: 6, missile: 1, placements: { b: 5, w: 13 }, fcReward: '다이아꾸러미3', fcExp: 250, rcReward: '골드50', rcExp: 50 },
-    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.중급, gameType: 'missile', missileCount: d.missile, actionPointCost: 4, boardSize: 11, autoEndTurnCount: 60, timeControl: byoyomiTimeControl, placements: { ...d.placements, bP: 0, wP: 0 } })),
+    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.중급, gameType: 'missile', mode: gameTypeToModeMap['missile'], missileCount: d.missile, actionPointCost: 4, boardSize: 11, autoEndTurnCount: 60, timeControl: byoyomiTimeControl, placements: { ...d.placements, bP: 0, wP: 0 } })),
     
     // 고급 1-20 (히든)
     ...[
@@ -260,7 +267,7 @@ export const SINGLE_PLAYER_STAGES: SinglePlayerStageInfo[] = [
         { id: '고급-18', ai: 8, placements: { b: 5, w: 12 }, fcReward: '골드600', fcExp: 200, rcReward: '골드100', rcExp: 40 },
         { id: '고급-19', ai: 8, placements: { b: 5, w: 12 }, fcReward: '골드600', fcExp: 200, rcReward: '골드100', rcExp: 40 },
         { id: '고급-20', ai: 8, placements: { b: 5, w: 14 }, fcReward: '다이아꾸러미4', fcExp: 350, rcReward: '골드100', rcExp: 80 },
-    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.고급, gameType: 'hidden', hiddenStoneCount: 1, scanCount: 5, actionPointCost: 5, boardSize: 13, autoEndTurnCount: 80, timeControl: byoyomiTimeControl, placements: { ...d.placements, bP: 0, wP: 0 } })),
+    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.고급, gameType: 'hidden', mode: gameTypeToModeMap['hidden'], hiddenStoneCount: 1, scanCount: 5, actionPointCost: 5, boardSize: 13, autoEndTurnCount: 80, timeControl: byoyomiTimeControl, placements: { ...d.placements, bP: 0, wP: 0 } })),
     
     // 유단자 1-20 (Mixed)
     ...[
@@ -294,7 +301,8 @@ export const SINGLE_PLAYER_STAGES: SinglePlayerStageInfo[] = [
         autoEndTurnCount: d.gameType !== 'capture' ? 80 : undefined,
         timeControl: d.timeControl || byoyomiTimeControl,
         targetScore: d.gameType === 'capture' ? { black: d.bTarget, white: d.wTarget } : undefined,
-        placements: { ...d.placements, bP: d.placements.bP ?? 0, wP: d.placements.wP ?? 0 }
+        placements: { ...d.placements, bP: d.placements.bP ?? 0, wP: d.placements.wP ?? 0 },
+        mode: gameTypeToModeMap[d.gameType as GameType]
     }))
 ].map((d: any) => ({
     ...d,

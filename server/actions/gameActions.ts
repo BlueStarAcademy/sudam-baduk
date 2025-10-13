@@ -1,8 +1,12 @@
+
+
+
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus } from '../../types/index.js';
 import * as db from '../db.js';
+// FIX: The member handleStrategicGameAction is now exported from strategic.js
 import { handleStrategicGameAction } from '../modes/strategic.js';
 import { handlePlayfulGameAction } from '../modes/playful.js';
-import { handleAiGameStart, handleAiGameRefresh, handleTowerAddStones, handleConfirmIntro } from './aiGameActions.js';
+import { handleAiGameStart, handleAiGameRefresh, handleTowerAddStones, handleConfirmIntro } from '../modes/singlePlayerMode.js';
 import { handleUserAction } from './userActions.js';
 import { handleNegotiationAction } from './negotiationActions.js';
 import { handleInventoryAction } from './inventoryActions.js';
@@ -162,7 +166,7 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
             } else if (itemType === 'scan') {
                 game.scans_p1 = (game.scans_p1 || 0) + (stage.scanCount || 0);
             }
-
+            
             await db.saveGame(game);
             await db.updateUser(user);
             
@@ -175,7 +179,7 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
     if (!gameId) {
         return { error: 'Action requires a gameId.' };
     }
-
+    
     const game = await db.getLiveGame(gameId);
     if (!game) {
         return { error: 'Game not found.' };

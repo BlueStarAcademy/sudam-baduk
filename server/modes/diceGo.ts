@@ -1,6 +1,9 @@
 
 
 
+
+
+
 import { type LiveGameSession, type Point, type DiceRoundSummary, Player, type Negotiation, type VolatileState, type ServerAction, type HandleActionResult, type User, GameMode, MythicStat, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
 import { getGoLogic, processMove } from '../../utils/goLogic';
@@ -9,6 +12,7 @@ import { aiUserId } from '../ai/index.js';
 import { DICE_GO_INITIAL_WHITE_STONES_BY_ROUND, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_TURN_CHOICE_TIME, DICE_GO_TURN_ROLL_TIME, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import { endGame, getGameResult } from '../summaryService.js';
+import { getDb } from '../db/connection.js';
 
 export function finishPlacingTurn(game: LiveGameSession, playerId: string) {
     const now = Date.now();
@@ -183,7 +187,6 @@ export const updateDiceGoState = (game: LiveGameSession, now: number) => {
                 game.turnOrderRolls = { [p1Id]: p1Roll, [p2Id]: p2Roll };
                 game.animation = { type: 'dice_roll_turn', p1Roll, p2Roll, startTime: now, duration: 1500 };
                 game.gameStatus = GameStatus.DiceTurnRollingAnimating;
-                game.turnOrderAnimationEndTime = now + 1500;
                 game.turnDeadline = undefined;
             }
             break;
@@ -301,12 +304,12 @@ export const updateDiceGoState = (game: LiveGameSession, now: number) => {
 };
 
 export const handleDiceGoAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
+    const dbPool = await getDb();
     const { type, payload } = action;
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     
-    // FIX: Pass 'volatileState' to handleSharedAction.
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if(sharedResult) return sharedResult;
 
@@ -346,7 +349,7 @@ export const handleDiceGoAction = async (volatileState: VolatileState, game: Liv
                 diceRoll = Math.floor(Math.random() * 6) + 1;
             }
 
-            const goLogic = getGoLogic(game);
+            const goLogic = getGoLogic(game.settings);
             const liberties = goLogic.getAllLibertiesOfPlayer(Player.White, game.boardState);
             const isOvershot = liberties.length > 0 && diceRoll > liberties.length;
 
@@ -365,7 +368,7 @@ export const handleDiceGoAction = async (volatileState: VolatileState, game: Liv
             if ((game.stonesToPlace ?? 0) <= 0) return { error: "No stones left to place."};
             
             const { x, y } = payload;
-            const goLogic = getGoLogic(game);
+            const goLogic = getGoLogic(game.settings);
             const liberties = goLogic.getAllLibertiesOfPlayer(Player.White, game.boardState);
             
             if (liberties.length > 0 && !liberties.some(p => p.x === x && p.y === y)) {
@@ -405,12 +408,13 @@ export const handleDiceGoAction = async (volatileState: VolatileState, game: Liv
 };
 
 export const makeDiceGoAiMove = async (game: LiveGameSession): Promise<void> => {
+    const dbPool = await getDb();
     const aiId = game.player2.id;
     if (game.currentPlayer !== (game.whitePlayerId === aiId ? Player.White : Player.Black)) return;
 
     if (game.gameStatus === GameStatus.DiceRolling) {
         const diceRoll = Math.floor(Math.random() * 6) + 1;
-        const logic = getGoLogic(game);
+        const logic = getGoLogic(game.settings);
         const liberties = logic.getAllLibertiesOfPlayer(Player.White, game.boardState);
         game.stonesToPlace = liberties.length > 0 && diceRoll > liberties.length ? -1 : diceRoll;
         game.animation = { type: 'dice_roll_main', dice: { dice1: diceRoll, dice2: 0, dice3: 0 }, startTime: Date.now(), duration: 1500 };
@@ -421,7 +425,7 @@ export const makeDiceGoAiMove = async (game: LiveGameSession): Promise<void> => 
             return;
         }
 
-        const logic = getGoLogic(game);
+        const logic = getGoLogic(game.settings);
         const liberties = logic.getAllLibertiesOfPlayer(Player.White, game.boardState);
         if (liberties.length > 0) {
             const move = liberties[Math.floor(Math.random() * liberties.length)];

@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { 
     GameMode, UserStatus, ShopTab, InventoryTab, User, LiveGameSession, UserWithStatus, ServerAction, 
@@ -1081,7 +1082,7 @@ export const useApp = () => {
 
         if (!currentUser) {
             initialRedirectHandled.current = false;
-            if (window.location.hash && window.location.hash !== '#/register') window.location.hash = '';
+            // Removed line that clears hash on load
             return;
         }
         
@@ -1337,18 +1338,85 @@ export const useApp = () => {
         openPresetModal: () => setIsPresetModalOpen(true),
         closePresetModal: () => setIsPresetModalOpen(false),
     };
-
+    
     return {
-        currentUser, login, currentUserWithStatus, kakaoRegistrationData, currentRoute, error, successToast, allUsers, onlineUsers, liveGames, negotiations,
-        waitingRoomChats, gameChats, adminLogs, gameModeAvailability, announcements, globalOverrideAnnouncement, announcementInterval,
-        towerRankings, guilds, activeGame, activeNegotiation, showExitToast, enhancementResult, enhancementOutcome, unreadMailCount,
-        hasClaimableQuest, hasUnclaimedTournamentReward, hasFullMissionReward, settings, updateTheme, updateSoundSetting,
-        updateFeatureSetting, updatePanelColor, updateTextColor, resetGraphicsToDefault, myGuild,
-        modals: { isSettingsModalOpen, isInventoryOpen, inventoryInitialTab, isMailboxOpen, isQuestsOpen, isShopOpen, isActionPointQuizOpen, lastUsedItemResult,
-            disassemblyResult, craftResult, synthesisResult, rewardSummary, viewingUser, isInfoModalOpen, isEncyclopediaOpen, isStatAllocationModalOpen, enhancementAnimationTarget,
-            pastRankingsInfo, enhancingItem, viewingItem, isProfileEditModalOpen, moderatingUser, isClaimAllSummaryOpen, claimAllSummary,
-            isTowerRewardInfoOpen, levelUpInfo, shopInitialTab, isGuildEffectsModalOpen, isEquipmentEffectsModalOpen, isPresetModalOpen,
-            guildBossBattleResult, activeModalIds },
-        handlers, guildDonationAnimation, isMobile,
+        currentUser,
+        sessionId,
+        kakaoRegistrationData,
+        login,
+        handleLogout,
+        currentRoute,
+        error,
+        successToast,
+        showExitToast,
+        settings,
+        updateTheme,
+        updatePanelColor,
+        updateTextColor,
+        resetGraphicsToDefault,
+        updateSoundSetting,
+        updateFeatureSetting,
+        usersMap,
+        userStatuses,
+        liveGames,
+        negotiations,
+        waitingRoomChats,
+        gameChats,
+        adminLogs,
+        gameModeAvailability,
+        announcements,
+        globalOverrideAnnouncement,
+        announcementInterval,
+        towerRankings,
+        guilds,
+        allUsers,
+        onlineUsers,
+        currentUserWithStatus,
+        activeGame,
+        myGuild,
+        activeNegotiation,
+        unreadMailCount,
+        hasClaimableQuest,
+        hasFullMissionReward,
+        hasUnclaimedTournamentReward,
+        handlers,
+        isMobile,
+        modals: {
+            isSettingsModalOpen,
+            isInventoryOpen,
+            inventoryInitialTab,
+            isMailboxOpen,
+            isQuestsOpen,
+            isShopOpen,
+            shopInitialTab,
+            isActionPointQuizOpen,
+            lastUsedItemResult,
+            disassemblyResult,
+            craftResult,
+            synthesisResult,
+            rewardSummary,
+            isClaimAllSummaryOpen,
+            claimAllSummary,
+            viewingUser,
+            isInfoModalOpen,
+            isEncyclopediaOpen,
+            isStatAllocationModalOpen,
+            enhancementResult,
+            enhancementOutcome,
+            enhancementAnimationTarget,
+            pastRankingsInfo,
+            enhancingItem,
+            viewingItem,
+            isProfileEditModalOpen,
+            moderatingUser,
+            isTowerRewardInfoOpen,
+            levelUpInfo,
+            isGuildEffectsModalOpen,
+            guildBossBattleResult,
+            guildDonationAnimation,
+            isEquipmentEffectsModalOpen,
+            isPresetModalOpen,
+            activeModalIds
+        }
     };
 };

@@ -1,6 +1,7 @@
 
-import { User, UserWithStatus, LiveGameSession, Negotiation, ChatMessage, Guild, TournamentState, TowerRank } from './entities';
-import { UserStatus, GameMode } from './enums';
+// FIX: Corrected imports. These types are now defined in entities.ts and exported via index.ts
+import { User, UserWithStatus, LiveGameSession, Negotiation, ChatMessage, Guild, TournamentState, TowerRank } from './index.js';
+import { UserStatus, GameMode } from './enums.js';
 
 export interface UserStatusInfo {
     status: UserStatus;
@@ -41,6 +42,32 @@ export interface VolatileState {
     waitingRoomChats: Record<string, ChatMessage[]>;
     gameChats: Record<string, ChatMessage[]>;
 }
+
+// FIX: Add missing type definitions for Guild Boss Battles
+export interface BattleLogEntry {
+    turn: number;
+    icon?: string;
+    message: string;
+    isUserAction?: boolean;
+    damageTaken?: number;
+    healingDone?: number;
+    bossHealingDone?: number;
+    isCrit?: boolean;
+    debuffsApplied?: { type: 'user_combat_power_reduction_percent' | 'user_heal_reduction_percent', value: number, turns: number }[];
+}
+
+export interface GuildBossBattleResult {
+    damageDealt: number;
+    turnsSurvived: number;
+    rewards: { guildCoins: number };
+    battleLog: BattleLogEntry[];
+    bossHpBefore: number;
+    bossHpAfter: number;
+    bossMaxHp: number;
+    userHp: number;
+    maxUserHp: number;
+}
+
 
 export type ServerActionType =
   | 'LOGIN'

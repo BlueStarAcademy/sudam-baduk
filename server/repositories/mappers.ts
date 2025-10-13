@@ -1,8 +1,5 @@
 
 
-
-
-// FIX: Import createDefaultBaseStats from shared utils as it's not exported from initialData.js.
 import { createDefaultQuests, createDefaultSpentStatPoints, defaultStats } from '../initialData.js';
 import { createDefaultBaseStats } from '../../utils/statUtils.js';
 import type { User, LiveGameSession, QuestLog, DailyQuestData, WeeklyQuestData, MonthlyQuestData, EquipmentPreset, AppSettings, SinglePlayerMissionState } from '../../types/index.js';
@@ -301,6 +298,13 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             nigiri: ensureObject(safeParse(row.nigiri, undefined), undefined),
             guessDeadline: row.guessDeadline != null ? Number(row.guessDeadline) : undefined,
             bids: ensureObject(safeParse(row.bids, undefined), undefined),
+// FIX: Add missing properties to satisfy LiveGameSession type
+            missileUsedThisTurn: !!row.missileUsedThisTurn,
+            round: row.round ?? 1,
+            turnInRound: row.turnInRound ?? 1,
+            scores: ensureObject(safeParse(row.scores, {})),
+            thiefPlayerId: row.thiefPlayerId ?? undefined,
+            policePlayerId: row.policePlayerId ?? undefined,
             biddingRound: row.biddingRound ?? undefined,
             captureBidDeadline: row.captureBidDeadline != null ? Number(row.captureBidDeadline) : undefined,
             effectiveCaptureTargets: ensureObject(safeParse(row.effectiveCaptureTargets, undefined), undefined),
@@ -325,7 +329,6 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             pendingCapture: ensureObject(safeParse(row.pendingCapture, undefined), undefined),
             permanentlyRevealedStones: ensureArray(safeParse(row.permanentlyRevealedStones, undefined), undefined),
             pendingAiMove: undefined, // This is transient
-            missileUsedThisTurn: !!row.missileUsedThisTurn,
             missiles_p1: row.missiles_p1 ?? undefined,
             missiles_p2: row.missiles_p2 ?? undefined,
             rpsState: ensureObject(safeParse(row.rpsState, null), null),
@@ -349,17 +352,12 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             diceGoBonuses: ensureObject(safeParse(row.diceGoBonuses, {})),
             diceCapturesThisTurn: row.diceCapturesThisTurn ?? undefined,
             diceLastCaptureStones: ensureArray(safeParse(row.diceLastCaptureStones, null), null),
-            round: row.round ?? 1,
             isDeathmatch: !!row.isDeathmatch,
-            turnInRound: row.turnInRound ?? 1,
-            scores: ensureObject(safeParse(row.scores, {})),
-            thiefPlayerId: row.thiefPlayerId ?? undefined,
-            policePlayerId: row.policePlayerId ?? undefined,
-            roleChoices: ensureObject(safeParse(row.roleChoices, {})),
-            roleChoiceWinnerId: row.roleChoiceWinnerId ?? undefined,
             thiefRoundSummary: ensureObject(safeParse(row.thiefRoundSummary, null), null),
             thiefDiceRollHistory: ensureObject(safeParse(row.thiefDiceRollHistory, null), null),
             thiefCapturesThisRound: row.thiefCapturesThisTurn ?? undefined,
+            roleChoices: ensureObject(safeParse(row.roleChoices, {})),
+            roleChoiceWinnerId: row.roleChoiceWinnerId ?? undefined,
             alkkagiStones: ensureArray(safeParse(row.alkkagiStones, null), null),
             alkkagiStones_p1: ensureArray(safeParse(row.alkkagiStones_p1, null), null),
             alkkagiStones_p2: ensureArray(safeParse(row.alkkagiStones_p2, null), null),
@@ -401,6 +399,7 @@ export const rowToGame = (row: any): LiveGameSession | null => {
             revealEndTime: row.revealEndTime != null ? Number(row.revealEndTime) : undefined,
             isAiGame: !!row.isAiGame,
             aiTurnStartTime: row.aiTurnStartTime != null ? Number(row.aiTurnStartTime) : undefined,
+            aiHiddenStoneUsedThisGame: !!row.aiHiddenStoneUsedThisGame,
             mythicBonuses: ensureObject(safeParse(row.mythicBonuses, {})),
             lastPlayfulGoldCheck: ensureObject(safeParse(row.lastPlayfulGoldCheck, {})),
             pendingSystemMessages: ensureArray(safeParse(row.pendingSystemMessages, undefined), undefined),
