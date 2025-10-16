@@ -7,6 +7,7 @@ import type { Guild as GuildType } from '../../types/index.js';
 
 const Guild: React.FC = () => {
     // Fetched `guildDonationAnimation` from useAppContext to pass to GuildDashboard.
+    // FIX: Destructure 'modals' from useAppContext to access 'guildDonationAnimation'.
     const { currentUserWithStatus, guilds, modals } = useAppContext();
 
     const myGuild = useMemo(() => {
@@ -28,6 +29,7 @@ const Guild: React.FC = () => {
     }
 
     // Pass the required `guildDonationAnimation` prop to GuildDashboard.
+    // FIX: Pass `modals.guildDonationAnimation` to the GuildDashboard component.
     return <GuildDashboard key={myGuild.id} guild={myGuild} guildDonationAnimation={modals.guildDonationAnimation} />;
 };
 

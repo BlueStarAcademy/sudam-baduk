@@ -12,7 +12,8 @@ interface KakaoRegisterProps {
 }
 
 const KakaoRegister: React.FC<KakaoRegisterProps> = ({ registrationData }) => {
-    const { login } = useAppContext();
+    // FIX: Destructure 'handlers' to access the login function.
+    const { handlers } = useAppContext();
     const [nickname, setNickname] = useState(registrationData.suggestedNickname);
     const [agreedToTerms, setAgreedToTerms] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -79,7 +80,8 @@ const KakaoRegister: React.FC<KakaoRegisterProps> = ({ registrationData }) => {
             }
     
             const { user, sessionId } = await response.json();
-            login(user, sessionId);
+            // FIX: Use handlers.login to call the login function from context.
+            handlers.login(user, sessionId);
             // The useApp hook will see the new user and redirect to profile
         } catch (err: any) {
             setError(err.message);

@@ -1,4 +1,5 @@
 
+
 import 'dotenv/config';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
@@ -9,11 +10,25 @@ import * as pgUserRepo from '../server/repositories/userRepository.js';
 import * as pgGameRepo from '../server/repositories/gameRepository.js';
 import * as pgKvRepo from '../server/repositories/kvRepository.js';
 import * as pgCredRepo from '../server/repositories/credentialsRepository.js';
-// FIX: Import process from 'process' to make Node.js globals available.
-import process from 'process';
+import { URL } from 'url';
+import fs from 'fs';
+
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+    console.warn('Supabase server-side environment variables VITE_SUPABASE_URL or SUPABASE_SERVICE_KEY are missing.');
+    throw new Error('DATABASE_URL is not set in your environment variables.');
+}
+
+try {
+    new URL(connectionString);
+} catch (e) {
+    console.error(`[DB Migration] The DATABASE_URL in your .env file is not a valid URL. Please check for typos or special characters that might need to be encoded (like '#' or '@' in the password). It is also recommended to wrap the entire URL in double quotes in your .env file.`);
+    console.error(`[DB Migration] Invalid value: "${connectionString}"`);
+    process.exit(1);
+}
 
 const pgPool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: connectionString,
 });
 
 const migrateUsers = async (sqliteDb: any) => {
@@ -41,7 +56,6 @@ const migrateCredentials = async (sqliteDb: any) => {
     console.log('Migrating credentials...');
     const creds = await sqliteDb.all('SELECT * FROM user_credentials');
     for (const row of creds) {
-        // FIX: Separate 'username' from the typed object literal to match the UserCredentials type and the createUserCredentials function signature.
         const userCreds = {
             userId: row.userId,
             hash: row.hash,
@@ -78,12 +92,28 @@ const migrateKvStore = async (sqliteDb: any) => {
 async function main() {
     console.log('Starting SQLite to PostgreSQL migration...');
 
+    const sqliteDbPath = './database.sqlite';
+    if (!fs.existsSync(sqliteDbPath)) {
+        console.log(`\n✅ SQLite database file not found at ${sqliteDbPath}. This is normal for a new setup.`);
+        console.log('Migration script finished successfully by skipping migration.');
+        process.exit(0);
+    }
+    
+    let sqliteDb;
     try {
-        const sqliteDb = await open({
-            filename: './sudam.sqlite',
+        sqliteDb = await open({
+            filename: sqliteDbPath,
             driver: sqlite3.Database
         });
         
+        // Check if the 'users' table exists. If not, it's not a valid DB to migrate from.
+        const usersTableExists = await sqliteDb.get("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+        if (!usersTableExists) {
+            console.log(`\n✅ SQLite database at ${sqliteDbPath} is empty or uninitialized. This is normal for a new setup.`);
+            console.log('Migration script finished successfully by skipping migration.');
+            process.exit(0);
+        }
+
         await pgPool.connect();
 
         await migrateUsers(sqliteDb);
@@ -91,10 +121,11 @@ async function main() {
         await migrateGames(sqliteDb);
         await migrateKvStore(sqliteDb);
 
-        console.log('Migration completed successfully!');
+        console.log('\n✅ Migration from SQLite to PostgreSQL completed successfully!');
     } catch (error) {
-        console.error('Migration failed:', error);
+        console.error('\n❌ Migration failed:', error);
     } finally {
+        if (sqliteDb) await sqliteDb.close();
         await pgPool.end();
         process.exit(0);
     }

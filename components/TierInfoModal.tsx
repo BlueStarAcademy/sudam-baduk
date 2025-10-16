@@ -1,8 +1,8 @@
 import React from 'react';
 import DraggableWindow from './DraggableWindow.js';
-import { RANKING_TIERS, SEASONAL_TIER_REWARDS, CONSUMABLE_ITEMS } from '../constants.js';
+import { RANKING_TIERS, SEASONAL_TIER_REWARDS, CONSUMABLE_ITEMS } from '../constants/index.js';
 // FIX: LeagueRewardTier is now defined in types/entities.ts and exported from types/index.js
-import { QuestReward, LeagueRewardTier } from '../types.js';
+import { QuestReward, LeagueRewardTier } from '../types/index.js';
 
 interface TierInfoModalProps {
     onClose: () => void;
@@ -38,7 +38,7 @@ const TierInfoModal: React.FC<TierInfoModalProps> = ({ onClose }) => {
         if (reward.items) {
             reward.items.forEach(item => {
                 // Correctly handle union type for item references.
-                const itemName = 'itemId' in item ? item.itemId : item.name;
+                const itemName = 'itemId' in item ? item.itemId : (item as any).name;
                 const itemImage = getItemImage(itemName);
                 // Handle optional quantity property on InventoryItem
                 const quantity = 'quantity' in item ? (item.quantity ?? 1) : 1;
@@ -48,14 +48,20 @@ const TierInfoModal: React.FC<TierInfoModalProps> = ({ onClose }) => {
 
         return (
             <div className="flex items-center gap-2 flex-wrap">
-                {rewardsToShow.map((r, index) => (
-                    r.image && (
+                {rewardsToShow.map((r, index) => {
+                    if (!r.image) return null;
+                    const isUrl = r.image.startsWith('/');
+                    return (
                         <div key={index} className="flex items-center gap-1.5 bg-gray-700/50 px-2 py-1 rounded-md" title={r.name}>
-                            <img src={r.image} alt={r.name} className="w-5 h-5 object-contain" />
+                            {isUrl ? (
+                                <img src={r.image} alt={r.name} className="w-5 h-5 object-contain" />
+                            ) : (
+                                <span className="text-lg">{r.image}</span>
+                            )}
                             <span className="text-gray-300 whitespace-nowrap text-xs">{r.name}</span>
                         </div>
-                    )
-                ))}
+                    );
+                })}
             </div>
         );
     };
@@ -80,7 +86,7 @@ const TierInfoModal: React.FC<TierInfoModalProps> = ({ onClose }) => {
                     </p>
                 </div>
 
-                <ul className="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
+                <ul className="space-y-2 overflow-y-auto pr-2">
                     {RANKING_TIERS.map(tier => (
                         <li key={tier.name} className="p-3 bg-gray-900/50 rounded-lg">
                             <div className="flex items-center">

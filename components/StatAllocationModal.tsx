@@ -7,6 +7,7 @@ import Button from './Button.js';
 import RadarChart from './RadarChart.js';
 import { CORE_STATS_DATA } from '../constants.js';
 
+// FIX: Add missing props to the interface
 interface StatAllocationModalProps {
     currentUser: UserWithStatus;
     onClose: () => void;

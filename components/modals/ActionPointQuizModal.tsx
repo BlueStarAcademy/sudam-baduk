@@ -164,7 +164,7 @@ const ActionPointQuizModal: React.FC<ActionPointQuizModalProps> = ({ onClose, on
 
     return (
         <DraggableWindow title="바둑 퀴즈" onClose={handleClose} windowId="action-point-quiz" initialWidth={500} isTopmost={isTopmost}>
-            <div className="h-[calc(var(--vh,1vh)*60)] flex flex-col">
+            <div className="h-full flex flex-col">
                 {isQuizOver ? renderResult() : renderQuiz()}
             </div>
         </DraggableWindow>

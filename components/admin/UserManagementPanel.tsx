@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useLayoutEffect, forwardRef } from 'react';
 // FIX: Separate enum and type imports.
 import { GameMode } from '../../types/index.js';
@@ -281,7 +280,7 @@ const UserManagementModal: React.FC<UserManagementModalProps> = ({ user, current
 
     return (
         <DraggableWindow title={`사용자 수정: ${user.nickname}`} onClose={onClose} windowId={`user-edit-${user.id}`} initialWidth={800}>
-            <div className="h-[70vh] flex flex-col">
+            <div className="h-full flex flex-col">
                 <div className="flex bg-tertiary/70 p-1 rounded-lg mb-4 flex-shrink-0">
                     <button onClick={() => setActiveTab('general')} className={`flex-1 py-2 text-sm font-semibold rounded-md ${activeTab === 'general' ? 'bg-accent' : 'text-tertiary'}`}>일반</button>
                     <button onClick={() => setActiveTab('strategic')} className={`flex-1 py-2 text-sm font-semibold rounded-md ${activeTab === 'strategic' ? 'bg-accent' : 'text-tertiary'}`}>전략</button>

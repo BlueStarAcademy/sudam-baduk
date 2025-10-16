@@ -1,7 +1,7 @@
 import React from 'react';
-import { UserWithStatus, GameMode } from '../../types.js';
+import { UserWithStatus, GameMode } from '../../types/index.js';
 import DraggableWindow from '../DraggableWindow.js';
-import { RANKING_TIERS } from '../../constants.js';
+import { RANKING_TIERS } from '../../constants/index.js';
 
 interface PastRankingsModalProps {
     info: { user: UserWithStatus; mode: GameMode; };
@@ -16,7 +16,7 @@ const PastRankingsModal: React.FC<PastRankingsModalProps> = ({ info, onClose, is
 
     return (
         <DraggableWindow title="지난 시즌 랭킹" onClose={onClose} windowId="past-rankings" initialWidth={450} isTopmost={isTopmost}>
-            <div className="max-h-[calc(var(--vh,1vh)*60)] overflow-y-auto pr-2">
+            <div className="h-full overflow-y-auto pr-2">
                 <h3 className="text-lg font-bold text-center mb-4">{mode}</h3>
                 {seasonNames.length > 0 ? (
                     <ul className="space-y-2">

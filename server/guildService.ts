@@ -118,7 +118,7 @@ export const checkCompletedResearch = async (guild: Guild): Promise<GuildResearc
         if (!guild.research[completedTaskId]) {
             guild.research[completedTaskId] = { level: 0 };
         }
-        guild.research[completedTaskId].level += 1;
+        guild.research[completedTaskId]!.level += 1;
         guild.researchTask = null;
         
         return completedTaskId;

@@ -29,7 +29,6 @@ import { initializeMissile, updateMissileState, handleMissileAction } from './mi
 import { VolatileState } from '../../types/api.js';
 import { getNewActionButtons } from '../services/actionButtonService.js';
 
-// FIX: Export function to make it accessible to other modules.
 export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player) => {
     try {
         const gameId = gameFromAction.id;
@@ -84,6 +83,7 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
                     gameAfterWait.passCount = 0;
                     gameAfterWait.gameStatus = GameStatus.Playing;
                     switchTurnAndUpdateTimers(gameAfterWait, Date.now());
+                    gameAfterWait.aiTurnStartTime = undefined;
                     await db.saveGame(gameAfterWait);
 
                 } catch (e) {
@@ -124,6 +124,7 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
                 }
             }
             switchTurnAndUpdateTimers(freshGame, Date.now());
+            freshGame.aiTurnStartTime = undefined;
             await db.saveGame(freshGame);
         }
     } catch (err) {
@@ -131,7 +132,6 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
     }
 };
 
-// FIX: Export function to make it accessible to other modules.
 export const initializeStrategicGame = async (game: LiveGameSession, neg: Negotiation, now: number) => {
     if (game.isSinglePlayer || game.isTowerChallenge) {
         // Single player games always have the human as black and start immediately.
@@ -174,7 +174,6 @@ export const initializeStrategicGame = async (game: LiveGameSession, neg: Negoti
     }
 };
 
-// FIX: Export function to make it accessible to other modules.
 export const updateStrategicGameState = async (game: LiveGameSession, now: number) => {
     if (updateSharedGameState(game, now)) return;
 
@@ -187,7 +186,6 @@ export const updateStrategicGameState = async (game: LiveGameSession, now: numbe
     updateMissileState(game, now);
 };
 
-// FIX: Export function to make it accessible to other modules.
 export const handleStrategicGameAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const { type, payload } = action;
     const now = Date.now();
@@ -255,7 +253,7 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
         switchTurnAndUpdateTimers(game, now);
         
         if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
-            // FIX: Don't assign the result of handleAiTurn to pendingAiMove. Just call it fire-and-forget.
+            game.aiTurnStartTime = Date.now();
             void handleAiTurn(game, { x, y }, myPlayerEnum);
         }
         
@@ -273,8 +271,8 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
         } else {
             switchTurnAndUpdateTimers(game, now);
             if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
-                // FIX: Don't assign the result of handleAiTurn to pendingAiMove. Just call it fire-and-forget.
-                 void handleAiTurn(game, { x: -1, y: -1 }, myPlayerEnum);
+                game.aiTurnStartTime = Date.now();
+                void handleAiTurn(game, { x: -1, y: -1 }, myPlayerEnum);
             }
         }
         return {};

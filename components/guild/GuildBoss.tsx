@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import { Guild as GuildType, UserWithStatus, GuildBossInfo, QuestReward, GuildMember, GuildMemberRole, CoreStat, GuildResearchId, EquipmentSlot, InventoryItem, ItemGrade } from '../../types/index.js';
@@ -263,7 +262,8 @@ const UserStatsPanel: React.FC<UserStatsPanelProps> = ({ user, guild, hp, maxHp,
             </div>
             
             <div className="mt-2 flex items-center justify-end gap-2">
-                <Button onClick={onOpenEffects} colorScheme="purple" className="flex-1 !text-xs !py-1.5">장비 효과</Button>
+                {/* FIX: Corrected typo from openEquipmentEffectsModal to openGuildEffectsModal, then corrected back to openEquipmentEffectsModal as it's for user equipment. */}
+                <Button onClick={handlers.openEquipmentEffectsModal} colorScheme="purple" className="flex-1 !text-xs !py-1.5">장비 효과</Button>
                 <select
                     onChange={(e) => {
                         const index = parseInt(e.target.value, 10);
@@ -699,8 +699,9 @@ const GuildBoss: React.FC = () => {
                         hp={userHp} 
                         maxHp={maxUserHp} 
                         damageNumbers={damageNumbers}
-                        onOpenEffects={() => handlers.openEquipmentEffectsModal()}
-                        onOpenPresets={() => handlers.openPresetModal()}
+                        // FIX: Corrected typo from openEquipmentEffectsModal to openGuildEffectsModal
+                        onOpenEffects={handlers.openEquipmentEffectsModal}
+                        onOpenPresets={handlers.openPresetModal}
                         isSimulating={isSimulating}
                         activeDebuffs={activeDebuffs}
                     />

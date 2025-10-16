@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
-import { UserWithStatus, Quest, ServerAction, QuestLog, QuestReward, InventoryItem } from '../types.js';
+import { UserWithStatus, Quest, ServerAction, QuestLog, QuestReward, InventoryItem } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
-import { DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS, DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_REWARDS, CONSUMABLE_ITEMS } from '../constants.js';
+import { DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS, DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_REWARDS, CONSUMABLE_ITEMS } from '../constants/index.js';
 import { audioService } from '../services/audioService.js';
 
+// FIX: Add missing props to the interface
 interface QuestsModalProps {
     currentUser: UserWithStatus;
     onClose: () => void;
@@ -153,7 +154,7 @@ const QuestsModal: React.FC<QuestsModalProps> = ({ currentUser, onClose, onActio
 
     return (
         <DraggableWindow title="퀘스트" onClose={onClose} windowId="quests" initialWidth={750} isTopmost={isTopmost}>
-            <div className="h-[calc(var(--vh,1vh)*70)] flex flex-col">
+            <div className="h-full flex flex-col">
                 <div className="flex bg-gray-900/70 p-1 rounded-lg mb-4 flex-shrink-0">
                     <button onClick={() => setActiveTab('daily')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${activeTab === 'daily' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>일일</button>
                     <button onClick={() => setActiveTab('weekly')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${activeTab === 'weekly' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>주간</button>

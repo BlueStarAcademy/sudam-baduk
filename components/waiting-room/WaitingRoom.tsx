@@ -11,8 +11,10 @@ import GameList from './GameList.js';
 import ChatWindow from './ChatWindow.js';
 import TierInfoModal from '../TierInfoModal.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, aiUserId } from '../../constants/index.js';
+// FIX: Import QuickAccessSidebar component to resolve module resolution error.
 import QuickAccessSidebar from '../QuickAccessSidebar.js';
 import Button from '../Button.js';
+import NineSlicePanel from '../ui/NineSlicePanel.js';
 
 interface WaitingRoomComponentProps {
     mode: GameMode;
@@ -40,7 +42,7 @@ const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
     const botName = isStrategic ? `${mode}봇(카타고)` : `${mode}봇`;
 
     return (
-        <div className="bg-panel panel-glow rounded-lg shadow-lg p-3 flex items-center justify-between flex-shrink-0 text-on-panel">
+        <NineSlicePanel className="shadow-lg p-3 flex items-center justify-between flex-shrink-0 text-on-panel" padding="p-3">
             <div className="flex items-center gap-3">
                  <Avatar userId={aiUserId} userName="AI" size={40} className="border-2 border-purple-500" />
                  <div>
@@ -81,14 +83,14 @@ const AnnouncementBoard: React.FC<{ mode: GameMode; }> = ({ mode }) => {
     
     if (!announcements || announcements.length === 0) {
         return (
-            <div className="bg-panel panel-glow rounded-lg shadow-lg p-2 flex items-center justify-center flex-shrink-0 h-10 text-on-panel">
+            <NineSlicePanel className="shadow-lg p-2 flex items-center justify-center flex-shrink-0 h-10 text-on-panel" padding="p-2">
                 <span className="font-bold text-tertiary text-center">[현재 등록된 공지사항이 없습니다.]</span>
             </div>
         );
     }
 
     return (
-        <div className="bg-panel panel-glow rounded-lg shadow-lg px-4 relative overflow-hidden flex-shrink-0 h-10">
+        <NineSlicePanel className="shadow-lg px-4 relative overflow-hidden flex-shrink-0 h-10" padding="px-4">
             <div
                 className="w-full absolute top-0 left-0 transition-transform duration-1000 ease-in-out"
                 style={{ transform: `translateY(-${currentIndex * 2.5}rem)` }}
@@ -190,10 +192,9 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                 <div className="flex-shrink-0"><AnnouncementBoard mode={mode} /></div>
                 <div className="flex-shrink-0"><AiChallengePanel mode={mode} /></div>
                 <div className="flex-1 flex flex-col gap-4 min-h-0">
-                    <div className="h-1/2 bg-panel panel-glow rounded-lg shadow-lg flex flex-col min-h-0">
-                        <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
+                    <NineSlicePanel className="h-1/2 shadow-lg flex flex-col min-h-0">
                     </div>
-                    <div className="h-1/2 bg-panel panel-glow rounded-lg shadow-lg flex flex-col min-h-0">
+                    <NineSlicePanel className="h-1/2 shadow-lg flex flex-col min-h-0">
                         <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} />
                     </div>
                 </div>
@@ -231,10 +232,10 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                     <AiChallengePanel mode={mode} />
                 </div>
                 <div className="grid grid-rows-2 gap-4 flex-1 min-h-0">
-                    <div className="min-h-0 bg-panel panel-glow rounded-lg shadow-lg flex flex-col">
+                    <NineSlicePanel className="min-h-0 shadow-lg flex flex-col">
                         <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                     </div>
-                    <div className="min-h-0 flex flex-col bg-panel panel-glow rounded-lg shadow-lg">
+                    <NineSlicePanel className="min-h-0 flex flex-col shadow-lg">
                         <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
                     </div>
                 </div>
@@ -243,7 +244,7 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
             {/* Right Sidebar Column */}
             <div className="lg:col-span-2 grid grid-rows-2 gap-4">
               <div className="flex flex-row gap-4 items-stretch min-h-0">
-                <div className="flex-1 bg-panel panel-glow rounded-lg shadow-lg min-w-0">
+                <NineSlicePanel className="flex-1 shadow-lg min-w-0">
                   <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
                 </div>
                 <div className="w-24 flex-shrink-0">
@@ -251,7 +252,7 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                 </div>
               </div>
 
-              <div className="bg-panel panel-glow rounded-lg shadow-lg min-h-0">
+              <NineSlicePanel className="shadow-lg min-h-0">
                 <RankingList currentUser={currentUserWithStatus} mode={mode} onViewUser={handlers.openViewingUser} onShowTierInfo={() => setIsTierInfoModalOpen(true)} onShowPastRankings={handlers.openPastRankings} />
               </div>
             </div>

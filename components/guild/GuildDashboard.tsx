@@ -2,32 +2,18 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Guild as GuildType, UserWithStatus, GuildBossInfo, QuestReward, GuildMember, GuildMemberRole, CoreStat, GuildResearchId, GuildResearchCategory, ItemGrade, ServerAction } from '../../types/index.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import Button from '../Button.js';
-import { 
-    GUILD_XP_PER_LEVEL, 
-    GUILD_BOSSES, 
-    GUILD_RESEARCH_PROJECTS, 
-    AVATAR_POOL, 
-    BORDER_POOL, 
-    emptySlotImages, 
-    slotNames, 
-    GUILD_BOSS_MAX_ATTEMPTS,
-    GUILD_INITIAL_MEMBER_LIMIT,
-    GUILD_DONATION_GOLD_LIMIT,
-    GUILD_DONATION_DIAMOND_LIMIT,
-    GUILD_DONATION_GOLD_COST,
-    GUILD_DONATION_DIAMOND_COST,
-    GUILD_CHECK_IN_MILESTONE_REWARDS
-} from '../../constants/index.js';
+import GuildHomePanel from './GuildHomePanel.js';
+import GuildMembersPanel from './GuildMembersPanel.js';
+import GuildManagementPanel from './GuildManagementPanel.js';
+import { GUILD_XP_PER_LEVEL, GUILD_BOSSES, GUILD_RESEARCH_PROJECTS, AVATAR_POOL, BORDER_POOL, emptySlotImages, slotNames, GUILD_BOSS_MAX_ATTEMPTS, GUILD_INITIAL_MEMBER_LIMIT, GUILD_DONATION_GOLD_LIMIT, GUILD_DONATION_DIAMOND_LIMIT, GUILD_DONATION_GOLD_COST, GUILD_DONATION_DIAMOND_COST, GUILD_CHECK_IN_MILESTONE_REWARDS } from '../../constants/index.js';
 import DraggableWindow from '../DraggableWindow.js';
 import GuildResearchPanel from './GuildResearchPanel.js';
 import GuildMissionsPanel from './GuildMissionsPanel.js';
+import NineSlicePanel from '../ui/NineSlicePanel.js';
 import GuildShopModal from './GuildShopModal.js';
 import { BOSS_SKILL_ICON_MAP } from '../../assets.js';
 import HelpModal from '../HelpModal.js';
 import { getTimeUntilNextMondayKST, isSameDayKST } from '../../utils/timeUtils.js';
-import GuildHomePanel from './GuildHomePanel.js';
-import GuildMembersPanel from './GuildMembersPanel.js';
-import GuildManagementPanel from './GuildManagementPanel.js';
 
 const GuildDonationPanel: React.FC<{ guildDonationAnimation: { coins: number; research: number } | null }> = ({ guildDonationAnimation }) => {
     const { handlers, currentUserWithStatus } = useAppContext();
@@ -78,6 +64,7 @@ const GuildDonationPanel: React.FC<{ guildDonationAnimation: { coins: number; re
     return (
         <div className="bg-secondary p-4 rounded-lg flex flex-col relative overflow-hidden">
             <h3 className="font-bold text-lg text-highlight mb-3 text-center">길드 기부</h3>
+            {animationElements}
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-tertiary p-3 rounded-md text-center">
                     <img src="/images/Gold.png" alt="골드 기부" className="w-12 h-12 mx-auto mb-2" />
@@ -104,7 +91,6 @@ const GuildDonationPanel: React.FC<{ guildDonationAnimation: { coins: number; re
                     </Button>
                 </div>
             </div>
-            {animationElements}
         </div>
     );
 };
@@ -258,11 +244,10 @@ interface GuildDashboardProps {
 type GuildTab = 'home' | 'members' | 'management';
 
 export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDonationAnimation }) => {
-    const { currentUserWithStatus } = useAppContext();
+    const { currentUserWithStatus, handlers } = useAppContext();
     const [activeTab, setActiveTab] = useState<GuildTab>('home');
     const [isMissionsOpen, setIsMissionsOpen] = useState(false);
     const [isResearchOpen, setIsResearchOpen] = useState(false);
-    const [isShopOpen, setIsShopOpen] = useState(false);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [isBossGuideOpen, setIsBossGuideOpen] = useState(false);
 
@@ -290,13 +275,13 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
         tabs.push({ id: 'management' as GuildTab, label: '관리' });
     }
     
-    const RightPanel = () => (
+    const RightPanel: React.FC<{ guildDonationAnimation: { coins: number; research: number } | null }> = ({ guildDonationAnimation }) => (
         <div className="lg:col-span-2 flex flex-col gap-4">
             <GuildDonationPanel guildDonationAnimation={guildDonationAnimation} />
             <ActivityPanel 
                 onOpenMissions={() => setIsMissionsOpen(true)} 
                 onOpenResearch={() => setIsResearchOpen(true)} 
-                onOpenShop={() => setIsShopOpen(true)} 
+                onOpenShop={handlers.openGuildShop} 
                 missionNotification={missionTabNotification} 
                 onOpenBossGuide={() => setIsBossGuideOpen(true)} 
             />
@@ -311,7 +296,6 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
         <div className="p-2 sm:p-4 lg:p-6 max-w-7xl mx-auto h-full flex flex-col w-full relative">
             {isMissionsOpen && <GuildMissionsPanel guild={guild} myMemberInfo={myMemberInfo} onClose={() => setIsMissionsOpen(false)} />}
             {isResearchOpen && <GuildResearchPanel guild={guild} myMemberInfo={myMemberInfo} onClose={() => setIsResearchOpen(false)} />}
-            {isShopOpen && <GuildShopModal onClose={() => setIsShopOpen(false)} />}
             {isHelpOpen && <HelpModal mode="guild" onClose={() => setIsHelpOpen(false)} />}
             {isBossGuideOpen && <GuildBossGuideModal onClose={() => setIsBossGuideOpen(false)} />}
             
@@ -342,7 +326,7 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
                     <div className="flex flex-col items-end gap-1">
                         <button onClick={() => setIsHelpOpen(true)} className="p-1 rounded-full text-2xl hover:bg-tertiary transition-colors" title="길드 도움말">❓</button>
                         <div className="flex items-center gap-2 bg-tertiary/70 p-2 rounded-lg">
-                            <div className="flex items-center gap-2 pr-2 border-r border-color" title="나의 길드 코인">
+                            <div className="flex items-center gap-1 pr-2 border-r border-color" title="나의 길드 코인">
                                 <img src="/images/guild/tokken.png" alt="Guild Coin" className="w-6 h-6" />
                                 <span className="font-bold text-lg">{myGuildCoins.toLocaleString()}</span>
                             </div>
@@ -371,22 +355,22 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
                         </div>
                     </div>
                     
-                    <div className="flex-1 min-h-0">
+                    <div className="flex-1 min-h-0 overflow-y-auto">
                         {activeTab === 'home' && <GuildHomePanel guild={guild} myMemberInfo={myMemberInfo} />}
                         {activeTab === 'members' && (
-                            <div className="bg-panel panel-glow rounded-lg p-4 h-full">
+                            <NineSlicePanel className="h-full">
                                 <GuildMembersPanel guild={guild} myMemberInfo={myMemberInfo} />
-                            </div>
+                            </NineSlicePanel>
                         )}
                         {activeTab === 'management' && canManage && (
-                            <div className="bg-panel panel-glow rounded-lg p-4 h-full">
+                            <NineSlicePanel className="h-full">
                                 <GuildManagementPanel guild={guild} />
-                            </div>
+                            </NineSlicePanel>
                         )}
                     </div>
                 </div>
 
-                <RightPanel />
+                <RightPanel guildDonationAnimation={guildDonationAnimation} />
             </main>
         </div>
     );

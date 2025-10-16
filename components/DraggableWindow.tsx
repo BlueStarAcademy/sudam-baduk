@@ -20,7 +20,7 @@ const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, windowId, onCl
     const initialWindowPos = useRef({ x: 0, y: 0 });
     const [isInitialized, setIsInitialized] = useState(false);
     const positionRef = useRef(position);
-    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [rememberPosition, setRememberPosition] = useState(true);
     
     const windowRef = useRef<HTMLDivElement>(null);
@@ -41,7 +41,7 @@ const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, windowId, onCl
     }, [modal, onClose, handleClickOutside]);
 
     useEffect(() => {
-        const checkIsMobile = () => setIsMobile(window.innerWidth < 768);
+        const checkIsMobile = () => setIsMobile(window.innerWidth < 1024);
         window.addEventListener('resize', checkIsMobile);
         checkIsMobile();
         return () => window.removeEventListener('resize', checkIsMobile);
@@ -219,7 +219,7 @@ const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, windowId, onCl
                     width: responsiveWidth,
                     transform: transformStyle,
                     boxShadow: isDragging ? '0 25px 50px -12px rgba(0, 0, 0, 0.5)' : '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                    maxHeight: '90vh',
+                    maxHeight: isMobile ? '90vh' : '850px',
                 }}
             >
                 {!isTopmost && (

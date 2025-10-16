@@ -1,9 +1,9 @@
 // server/ai/index.ts
 import { LiveGameSession, GameMode, User, Player, Point } from '../../types/index.js';
-import { aiUserId } from '../../constants/index.js';
+import { aiUserId, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, strategicAiDisplayMap, captureAiLevelMap } from '../../constants/index.js';
 import { makePlayfulAiMove } from './playfulAi.js';
 import { makeSimpleAiMove } from './simpleAi.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, strategicAiDisplayMap, captureAiLevelMap } from '../../constants/index.js';
+import { createDefaultUser } from '../initialData.js';
 
 export const getAiUser = (mode: GameMode, difficulty: number = 50, stageId?: string, floor?: number): User => {
     const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
@@ -34,20 +34,18 @@ export const getAiUser = (mode: GameMode, difficulty: number = 50, stageId?: str
             botName = `따내기봇 ${displayLevel}단`;
         } else {
             displayLevel = strategicAiDisplayMap[engineLevel - 1];
-            // FIX: The variable 'difficultyStep' was not defined. Based on the logic, 'engineLevel' should be used here.
             botName = `${mode}봇 ${engineLevel}단계`;
         }
     }
     
-    // This is a partial User object, which is what seems to be expected.
-    return {
-        id: aiUserId,
-        username: 'ai_player',
-        nickname: botName,
-        isAdmin: false,
-        strategyLevel: isStrategic ? displayLevel : 1,
-        playfulLevel: isPlayful ? displayLevel : 1,
-    } as User;
+    // Create a full user object for the AI to prevent crashes in services that expect a complete User object.
+    const aiUser = createDefaultUser(aiUserId, 'ai_player', botName);
+
+    // Override specific properties for this AI instance
+    aiUser.strategyLevel = isStrategic ? displayLevel : 1;
+    aiUser.playfulLevel = isPlayful ? displayLevel : 1;
+
+    return aiUser;
 };
 
 export const makeAiMove = async (game: LiveGameSession): Promise<Point & { isHidden?: boolean }> => {

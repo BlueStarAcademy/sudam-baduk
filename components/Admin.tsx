@@ -6,7 +6,7 @@ import ServerSettingsPanel from './admin/ServerSettingsPanel';
 import { useAppContext } from '../hooks/useAppContext';
 import AdminGuildManagementPanel from './admin/GuildManagementPanel';
 // FIX: Use `import type` for interfaces to prevent type/value confusion.
-import type { LiveGameSession, Guild as GuildType, AdminProps } from '../types/index';
+import type { LiveGameSession, Guild as GuildType, AdminProps } from '../types/index.js';
 import Button from './Button';
 
 type AdminView = 'dashboard' | 'userManagement' | 'mailSystem' | 'serverSettings' | 'guildManagement';

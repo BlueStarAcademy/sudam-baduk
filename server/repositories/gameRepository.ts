@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { LiveGameSession } from '../../types/index.js';
 // FIX: Corrected import path for `rowToGame` to point to the correct mapper file.
 import { rowToGame } from '../db/mappers.js';
+import { broadcast } from '../services/supabaseService.js';
 
 const serializeGame = (game: LiveGameSession) => {
     const serialized: any = {};
@@ -49,8 +50,14 @@ export const saveGame = async (db: Pool, game: LiveGameSession): Promise<void> =
         const values = columns.map(key => serializedGame[key]);
         await db.query(`INSERT INTO live_games (${columns.map(c => `"${c}"`).join(',')}) VALUES (${placeholders})`, values);
     }
+
+    const updatedGame = await getLiveGame(db, game.id);
+    if (updatedGame) {
+        await broadcast({ event: 'GAME_UPDATE', payload: updatedGame });
+    }
 };
 
 export const deleteGame = async (db: Pool, id: string): Promise<void> => {
     await db.query('DELETE FROM live_games WHERE id = $1', [id]);
+    await broadcast({ event: 'GAME_DELETE', payload: { id } });
 };

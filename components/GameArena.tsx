@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { GameProps, Player, GameMode, Point } from '../types/index.js';
 

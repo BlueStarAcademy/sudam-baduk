@@ -2,17 +2,17 @@ import React from 'react';
 import { useAppContext } from '../hooks/useAppContext';
 
 // Import all view components. It's safe to assume they exist based on the file list.
-import Profile from './Profile.js';
-import Lobby from './Lobby.js';
-import WaitingRoom from './waiting-room/WaitingRoom.js';
-import Game from './Game.js';
-import Admin from './Admin.js';
-import TournamentLobby from './TournamentLobby.js';
-import SinglePlayerLobby from './SinglePlayerLobby.js';
-import TowerChallengeLobby from './TowerChallengeLobby.js';
-import Guild from './guild/Guild.js';
-import GuildBoss from './guild/GuildBoss.js';
-import GuildWar from './guild/GuildWar.js';
+import Profile from './Profile';
+import Lobby from './Lobby';
+import WaitingRoom from './waiting-room/WaitingRoom';
+import Game from './Game';
+import Admin from './Admin';
+import TournamentLobby from './TournamentLobby';
+import SinglePlayerLobby from './SinglePlayerLobby';
+import TowerChallengeLobby from './TowerChallengeLobby';
+import Guild from './guild/Guild';
+import GuildBoss from './guild/GuildBoss';
+import GuildWar from './guild/GuildWar';
 
 const Router: React.FC = () => {
     const { currentRoute, activeGame } = useAppContext();

@@ -38,6 +38,7 @@ export const switchTurnAndUpdateTimers = (game: LiveGameSession, now: number) =>
     // 2. Switch player
     game.currentPlayer = game.currentPlayer === Player.Black ? Player.White : Player.Black;
     game.missileUsedThisTurn = false;
+    game.canRequestNoContest = {}; // Reset on every turn
     
     // 3. Set up next turn's deadline
     if (hasTimeLimit) {
@@ -138,13 +139,10 @@ export const handleSharedAction = async (volatileState: VolatileState, game: Liv
             
             game.noContestInitiatorIds = [...(game.noContestInitiatorIds || []), user.id];
             
-            const opponentId = game.player1.id === user.id ? game.player2.id : game.player1.id;
+            game.gameStatus = GameStatus.NoContest;
+            game.winReason = WinReason.Disconnect; // for summary purposes
+            await processGameSummary(game);
             
-            if (game.noContestInitiatorIds.includes(opponentId)) {
-                game.gameStatus = GameStatus.NoContest;
-                game.winReason = WinReason.Disconnect; // for summary purposes
-                await processGameSummary(game);
-            }
             return {};
         }
         case 'CHOOSE_TURN_PREFERENCE': {

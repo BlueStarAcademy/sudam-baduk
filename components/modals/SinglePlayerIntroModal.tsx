@@ -3,20 +3,14 @@ import { LiveGameSession, GameMode, GameType, Player } from '../../types/index.j
 import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants/index.js';
 import { BLACK_PATTERN_STONE_IMG, WHITE_PATTERN_STONE_IMG } from '../../assets.js';
 import Button from '../Button.js';
+// FIX: Import gameTypeKorean from a single source to prevent redeclaration errors.
+import { gameTypeKorean } from '../arenas/TowerChallengeArena.js';
+
 
 interface SinglePlayerIntroModalProps {
     session: LiveGameSession;
     onConfirm: () => Promise<any>;
 }
-
-// FIX: Moved 'gameTypeKorean' object here to resolve a circular dependency.
-const gameTypeKorean: Record<GameType, string> = {
-    'capture': '따내기',
-    'survival': '살리기',
-    'speed': '스피드',
-    'missile': '미사일',
-    'hidden': '히든'
-};
 
 const CaptureTargetPanel: React.FC<{ target: number; label: string; isBlack: boolean }> = ({ target, label, isBlack }) => (
     <div className={`p-2 rounded-lg text-center flex flex-col justify-center ${isBlack ? 'bg-gray-800' : 'bg-gray-200'}`}>

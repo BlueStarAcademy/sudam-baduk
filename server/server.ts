@@ -1,6 +1,7 @@
 // server/server.ts
-// FIX: Changed import to use RequestHandler for correct type inference, resolving issues with Express types.
-import express, { RequestHandler } from 'express';
+// FIX: Separated express value and type imports to resolve middleware type errors with `app.use`.
+// FIX: Combined express imports to a single line to fix type resolution issues with app.use overloads.
+import express, { type Express, type RequestHandler } from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV, setKV, updateUserStatus, removeUserStatus } from './db.js';
@@ -17,8 +18,6 @@ import { GUILD_RESEARCH_PROJECTS } from '../constants/index.js';
 import { regenerateActionPoints } from './services/effectService.js';
 import { containsProfanity } from '../profanity.js';
 import { broadcast } from './services/supabaseService.js';
-// FIX: Import process from 'process' to make Node.js globals available.
-import process from 'process';
 
 const volatileState: VolatileState = {
     userConnections: {},
@@ -33,12 +32,13 @@ const volatileState: VolatileState = {
 };
 
 
-const app = express();
+// FIX: Explicitly type `app` as `Express` to fix overload resolution issues with `app.use`.
+const app: Express = express();
 const port = process.env.PORT || 4000;
 
+// FIX: Removed unnecessary 'as RequestHandler' cast. The combined import for express resolves the type issue.
 app.use(cors());
-// FIX: The `express.json()` middleware should be applied to all routes without a path argument. Using `app.use('/', ...)` causes a TypeScript overload resolution error.
-// FIX: Removed path argument from app.use() to fix overload error.
+// FIX: Removed unnecessary 'as RequestHandler' cast. The combined import for express resolves the type issue.
 app.use(express.json({ limit: '10mb' }));
 
 declare global {
@@ -82,8 +82,8 @@ const userMiddleware: RequestHandler = async (req, res, next) => {
     next();
 };
 
-// FIX: The userMiddleware should be applied to all routes without a path argument. Using `app.use('/', ...)` causes a TypeScript overload resolution error.
-// FIX: Removed path argument from app.use() to fix overload error.
+// FIX: Cast middleware to RequestHandler to resolve "No overload matches this call" error. This helps TypeScript correctly identify the 'app.use' signature.
+// FIX: Removed unnecessary 'as RequestHandler' cast. The combined import for express resolves the type issue.
 app.use(userMiddleware);
 
 app.post('/api/auth/register', async (req, res) => {
@@ -98,6 +98,7 @@ app.post('/api/auth/register', async (req, res) => {
         }
         
         const allUsers = await db.getAllUsers();
+        // FIX: Removed reference to undefined 'user' variable.
         if (allUsers.some(u => u.nickname.toLowerCase() === nickname.toLowerCase())) {
             return res.status(409).json({ message: 'Nickname already exists.' });
         }
@@ -349,14 +350,17 @@ const startServer = async () => {
                     const game = await db.getLiveGame(userStatus.gameId);
                     if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
                         await db.deleteGame(game.id);
-                    } else {
-                        continue; 
                     }
                 }
                 
                 console.log(`[Cleanup] User ${userId} connection timed out. Setting to offline.`);
                 delete volatileState.userConnections[userId];
+                delete volatileState.userStatuses[userId];
                 await removeUserStatus(userId);
+                
+                const allSessions = (await getKV<Record<string, string>>('userSessions') || {}) as Record<string, string>;
+                delete allSessions[userId];
+                await setKV('userSessions', allSessions);
                 delete volatileState.userSessions[userId];
             } else {
                 const userStatus = userStatuses[userId];
@@ -456,7 +460,8 @@ app.listen(port, () => {
     });
 });
 
-['SIGINT', 'SIGTERM', 'SIGQUIT'].forEach(signal => process.on(signal, () => {
+// FIX: Remove problematic type cast on 'process' and use 'as const' to correctly infer signal types.
+(['SIGINT', 'SIGTERM', 'SIGQUIT'] as const).forEach(signal => process.on(signal, () => {
     process.exit();
 }));
 

@@ -90,7 +90,7 @@ const MbtiQuestionnaireModal: React.FC<MbtiQuestionnaireModalProps> = ({ onClose
 
     return (
         <DraggableWindow title={`MBTI 성향 설정 (${step + 1}/${steps.length})`} onClose={onClose} windowId="mbti-questionnaire" initialWidth={700} isTopmost={isTopmost}>
-            <div className="h-[calc(var(--vh,1vh)*60)] flex flex-col justify-between">
+            <div className="h-full flex flex-col justify-between">
                 <QuestionnaireStep
                     title={currentStep.title}
                     options={currentStep.options}

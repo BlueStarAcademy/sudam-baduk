@@ -28,7 +28,6 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             if (!opponent) return { error: 'Opponent not found.' };
             if (user.id === opponent.id) return { error: 'You cannot challenge yourself.' };
 
-            // Clean up any of my own previous abandoned drafts
             const existingDraftId = Object.keys(volatileState.negotiations).find(id => {
                 const neg = volatileState.negotiations[id];
                 return neg.challenger.id === user.id && neg.status === 'draft';
@@ -40,7 +39,6 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             const cost = getActionPointCost(mode);
             const userStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
 
-            // For real players, perform status checks
             if (opponentId !== aiUserId) {
                 const myStatus = userStatuses[user.id];
                 const opponentStatus = userStatuses[opponent.id];
@@ -94,7 +92,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             volatileState.userStatuses = userStatuses;
             await db.setKV('userStatuses', userStatuses);
             
-            return { clientResponse: { newNegotiation, userStatusUpdate: userStatusInfo } };
+            return { clientResponse: { newNegotiation, updatedUserStatuses: { [user.id]: userStatusInfo } } };
         }
         case 'SEND_CHALLENGE': {
             const { negotiationId, settings } = payload;
@@ -267,7 +265,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             volatileState.userStatuses = userStatuses;
             await db.setKV('userStatuses', userStatuses);
 
-            return {};
+            return { clientResponse: { updatedUser: opponent, updatedUserStatuses: { [challenger.id]: userStatuses[challenger.id], [opponent.id]: userStatuses[opponent.id] } } };
         }
         case 'DECLINE_NEGOTIATION': {
             const { negotiationId } = payload;
@@ -361,7 +359,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             if (draftNegId) delete volatileState.negotiations[draftNegId];
             
             await db.updateUser(user);
-            return {};
+            return { clientResponse: { updatedUser: user } };
         }
         case 'REQUEST_REMATCH': {
             const { opponentId, originalGameId } = payload;

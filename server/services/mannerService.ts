@@ -1,11 +1,10 @@
-
 // server/services/mannerService.ts
 import { User, Guild, MannerEffects, CoreStat } from '../../types/index.js';
-import { ACTION_POINT_REGEN_INTERVAL_MS } from '../../constants/rules.js';
+import { ACTION_POINT_REGEN_INTERVAL_MS } from '../../constants.js';
 import { getMannerRank } from '../../utils/mannerUtils.js';
 import * as db from '../db.js';
 import { regenerateActionPoints } from './effectService.js';
-import { getDb } from '.././db/connection.js';
+import { getDb } from '../db/connection.js';
 
 export const applyMannerRankChange = async (user: User, oldMannerScore: number): Promise<void> => {
     // FIX: Removed dbPool argument. db.getKV takes no arguments.

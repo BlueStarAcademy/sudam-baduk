@@ -1,5 +1,4 @@
 
-
 import type { User, Guild, MannerEffects } from '../types/index.js';
 import { CoreStat, SpecialStat, MythicStat, GuildResearchId } from '../types/index.js';
 import { GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index.js';

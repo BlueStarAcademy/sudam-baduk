@@ -1,4 +1,6 @@
-import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS } from '../constants/index.js';
+// server/gameModes.ts
+
+import { NO_CONTEST_MOVE_THRESHOLD, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_BUTTONS_EARLY, STRATEGIC_ACTION_BUTTONS_MID, STRATEGIC_ACTION_BUTTONS_LATE, PLAYFUL_ACTION_BUTTONS_EARLY, PLAYFUL_ACTION_BUTTONS_MID, PLAYFUL_ACTION_BUTTONS_LATE, RANDOM_DESCRIPTIONS, ALKKAGI_TURN_TIME_LIMIT, ALKKAGI_PLACEMENT_TIME_LIMIT, TIME_BONUS_SECONDS_PER_POINT, DEFAULT_GAME_SETTINGS, NO_CONTEST_TIME_THRESHOLD_SECONDS } from '../constants/index.js';
 import { TOWER_STAGES } from '../constants/towerChallengeConstants.js';
 import { SINGLE_PLAYER_STAGES } from '../constants/singlePlayerConstants.js';
 import { type LiveGameSession, type Negotiation, type ActionButton, GameMode, Player, type GameSettings, GameStatus, MythicStat, WinReason, Guild, Move, type AnalysisResult, type UserStatusInfo } from '../types/index.js';
@@ -171,6 +173,26 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, gu
             updatedGames.push(game);
             continue;
         }
+
+        if (game.turnDeadline && now > game.turnDeadline) {
+            const aiPlayerId = game.player2.id;
+            const aiPlayerEnum = game.blackPlayerId === aiPlayerId ? Player.Black : Player.White;
+            
+            if ((game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) && game.currentPlayer === aiPlayerEnum && game.aiTurnStartTime) {
+                continue; // AI is thinking, skip timeout check
+            }
+        }
+        
+        const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === game.mode);
+        if (isStrategic && !game.isAiGame && game.gameStatus === GameStatus.Playing && game.moveHistory.length < NO_CONTEST_MOVE_THRESHOLD * 2) {
+            const opponentId = game.currentPlayer === Player.Black ? game.whitePlayerId : game.blackPlayerId;
+            if (opponentId && game.turnStartTime && (now - game.turnStartTime > NO_CONTEST_TIME_THRESHOLD_SECONDS * 1000)) {
+                if (!game.canRequestNoContest) game.canRequestNoContest = {};
+                if (!game.noContestInitiatorIds?.includes(opponentId)) {
+                    game.canRequestNoContest[opponentId] = true;
+                }
+            }
+        }
         
         if (game.lastTimeoutPlayerIdClearTime && now >= game.lastTimeoutPlayerIdClearTime) {
             game.lastTimeoutPlayerId = undefined;
@@ -208,10 +230,9 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, gu
             await summaryService.getGameResult(game);
         }
         
-        const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === game.mode) || game.isSinglePlayer || game.isTowerChallenge;
         const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === game.mode);
 
-        if (isStrategic) {
+        if (isStrategic || game.isSinglePlayer || game.isTowerChallenge) {
             await strategic.updateStrategicGameState(game, now);
         } else if (isPlayful) {
             await updatePlayfulGameState(game, now);

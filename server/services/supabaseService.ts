@@ -1,15 +1,13 @@
 
-
 import { createClient } from '@supabase/supabase-js';
 import 'dotenv/config';
-import process from 'process';
 
 // These should be set in the Vercel environment variables
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY; // Use service key for server-side admin actions
 
 if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('Supabase server-side environment variables VITE_SUPABASE_URL or SUPABASE_SERVICE_KEY are missing.');
+    console.warn('Supabase server-side environment variables SUPABASE_URL or SUPABASE_SERVICE_KEY are missing.');
 }
 
 // Create a single client instance

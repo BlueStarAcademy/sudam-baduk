@@ -1,5 +1,3 @@
-
-
 import { GameMode } from '../types/index.js';
 import type { ActionButton, QuestReward } from '../types/index.js';
 

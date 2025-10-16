@@ -7,8 +7,8 @@ import { AVATAR_POOL, BORDER_POOL } from '../constants/index.js';
 import { useAppContext } from '../hooks/useAppContext.js';
 
 const ResourceDisplay: React.FC<{ icon: React.ReactNode; value: string; className?: string }> = ({ icon, value, className }) => (
-    <div className={`flex items-center gap-1 sm:gap-2 bg-tertiary/50 rounded-full py-1 pl-1 pr-2 sm:pr-3 shadow-inner ${className}`}>
-        <div className="bg-primary w-7 h-7 flex items-center justify-center rounded-full text-lg flex-shrink-0">{icon}</div>
+    <div className={`flex items-center gap-1 sm:gap-2 bg-tertiary/50 rounded-full py-1 pl-1 pr-2 shadow-inner ${className}`}>
+        <div className="bg-primary w-6 h-6 flex items-center justify-center rounded-full text-lg flex-shrink-0">{icon}</div>
         <span className="font-bold text-xs sm:text-sm text-primary">{value}</span>
     </div>
 );

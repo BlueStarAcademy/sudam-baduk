@@ -1,11 +1,12 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
+import { useAppContext } from '../hooks/useAppContext.js';
 import { UserWithStatus, ServerAction, ShopTab } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { isSameDayKST, isDifferentWeekKST } from '../utils/timeUtils.js';
-import { SHOP_ITEMS } from '../server/shop.js';
+import { SHOP_CONSUMABLE_ITEMS, CLIENT_SHOP_ITEMS } from '../constants/items.js';
 import Slider from './ui/Slider.js';
-import { SHOP_CONSUMABLE_ITEMS } from '../constants/index.js';
 
 // --- Type Definitions ---
 type ShopItemDetails = {
@@ -194,7 +195,6 @@ const BulkPurchaseModal: React.FC<BulkPurchaseModalProps> = ({ item, currentUser
         
         // 3. By inventory space (for non-stackable equipment boxes, assume 1 item per box)
         if (item.type === 'equipment') {
-            // FIX: Correctly calculate inventory space for equipment.
             const space = currentUser.inventorySlots.equipment - currentUser.inventory.filter(i => i.type === 'equipment').length;
             let maxBySpace = 0;
             for (let q = 1; q < 200; q++) { // assume max buy is < 200
@@ -266,7 +266,8 @@ const BulkPurchaseModal: React.FC<BulkPurchaseModalProps> = ({ item, currentUser
 };
 
 
-const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAction, onStartQuiz, isTopmost, initialTab }) => {
+export const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAction, onStartQuiz, isTopmost, initialTab }) => {
+    const { handlers } = useAppContext();
     const [activeTab, setActiveTab] = useState<ShopTab>(initialTab || 'package');
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [purchasingItem, setPurchasingItem] = useState<ShopItemDetails | null>(null);
@@ -283,16 +284,16 @@ const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAction, o
     };
 
     const shopItems = useMemo(() => {
-        const eq = Object.entries(SHOP_ITEMS)
-            .filter(([, item]) => item.type === 'equipment')
-            .map(([itemId, item]) => ({ ...item, itemId, price: item.cost }));
+        const eq = Object.entries(CLIENT_SHOP_ITEMS)
+            .filter(([, item]) => (item as any).type === 'equipment')
+            .map(([itemId, item]) => ({ ...(item as any), itemId, price: (item as any).cost }));
         
-        const mat = Object.entries(SHOP_ITEMS)
-            .filter(([, item]) => item.type === 'material')
-            .map(([itemId, item]) => ({ ...item, itemId, price: item.cost }));
+        const mat = Object.entries(CLIENT_SHOP_ITEMS)
+            .filter(([, item]) => (item as any).type === 'material')
+            .map(([itemId, item]) => ({ ...(item as any), itemId, price: (item as any).cost }));
             
         const cons = SHOP_CONSUMABLE_ITEMS.map(item => ({
-            itemId: item.name, // Use name as ID for consumables
+            itemId: item.name,
             name: item.name,
             description: item.description,
             price: item.cost,
@@ -391,4 +392,5 @@ const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAction, o
     );
 };
 
+// FIX: Add default export to resolve module not found error.
 export default ShopModal;

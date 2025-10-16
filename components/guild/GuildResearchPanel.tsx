@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Guild, GuildMember, GuildMemberRole, GuildResearchId, GuildResearchCategory } from '../../types/index.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
@@ -193,7 +192,7 @@ const GuildResearchPanel: React.FC<GuildResearchPanelProps & { onClose: () => vo
 
     return (
         <DraggableWindow title="길드 연구소" onClose={onClose} windowId="guild-research" initialWidth={900}>
-            <div className="flex flex-col h-[70vh]">
+            <div className="flex flex-col h-full">
                 <div className="flex justify-between items-center mb-4 flex-shrink-0">
                     <h3 className="text-xl font-bold text-highlight">길드 연구</h3>
                     <div className="bg-tertiary p-2 rounded-lg text-center">

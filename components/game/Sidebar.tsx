@@ -69,8 +69,6 @@ const GameInfoPanel: React.FC<{ session: LiveGameSession, onClose?: () => void }
             }
         }
         
-        // --- ALL MODE SPECIFIC SETTINGS ---
-
         if (mode === GameMode.Mix) {
             details.push(renderSetting("조합 규칙", settings.mixedModes?.join(', ')));
         }
@@ -147,16 +145,16 @@ const GameInfoPanel: React.FC<{ session: LiveGameSession, onClose?: () => void }
 };
 
 const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ session, onlineUsers, currentUser, onClose, onAction, onViewUser }) => {
+    
     const { player1, player2, blackPlayerId, whitePlayerId, gameStatus, isAiGame } = session;
 
-    // Derive players and spectators from the live onlineUsers list for accuracy
     const playersInRoom = useMemo(() => {
         return onlineUsers
             .filter(u => u.status === 'in-game' && u.gameId === session.id)
             .sort((a, b) => {
                 if (a.id === blackPlayerId) return -1;
                 if (b.id === blackPlayerId) return 1;
-                return 0; // white player will be second
+                return 0;
             });
     }, [onlineUsers, session.id, blackPlayerId]);
 
@@ -179,24 +177,28 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
         const borderUrl = BORDER_POOL.find(b => b.id === user.borderId)?.url;
 
         return (
-            <div key={user.id} className={`flex items-center gap-2 p-1 rounded ${isMe ? 'bg-blue-900/50' : ''}`}>
-                <Avatar userId={user.id} userName={user.nickname} size={28} avatarUrl={avatarUrl} borderUrl={borderUrl} />
+            <div className={`flex items-center gap-2 p-1 rounded ${isMe ? 'bg-blue-900/50' : ''}`}>
                 <div 
                     className={`flex items-center gap-2 flex-grow overflow-hidden ${!isMe ? 'cursor-pointer' : ''}`}
                     onClick={() => !isMe && onViewUser(user.id)}
                     title={!isMe ? `${user.nickname} 프로필 보기` : ''}
                 >
-                    <span className="font-semibold truncate text-sm">{user.nickname}</span>
-                    {isGameEnded && isOpponent && !isAiGame && (
-                         <Button
-                            onClick={(e) => { e?.stopPropagation(); handleRematch(user.id); }}
-                            disabled={rematchRequested}
-                            colorScheme="yellow"
-                            className="!text-xs !py-0.5 !px-2 flex-shrink-0"
-                         >
-                            {rematchRequested ? '신청중' : '재대결'}
-                         </Button>
-                    )}
+                    <div className="relative flex-shrink-0">
+                         <Avatar userId={user.id} userName={user.nickname} size={28} avatarUrl={avatarUrl} borderUrl={borderUrl} />
+                    </div>
+                    <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="font-semibold truncate text-sm">{user.nickname}</span>
+                        {isGameEnded && isOpponent && !isAiGame && (
+                             <Button
+                                onClick={(e) => { e?.stopPropagation(); handleRematch(user.id); }}
+                                disabled={rematchRequested}
+                                colorScheme="yellow"
+                                className="!text-xs !py-0.5 !px-2 flex-shrink-0"
+                             >
+                                {rematchRequested ? '신청중' : '재대결'}
+                             </Button>
+                        )}
+                    </div>
                 </div>
                 <span className="ml-auto text-xs text-gray-400 flex-shrink-0">{role}</span>
             </div>
@@ -210,8 +212,16 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
                 {onClose && <button onClick={onClose} className="text-xl font-bold text-gray-400 hover:text-white">×</button>}
             </h3>
             <div className="space-y-0.5 overflow-y-auto pr-1 flex-grow">
-                {playersInRoom.map(user => renderUser(user, user.id === blackPlayerId ? '흑' : '백'))}
-                {spectators.map(user => renderUser(user, '관전'))}
+                {playersInRoom.map(user => (
+                    <div key={user.id}>
+                        {renderUser(user, user.id === blackPlayerId ? '흑' : '백')}
+                    </div>
+                ))}
+                {spectators.map(user => (
+                    <div key={user.id}>
+                        {renderUser(user, '관전')}
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -221,7 +231,7 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
 const ChatPanel: React.FC<Omit<SidebarProps, 'onLeaveOrResign' | 'isNoContestLeaveAvailable'>> = (props) => {
     const { session, isSpectator, onAction, waitingRoomChat, gameChat, onClose, onViewUser } = props;
     const { mode } = session;
-    const { currentUserWithStatus, handlers } = useAppContext();
+    const { currentUserWithStatus, handlers, onlineUsers } = useAppContext();
     const isAiGame = session.isAiGame;
 
     const [activeTab, setActiveTab] = useState<'game' | 'global'>(isAiGame ? 'global' : 'game');
@@ -287,9 +297,15 @@ const ChatPanel: React.FC<Omit<SidebarProps, 'onLeaveOrResign' | 'isNoContestLea
 
     const handleUserClick = (userId: string) => {
         if (currentUserWithStatus.isAdmin && userId !== currentUserWithStatus.id) {
-            handlers.openModerationModal(userId);
+            const userToModerate = onlineUsers.find(u => u.id === userId);
+            if (userToModerate) {
+                handlers.openModerationModal(userToModerate.id);
+            }
         } else if (userId !== currentUserWithStatus.id) {
-            onViewUser(userId);
+            const userToView = onlineUsers.find(u => u.id === userId);
+            if (userToView) {
+                onViewUser(userToView.id);
+            }
         }
     };
 
@@ -316,7 +332,7 @@ const ChatPanel: React.FC<Omit<SidebarProps, 'onLeaveOrResign' | 'isNoContestLea
                 {activeChatMessages.map(msg => {
                     const isBotMessage = msg.system && !msg.actionInfo && msg.user.nickname === 'AI 보안관봇';
                     return (
-                        <div key={msg.id} className="text-sm">
+                        <div key={msg.id || msg.timestamp} className="text-sm">
                             {msg.location && <span className="font-semibold text-gray-500 pr-1">{msg.location}</span>}
                             <span 
                                 className={`font-semibold pr-2 ${msg.system ? 'text-yellow-400' : 'text-gray-400 cursor-pointer hover:underline'}`}

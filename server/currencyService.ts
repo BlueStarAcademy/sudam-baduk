@@ -36,6 +36,7 @@ export function grantGold(user: User, amount: number, reason: string) {
 }
 
 export function spendGold(user: User, amount: number, reason: string) {
+    if (user.isAdmin) return;
     if (amount <= 0) return;
     user.gold -= amount;
     addCurrencyLog(user, 'gold_spend', amount, reason);
@@ -48,6 +49,7 @@ export function grantDiamonds(user: User, amount: number, reason: string) {
 }
 
 export function spendDiamonds(user: User, amount: number, reason: string) {
+    if (user.isAdmin) return;
     if (amount <= 0) return;
     user.diamonds -= amount;
     addCurrencyLog(user, 'diamond_spend', amount, reason);

@@ -35,7 +35,7 @@ interface TowerChallengeArenaProps {
 }
 
 // FIX: Moved the 'gameTypeKorean' object here to resolve a circular dependency issue with 'TowerChallengeLobby.tsx'.
-const gameTypeKorean: Record<GameType, string> = {
+export const gameTypeKorean: Record<GameType, string> = {
     'capture': '따내기',
     'survival': '살리기',
     'speed': '스피드',

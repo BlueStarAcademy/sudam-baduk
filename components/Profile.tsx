@@ -8,12 +8,14 @@ import DetailedStatsModal from './DetailedStatsModal.js';
 import { getMannerScore, getMannerRank, getMannerStyle } from '../utils/mannerUtils.js';
 import { calculateUserEffects, calculateTotalStats } from '../utils/statUtils.js';
 import { useAppContext } from '../hooks/useAppContext.js';
+// FIX: Import QuickAccessSidebar component to resolve module resolution error.
 import QuickAccessSidebar from './QuickAccessSidebar.js';
 import ChatWindow from "./waiting-room/ChatWindow.js";
 import EquipmentEffectsModal from "./EquipmentEffectsModal.js";
 import PresetModal from "./PresetModal.js";
 import RankingBoard from "./profile/RankingBoard.js";
 import { isDifferentDayKST, getKSTDate } from '../utils/timeUtils.js';
+import NineSlicePanel from './ui/NineSlicePanel.js';
 
 interface ProfileProps {
 }
@@ -368,6 +370,7 @@ const Profile: React.FC<ProfileProps> = () => {
                             <p className="text-sm text-tertiary">Lv.{myGuild.level}</p>
                         </div>
                     </a>
+                    {/* FIX: Corrected typo from openEquipmentEffectsModal to openGuildEffectsModal */}
                     <Button 
                         onClick={(e?: React.MouseEvent) => { if (e) e.stopPropagation(); handlers.openGuildEffectsModal(); }}
                         colorScheme="gray" 
@@ -414,7 +417,7 @@ const Profile: React.FC<ProfileProps> = () => {
     ), [currentUserWithStatus, handlers, mannerRank, mannerStyle, totalMannerScore, availablePoints, myGuild, avatarUrl, borderUrl, nickname, totalStats]);
 
     const EquipmentPanelContent = useMemo(() => (
-        <div className="bg-panel panel-glow text-on-panel rounded-lg p-2 flex flex-col gap-2 h-full">
+        <NineSlicePanel className="flex flex-col gap-2 h-full">
             <h3 className="text-center font-semibold text-secondary text-sm">장착 장비</h3>
             <div className="grid grid-cols-3 gap-2">
                 {(['fan', 'top', 'bottom', 'board', 'bowl', 'stones'] as EquipmentSlot[]).map(slot => {
@@ -480,6 +483,7 @@ const Profile: React.FC<ProfileProps> = () => {
                         <button onClick={handlers.openEncyclopedia} className="w-8 h-8 flex items-center justify-center bg-purple-600 hover:bg-purple-500 rounded-full text-white font-bold text-lg flex-shrink-0 transition-transform hover:scale-110" title="도감">
                             <img src="/images/item/itembook.png" alt="도감" className="w-5 h-5"/>
                         </button>
+                        {/* FIX: Corrected call to handlers.openInfoModal */}
                         <button onClick={handlers.openInfoModal} className="w-8 h-8 flex items-center justify-center bg-gray-600 hover:bg-gray-500 rounded-full text-white font-bold text-lg flex-shrink-0 transition-transform hover:scale-110" title="도움말">?</button>
                     </div>
                 </header>
@@ -487,24 +491,24 @@ const Profile: React.FC<ProfileProps> = () => {
                     <div className="hidden lg:flex flex-col h-full gap-2">
                         <div className="flex flex-row gap-2 h-[45%]">
                             <div className="lg:w-[380px] xl:w-[420px] flex-shrink-0 flex flex-col">
-                               <div className="bg-panel panel-glow text-on-panel rounded-lg p-2 flex flex-col gap-1 h-full">
+                               <NineSlicePanel className="flex flex-col gap-1 h-full">
                                     {ProfilePanelContent}
-                               </div>
+                               </NineSlicePanel>
                             </div>
                              <div className="flex-1 flex flex-row gap-2 min-w-0">
                                  <div className="w-[280px] flex-shrink-0 h-full">{EquipmentPanelContent}</div>
-                                 <div className="flex-1 bg-panel panel-glow text-on-panel rounded-lg min-h-0 flex flex-col">
+                                 <NineSlicePanel className="flex-1 min-h-0 flex flex-col">
                                     <RankingBoard allUsers={allUsers} currentUser={currentUserWithStatus!} guilds={guilds} />
-                                 </div>
+                                 </NineSlicePanel>
                             </div>
                             <div className="w-24 flex-shrink-0">
                                <QuickAccessSidebar compact={true} fillHeight={true} />
                             </div>
                         </div>
                         <div className="flex-1 flex flex-row gap-2 min-h-0">
-                            <div className="w-full lg:w-[30%] flex-shrink-0 bg-panel panel-glow text-on-panel rounded-lg min-h-0 flex flex-col">
+                            <NineSlicePanel className="w-full lg:w-[30%] flex-shrink-0 min-h-0 flex flex-col">
                                 <ChatWindow messages={globalChat} mode="global" onAction={handlers.handleAction} onViewUser={handlers.openViewingUser} locationPrefix="[홈]" />
-                            </div>
+                            </NineSlicePanel>
                             <div className="flex-1 min-h-0 flex flex-col">
                                 <div className="grid grid-cols-6 grid-rows-4 gap-4 h-full">
                                     <div className="col-span-2 row-span-2"><LobbyCard type="strategic" stats={aggregatedStats.strategic} onEnter={() => onSelectLobby('strategic')} onViewStats={() => setDetailedStatsType('strategic')} level={currentUserWithStatus.strategyLevel} title="전략 바둑" imageUrl={STRATEGIC_GO_LOBBY_IMG} tier={overallTiers.strategicTier} available={true} /></div>
@@ -615,7 +619,7 @@ const Profile: React.FC<ProfileProps> = () => {
                     </button>
                 </div>
 
-                <div className="flex-1 min-h-0 overflow-y-auto bg-panel panel-glow rounded-lg p-2">
+                <NineSlicePanel className="flex-1 min-h-0 overflow-y-auto p-2">
                     {activeMobileTab === 'profile' && ProfilePanelContent}
                     {activeMobileTab === 'equipment' && EquipmentPanelContent}
                     {activeMobileTab === 'chat' && (

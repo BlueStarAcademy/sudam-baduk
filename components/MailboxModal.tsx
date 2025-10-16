@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { UserWithStatus, Mail, ServerAction, InventoryItem } from '../types.js';
+import { UserWithStatus, Mail, ServerAction, InventoryItem } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { audioService } from '../services/audioService.js';
 
+// FIX: Add missing props to the interface
 interface MailboxModalProps {
     currentUser: UserWithStatus;
     onClose: () => void;
@@ -103,7 +104,7 @@ const MailboxModal: React.FC<MailboxModalProps> = ({ currentUser, onClose, onAct
 
     return (
         <DraggableWindow title="우편함" onClose={onClose} windowId="mailbox" initialWidth={800} isTopmost={isTopmost}>
-            <div className="flex gap-6 h-[65vh]">
+            <div className="flex gap-6 h-full">
                 {/* Mail List */}
                 <div className="w-1/3 bg-gray-900/50 rounded-lg p-3 flex flex-col">
                     <h3 className="text-lg font-semibold mb-2 flex-shrink-0">받은 우편 ({mail.length})</h3>

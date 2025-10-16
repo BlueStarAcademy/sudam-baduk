@@ -145,7 +145,7 @@ export const handleAiGameStart = async (
     
     await db.updateUser(user);
 
-    return {};
+    return { clientResponse: { newGameId: game.id, updatedUser: user } };
 };
 
 export const handleAiGameRefresh = async (game: LiveGameSession, user: User, type: 'single-player' | 'tower-challenge'): Promise<HandleActionResult> => {
@@ -169,8 +169,8 @@ export const handleAiGameRefresh = async (game: LiveGameSession, user: User, typ
     
     if(!user.isAdmin) {
         currencyService.spendGold(user, cost, `${isTower ? '도전의탑' : '싱글플레이어'} 새로고침 (${refreshesUsed + 1}회)`);
+        (game as any)[refreshesUsedKey] = refreshesUsed + 1;
     }
-    (game as any)[refreshesUsedKey] = refreshesUsed + 1;
     
     const stageSource = isTower ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
     const stage = stageSource.find(s => s.id === game.stageId);
@@ -200,9 +200,8 @@ export const handleTowerAddStones = async (game: LiveGameSession, user: User): P
     
     if (!user.isAdmin) {
         currencyService.spendGold(user, cost, `도전의탑 흑돌 추가 (${uses + 1}회)`);
+        game.towerAddStonesUsed = uses + 1;
     }
-    
-    game.towerAddStonesUsed = uses + 1;
     game.blackStoneLimit = (game.blackStoneLimit || 0) + 3;
     game.promptForMoreStones = false;
     
@@ -254,5 +253,5 @@ export const handleConfirmIntro = async (gameId: string, user: User): Promise<Ha
         
         await db.saveGame(game);
     }
-    return {};
+    return { clientResponse: { updatedGame: game } };
 };

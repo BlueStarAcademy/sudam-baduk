@@ -1,3 +1,4 @@
+
 import type { InventoryItem, ItemOption, ShopBorderItem } from '../types/entities.js';
 import { EquipmentSlot, ItemGrade, CoreStat, SpecialStat, MythicStat, ItemOptionType } from '../types/enums.js';
 
@@ -121,6 +122,21 @@ export const CONSUMABLE_ITEMS: (Omit<InventoryItem, 'id'|'createdAt'|'isEquipped
     { name: '보너스 스탯 +5', description: '모든 능력치에 자유롭게 분배할 수 있는 보너스 스탯 포인트를 5개 획득합니다.', type: 'consumable', slot: null, image: '/images/statpoint.png', grade: ItemGrade.Legendary },
 ];
 
+export const CLIENT_SHOP_ITEMS: { [key: string]: { type: 'equipment' | 'material' | 'consumable'; name: string; description: string; cost: { gold?: number, diamonds?: number }; image: string, dailyLimit?: number, weeklyLimit?: number } } = {
+    'equipment_box_1': { type: 'equipment', name: '장비 상자 I', description: '일반~희귀 등급 장비 획득', cost: { gold: 500 }, image: '/images/Box/EquipmentBox1.png' },
+    'equipment_box_2': { type: 'equipment', name: '장비 상자 II', description: '일반~에픽 등급 장비 획득', cost: { gold: 1500 }, image: '/images/Box/EquipmentBox2.png' },
+    'equipment_box_3': { type: 'equipment', name: '장비 상자 III', description: '고급~전설 등급 장비 획득', cost: { gold: 5000 }, image: '/images/Box/EquipmentBox3.png' },
+    'equipment_box_4': { type: 'equipment', name: '장비 상자 IV', description: '희귀~신화 등급 장비 획득', cost: { gold: 10000 }, image: '/images/Box/EquipmentBox4.png' },
+    'equipment_box_5': { type: 'equipment', name: '장비 상자 V', description: '에픽~신화 등급 장비 획득', cost: { diamonds: 100 }, image: '/images/Box/EquipmentBox5.png' },
+    'equipment_box_6': { type: 'equipment', name: '장비 상자 VI', description: '전설~신화 등급 장비 획득', cost: { diamonds: 500 }, image: '/images/Box/EquipmentBox6.png' },
+    'material_box_1': { type: 'material', name: '재료 상자 I', description: '하급 ~ 상급 강화석 5개 획득', cost: { gold: 500 }, image: '/images/Box/ResourceBox1.png', dailyLimit: 10 },
+    'material_box_2': { type: 'material', name: '재료 상자 II', description: '하급 ~ 상급 강화석 7개 획득', cost: { gold: 1000 }, image: '/images/Box/ResourceBox2.png', dailyLimit: 6 },
+    'material_box_3': { type: 'material', name: '재료 상자 III', description: '하급 ~ 상급 강화석 5개 획득', cost: { gold: 3000 }, image: '/images/Box/ResourceBox3.png', dailyLimit: 3 },
+    'material_box_4': { type: 'material', name: '재료 상자 IV', description: '중급 ~ 최상급 강화석 5개 획득', cost: { gold: 5000 }, image: '/images/Box/ResourceBox4.png', dailyLimit: 3 },
+    'material_box_5': { type: 'material', name: '재료 상자 V', description: '상급 ~ 신비의 강화석 5개 획득', cost: { gold: 10000 }, image: '/images/Box/ResourceBox5.png', dailyLimit: 3 },
+    'material_box_6': { type: 'material', name: '재료 상자 VI', description: '상급 ~ 신비의 강화석 5개 획득', cost: { diamonds: 100 }, image: '/images/Box/ResourceBox6.png', dailyLimit: 3 },
+};
+
 export const SHOP_CONSUMABLE_ITEMS: { name: string; description: string; cost: { gold?: number, diamonds?: number }; image: string; weeklyLimit?: number; dailyLimit?: number; type: 'consumable' }[] = [
     { name: '컨디션 물약(소)', description: '피로도 1~5 회복', cost: { gold: 100 }, image: '/images/use/con1.png', weeklyLimit: 10, type: 'consumable' },
     { name: '컨디션 물약(중)', description: '피로도 5~10 회복', cost: { gold: 250 }, image: '/images/use/con2.png', weeklyLimit: 5, type: 'consumable' },
@@ -131,6 +147,7 @@ export const SHOP_CONSUMABLE_ITEMS: { name: string; description: string; cost: {
     { name: '골드 꾸러미4', description: '1,000 ~ 10,000 골드 획득', cost: { diamonds: 40 }, image: '/images/Box/GoldBox4.png', dailyLimit: 1, type: 'consumable' },
 ];
 
+
 export const MATERIAL_ITEMS: Record<string, Omit<InventoryItem, 'id'|'createdAt'|'isEquipped'|'level'|'stars'|'options'|'enhancementFails'>> = {
     '하급 강화석': { name: '하급 강화석', description: '장비 강화에 사용되는 기본 재료.', type: 'material', slot: null, image: '/images/materials/materials1.png', grade: ItemGrade.Normal },
     '중급 강화석': { name: '중급 강화석', description: '장비 강화에 사용되는 상급 재료.', type: 'material', slot: null, image: '/images/materials/materials2.png', grade: ItemGrade.Uncommon },
@@ -139,6 +156,7 @@ export const MATERIAL_ITEMS: Record<string, Omit<InventoryItem, 'id'|'createdAt'
     '신비의 강화석': { name: '신비의 강화석', description: '장비 강화에 사용되는 고대 재료.', type: 'material', slot: null, image: '/images/materials/materials5.png', grade: ItemGrade.Legendary },
 };
 
+// ... (rest of the file remains unchanged)
 export const ENHANCEMENT_SUCCESS_RATES = [100, 90, 80, 70, 60, 50, 40, 35, 30, 20]; // For +1 to +10
 
 export const ENHANCEMENT_FAIL_BONUS_RATES: Record<ItemGrade, number> = {

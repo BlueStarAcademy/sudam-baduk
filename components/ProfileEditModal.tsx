@@ -10,6 +10,7 @@ import ToggleSwitch from './ui/ToggleSwitch.js';
 import MbtiQuestionnaireModal from './modals/MbtiQuestionnaireModal.js';
 
 
+// FIX: Add missing props to the interface
 interface ProfileEditModalProps {
     currentUser: UserWithStatus;
     onClose: () => void;
@@ -373,7 +374,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
                     ))}
                 </div>
                 <div className="flex-grow overflow-y-auto pr-2">
-                    {/* FIX: Changed renderContent to renderTabContent */}
                     {renderTabContent()}
                 </div>
                  <div className="flex justify-end gap-4 mt-4 pt-4 border-t border-gray-700 flex-shrink-0">

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ChatMessage, ServerAction, GameMode, UserWithStatus } from '../../types.js';
-import { GAME_CHAT_MESSAGES, GAME_CHAT_EMOJIS } from '../../constants.js';
+import { ChatMessage, ServerAction, GameMode, UserWithStatus } from '../../types/index.js';
+import { GAME_CHAT_MESSAGES, GAME_CHAT_EMOJIS } from '../../constants/index.js';
 import { containsProfanity } from '../../profanity.js';
 import Button from '../Button.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
@@ -9,7 +9,7 @@ interface ChatWindowProps {
     messages: ChatMessage[];
     onAction: (a: ServerAction) => void;
     mode: GameMode | 'global';
-    onViewUser?: (userId: string) => void; // Optional for profile view
+    onViewUser?: (userId: string) => void;
     locationPrefix?: string;
 }
 
@@ -19,7 +19,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, onAction, mode, onVie
     const [chatInput, setChatInput] = useState('');
     const [showQuickChat, setShowQuickChat] = useState(false);
     const [cooldown, setCooldown] = useState(0);
-    const { currentUserWithStatus, handlers } = useAppContext();
+    const { currentUserWithStatus, handlers, onlineUsers } = useAppContext();
 
     useEffect(() => {
         if (chatBodyRef.current) {
@@ -47,14 +47,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, onAction, mode, onVie
     }, []);
 
     const handleSend = (message: { text?: string, emoji?: string }) => {
-        if (cooldown > 0) return;
-        const payload = { channel: 'global', ...message, location: locationPrefix };
+        if(cooldown > 0) return;
+        
+        const channel = 'global'; // Waiting room is always global
+        const payload: any = { channel, ...message, location: locationPrefix };
+
         onAction({ type: 'SEND_CHAT_MESSAGE', payload });
-        setShowQuickChat(false);
-        setChatInput('');
+        setShowQuickChat(false); setChatInput('');
         setCooldown(5);
     };
-    
+
     const handleSendTextSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!chatInput.trim()) return;
@@ -72,10 +74,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, onAction, mode, onVie
     
     const handleUserClick = (userId: string) => {
         if (currentUserWithStatus.isAdmin && userId !== currentUserWithStatus.id) {
-            handlers.openModerationModal(userId);
+            const userToModerate = onlineUsers.find(u => u.id === userId);
+            if (userToModerate) {
+                handlers.openModerationModal(userToModerate.id);
+            }
         } else if (userId !== currentUserWithStatus.id) {
             const viewUserHandler = onViewUser || handlers.openViewingUser;
-            viewUserHandler(userId);
+            const userToView = onlineUsers.find(u => u.id === userId);
+            if(userToView) {
+                viewUserHandler(userToView.id);
+            }
         }
     };
 

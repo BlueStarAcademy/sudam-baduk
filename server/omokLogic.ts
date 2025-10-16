@@ -1,12 +1,8 @@
-
 // server/modes/omokLogic.ts
-import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus, Negotiation } from '.././types/index.js';
-// FIX: Corrected import path for switchTurnAndUpdateTimers from strategic to shared module.
+import { LiveGameSession, Point, BoardState, Player, GameMode, WinReason, HandleActionResult, VolatileState, User, ServerAction, GameStatus, Negotiation } from '../types/index.js';
 import { handleSharedAction, updateSharedGameState, transitionToPlaying, switchTurnAndUpdateTimers } from './modes/shared.js';
 import { endGame } from './summaryService.js';
-// FIX: Corrected import path from ./db/connection.js to ../db/connection.js
 import { getDb } from './db/connection.js';
-// FIX: Corrected import path from ../../ to ../ to match file location.
 import { getGoLogic, processMove } from '../utils/goLogic.js';
 
 export const getOmokLogic = (game: LiveGameSession) => {
@@ -291,14 +287,12 @@ export const updateOmokState = async (game: LiveGameSession, now: number) => {
     }
 };
 
-// FIX: Add 'volatileState' parameter to the function signature.
 export const handleOmokAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const { type, payload } = action as any;
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
 
-    // FIX: Changed incorrect handleRewardAction call to handleSharedAction and fixed arguments.
     const sharedResult = await handleSharedAction(volatileState, game, action, user);
     if (sharedResult) return sharedResult;
 
@@ -347,7 +341,6 @@ export const handleOmokAction = async (volatileState: VolatileState, game: LiveG
 };
 
 export const makeOmokAiMove = async (game: LiveGameSession): Promise<void> => {
-    // FIX: Get database pool
     const dbPool = await getDb();
     const aiId = game.player2.id;
     const myPlayerEnum = game.whitePlayerId === aiId ? Player.White : Player.Black;

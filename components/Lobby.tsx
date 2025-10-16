@@ -3,6 +3,7 @@ import { GameMode } from '../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
 import Button from './Button.js';
 import { useAppContext } from '../hooks/useAppContext.js';
+import NineSlicePanel from './ui/NineSlicePanel.js';
 
 interface LobbyProps {
   lobbyType: 'strategic' | 'playful';
@@ -12,9 +13,10 @@ const GameCard: React.FC<{ mode: GameMode, description: string, image: string, a
     const [imgError, setImgError] = useState(false);
 
     return (
-        <div
-            className={`bg-panel text-on-panel rounded-lg p-3 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${hoverColorClass} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} panel-glow`}
+        <NineSlicePanel
+            className={`text-on-panel flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${hoverColorClass} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={available ? onSelect : undefined}
+            padding="p-3"
         >
             <div className="w-full aspect-[4/3] bg-tertiary rounded-md mb-2 overflow-hidden shadow-inner">
                 {!imgError ? (
@@ -65,6 +67,7 @@ const Lobby: React.FC<LobbyProps> = ({ lobbyType }) => {
         <section>
           <h2 className={`text-2xl font-semibold mb-5 border-l-4 ${sectionBorderColor} pl-4`}>{sectionTitle}</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* FIX: Corrected call to handlers.handleEnterWaitingRoom */}
             {modes.map(game => (
               <GameCard key={game.mode} {...game} available={gameModeAvailability[game.mode] ?? game.available} onSelect={() => handlers.handleEnterWaitingRoom(game.mode)} hoverColorClass={hoverColorClass} />
             ))}

@@ -3,6 +3,7 @@ import React from 'react';
 // FIX: Use `import type` for interfaces to prevent type/value confusion.
 import type { AdminProps, LiveGameSession } from '../../types/index.js';
 import Button from '../Button.js';
+import NineSlicePanel from '../ui/NineSlicePanel.js';
 
 type AdminView = 'dashboard' | 'userManagement' | 'mailSystem' | 'serverSettings' | 'guildManagement';
 
@@ -44,7 +45,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onBackToPro
                 </div>
             </div>
 
-            <div className="mt-8 bg-panel border border-color p-6 rounded-lg shadow-lg">
+            <NineSlicePanel className="mt-8" padding="p-6">
                 <h2 className="text-xl font-semibold mb-4 border-b border-color pb-2 text-on-panel">진행중인 대국 ({liveGames.length})</h2>
                 <div className="max-h-[40vh] overflow-y-auto">
                     <div className="overflow-x-auto">

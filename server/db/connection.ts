@@ -1,7 +1,7 @@
 
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
-import process from 'process';
+import { URL } from 'url';
 
 // Explicitly load .env file. tsx runner might not do this automatically.
 dotenv.config();
@@ -26,7 +26,17 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
         console.error(`[DB] DATABASE_URL environment variable is not valid. Found: "${connectionString}". Please check your .env file in the project root.`);
         process.exit(1);
     }
+    
+    try {
+        new URL(connectionString);
+    } catch (e) {
+        console.error(`[DB] The DATABASE_URL in your .env file is not a valid URL. Please check for typos or special characters that might need to be encoded (like '#' or '@' in the password). It is also recommended to wrap the entire URL in double quotes in your .env file.`);
+        console.error(`[DB] Invalid value: "${connectionString}"`);
+        process.exit(1);
+    }
 
+
+    // Use the connection string directly from .env without modification
     const pool = new Pool({
         connectionString: connectionString,
     });

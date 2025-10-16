@@ -95,7 +95,7 @@ const GuildShopModal: React.FC<GuildShopModalProps> = ({ onClose, isTopmost }) =
 
     return (
         <DraggableWindow title="길드 상점" onClose={onClose} windowId="guild-shop" initialWidth={750} isTopmost={isTopmost}>
-            <div className="flex flex-col h-[70vh]">
+            <div className="flex flex-col h-full">
                 <div className="flex justify-between items-center mb-4 flex-shrink-0">
                     <h3 className="text-xl font-bold text-highlight">길드 상점</h3>
                     <div className="bg-tertiary p-2 rounded-lg text-center">

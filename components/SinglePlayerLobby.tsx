@@ -9,6 +9,7 @@ import DraggableWindow from './DraggableWindow.js';
 import { getMissionInfoWithLevel } from '../utils/questUtils.js';
 // FIX: Add missing import for CONSUMABLE_ITEMS
 import { CONSUMABLE_ITEMS } from '../constants/items.js';
+import NineSlicePanel from './ui/NineSlicePanel.js';
 
 interface UpgradeMissionModalProps {
     mission: SinglePlayerStageInfo;
@@ -443,7 +444,7 @@ const SinglePlayerLobby: React.FC = () => {
             <main className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 p-4">
                 {/* Panel 1: Level Selection */}
                 <div className="w-full lg:w-1/4 flex items-center">
-                    <div className="bg-panel border border-color rounded-lg p-4 flex flex-col w-full h-full">
+                    <NineSlicePanel className="flex flex-col w-full h-full">
                         <div className="w-full relative flex-1 min-h-0">
                             <div className="relative w-full h-full rounded-lg overflow-hidden bg-black">
                                 <img key={activeLevelData.id} src={activeLevelData.image} alt={activeLevelData.name} className="w-full h-full object-cover animate-fade-in" />
@@ -458,7 +459,7 @@ const SinglePlayerLobby: React.FC = () => {
                 </div>
 
                 {/* Panel 2: Stage List */}
-                <div className="w-full lg:w-1/2 min-w-0 flex flex-col bg-panel border border-color rounded-lg p-4">
+                <NineSlicePanel className="w-full lg:w-1/2 min-w-0 flex flex-col">
                     <h3 className="text-xl font-bold text-center mb-2 text-primary flex-shrink-0">{activeLevelData.name} 스테이지</h3>
                     <ul ref={scrollContainerRef} className="space-y-2 flex flex-col overflow-y-auto pr-2">
                         {stagesForLevel.map((stage) => {
@@ -479,7 +480,7 @@ const SinglePlayerLobby: React.FC = () => {
 
                 {/* Panel 3: Training Tasks */}
                 <div className="w-full lg:w-1/4 flex flex-col">
-                    <div className="bg-panel border border-color rounded-lg p-2 lg:p-4 flex flex-col min-h-0 w-full h-full">
+                    <NineSlicePanel className="p-2 lg:p-4 flex flex-col min-h-0 w-full h-full">
                         <h2 className="text-xl font-bold text-highlight text-center mb-2 lg:mb-4 flex-shrink-0">수련 과제</h2>
                         <div className="grid grid-cols-2 grid-rows-3 gap-2 lg:gap-3 flex-grow lg:flex-grow-0 overflow-y-auto lg:overflow-visible pr-1 lg:pr-0">
                             {SINGLE_PLAYER_MISSIONS.map(mission => {

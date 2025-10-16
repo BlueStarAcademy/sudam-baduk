@@ -174,10 +174,10 @@ export const createDefaultUser = (id: string, username: string, nickname: string
 
 
 export const getInitialState = (): Omit<AppState, 'liveGames' | 'negotiations' | 'userStatuses' | 'userConnections' | 'userLastChatMessage' | 'waitingRoomChats' | 'gameChats' | 'adminLogs' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'towerRankings' | 'userLastChatMessage'> => {
-    const adminUser = createDefaultUser(`user-admin-${Date.now()}`, '푸른별바둑학원', '관리자', true);
-    const testUser1 = createDefaultUser(`user-test-${Date.now()+1}`, '푸른별', '푸른별');
-    const testUser2 = createDefaultUser(`user-test-${Date.now()+2}`, '노란별', '노란별');
-    const testUser3 = createDefaultUser(`user-test-${Date.now()+3}`, '녹색별', '녹색별');
+    const adminUser = createDefaultUser('user-admin-static-id', '푸른별바둑학원', '관리자', true);
+    const testUser1 = createDefaultUser('user-test-1', '푸른별', '푸른별');
+    const testUser2 = createDefaultUser('user-test-2', '노란별', '노란별');
+    const testUser3 = createDefaultUser('user-test-3', '녹색별', '녹색별');
 
     const createCredentials = (password: string): { hash: string; salt: string } => {
         const salt = crypto.randomBytes(16).toString('hex');
