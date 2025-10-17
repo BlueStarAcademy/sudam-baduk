@@ -225,7 +225,7 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
             <div className="space-y-0.5 overflow-y-auto pr-1 flex-grow">
                 {playersInRoom.map(user => (
                     <UserItem
-                        key={user.id}
+                        key={`${user.id}-player`}
                         user={user}
                         role={user.id === blackPlayerId ? '흑' : '백'}
                         isGameEnded={isGameEnded}
@@ -240,7 +240,7 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
                 ))}
                 {spectators.map(user => (
                     <UserItem
-                        key={user.id}
+                        key={`${user.id}-spectator`}
                         user={user}
                         role={'관전'}
                         isGameEnded={isGameEnded}

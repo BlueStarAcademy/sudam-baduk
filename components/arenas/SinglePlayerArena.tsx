@@ -119,6 +119,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     };
 
     useEffect(() => {
+        console.log(`[SinglePlayerArena Debug] gameStatus: ${gameStatus}, prevGameStatus: ${prevGameStatus}`);
         const gameHasJustEnded =
             (gameStatus === GameStatus.Ended || gameStatus === GameStatus.NoContest) &&
             prevGameStatus !== GameStatus.Ended &&
@@ -126,6 +127,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
             prevGameStatus !== GameStatus.RematchPending;
 
         if (gameHasJustEnded) {
+            console.log(`[SinglePlayerArena Debug] Game has just ended. Showing result modal.`);
             setShowResultModal(true);
             setShowFinalTerritory(true);
             if (session.winner === Player.Black) { 
@@ -134,7 +136,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                 audioService.gameLose();
             }
         }
-    }, [gameStatus, prevGameStatus, session.winner]);
+    }, [gameStatus, prevGameStatus]);
     
     useEffect(() => {
         if (session.lastMove && session.lastMove.x !== -1 && JSON.stringify(session.lastMove) !== JSON.stringify(prevLastMove)) {
@@ -191,7 +193,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     const isSpectator = false;
 
     const handleBoardClick = useCallback(async (x: number, y: number) => {
-        if (isSubmittingMove || isSpectator || session.gameStatus === 'missile_animating') return;
+        if (isSubmittingMove || isSpectator || session.gameStatus === 'missile_animating' || session.gameStatus === GameStatus.SinglePlayerIntro) return;
 
         // Client-side move validation for standard Go moves
         if (['playing', 'hidden_placing'].includes(gameStatus) && isMyTurn) {

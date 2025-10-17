@@ -29,23 +29,25 @@ import { initializeMissile, updateMissileState, handleMissileAction } from './mi
 import { VolatileState } from '../../types/api.js';
 import { getNewActionButtons } from '../services/actionButtonService.js';
 
-export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player) => {
+export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player): Promise<LiveGameSession | undefined> => {
     try {
         const gameId = gameFromAction.id;
         
         const aiPlayerId = gameFromAction.player2.id;
         const aiPlayerEnum = gameFromAction.blackPlayerId === aiPlayerId ? Player.Black : (gameFromAction.whitePlayerId === aiPlayerId ? Player.White : Player.None);
 
-        if (gameFromAction.currentPlayer !== aiPlayerEnum) return;
+        console.log(`[AI Turn Debug] Game ${gameId}: Current player is ${gameFromAction.currentPlayer}, AI player is ${aiPlayerEnum}`);
+
+        if (gameFromAction.currentPlayer !== aiPlayerEnum) return undefined;
 
         const aiMove = await makeAiMove(gameFromAction) as (Point & { isHidden?: boolean });
-        console.log(`[AI Turn] AI move for game ${gameFromAction.id}: ${JSON.stringify(aiMove)}`);
+        console.log(`[AI Turn Debug] Game ${gameId}: AI generated move: ${JSON.stringify(aiMove)}`);
 
         const freshGame = await db.getLiveGame(gameId);
         if (!freshGame || freshGame.currentPlayer !== aiPlayerEnum) {
-            console.log(`[AI Turn] Game state changed or game ended while AI was thinking. Aborting AI move for game ${gameId}.`);
-            console.log(`[AI Turn] Current player was ${aiPlayerEnum}, now is ${freshGame?.currentPlayer}`);
-            return;
+            console.log(`[AI Turn Debug] Game ${gameId}: Game state changed or game ended while AI was thinking. Aborting AI move.`);
+            console.log(`[AI Turn Debug] Game ${gameId}: Current player was ${aiPlayerEnum}, now is ${freshGame?.currentPlayer}`);
+            return undefined;
         }
 
         if (aiMove.isHidden) {
@@ -56,7 +58,7 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
             setTimeout(async () => {
                 try {
                     const gameAfterWait = await db.getLiveGame(gameId);
-                    if (!gameAfterWait || gameAfterWait.gameStatus !== GameStatus.AiHiddenThinking) return;
+                    if (!gameAfterWait || gameAfterWait.gameStatus !== GameStatus.AiHiddenThinking) return undefined;
 
                     gameAfterWait.aiHiddenStoneUsedThisGame = true;
 
@@ -67,7 +69,7 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
                         const winner = aiPlayerEnum === Player.Black ? Player.White : Player.Black;
                         await endGame(gameAfterWait, winner, WinReason.Resign);
                         await db.saveGame(gameAfterWait);
-                        return;
+                        return undefined;
                     }
 
                     gameAfterWait.boardState = result.newBoardState;
@@ -87,34 +89,40 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
                     switchTurnAndUpdateTimers(gameAfterWait, Date.now());
                     gameAfterWait.aiTurnStartTime = undefined;
                     await db.saveGame(gameAfterWait);
+                    return gameAfterWait;
 
                 } catch (e) {
                     console.error(`[AI HIDDEN MOVE ERROR] for game ${gameId}:`, e);
+                    return undefined;
                 }
             }, 5000); // 5-second thinking delay
         } else {
             if (aiMove.x === -3 && aiMove.y === -3) { // Sentinel for playful AI
+                console.log(`[AI Turn Debug] Game ${gameId}: Playful AI move, state modified directly.`);
                 await db.saveGame(freshGame); // Playful AI modifies game state directly
-                return;
+                return freshGame;
             }
 
             if (aiMove.x === -1 && aiMove.y === -1) { // AI Passed
+                console.log(`[AI Turn Debug] Game ${gameId}: AI passed.`);
                 freshGame.passCount++;
                 freshGame.lastMove = { x: -1, y: -1 };
                 freshGame.moveHistory.push({ player: freshGame.currentPlayer, x: -1, y: -1 });
                 if (freshGame.passCount >= 2) {
                     await getGameResult(freshGame);
                     await db.saveGame(freshGame);
-                    return;
+                    return freshGame;
                 }
             } else { // AI made a regular move
+                console.log(`[AI Turn Debug] Game ${gameId}: AI making regular move at (${aiMove.x}, ${aiMove.y}).`);
                 const result = processMove(freshGame.boardState, { ...aiMove, player: freshGame.currentPlayer }, freshGame.koInfo, freshGame.moveHistory.length);
+                console.log(`[AI Turn Debug] Game ${gameId}: processMove result - isValid: ${result.isValid}, reason: ${result.reason}`); // 이 로그를 추가합니다.
                 if (!result.isValid) {
                     console.error(`[AI Error] AI generated an invalid move: ${JSON.stringify(aiMove)} for game ${freshGame.id}. Reason: ${result.reason}. AI resigns.`);
                     const winner = freshGame.currentPlayer === Player.Black ? Player.White : Player.Black;
                     await endGame(freshGame, winner, WinReason.Resign);
                     await db.saveGame(freshGame);
-                    return;
+                    return undefined;
                 }
                 freshGame.boardState = result.newBoardState;
                 freshGame.lastMove = { x: aiMove.x, y: aiMove.y };
@@ -128,9 +136,11 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
             switchTurnAndUpdateTimers(freshGame, Date.now());
             freshGame.aiTurnStartTime = undefined;
             await db.saveGame(freshGame);
+            return freshGame;
         }
     } catch (err) {
         console.error(`[AI TURN ERROR] for game ${gameFromAction.id}:`, err);
+        return undefined;
     }
 };
 
@@ -253,13 +263,26 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
         }
 
         switchTurnAndUpdateTimers(game, now);
+        await db.saveGame(game); // Save game state after player's move and turn switch
         
         if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
             game.aiTurnStartTime = Date.now();
-            void handleAiTurn(game, { x, y }, myPlayerEnum);
+            const updatedGameAfterAi = await handleAiTurn(game, { x, y }, myPlayerEnum);
+            if (updatedGameAfterAi) {
+                // AI 턴이 성공적으로 완료되면, AI가 반환한 게임 객체를 클라이언트에 전달
+                return { clientResponse: { updatedGame: updatedGameAfterAi } };
+            } else {
+                // AI 턴이 실패한 경우 (updatedGameAfterAi가 undefined)
+                // 턴을 다시 플레이어에게 돌려주고, 이 상태를 저장 후 클라이언트에 전달
+                game.currentPlayer = myPlayerEnum; // 플레이어의 턴으로 되돌림
+                switchTurnAndUpdateTimers(game, now); // 타이머도 다시 플레이어 기준으로 설정
+                await db.saveGame(game); // 이 상태를 데이터베이스에 저장
+                return { clientResponse: { updatedGame: game } };
+            }
         }
         
-        return {};
+        // AI 게임이 아닌 경우 또는 AI 턴 로직을 타지 않은 경우
+        return { clientResponse: { updatedGame: game } };
     }
 
     if (type === 'PASS_TURN') {

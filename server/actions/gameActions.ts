@@ -199,6 +199,22 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
         return handleTowerAddStones(game, user);
     }
 
+    if (type === 'RESIGN_GAME') {
+        const game = await db.getLiveGame(gameId);
+        if (!game) return { error: "Game not found." };
+
+        // Determine the winner (the opponent of the resigning player)
+        const winnerId = game.player1.id === user.id ? game.player2.id : game.player1.id;
+        const winnerPlayerEnum = game.player1.id === user.id ? game.player2Enum : game.player1Enum;
+
+        game.gameStatus = GameStatus.Ended;
+        game.winner = winnerPlayerEnum;
+        game.winReason = 'resign';
+
+        await db.saveGame(game);
+        return { clientResponse: { updatedGame: game } };
+    }
+
     const strategicModes = [GameMode.Standard, GameMode.Capture, GameMode.Speed, GameMode.Base, GameMode.Hidden, GameMode.Missile, GameMode.Mix];
     const playfulModes = [GameMode.Dice, GameMode.Omok, GameMode.Ttamok, GameMode.Thief, GameMode.Alkkagi, GameMode.Curling];
 
@@ -213,7 +229,6 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
     }
 
     if (result) {
-        await db.saveGame(game);
         return result;
     }
 

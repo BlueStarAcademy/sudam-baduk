@@ -85,7 +85,13 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
         }
     }
     
-    return (captureScore + saveScore + atariScore + shapeScore) - selfAtariPenalty;
+    // 여기에 level 1일 때의 특별 로직을 추가합니다.
+    if (level === 1) {
+        // 1단계 AI는 따내기만 집중하도록 다른 점수들을 무시하고 따내기 점수에만 가중치를 줍니다.
+        return captureScore * 1000 + Math.random(); // 따내기 점수에 매우 높은 가중치 부여, 동점 방지용 랜덤
+    } else {
+        return (captureScore + saveScore + atariScore + shapeScore) - selfAtariPenalty + Math.random(); // 동점 방지용 랜덤
+    }
 };
 
 export const makeSimpleAiMove = (game: LiveGameSession): Point => {
@@ -96,12 +102,19 @@ export const makeSimpleAiMove = (game: LiveGameSession): Point => {
     const mistakeProbabilities = [0, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.05, 0.02, 0.01, 0];
     const mistakeChance = mistakeProbabilities[level] ?? 0.05;
 
+    console.log(`[Simple AI Debug] Game ${game.id}: Difficulty ${difficulty}, Level ${level}, Mistake Chance ${mistakeChance}`);
+
     if (Math.random() < mistakeChance && level < 8) {
-        return getRandomValidMove(game);
+        const randomMove = getRandomValidMove(game);
+        console.log(`[Simple AI Debug] Game ${game.id}: Making a random (mistake) move: ${JSON.stringify(randomMove)}`);
+        return randomMove;
     }
     
     const validMoves = getValidMoves(game);
+    console.log(`[Simple AI Debug] Game ${game.id}: Found ${validMoves.length} valid moves.`);
+
     if (validMoves.length === 0) {
+        console.log(`[Simple AI Debug] Game ${game.id}: No valid moves, AI passes.`);
         return { x: -1, y: -1 }; // Pass
     }
 
@@ -128,8 +141,12 @@ export const makeSimpleAiMove = (game: LiveGameSession): Point => {
     scoredMoves.sort((a, b) => b.score - a.score);
 
     if (scoredMoves.length > 0) {
-        return scoredMoves[0].move;
+        const bestMove = scoredMoves[0].move;
+        console.log(`[Simple AI Debug] Game ${game.id}: Best move found: ${JSON.stringify(bestMove)} with score ${scoredMoves[0].score}`);
+        return bestMove;
     }
 
-    return getRandomValidMove(game);
+    const fallbackMove = getRandomValidMove(game);
+    console.log(`[Simple AI Debug] Game ${game.id}: Fallback to random move: ${JSON.stringify(fallbackMove)}`);
+    return fallbackMove;
 };

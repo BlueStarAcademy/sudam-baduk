@@ -30,17 +30,23 @@ const getCurrentSeasonName = () => {
 const RankingList: React.FC<RankingListProps> = ({ currentUser, mode, onViewUser, onShowTierInfo, onShowPastRankings }) => {
     const { allUsers } = useAppContext();
 
+    console.log(`[RankingList Debug] Mode: ${mode}`);
+    console.log(`[RankingList Debug] All Users from useAppContext:`, allUsers);
+
     const allRankedUsers = useMemo(() => {
-        return [...allUsers]
-            .filter(u => u.stats?.[mode])
-            .sort((a, b) => (b.stats![mode].rankingScore || 0) - (a.stats![mode].rankingScore || 0));
+        const filtered = [...allUsers]
+            .filter(u => u.stats?.[mode]);
+        console.log(`[RankingList Debug] All Ranked Users (filtered by mode ${mode}):`, filtered);
+        return filtered.sort((a, b) => (b.stats![mode].rankingScore || 0) - (a.stats![mode].rankingScore || 0));
     }, [allUsers, mode]);
 
     const eligibleRankedUsers = useMemo(() => {
-        return allRankedUsers.filter(u => {
+        const filtered = allRankedUsers.filter(u => {
             const stats = u.stats?.[mode];
             return stats && (stats.wins + stats.losses) >= 20;
         });
+        console.log(`[RankingList Debug] Eligible Ranked Users (min 20 games):`, filtered);
+        return filtered;
     }, [allRankedUsers, mode]);
     
     const totalEligiblePlayers = eligibleRankedUsers.length;
@@ -50,6 +56,7 @@ const RankingList: React.FC<RankingListProps> = ({ currentUser, mode, onViewUser
     const myRankData = myRankIndex !== -1 ? { user: allRankedUsers[myRankIndex], rank: myRankIndex + 1 } : null;
 
     const topUsers = allRankedUsers.slice(0, 100);
+    console.log(`[RankingList Debug] Top 100 Users to render:`, topUsers);
 
     const getTierForUser = useCallback((user: User) => {
         const stats = user.stats?.[mode];

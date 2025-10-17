@@ -60,7 +60,7 @@ const ItemCard: React.FC<{ item: InventoryItem; onClick: () => void; }> = ({ ite
 
 
 const InventoryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { currentUserWithStatus, handlers } = useAppContext();
+  const { currentUserWithStatus, handlers, modals } = useAppContext();
   const [activeTab, setActiveTab] = useState<InventoryItemType | 'all'>('all');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [bulkUseItem, setBulkUseItem] = useState<InventoryItem | null>(null);
