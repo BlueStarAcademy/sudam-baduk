@@ -58,6 +58,37 @@ export const getAiUser = (mode: GameMode, difficulty: number = 50, stageId?: str
     return aiUser;
 };
 
+const canAiUseHiddenMove = (game: LiveGameSession): boolean => {
+    if (game.mode === GameMode.Hidden || (game.mode === GameMode.Mix && game.settings.mixedModes?.includes(GameMode.Hidden))) {
+        return true;
+    }
+
+    if (!((game.isSinglePlayer || game.isTowerChallenge) && game.settings.hiddenStoneCount && game.settings.hiddenStoneCount > 0)) {
+        return false;
+    }
+
+    if (game.isSinglePlayer && game.stageId) {
+        if (game.stageId.startsWith('고급-')) {
+            return true;
+        }
+        if (game.stageId.startsWith('유단자-')) {
+            const stageNum = parseInt(game.stageId.split('-')[1], 10);
+            if (stageNum >= 16 && stageNum <= 20) {
+                return true;
+            }
+        }
+    }
+
+    if (game.isTowerChallenge && game.stageId) {
+        const floor = parseInt(game.stageId.split('-')[1], 10);
+        if (floor >= 21 && floor <= 100) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 export const makeAiMove = async (game: LiveGameSession): Promise<Point & { isHidden?: boolean }> => {
     const isPlayful = PLAYFUL_GAME_MODES.some(m => m.mode === game.mode);
     if (isPlayful) {
@@ -68,7 +99,7 @@ export const makeAiMove = async (game: LiveGameSession): Promise<Point & { isHid
     // Always use the self-contained simple AI
     const move = makeSimpleAiMove(game);
 
-    if (game.mode === GameMode.Hidden || (game.mode === GameMode.Mix && game.settings.mixedModes?.includes(GameMode.Hidden)) || ((game.isSinglePlayer || game.isTowerChallenge) && game.settings.hiddenStoneCount && game.settings.hiddenStoneCount > 0)) {
+    if (canAiUseHiddenMove(game)) {
         // Simple logic for hidden move
         if (!game.aiHiddenStoneUsedThisGame && Math.random() < 0.2) {
             return { ...move, isHidden: true };

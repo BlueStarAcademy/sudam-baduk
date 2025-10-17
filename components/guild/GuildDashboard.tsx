@@ -104,19 +104,19 @@ const ActivityPanel: React.FC<{ onOpenMissions: () => void; onOpenResearch: () =
         { name: '보스 도감', icon: '/images/guild/bossraid1.png', action: onOpenBossGuide },
     ];
     return (
-        <div className="bg-secondary p-4 rounded-lg">
-            <h3 className="font-bold text-lg text-highlight mb-3 text-center">길드 활동</h3>
+        <div className="bg-secondary p-2 rounded-lg">
+            <h3 className="font-bold text-base text-highlight mb-2 text-center">길드 활동</h3>
             <div className="flex justify-around">
                 {activities.map(act => (
                     <button 
                         key={act.name} 
                         onClick={act.action}
-                        className={`flex flex-col items-center gap-2 text-center transition-transform hover:scale-105 relative`}
+                        className={`flex flex-col items-center gap-1 text-center transition-transform hover:scale-105 relative`}
                     >
-                        <div className="w-16 h-16 bg-tertiary rounded-lg flex items-center justify-center">
-                            <img src={act.icon} alt={act.name} className="w-14 h-14" />
+                        <div className="w-14 h-14 bg-tertiary rounded-lg flex items-center justify-center">
+                            <img src={act.icon} alt={act.name} className="w-12 h-12" />
                         </div>
-                        <span className="text-base font-semibold">{act.name}</span>
+                        <span className="text-sm font-semibold">{act.name}</span>
                         {act.notification && <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full animate-pulse border-2 border-secondary"></div>}
                     </button>
                 ))}
@@ -151,19 +151,19 @@ const BossPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
     return (
         <button 
             onClick={() => window.location.hash = '#/guildboss'}
-            className="bg-secondary p-3 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full"
+            className="bg-secondary p-2 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full"
         >
-            <h3 className="font-bold text-xl text-highlight mb-2">길드 보스전</h3>
-            <div className="w-24 h-24 bg-tertiary rounded-lg flex items-center justify-center my-1">
-                <img src="/images/guild/bossraid.png" alt="길드 보스전" className="w-20 h-20" />
+            <h3 className="font-bold text-lg text-highlight mb-1">길드 보스전</h3>
+            <div className="w-20 h-20 bg-tertiary rounded-lg flex items-center justify-center my-1">
+                <img src="/images/guild/bossraid.png" alt="길드 보스전" className="w-16 h-16" />
             </div>
             <div className="w-full mt-auto">
-                <p className="text-lg font-semibold">{currentBoss.name}</p>
+                <p className="text-base font-semibold">{currentBoss.name}</p>
                 <div className="w-full bg-tertiary rounded-full h-2 border border-color mt-1">
                     <div className="bg-gradient-to-r from-red-500 to-red-700 h-full rounded-full" style={{ width: `${hpPercent}%` }}></div>
                 </div>
                 <p className="text-xs text-tertiary mt-1">{hpPercent.toFixed(1)}%</p>
-                 <p className="text-xs text-tertiary mt-2">교체까지: {timeLeft}</p>
+                 <p className="text-xs text-tertiary mt-1">교체까지: {timeLeft}</p>
             </div>
         </button>
     );
@@ -172,13 +172,13 @@ const BossPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
 const WarPanel: React.FC = () => (
     <button 
         onClick={() => window.location.hash = '#/guildwar'}
-        className="bg-secondary p-3 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full"
+        className="bg-secondary p-2 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full"
     >
-        <h3 className="font-bold text-xl text-highlight mb-2">길드 전쟁</h3>
-        <div className="w-24 h-24 bg-tertiary rounded-lg flex items-center justify-center my-1">
-            <img src="/images/guild/guildwar.png" alt="길드 전쟁" className="w-20 h-20" />
+        <h3 className="font-bold text-lg text-highlight mb-1">길드 전쟁</h3>
+        <div className="w-20 h-20 bg-tertiary rounded-lg flex items-center justify-center my-1">
+            <img src="/images/guild/guildwar.png" alt="길드 전쟁" className="w-16 h-16" />
         </div>
-        <span className="text-lg text-secondary mt-auto">입장하기</span>
+        <span className="text-base text-secondary mt-auto">입장하기</span>
     </button>
 );
 
@@ -294,13 +294,13 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
     );
 
     return (
-        <div className="p-2 sm:p-4 lg:p-6 max-w-7xl mx-auto h-full flex flex-col w-full relative">
+        <div className="p-2 max-w-7xl mx-auto h-full flex flex-col w-full relative">
             {isMissionsOpen && <GuildMissionsPanel guild={guild} myMemberInfo={myMemberInfo} onClose={() => setIsMissionsOpen(false)} />}
             {isResearchOpen && <GuildResearchPanel guild={guild} myMemberInfo={myMemberInfo} onClose={() => setIsResearchOpen(false)} />}
             {isHelpOpen && <HelpModal mode="guild" onClose={() => setIsHelpOpen(false)} />}
             {isBossGuideOpen && <GuildBossGuideModal onClose={() => setIsBossGuideOpen(false)} />}
             
-            <header className="relative flex justify-center items-center mb-4 flex-shrink-0 py-2">
+            <header className="relative flex justify-center items-center mb-2 flex-shrink-0 py-1">
                 <div className="absolute left-0 top-1/2 -translate-y-1/2">
                     <BackButton onClick={() => window.location.hash = '#/profile'} />
                 </div>
@@ -342,7 +342,7 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
                 </div>
             </header>
 
-            <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-4" style={{ height: 'calc(100% - 80px)' }}>
+            <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <div className="lg:col-span-3 flex flex-col gap-4">
                     <div className="flex-shrink-0">
                         <div className="flex bg-tertiary/70 p-1 rounded-lg w-full max-w-sm">

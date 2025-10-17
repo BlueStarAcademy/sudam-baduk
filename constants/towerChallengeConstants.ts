@@ -195,7 +195,7 @@ export const TOWER_STAGES: SinglePlayerStageInfo[] = rawData.map(d => {
         boardSize: d.board as 7 | 9 | 11 | 13,
         targetScore: d.bTarget ? { black: d.bTarget, white: d.wTarget } : undefined,
         katagoLevel: Math.ceil(d.ai / 10),
-        placements: { black: d.bStones, white: d.wStones, blackPattern: d.bPattern || 0, whitePattern: d.wPattern || 0 },
+        placements: { b: d.bStones, w: d.wStones, bP: d.bPattern || 0, wP: d.wPattern || 0 },
         timeControl: { type: 'byoyomi', mainTime: 3, byoyomiTime: 30, byoyomiCount: 3 },
         rewards: {
             firstClear: { ...fcRewardParsed, exp: { type: 'strategy', amount: d.fcExp } } as QuestReward,

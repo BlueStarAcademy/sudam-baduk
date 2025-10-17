@@ -42,6 +42,8 @@ const GameCard: React.FC<{ mode: GameMode, description: string, image: string, a
     );
 };
 
+import { aiUserId } from '../constants/auth.js';
+
 const Lobby: React.FC<LobbyProps> = ({ lobbyType }) => {
   const { gameModeAvailability, handlers } = useAppContext();
 
@@ -57,16 +59,25 @@ const Lobby: React.FC<LobbyProps> = ({ lobbyType }) => {
   const onBackToProfile = () => window.location.hash = '#/profile';
 
   const handleStartAiGame = (mode: GameMode) => {
-    handlers.handleAction({ type: 'START_AI_GAME', payload: { mode, aiDifficulty: selectedAiDifficulty } });
+    handlers.handleAction({
+      type: 'CHALLENGE_USER',
+      payload: {
+        opponentId: aiUserId,
+        mode: mode,
+        settings: {
+          aiDifficulty: selectedAiDifficulty,
+        }
+      }
+    });
   };
 
   return (
-    <div className="bg-primary text-primary p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto h-full flex flex-col">
-      <header className="flex flex-wrap justify-between items-center mb-8 gap-4 flex-shrink-0">
+    <div className="bg-primary text-primary p-4 max-w-7xl mx-auto h-full flex flex-col">
+      <header className="flex flex-wrap justify-between items-center mb-4 gap-4 flex-shrink-0">
         <BackButton onClick={onBackToProfile} />
         <div className="text-center flex-grow">
-          <h1 className="text-4xl font-bold">{title} 로비</h1>
-          <p className="text-secondary mt-2">플레이할 게임을 선택하세요.</p>
+          <h1 className="text-3xl font-bold">{title} 로비</h1>
+          <p className="text-secondary mt-1">플레이할 게임을 선택하세요.</p>
         </div>
         <div className="w-24"></div> {/* Spacer to balance the back button */}
       </header>
@@ -82,26 +93,7 @@ const Lobby: React.FC<LobbyProps> = ({ lobbyType }) => {
           </div>
         </section>
 
-        {/* NEW AI GAME SECTION */}
-        <section className="mt-8">
-          <h2 className={`text-2xl font-semibold mb-5 border-l-4 ${sectionBorderColor} pl-4`}>AI 대국</h2>
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <label htmlFor="ai-difficulty" className="text-lg font-semibold">AI 난이도:</label>
-              <select
-                id="ai-difficulty"
-                value={selectedAiDifficulty}
-                onChange={(e) => setSelectedAiDifficulty(parseInt(e.target.value))}
-                className="bg-tertiary border border-color rounded-md p-2 text-primary"
-              >
-                {strategicAiDisplayMap.map(level => (
-                  <option key={level} value={level}>Lv.{level}</option>
-                ))}
-              </select>
-            </div>
-            <Button onClick={() => handleStartAiGame(modes[0].mode)} colorScheme="blue" className="w-48">AI 대국 시작</Button>
-          </div>
-        </section>
+
       </main>
     </div>
   );

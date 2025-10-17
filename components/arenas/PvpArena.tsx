@@ -90,10 +90,17 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
 
     const handlePauseToggle = useCallback(() => {
         if (isPauseCooldown || !session.isAiGame) return;
-        const actionType = isPaused ? 'RESUME_GAME' : 'PAUSE_GAME';
+
+        // Optimistic UI update
+        const newPausedState = !isPaused;
+        setIsPaused(newPausedState);
+
+        const actionType = newPausedState ? 'PAUSE_GAME' : 'RESUME_GAME';
         handlers.handleAction({ type: actionType, payload: { gameId: session.id } });
+        
+        // Cooldown
         setIsPauseCooldown(true);
-        setTimeout(() => setIsPauseCooldown(false), 2000); // 2 second cooldown to prevent spam
+        setTimeout(() => setIsPauseCooldown(false), 5000); // 5 second cooldown
     }, [isPauseCooldown, session.isAiGame, isPaused, handlers, session.id]);
 
     useEffect(() => {
@@ -423,9 +430,7 @@ const PvpArena: React.FC<PvpArenaProps> = ({ session }) => {
                     </div>
                     <div className="flex-1 w-full flex items-center justify-center min-h-0">
                         {isPaused && session.isAiGame ? (
-                            <div className="w-full h-full flex items-center justify-center text-primary text-2xl font-bold">
-                                일시정지됨
-                            </div>
+                            null
                         ) : (
                             <div className="relative w-full h-full max-w-full max-h-full aspect-square">
                                 <div className="absolute inset-0">

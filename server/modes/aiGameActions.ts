@@ -86,6 +86,9 @@ export const handleAiGameStart = async (
     const game = await initializeGame(negotiation, guilds);
     game.isSinglePlayer = !isTower;
     game.isTowerChallenge = isTower;
+    if (isTower) {
+        game.floor = payload.floor;
+    }
     
     game.stageId = stage.id;
     game.gameType = stage.gameType;
@@ -101,12 +104,8 @@ export const handleAiGameStart = async (
     if (isTower) {
         game.towerChallengePlacementRefreshesUsed = 0;
         game.towerAddStonesUsed = 0;
-    } else {
-        game.singlePlayerPlacementRefreshesUsed = 0;
-    }
-
-    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount } = stage.placements;
-    const totalInitialStones = blackCount + whiteCount + blackPatternCount + whitePatternCount;
+    const { b: blackCount, w: whiteCount, bP: blackPatternCount, wP: whitePatternCount } = stage.placements || { b: 0, w: 0, bP: 0, wP: 0 };
+    const totalInitialStones = (blackCount || 0) + (whiteCount || 0) + (blackPatternCount || 0) + (whitePatternCount || 0);
 
     const gnuGoInstance = gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi);
     if (!gnuGoInstance) {
@@ -185,8 +184,8 @@ export const handleAiGameRefresh = async (game: LiveGameSession, user: User, typ
     game.blackPatternStones = [];
     game.whitePatternStones = [];
 
-    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount } = stage.placements;
-    const totalInitialStones = blackCount + whiteCount + blackPatternCount + whitePatternCount;
+    const { b: blackCount, w: whiteCount, bP: blackPatternCount, wP: whitePatternCount } = stage.placements || { b: 0, w: 0, bP: 0, wP: 0 };
+    const totalInitialStones = (blackCount || 0) + (whiteCount || 0) + (blackPatternCount || 0) + (whitePatternCount || 0);
 
     const gnuGoInstance = gnuGoServiceManager.get(game.id);
     if (gnuGoInstance && totalInitialStones > 0) {

@@ -33,6 +33,7 @@ function usePrevious<T>(value: T): T | undefined {
 
 const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
     const { handlers } = useAppContext();
+    const [selectedAiDifficulty, setSelectedAiDifficulty] = useState(50);
     const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
     const isPlayfulAiSupported = PLAYFUL_AI_MODES.includes(mode);
 
@@ -41,6 +42,17 @@ const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
     }
     
     const botName = isStrategic ? `${mode}봇(카타고)` : `${mode}봇`;
+
+    const handleChallenge = () => {
+        handlers.handleAction({
+            type: 'CHALLENGE_USER',
+            payload: {
+                opponentId: aiUserId,
+                mode,
+                settings: { aiDifficulty: selectedAiDifficulty }
+            }
+        });
+    };
 
     return (
         <NineSlicePanel className="shadow-lg p-3 flex items-center justify-between flex-shrink-0 text-on-panel" padding="p-3">
@@ -51,7 +63,25 @@ const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
                     <p className="text-xs text-tertiary">{botName}와(과) 즉시 대국을 시작합니다.</p>
                  </div>
             </div>
-            <Button onClick={() => handlers.handleAction({ type: 'CHALLENGE_USER', payload: { opponentId: aiUserId, mode } })} colorScheme="purple" className="!text-sm !py-1.5">설정 및 시작</Button>
+            <div className="flex items-center gap-2">
+                <select 
+                    value={selectedAiDifficulty} 
+                    onChange={e => setSelectedAiDifficulty(Number(e.target.value))}
+                    className="bg-tertiary border border-color rounded-md p-1.5 text-xs text-primary"
+                >
+                    <option value={10}>Lv.1</option>
+                    <option value={20}>Lv.2</option>
+                    <option value={30}>Lv.3</option>
+                    <option value={40}>Lv.4</option>
+                    <option value={50}>Lv.5</option>
+                    <option value={60}>Lv.6</option>
+                    <option value={70}>Lv.7</option>
+                    <option value={80}>Lv.8</option>
+                    <option value={90}>Lv.9</option>
+                    <option value={100}>Lv.10</option>
+                </select>
+                <Button onClick={handleChallenge} colorScheme="purple" className="!text-sm !py-1.5">설정 및 시작</Button>
+            </div>
         </NineSlicePanel>
     );
 };
@@ -167,32 +197,32 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
     
   return (
     <div className="bg-primary text-primary flex flex-col h-full max-w-full">
-      <header className="flex justify-between items-center mb-4 flex-shrink-0 px-2 sm:px-4 lg:px-6 pt-2 sm:pt-4 lg:pt-6">
+      <header className="flex justify-between items-center mb-2 flex-shrink-0 px-4">
         <div className="flex-1">
           <BackButton onClick={onBackToLobby} />
         </div>
         <div className='flex-1 text-center flex items-center justify-center'>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">{mode} 대기실</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">{mode} 대기실</h1>
           <button 
             onClick={() => setIsHelpModalOpen(true)}
-            className="ml-3 w-8 h-8 flex items-center justify-center bg-secondary hover:bg-tertiary rounded-full text-primary font-bold text-xl flex-shrink-0 transition-transform hover:scale-110"
+            className="ml-2 w-7 h-7 flex items-center justify-center bg-secondary hover:bg-tertiary rounded-full text-primary font-bold text-lg flex-shrink-0 transition-transform hover:scale-110"
             aria-label="게임 방법 보기"
             title="게임 방법 보기"
           >
-            <img src="/images/button/help.png" alt="도움말" className="h-5" />
+            <img src="/images/button/help.png" alt="도움말" className="h-4" />
           </button>
         </div>
         <div className="flex-1 text-right">
-             <p className="text-secondary text-sm">{usersInThisRoom.length}명 접속 중</p>
+             <p className="text-secondary text-xs">{usersInThisRoom.length}명 접속 중</p>
         </div>
       </header>
-      <div className="flex-1 min-h-0 relative px-2 sm:px-4 lg:px-6 pb-2 sm:pb-4 lg:pb-6">
+      <div className="flex-1 min-h-0 relative px-4 pb-2">
         {isMobile ? (
           <>
-            <div className="flex flex-col h-full gap-4">
+            <div className="flex flex-col h-full gap-2">
                 <div className="flex-shrink-0"><AnnouncementBoard mode={mode} /></div>
                 <div className="flex-shrink-0"><AiChallengePanel mode={mode} /></div>
-                <div className="flex-1 flex flex-col gap-4 min-h-0">
+                <div className="flex-1 flex flex-col gap-2 min-h-0">
                     <NineSlicePanel className="h-1/2 shadow-lg flex flex-col min-h-0">
                         <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                     </NineSlicePanel>
@@ -224,16 +254,16 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
             {isMobileSidebarOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsMobileSidebarOpen(false)}></div>}
           </>
         ) : (
-          <div ref={desktopContainerRef} className="grid grid-cols-1 lg:grid-cols-5 h-full gap-4">
+          <div ref={desktopContainerRef} className="grid grid-cols-1 lg:grid-cols-5 h-full gap-2">
             {/* Main Content Column */}
-            <div className="lg:col-span-3 flex flex-col gap-4 min-h-0">
+            <div className="lg:col-span-3 flex flex-col gap-2 min-h-0">
                 <div className="flex-shrink-0">
                     <AnnouncementBoard mode={mode} />
                 </div>
                  <div className="flex-shrink-0">
                     <AiChallengePanel mode={mode} />
                 </div>
-                <div className="grid grid-rows-2 gap-4 flex-1 min-h-0">
+                <div className="grid grid-rows-2 gap-2 flex-1 min-h-0">
                     <NineSlicePanel className="min-h-0 shadow-lg flex flex-col">
                         <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                     </NineSlicePanel>
@@ -244,12 +274,12 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
             </div>
             
             {/* Right Sidebar Column */}
-            <div className="lg:col-span-2 grid grid-rows-2 gap-4">
-              <div className="flex flex-row gap-4 items-stretch min-h-0">
+            <div className="lg:col-span-2 grid grid-rows-2 gap-2">
+              <div className="flex flex-row gap-2 items-stretch min-h-0">
                 <NineSlicePanel className="flex-1 shadow-lg min-w-0">
                   <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
                 </NineSlicePanel>
-                <div className="w-24 flex-shrink-0">
+                <div className="w-20 flex-shrink-0">
                   <QuickAccessSidebar />
                 </div>
               </div>

@@ -198,6 +198,21 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, gu
             game.lastTimeoutPlayerId = undefined;
             game.lastTimeoutPlayerIdClearTime = undefined;
         }
+
+        // Server-side trigger for stuck AI turns
+        const isSpOrTower = game.isSinglePlayer || game.isTowerChallenge;
+        if (isSpOrTower) {
+            const aiPlayerEnum = game.player1.id === game.blackPlayerId ? Player.White : Player.Black;
+            const isAiTurn = game.currentPlayer === aiPlayerEnum;
+
+            if (isAiTurn && !game.aiTurnStartTime && game.gameStatus === GameStatus.Playing) {
+                console.log(`[Game Loop] Triggering stuck AI turn for game ${game.id}`);
+                game.aiTurnStartTime = now;
+                // Do not await, let it run in the background
+                void strategic.handleAiTurn(game, game.lastMove, Player.Black);
+            }
+        }
+        
         
         const players = [game.player1, game.player2];
         

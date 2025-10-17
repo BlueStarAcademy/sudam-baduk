@@ -22,8 +22,9 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
 
     switch (type) {
         case 'CHALLENGE_USER': {
-            const { opponentId, mode } = payload;
-            const opponent = opponentId === aiUserId ? getAiUser(mode) : await db.getUser(opponentId);
+            const { opponentId, mode, settings } = payload;
+            const aiDifficulty = settings?.aiDifficulty;
+            const opponent = opponentId === aiUserId ? getAiUser(mode, aiDifficulty) : await db.getUser(opponentId);
         
             if (!opponent) return { error: 'Opponent not found.' };
             if (user.id === opponent.id) return { error: 'You cannot challenge yourself.' };
@@ -77,7 +78,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 challenger: user,
                 opponent: opponent,
                 mode: mode,
-                settings: { ...DEFAULT_GAME_SETTINGS },
+                settings: { ...DEFAULT_GAME_SETTINGS, ...settings },
                 proposerId: user.id,
                 status: 'draft',
                 turnCount: 0,

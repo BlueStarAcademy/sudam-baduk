@@ -4,7 +4,8 @@
 import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus } from '../../types/index.js';
 import * as db from '../db.js';
 // FIX: The member handleStrategicGameAction is now exported from strategic.js
-import { handleStrategicGameAction } from '../modes/strategic.js';
+import { handleAiTurn, handleStrategicGameAction } from '../modes/strategic.js';
+import { Player } from '../../types/index.js';
 import { handlePlayfulGameAction } from '../modes/playful.js';
 import { handleAiGameStart, handleAiGameRefresh, handleTowerAddStones, handleConfirmIntro } from '../modes/singlePlayerMode.js';
 import { handleUserAction } from './userActions.js';
@@ -109,6 +110,28 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
     }
     if (type === 'CONFIRM_SP_INTRO') {
         return handleConfirmIntro(gameId, user);
+    }
+
+    if (type === 'TRIGGER_AI_MOVE') {
+        const game = await db.getLiveGame(gameId);
+        if (!game) {
+            return { error: "Game not found." };
+        }
+
+        const aiPlayerId = game.player2.id;
+        const aiPlayerEnum = game.blackPlayerId === aiPlayerId ? Player.Black : (game.whitePlayerId === aiPlayerId ? Player.White : Player.None);
+
+        if (game.currentPlayer === aiPlayerEnum && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
+            console.log(`[AI Trigger] Game ${game.id}: Manually triggering AI turn from client.`);
+            const updatedGame = await handleAiTurn(game, game.lastMove, Player.Black); // In SP/Tower, user is always Black (P1)
+            if (updatedGame) {
+                return { clientResponse: { updatedGame } };
+            }
+            // If handleAiTurn fails, return the original game state to prevent de-sync
+            return { clientResponse: { updatedGame: game } };
+        }
+        // If it's not the AI's turn, just return the current game state
+        return { clientResponse: { updatedGame: game } };
     }
 
     // Actions requiring gameId from here

@@ -69,7 +69,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             const { gameId } = payload;
             const game = await db.getLiveGame(gameId);
             if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) && game.player1.id === user.id) {
-                await db.deleteGame(game.id);
+                // await db.deleteGame(game.id); // Do not delete SP games, let them be cleaned up later or archived
             }
             const status = allStatuses[user.id];
             if (status) {

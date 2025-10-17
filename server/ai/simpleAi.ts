@@ -26,10 +26,10 @@ const getRandomValidMove = (game: LiveGameSession): Point => {
     if (validMoves.length > 0) {
         return validMoves[Math.floor(Math.random() * validMoves.length)];
     }
-    return { x: -1, y: -1 }; // Pass
+    return { x: -2, y: -2 }; // Resign
 };
 
-const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: number): number => {
+const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: number, gameType: string | undefined): number => {
     const { boardState, currentPlayer, settings } = game;
     const opponent = currentPlayer === Player.Black ? Player.White : Player.Black;
     const boardSize = settings.boardSize;
@@ -86,11 +86,11 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
     }
     
     // 여기에 level 1일 때의 특별 로직을 추가합니다.
-    if (level === 1) {
-        // 1단계 AI는 따내기만 집중하도록 다른 점수들을 무시하고 따내기 점수에만 가중치를 줍니다.
-        return captureScore * 1000 + Math.random(); // 따내기 점수에 매우 높은 가중치 부여, 동점 방지용 랜덤
+    if (level === 1 || gameType === 'capture' || gameType === 'survival') {
+        // For level 1, or in capture/survival modes, focus heavily on captures.
+        return (captureScore * 1000) + (atariScore * 50) + (saveScore * 10) - selfAtariPenalty + Math.random();
     } else {
-        return (captureScore + saveScore + atariScore + shapeScore) - selfAtariPenalty + Math.random(); // 동점 방지용 랜덤
+        return (captureScore + saveScore + atariScore + shapeScore) - selfAtariPenalty + Math.random(); // Default scoring
     }
 };
 
@@ -114,27 +114,75 @@ export const makeSimpleAiMove = (game: LiveGameSession): Point => {
     console.log(`[Simple AI Debug] Game ${game.id}: Found ${validMoves.length} valid moves.`);
 
     if (validMoves.length === 0) {
-        console.log(`[Simple AI Debug] Game ${game.id}: No valid moves, AI passes.`);
-        return { x: -1, y: -1 }; // Pass
+        console.log(`[Simple AI Debug] Game ${game.id}: No valid moves, AI resigns.`);
+        return { x: -2, y: -2 }; // Resign
     }
 
     let scoredMoves: { move: Point, score: number }[];
 
-    if (level >= 6) { // 형세판단 AI
-        scoredMoves = validMoves.map(move => {
-            const { newBoardState, capturedStones } = processMove(game.boardState, { ...move, player: currentPlayer }, game.koInfo, game.moveHistory.length);
-            const capturesForScore = { ...game.captures };
-            capturesForScore[currentPlayer] += capturedStones.length;
-            
-            const scores = calculateScores(newBoardState, game.settings.komi, capturesForScore);
-            const scoreDiff = currentPlayer === Player.Black ? scores.black - scores.white : scores.white - scores.black;
-            
-            return { move, score: scoreDiff };
-        });
-    } else { // 휴리스틱 기반 AI
+    if (level >= 6) { // Minimax AI
+        if (game.gameType === 'capture' || game.gameType === 'survival') {
+            // In capture/survival modes, the goal is to capture stones, not to score territory.
+            // The AI will prioritize moves that lead to immediate captures.
+            scoredMoves = validMoves.map(myMove => {
+                const { capturedStones: myCapturedStones, newBoardState: boardAfterMyMove, newKoInfo: koAfterMyMove } = processMove(game.boardState, { ...myMove, player: currentPlayer }, game.koInfo, game.moveHistory.length);
+
+                // Find opponent's best reply in terms of captures
+                const opponent = currentPlayer === Player.Black ? Player.White : Player.Black;
+                const opponentMoves = getValidMoves({ ...game, boardState: boardAfterMyMove, currentPlayer: opponent, koInfo: koAfterMyMove });
+                let maxOpponentCaptures = 0;
+                if (opponentMoves.length > 0) {
+                    for (const opponentMove of opponentMoves) {
+                        const { capturedStones: opponentCapturedStones } = processMove(boardAfterMyMove, { ...opponentMove, player: opponent }, koAfterMyMove, game.moveHistory.length + 1);
+                        if (opponentCapturedStones.length > maxOpponentCaptures) {
+                            maxOpponentCaptures = opponentCapturedStones.length;
+                        }
+                    }
+                }
+                // Score is our captures minus opponent's best capture reply.
+                return { move: myMove, score: myCapturedStones.length - maxOpponentCaptures };
+            });
+        } else {
+            // Standard Minimax AI with 1-ply lookahead for territory
+            scoredMoves = validMoves.map(myMove => {
+                // 1. AI makes a move
+                const { newBoardState: boardAfterMyMove, capturedStones: myCapturedStones, newKoInfo: koAfterMyMove } = processMove(game.boardState, { ...myMove, player: currentPlayer }, game.koInfo, game.moveHistory.length);
+                const capturesAfterMyMove = { ...game.captures };
+                capturesAfterMyMove[currentPlayer] += myCapturedStones.length;
+
+                // 2. Find opponent's best response
+                const opponent = currentPlayer === Player.Black ? Player.White : Player.Black;
+                const opponentMoves = getValidMoves({ ...game, boardState: boardAfterMyMove, currentPlayer: opponent, koInfo: koAfterMyMove });
+
+                let bestOpponentReplyScore = -Infinity;
+                if (opponentMoves.length > 0) {
+                    for (const opponentMove of opponentMoves) {
+                        const { newBoardState: boardAfterOpponentMove, capturedStones: opponentCapturedStones } = processMove(boardAfterMyMove, { ...opponentMove, player: opponent }, koAfterMyMove, game.moveHistory.length + 1);
+                        const capturesAfterOpponentMove = { ...capturesAfterMyMove };
+                        capturesAfterOpponentMove[opponent] += opponentCapturedStones.length;
+                        const scores = calculateScores(boardAfterOpponentMove, game.settings.komi, capturesAfterOpponentMove);
+                        const opponentScore = opponent === Player.Black ? scores.black - scores.white : scores.white - scores.black;
+                        if (opponentScore > bestOpponentReplyScore) {
+                            bestOpponentReplyScore = opponentScore;
+                        }
+                    }
+                } else {
+                    // If opponent has no moves, it's a huge advantage for us. Calculate score from our perspective.
+                    const scores = calculateScores(boardAfterMyMove, game.settings.komi, capturesAfterMyMove);
+                    bestOpponentReplyScore = -(currentPlayer === Player.Black ? scores.black - scores.white : scores.white - scores.black);
+                }
+
+                // The score of our move is how good it is for us, minus how good the opponent's reply is for them.
+                const scoresAfterMyMove = calculateScores(boardAfterMyMove, game.settings.komi, capturesAfterMyMove);
+                const myScore = currentPlayer === Player.Black ? scoresAfterMyMove.black - scoresAfterMyMove.white : scoresAfterMyMove.white - scoresAfterMyMove.black;
+                
+                return { move: myMove, score: myScore - bestOpponentReplyScore };
+            });
+        }
+    } else { // Heuristic-based AI
         scoredMoves = validMoves.map(move => ({
             move,
-            score: calculateHeuristicMoveScore(move, game, level)
+            score: calculateHeuristicMoveScore(move, game, level, game.gameType)
         }));
     }
 

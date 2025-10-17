@@ -50,9 +50,16 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
     const { id: gameId, gameStatus, moveHistory, singlePlayerPlacementRefreshesUsed } = session;
     const isWinner = session.winner === Player.Black;
     
-    // Moved hooks to top level to fix conditional hook call error
     const currentStageIndex = useMemo(() => SINGLE_PLAYER_STAGES.findIndex(s => s.id === session.stageId), [session.stageId]);
     const nextStage = useMemo(() => SINGLE_PLAYER_STAGES[currentStageIndex + 1], [currentStageIndex]);
+
+    const { isHiddenMode, isMissileMode } = useMemo(() => {
+        const stageInfo = SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId);
+        return {
+            isHiddenMode: stageInfo?.gameType === 'hidden' || stageInfo?.hiddenStoneCount,
+            isMissileMode: stageInfo?.gameType === 'missile' || stageInfo?.missileCount,
+        };
+    }, [session.stageId]);
 
     const canTryNext = useMemo(() => {
         if (gameStatus !== 'ended' && gameStatus !== 'no_contest') return false;
@@ -60,6 +67,31 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
         const hasAlreadyClearedThisLevel = (currentUser.singlePlayerProgress ?? 0) > currentStageIndex;
         return isWinner || hasAlreadyClearedThisLevel;
     }, [gameStatus, isWinner, nextStage, currentUser.singlePlayerProgress, currentStageIndex]);
+
+    const canUseHiddenItem = useMemo(() => {
+        if (!session.stageId) return false;
+
+        if (session.isSinglePlayer) {
+            if (session.stageId.startsWith('고급-')) {
+                return true;
+            }
+            if (session.stageId.startsWith('유단자-')) {
+                const stageNum = parseInt(session.stageId.split('-')[1], 10);
+                if (stageNum >= 16 && stageNum <= 20) {
+                    return true;
+                }
+            }
+        }
+
+        if (session.isTowerChallenge) {
+            const floor = parseInt(session.stageId.split('-')[1], 10);
+            if (floor >= 21 && floor <= 100) {
+                return true;
+            }
+        }
+
+        return false;
+    }, [session.stageId, session.isSinglePlayer, session.isTowerChallenge]);
 
     if (gameStatus === 'ended' || gameStatus === 'no_contest') {
         const handleRetry = () => {
@@ -109,14 +141,17 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
     
     const isMyTurn = session.currentPlayer === Player.Black;
 
-    // Item logic
-    const { isHiddenMode, isMissileMode } = useMemo(() => {
-        const stageInfo = SINGLE_PLAYER_STAGES.find(s => s.id === session.stageId);
-        return {
-            isHiddenMode: stageInfo?.gameType === 'hidden' || stageInfo?.hiddenStoneCount,
-            isMissileMode: stageInfo?.gameType === 'missile' || stageInfo?.missileCount,
-        };
-    }, [session.stageId]);
+
+
+    const handleUseItem = (item: 'hidden' | 'scan') => {
+        if(gameStatus !== 'playing') return;
+        const actionType = item === 'hidden' ? 'START_HIDDEN_PLACEMENT' : 'START_SCANNING';
+        onAction({ type: actionType, payload: { gameId } });
+    };
+
+    const myHiddenUsed = session.hidden_stones_used_p1 ?? 0;
+    const hiddenLeft = (session.settings.hiddenStoneCount || 0) - myHiddenUsed;
+    const myScansLeft = session.scans_p1 ?? 0;
 
     if (isMobile && settings.features.mobileConfirm && pendingMove && onConfirmMove && onCancelMove) {
         return (
@@ -139,6 +174,26 @@ const SinglePlayerControls: React.FC<SinglePlayerControlsProps> = ({ session, on
                     disabled={!canRefresh || !canAfford} 
                     title={!canAfford ? '골드가 부족합니다.' : `판 새로고침 (${5-refreshesUsed}회 남음)`}
                 />
+            )}
+            {canUseHiddenItem && isHiddenMode && (
+                <>
+                    <ControlButton 
+                        imgSrc="/images/button/hidden.png" 
+                        label="히든"
+                        count={hiddenLeft}
+                        onClick={() => handleUseItem('hidden')} 
+                        disabled={!isMyTurn || gameStatus !== 'playing' || hiddenLeft <= 0}
+                        title={`상대방이 못보는 돌을 둡니다. 남은 개수: ${hiddenLeft}`}
+                    />
+                    <ControlButton 
+                        imgSrc="/images/button/scan.png" 
+                        label="스캔" 
+                        count={myScansLeft}
+                        onClick={() => handleUseItem('scan')} 
+                        disabled={!isMyTurn || gameStatus !== 'playing' || myScansLeft <= 0}
+                        title={`상대방의 히든돌을 찾아냅니다. 남은 개수: ${myScansLeft}`}
+                    />
+                </>
             )}
             <ControlButton 
                 imgSrc="/images/button/giveup.png" 

@@ -332,12 +332,10 @@ const App: React.FC = () => {
 
             {/* Modals */}
             {activeNegotiation && <NegotiationModal negotiation={activeNegotiation} currentUser={currentUserWithStatus} onAction={handlers.handleAction} onlineUsers={onlineUsers} isTopmost={topmostModalId === 'negotiation'} />}
-            {/* FIX: Corrected prop types and names for various modal components to align with their expected definitions. */}
             {modals.isSettingsModalOpen && <SettingsModal onClose={handlers.closeSettingsModal} isTopmost={topmostModalId === 'settings'} />}
             {modals.isInventoryOpen && <InventoryModal onClose={handlers.closeInventory} isTopmost={topmostModalId === 'inventory'} />}
             {modals.isMailboxOpen && <MailboxModal currentUser={currentUserWithStatus} onClose={handlers.closeMailbox} onAction={handlers.handleAction} isTopmost={topmostModalId === 'mailbox'} />}
             {modals.isQuestsOpen && <QuestsModal currentUser={currentUserWithStatus} onClose={handlers.closeQuests} onAction={handlers.handleAction} isTopmost={topmostModalId === 'quests'} />}
-            {/* FIX: Pass missing props (currentUser, onAction, onStartQuiz) to the ShopModal component to fix type error. */}
             {modals.isShopOpen && <ShopModal currentUser={currentUserWithStatus} onAction={handlers.handleAction} onStartQuiz={handlers.openActionPointQuiz} onClose={handlers.closeShop} initialTab={modals.shopInitialTab!} isTopmost={topmostModalId === 'shop'} />}
             {modals.actionPointQuiz && <ActionPointQuizModal onClose={handlers.closeActionPointQuiz} onAction={handlers.handleAction} isTopmost={topmostModalId === 'actionPointQuiz'} />}
             {modals.lastUsedItemResult && modals.lastUsedItemResult.length === 1 && <ItemObtainedModal item={modals.lastUsedItemResult[0]} onClose={handlers.closeItemObtained} isTopmost={topmostModalId === 'itemObtained'} />}
@@ -365,6 +363,7 @@ const App: React.FC = () => {
             {modals.preset && <PresetModal user={currentUserWithStatus} onAction={handlers.handleAction} onClose={handlers.closePresetModal} isTopmost={topmostModalId === 'preset'} />}
         </div>
     );
+
 };
 
 export default App;

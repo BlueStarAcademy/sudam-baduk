@@ -76,7 +76,12 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     
     const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const [isPaused, setIsPaused] = useState(session.gameStatus === GameStatus.Paused);
     const [isPauseCooldown, setIsPauseCooldown] = useState(false);
+
+    useEffect(() => {
+        setIsPaused(session.gameStatus === GameStatus.Paused);
+    }, [session.gameStatus]);
 
     const isItemModeActive = useMemo(() => 
         ['hidden_placing', 'scanning', 'missile_selecting', 'ai_hidden_thinking'].includes(session.gameStatus), 
@@ -95,6 +100,18 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
 
     const prevGameStatus = usePrevious(gameStatus);
     const prevLastMove = usePrevious(session.lastMove);
+    const aiTriggeredForTurn = useRef(-1);
+
+    useEffect(() => {
+        const isAiTurn = session.currentPlayer === Player.White && (session.isSinglePlayer || session.isTowerChallenge);
+        const turnNumber = session.moveHistory.length;
+
+        if (isAiTurn && aiTriggeredForTurn.current !== turnNumber && session.gameStatus === GameStatus.Playing) {
+            console.log(`[AI Trigger] It is AI's turn (turn ${turnNumber}) on client. Triggering move.`);
+            aiTriggeredForTurn.current = turnNumber; // Mark that we've triggered for this turn
+            handlers.handleAction({ type: 'TRIGGER_AI_MOVE', payload: { gameId: session.id } });
+        }
+    }, [session, handlers]);
 
     useEffect(() => {
         setOptimisticStone(null);
@@ -110,13 +127,20 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         }
     }, [handlers, session.id, session.gameStatus]);
     
-    const handlePauseToggle = () => {
+    const handlePauseToggle = useCallback(() => {
         if (isPauseCooldown) return;
-        const actionType = session.gameStatus === GameStatus.Paused ? 'RESUME_GAME' : 'PAUSE_GAME';
+
+        // Optimistic UI update
+        const newPausedState = !isPaused;
+        setIsPaused(newPausedState);
+
+        const actionType = newPausedState ? 'PAUSE_GAME' : 'RESUME_GAME';
         handlers.handleAction({ type: actionType, payload: { gameId: session.id } });
+        
+        // Cooldown
         setIsPauseCooldown(true);
         setTimeout(() => setIsPauseCooldown(false), 5000);
-    };
+    }, [isPauseCooldown, isPaused, handlers, session.id]);
 
     useEffect(() => {
         console.log(`[SinglePlayerArena Debug] gameStatus: ${gameStatus}, prevGameStatus: ${prevGameStatus}`);
@@ -345,9 +369,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                         />
                     </div>
                     {isPaused ? (
-                        <div className="flex-1 w-full flex items-center justify-center text-primary text-2xl font-bold">
-                            일시정지됨
-                        </div>
+                        null
                     ) : (
                         <div className="flex-1 w-full flex items-center justify-center min-h-0">
                             <div className="relative w-full h-full max-w-full max-h-full aspect-square">

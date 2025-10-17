@@ -69,6 +69,10 @@ export const useApp = () => {
 
     const [settings, setSettings] = useState<AppSettings>(defaultSettings);
     
+    useEffect(() => {
+        audioService.updateSettings(settings.sound);
+    }, [settings.sound]);
+
     // Toast and Auth flow state
     const [successToast, setSuccessToast] = useState<string | null>(null);
     const [showExitToast, setShowExitToast] = useState(false);
@@ -114,6 +118,13 @@ export const useApp = () => {
     const hasFullMissionReward = useMemo(() => {
         return false;
     }, [currentUser]);
+
+    useEffect(() => {
+        if (postGameRedirect && !activeGame) {
+            window.location.hash = postGameRedirect;
+            setPostGameRedirect(null);
+        }
+    }, [postGameRedirect, activeGame]);
 
     // Modal helpers
     const openModal = useCallback((id: string) => setActiveModalIds(prev => [...prev.filter(i => i !== id), id]), []);
@@ -218,6 +229,10 @@ export const useApp = () => {
 
             if (data.newGameId) {
                 window.location.hash = `#/game/${data.newGameId}`;
+            }
+
+            if (data.newNegotiation) {
+                setNegotiations(prev => ({...prev, [data.newNegotiation.id]: data.newNegotiation}));
             }
 
             if (data.obtainedItemsBulk) {

@@ -704,39 +704,4 @@ const NegotiationModal: React.FC<NegotiationModalProps> = (props) => {
   );
 };
 
-const areEqual = (prevProps: NegotiationModalProps, nextProps: NegotiationModalProps) => {
-    if (prevProps.isTopmost !== nextProps.isTopmost) {
-        return false;
-    }
-    // If the negotiation object is different (ID, status, turn count), we must re-render.
-    if (JSON.stringify(prevProps.negotiation) !== JSON.stringify(nextProps.negotiation)) {
-        return false;
-    }
-
-    // If my user object is different (e.g., action points changed), re-render.
-    if (JSON.stringify(prevProps.currentUser) !== JSON.stringify(nextProps.currentUser)) {
-        return false;
-    }
-
-    // onlineUsers is a large array that changes reference every second.
-    // We only care about the opponent's data. Let's find the opponent and check their data.
-    const getOpponentId = (props: NegotiationModalProps) => {
-      const opponentUser = props.negotiation.challenger.id === props.currentUser.id ? props.negotiation.opponent : props.negotiation.challenger;
-      return opponentUser.id;
-    };
-    const opponentId = getOpponentId(prevProps);
-
-    const prevOpponent = prevProps.onlineUsers.find(u => u.id === opponentId);
-    const nextOpponent = nextProps.onlineUsers.find(u => u.id === opponentId);
-
-    // If opponent's data has changed, re-render. Otherwise, don't.
-    if (JSON.stringify(prevOpponent) !== JSON.stringify(nextOpponent)) {
-        return false;
-    }
-    
-    // If we got here, nothing relevant has changed.
-    return true; // Props are considered equal, don't re-render.
-};
-
-
-export default React.memo(NegotiationModal, areEqual);
+export default React.memo(NegotiationModal);
