@@ -1,7 +1,7 @@
 // Define setting types
 export type Theme = 'black' | 'white' | 'blue' | 'sky' | 'green';
 export type SoundCategory = 'stone' | 'notification' | 'item' | 'countdown' | 'turn';
-export type ShopTab = 'equipment' | 'materials' | 'consumables' | 'misc' | 'package';
+export type ShopTab = 'equipment' | 'materials' | 'consumables' | 'misc' | 'package' | 'guild';
 export type InventoryTab = 'all' | 'equipment' | 'consumable' | 'material';
 
 export interface GraphicsSettings {

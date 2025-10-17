@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Guild as GuildType, UserWithStatus, GuildBossInfo, QuestReward, GuildMember, GuildMemberRole, CoreStat, GuildResearchId, GuildResearchCategory, ItemGrade, ServerAction } from '../../types/index.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
+import BackButton from '../BackButton.js';
 import Button from '../Button.js';
 import GuildHomePanel from './GuildHomePanel.js';
 import GuildMembersPanel from './GuildMembersPanel.js';
@@ -301,7 +302,7 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
             
             <header className="relative flex justify-center items-center mb-4 flex-shrink-0 py-2">
                 <div className="absolute left-0 top-1/2 -translate-y-1/2">
-                    <Button onClick={() => window.location.hash = '#/profile'}>&larr; 프로필로</Button>
+                    <BackButton onClick={() => window.location.hash = '#/profile'} />
                 </div>
                 
                 <div className="flex flex-col items-center gap-2">
@@ -324,7 +325,9 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
 
                 <div className="absolute right-0 top-1/2 -translate-y-1/2">
                     <div className="flex flex-col items-end gap-1">
-                        <button onClick={() => setIsHelpOpen(true)} className="p-1 rounded-full text-2xl hover:bg-tertiary transition-colors" title="길드 도움말">❓</button>
+                                                <button onClick={() => setIsHelpOpen(true)} className="p-1 rounded-full text-2xl hover:bg-tertiary transition-colors" title="길드 도움말">
+                            <img src="/images/button/help.png" alt="도움말" className="h-6" />
+                        </button>
                         <div className="flex items-center gap-2 bg-tertiary/70 p-2 rounded-lg">
                             <div className="flex items-center gap-1 pr-2 border-r border-color" title="나의 길드 코인">
                                 <img src="/images/guild/tokken.png" alt="Guild Coin" className="w-6 h-6" />
@@ -339,7 +342,7 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
                 </div>
             </header>
 
-            <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-4" style={{ height: 'calc(100% - 80px)' }}>
                 <div className="lg:col-span-3 flex flex-col gap-4">
                     <div className="flex-shrink-0">
                         <div className="flex bg-tertiary/70 p-1 rounded-lg w-full max-w-sm">

@@ -255,7 +255,7 @@ app.post('/api/initial-state', async (req, res) => {
         volatileState.userConnections[userId] = Date.now();
     }
     
-    const data = await getAllData();
+    const data = await getAllData(userId);
     
     const negotiations = await getKV('negotiations') || {};
     const waitingRoomChats = await getKV('waitingRoomChats') || {};
@@ -336,7 +336,7 @@ const startServer = async () => {
 
     setInterval(async () => {
         const now = Date.now();
-        const CONNECTION_TIMEOUT_MS = 60 * 1000;
+        const CONNECTION_TIMEOUT_MS = 5 * 60 * 1000;
         const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
         
         const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};

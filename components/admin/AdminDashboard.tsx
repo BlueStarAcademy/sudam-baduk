@@ -2,6 +2,7 @@
 import React from 'react';
 // FIX: Use `import type` for interfaces to prevent type/value confusion.
 import type { AdminProps, LiveGameSession } from '../../types/index.js';
+import BackButton from '../BackButton.js';
 import Button from '../Button.js';
 import NineSlicePanel from '../ui/NineSlicePanel.js';
 
@@ -24,7 +25,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onBackToPro
         <div className="bg-primary text-primary">
             <header className="flex justify-between items-center mb-8">
                 <h1 className="text-3xl font-bold">관리자 대시보드</h1>
-                <Button onClick={onBackToProfile} colorScheme="gray">&larr; 프로필로 돌아가기</Button>
+                <BackButton onClick={onBackToProfile} />
             </header>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
                 <div onClick={() => onNavigate('userManagement')} className="bg-blue-800/50 hover:bg-blue-700/50 p-6 rounded-lg shadow-lg cursor-pointer transition-all transform hover:-translate-y-1 border border-color">
@@ -75,7 +76,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate, onBackToPro
                         </table>
                     </div>
                 </div>
-            </div>
+            </NineSlicePanel>
         </div>
     );
 };

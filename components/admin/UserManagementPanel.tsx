@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef, useLayoutEffect, forwardRef } from 'r
 import { GameMode } from '../../types/index.js';
 import type { User, ServerAction, AdminProps, Quest, DailyQuestData, WeeklyQuestData, MonthlyQuestData, CurrencyLog, Guild } from '../../types/index.js';
 import DraggableWindow from '../DraggableWindow.js';
+import BackButton from '../BackButton.js';
 import Button from '../Button.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/gameModes.js';
 
@@ -409,7 +410,7 @@ const UserManagementPanel: React.FC<AdminProps> = ({ allUsers, currentUser, onAc
             {selectedUser && <UserManagementModal user={selectedUser} currentUser={currentUser} onClose={() => setSelectedUser(null)} onAction={onAction} guilds={guilds} />}
             <header className="flex justify-between items-center mb-8">
                 <h1 className="text-3xl font-bold">사용자 관리</h1>
-                <Button onClick={onBack} colorScheme="gray">&larr; 대시보드로</Button>
+                <BackButton onClick={onBack} />
             </header>
             <div className="mb-4">
                 <input

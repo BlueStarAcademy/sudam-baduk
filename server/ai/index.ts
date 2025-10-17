@@ -18,12 +18,22 @@ export const getAiUser = (mode: GameMode, difficulty: number = 50, stageId?: str
         botName = `도전의 탑 ${floor}층`;
         displayLevel = floor;
     } else if (stageId) {
-        if(stageId.startsWith('입문')) engineLevel = 1;
-        else if(stageId.startsWith('초급')) engineLevel = 3;
-        else if(stageId.startsWith('중급')) engineLevel = 5;
-        else if(stageId.startsWith('고급')) engineLevel = 7;
-        else if(stageId.startsWith('유단자')) engineLevel = 9;
-        botName = `수련의 장 ${stageId}`;
+        if(stageId.startsWith('입문')) {
+            botName = '입문봇';
+            engineLevel = 1;
+        } else if(stageId.startsWith('초급')) {
+            botName = '초급봇';
+            engineLevel = 3;
+        } else if(stageId.startsWith('중급')) {
+            botName = '중급봇';
+            engineLevel = 5;
+        } else if(stageId.startsWith('고급')) {
+            botName = '고급봇';
+            engineLevel = 7;
+        } else if(stageId.startsWith('유단자')) {
+            botName = '유단자봇';
+            engineLevel = 9;
+        }
         displayLevel = engineLevel;
     } else if (isPlayful) {
         displayLevel = engineLevel;

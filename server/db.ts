@@ -156,41 +156,43 @@ export const deleteGame = async (id: string): Promise<void> => {
 
 
 // --- Full State Retrieval (for client sync) ---
-export const getAllData = async (): Promise<Pick<AppState, 'users' | 'userCredentials' | 'liveGames' | 'adminLogs' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'guilds' | 'towerRankings'>> => {
+export const getAllData = async (userId: string): Promise<Pick<AppState, 'users' | 'liveGames' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'guilds' | 'towerRankings'>> => {
     const db = await getDb();
     const userRepository = await import('./repositories/userRepository.js');
     const gameRepository = await import('./repositories/gameRepository.js');
     const kvRepository = await import('./repositories/kvRepository.js');
     
-    const users = await userRepository.getAllUsers(db);
-    const liveGames = await gameRepository.getAllActiveGames(db);
+    const currentUser = await userRepository.getUser(db, userId);
+    const liveGames = currentUser?.gameId ? [await gameRepository.getLiveGame(db, currentUser.gameId)].filter(Boolean) as LiveGameSession[] : [];
     
-    const adminLogs = await kvRepository.getKV<AdminLog[]>(db, 'adminLogs') || [];
     const announcements = await kvRepository.getKV<Announcement[]>(db, 'announcements') || [];
-        const globalOverrideAnnouncement = await kvRepository.getKV<OverrideAnnouncement | null>(db, 'globalOverrideAnnouncement');
+    const globalOverrideAnnouncement = await kvRepository.getKV<OverrideAnnouncement | null>(db, 'globalOverrideAnnouncement');
     const gameModeAvailability = await kvRepository.getKV<Record<GameMode, boolean>>(db, 'gameModeAvailability') || {} as Record<GameMode, boolean>;
     const announcementInterval = await kvRepository.getKV<number>(db, 'announcementInterval') || 3;
     const guilds = await kvRepository.getKV<Record<string, Guild>>(db, 'guilds') || {};
     
-    const towerRankings = users
-        .filter(u => u.towerProgress && u.towerProgress.highestFloor > 0)
+    // Fetch only users who are online or in a game for the initial state
+    const userStatuses = await kvRepository.getKV<Record<string, UserStatusInfo>>(db, 'userStatuses') || {};
+    const onlineUserIds = Object.keys(userStatuses);
+    const onlineUsers = await Promise.all(onlineUserIds.map(id => userRepository.getUser(db, id)));
+
+    const towerRankings = onlineUsers
+        .filter(u => u && u.towerProgress && u.towerProgress.highestFloor > 0)
         .sort((a, b) => {
-            if (b.towerProgress!.highestFloor !== a.towerProgress!.highestFloor) {
-                return b.towerProgress!.highestFloor - a.towerProgress!.highestFloor;
+            if (b!.towerProgress!.highestFloor !== a!.towerProgress!.highestFloor) {
+                return b!.towerProgress!.highestFloor - a!.towerProgress!.highestFloor;
             }
-            return a.towerProgress!.lastClearTimestamp - b.towerProgress!.lastClearTimestamp;
+            return a!.towerProgress!.lastClearTimestamp - b!.towerProgress!.lastClearTimestamp;
         })
         .map((user, index): TowerRank => ({
             rank: index + 1,
-            user: user,
-            floor: user.towerProgress.highestFloor,
+            user: user!,
+            floor: user!.towerProgress!.highestFloor,
         }));
 
     return {
-        users: users.reduce((acc: Record<string, User>, user: User) => { acc[user.id] = user; return acc; }, {}),
-        userCredentials: {}, // Never send credentials to client
+        users: onlineUsers.filter(Boolean).reduce((acc: Record<string, User>, user: User) => { acc[user.id] = user; return acc; }, {}),
         liveGames: liveGames.reduce((acc: Record<string, LiveGameSession>, game: LiveGameSession) => { acc[game.id] = game; return acc; }, {}),
-        adminLogs,
         announcements,
         globalOverrideAnnouncement,
         gameModeAvailability,

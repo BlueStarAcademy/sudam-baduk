@@ -81,7 +81,7 @@ export const initializeGame = async (neg: Negotiation, guilds: Record<string, Gu
         game.isSinglePlayer = true;
     }
     
-    if (isAiGame && mode !== GameMode.Capture && SPECIAL_GAME_MODES.some(m => m.mode === mode)) {
+    if (isAiGame && !neg.id.startsWith('neg-sp-') && !neg.id.startsWith('neg-tc-') && mode !== GameMode.Capture && SPECIAL_GAME_MODES.some(m => m.mode === mode)) {
         if (!game.autoEndTurnCount) {
              switch (settings.boardSize) {
                 case 7: game.autoEndTurnCount = 30; break;

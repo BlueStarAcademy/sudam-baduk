@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../hooks/useAppContext';
+import BackButton from '../BackButton';
 import Button from '../Button';
 
 interface Board {
@@ -105,7 +106,7 @@ const GuildWar = () => {
     return (
         <div className="h-full w-full flex flex-col bg-tertiary text-primary p-4 bg-cover bg-center" style={{ backgroundImage: "url('/images/guild/guildwar/warmap.png')" }}>
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                 <Button onClick={() => window.location.hash = '#/guild'}>&larr; 길드 홈으로</Button>
+                 <BackButton onClick={() => window.location.hash = '#/guild'} />
                 <h1 className="text-3xl font-bold text-white" style={{textShadow: '2px 2px 5px black'}}>길드 전쟁</h1>
                  <div className="w-40 text-right">
                     <p className="text-sm text-white font-semibold" style={{textShadow: '1px 1px 3px black'}}>남은 시간: 2일 14시간</p>

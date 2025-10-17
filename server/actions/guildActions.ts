@@ -22,6 +22,7 @@ import { openGuildGradeBox } from '../shop.js';
 import { randomUUID } from 'crypto';
 import { updateQuestProgress } from '../questService.js';
 import { calculateGuildMissionXp } from '../../utils/guildUtils.js';
+import { broadcast } from '../services/supabaseService.js';
 
 const getRandomInt = (min: number, max: number): number => {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -60,6 +61,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
 
     if (needsSave) {
         await db.setKV('guilds', guilds);
+        await broadcast({ guilds });
     }
 
 
@@ -83,9 +85,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             const newGuild = createDefaultGuild(guildId, name, description, isPublic, user);
             guilds[guildId] = newGuild;
             
-            user.guildId = guildId;
-            
             await db.setKV('guilds', guilds);
+            await broadcast({ guilds });
             await db.updateUser(user);
 
             return { clientResponse: { updatedUser: user } };
@@ -123,6 +124,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             }
 
             await db.setKV('guilds', guilds);
+            await broadcast({ guilds });
             await db.updateUser(user);
             return { clientResponse: { updatedUser: user } };
         }
@@ -133,6 +135,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             if (guild && guild.applicants) {
                 guild.applicants = guild.applicants.filter(id => id !== user.id);
                 await db.setKV('guilds', guilds);
+                await broadcast({ guilds });
             }
             if (user.guildApplications) {
                 user.guildApplications = user.guildApplications.filter(id => id !== guildId);
@@ -160,9 +163,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             guild.members.push({ userId: applicant.id, nickname: applicant.nickname, role: GuildMemberRole.Member, joinedAt: Date.now(), contribution: 0, weeklyContribution: 0 });
             if (guild.applicants) guild.applicants = guild.applicants.filter(id => id !== applicantId);
             applicant.guildId = guild.id;
-            applicant.guildApplications = [];
-
             await db.setKV('guilds', guilds);
+            await broadcast({ guilds });
             await db.updateUser(applicant);
             return {};
         }
@@ -183,6 +185,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             }
 
             await db.setKV('guilds', guilds);
+            await broadcast({ guilds });
             return {};
         }
 
@@ -204,9 +207,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             }
             
             user.guildId = null;
-            user.guildLeaveCooldownUntil = Date.now() + GUILD_LEAVE_COOLDOWN_MS;
-            
             await db.setKV('guilds', guilds);
+            await broadcast({ guilds });
             await db.updateUser(user);
             return { clientResponse: { updatedUser: user } };
         }
@@ -228,6 +230,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
                     await db.updateUser(targetUser);
                 }
                 await db.setKV('guilds', guilds);
+                await broadcast({ guilds });
             } else {
                 return { error: '권한이 없습니다.' };
             }
@@ -249,6 +252,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
                 targetMemberInfo.role = GuildMemberRole.Member;
             }
             await db.setKV('guilds', guilds);
+            await broadcast({ guilds });
             return {};
         }
         
@@ -266,9 +270,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             }
             
             myMemberInfo.role = GuildMemberRole.Member;
-            targetMemberInfo.role = GuildMemberRole.Master;
-            
             await db.setKV('guilds', guilds);
+            await broadcast({ guilds });
             return {};
         }
 
@@ -281,9 +284,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             }
             if(description !== undefined) guild.description = description;
             if(isPublic !== undefined) guild.isPublic = isPublic;
-            if(icon !== undefined) guild.icon = icon;
-
             await db.setKV('guilds', guilds);
+            await broadcast({ guilds });
             return {};
         }
 
@@ -498,7 +500,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
                 const record = user.guildShopPurchases[itemId];
                 if (record) {
                     const isNewPeriod = (itemToBuy.limitType === 'weekly' && isDifferentWeekKST(record.lastPurchaseTimestamp, now)) ||
-                                        (itemToBuy.limitType === 'monthly' && isDifferentMonthKST(record.lastPurchaseTimestamp, now));
+                                        (itemToType.limitType === 'monthly' && isDifferentMonthKST(record.lastPurchaseTimestamp, now));
 
                     if (isNewPeriod) {
                         record.quantity = 1;
@@ -557,6 +559,91 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             
             await db.updateUser(user);
             
+            return { clientResponse: { updatedUser: user, obtainedItemsBulk: itemsToAdd } };
+        }
+
+        case 'BUY_GUILD_SHOP_ITEM': {
+            const { itemId, quantity } = payload;
+            if (!user.guildId) return { error: '길드에 가입되어 있지 않습니다.' };
+            const guild = guilds[user.guildId];
+            if (!guild) return { error: '길드를 찾을 수 없습니다.' };
+
+            const itemToBuy = GUILD_SHOP_ITEMS.find(item => item.itemId === itemId);
+            if (!itemToBuy) return { error: '상점에서 해당 아이템을 찾을 수 없습니다.' };
+
+            const totalCost = itemToBuy.cost * quantity;
+            if ((user.guildCoins || 0) < totalCost) {
+                return { error: '길드 코인이 부족합니다.' };
+            }
+
+            const now = Date.now();
+            if (!user.guildShopPurchases) user.guildShopPurchases = {};
+            const purchaseRecord = user.guildShopPurchases[itemId];
+            let purchasesThisPeriod = 0;
+
+            if (purchaseRecord) {
+                const isNewPeriod = (itemToBuy.limitType === 'weekly' && isDifferentWeekKST(purchaseRecord.lastPurchaseTimestamp, now)) ||
+                                    (itemToBuy.limitType === 'monthly' && isDifferentMonthKST(purchaseRecord.lastPurchaseTimestamp, now));
+                if (!isNewPeriod) {
+                    purchasesThisPeriod = purchaseRecord.quantity;
+                }
+            }
+
+            if (itemToBuy.limit !== Infinity && (purchasesThisPeriod + quantity) > itemToBuy.limit) {
+                return { error: `${itemToBuy.limitType === 'weekly' ? '주간' : '월간'} 구매 한도를 초과했습니다.` };
+            }
+
+            user.guildCoins = (user.guildCoins || 0) - totalCost;
+
+            if (!user.guildShopPurchases) user.guildShopPurchases = {};
+            const record = user.guildShopPurchases[itemId];
+            if (record) {
+                const isNewPeriod = (itemToBuy.limitType === 'weekly' && isDifferentWeekKST(record.lastPurchaseTimestamp, now)) ||
+                                    (itemToBuy.limitType === 'monthly' && isDifferentMonthKST(record.lastPurchaseTimestamp, now));
+
+                if (isNewPeriod) {
+                    record.quantity = quantity;
+                    record.lastPurchaseTimestamp = now;
+                } else {
+                    record.quantity += quantity;
+                }
+            } else {
+                user.guildShopPurchases[itemId] = {
+                    quantity: quantity,
+                    lastPurchaseTimestamp: now,
+                };
+            }
+
+            let itemsToAdd: InventoryItem[] = [];
+            for (let i = 0; i < quantity; i++) {
+                if (itemToBuy.type === 'equipment_box') {
+                    itemsToAdd.push(openGuildGradeBox(itemToBuy.grade));
+                } else { // 'material' or 'consumable'
+                    const template = [...CONSUMABLE_ITEMS, ...Object.values(MATERIAL_ITEMS)].find(t => t.name === itemToBuy.name);
+                    if (template) {
+                        itemsToAdd.push({
+                            ...template,
+                            id: `item-${globalThis.crypto.randomUUID()}`,
+                            createdAt: Date.now(),
+                            quantity: 1,
+                            isEquipped: false, level: 1, stars: 0, options: undefined, slot: null,
+                        });
+                    } else {
+                        console.error(`[Guild Shop] Could not find template for ${itemToBuy.name}`);
+                        return { error: '아이템 정보를 찾을 수 없습니다.' };
+                    }
+                }
+            }
+
+            const { success } = addItemsToInventory(user.inventory, user.inventorySlots, itemsToAdd);
+            if (!success) {
+                user.guildCoins = (user.guildCoins || 0) + totalCost; // Refund
+                return { error: '인벤토리 공간이 부족합니다.' };
+            }
+
+            await db.updateUser(user);
+            await broadcast({ updatedUser: user, guilds }); // Broadcast updated user and guilds
+
             return { clientResponse: { updatedUser: user, obtainedItemsBulk: itemsToAdd } };
         }
 

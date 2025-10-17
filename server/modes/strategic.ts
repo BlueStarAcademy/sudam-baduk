@@ -39,10 +39,12 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
         if (gameFromAction.currentPlayer !== aiPlayerEnum) return;
 
         const aiMove = await makeAiMove(gameFromAction) as (Point & { isHidden?: boolean });
+        console.log(`[AI Turn] AI move for game ${gameFromAction.id}: ${JSON.stringify(aiMove)}`);
 
         const freshGame = await db.getLiveGame(gameId);
         if (!freshGame || freshGame.currentPlayer !== aiPlayerEnum) {
             console.log(`[AI Turn] Game state changed or game ended while AI was thinking. Aborting AI move for game ${gameId}.`);
+            console.log(`[AI Turn] Current player was ${aiPlayerEnum}, now is ${freshGame?.currentPlayer}`);
             return;
         }
 

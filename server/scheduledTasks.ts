@@ -460,7 +460,7 @@ export const runScheduledTasks = async () => {
 };
 
 export const performOneTimeGuildResearchMigration = async () => {
-    const migrationFlag = await db.getKV('oneTimeGuildResearchMigration_20250916');
+    const migrationFlag = await db.getKV('oneTimeGuildResearchMigration_20251017');
     if (migrationFlag) {
         return;
     }

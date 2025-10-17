@@ -48,7 +48,7 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
     
     const negotiationActionTypes: ServerActionType[] = [
         'CHALLENGE_USER', 'SEND_CHALLENGE', 'UPDATE_NEGOTIATION', 'ACCEPT_NEGOTIATION', 'DECLINE_NEGOTIATION',
-        'START_AI_GAME', 'REQUEST_REMATCH'
+        'REQUEST_REMATCH'
     ];
     if (negotiationActionTypes.includes(type)) {
         return handleNegotiationAction(volatileState, actionWithUserId, user, guilds);
@@ -80,7 +80,7 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
         return handleUserAction(actionWithUserId, user);
     }
 
-    if (type === 'LOGOUT' || type.startsWith('FRIEND_') || type === 'SET_USER_STATUS' || type === 'ENTER_WAITING_ROOM' || type === 'LEAVE_WAITING_ROOM' || type === 'SPECTATE_GAME' || type === 'LEAVE_SPECTATING' || type === 'SEND_CHAT_MESSAGE' || type === 'LEAVE_AI_GAME' || type === 'LEAVE_GAME_ROOM') {
+    if (type === 'HEARTBEAT' || type === 'LOGOUT' || type.startsWith('FRIEND_') || type === 'SET_USER_STATUS' || type === 'ENTER_WAITING_ROOM' || type === 'LEAVE_WAITING_ROOM' || type === 'SPECTATE_GAME' || type === 'LEAVE_SPECTATING' || type === 'SEND_CHAT_MESSAGE' || type === 'LEAVE_AI_GAME' || type === 'LEAVE_GAME_ROOM') {
         return handleSocialAction(volatileState, action);
     }
 
@@ -102,6 +102,10 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
     }
     if (type === 'START_TOWER_CHALLENGE_GAME') {
         return handleAiGameStart(volatileState, payload, user, guilds, 'tower-challenge');
+    }
+    if (type === 'START_AI_GAME') {
+        const { mode, aiDifficulty } = payload;
+        return handleAiGameStart(volatileState, { mode, aiDifficulty }, user, guilds, 'ai-match');
     }
     if (type === 'CONFIRM_SP_INTRO') {
         return handleConfirmIntro(gameId, user);

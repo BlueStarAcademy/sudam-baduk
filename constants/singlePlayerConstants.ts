@@ -181,7 +181,7 @@ export const SINGLE_PLAYER_STAGES: SinglePlayerStageInfo[] = [
         { id: '입문-8', bTarget: 6, wTarget: 5, ai: 1, bLimit: 15, placements: { b: 3, w: 7, bP: 3, wP: 2 }, fcReward: '골드100', fcExp: 20, rcReward: '골드10', rcExp: 10 },
         { id: '입문-9', bTarget: 6, wTarget: 5, ai: 1, bLimit: 15, placements: { b: 3, w: 6, bP: 3, wP: 3 }, fcReward: '골드100', fcExp: 20, rcReward: '골드10', rcExp: 10 },
         { id: '입문-10', bTarget: 7, wTarget: 5, ai: 1, bLimit: 15, placements: { b: 4, w: 7, bP: 2, wP: 3 }, fcReward: '장비상자1', fcExp: 100, rcReward: '골드15', rcExp: 10 },
-    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.입문, gameType: 'capture', mode: gameTypeToModeMap['capture'], actionPointCost: 2, boardSize: 7, targetScore: { black: d.bTarget, white: d.wTarget }, blackStoneLimit: d.bLimit })),
+    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.입문, gameType: 'capture', mode: gameTypeToModeMap['capture'], timeControl: byoyomiTimeControl, actionPointCost: 2, boardSize: 7, targetScore: { black: d.bTarget, white: d.wTarget }, blackStoneLimit: d.bLimit })),
     
     // 입문 11-20 (살리기)
     ...[
@@ -195,7 +195,7 @@ export const SINGLE_PLAYER_STAGES: SinglePlayerStageInfo[] = [
         { id: '입문-18', bTarget: 999, wTarget: 5, ai: 2, wLimit: 18, placements: { b: 4, w: 16, bP: 3, wP: 2 }, fcReward: '골드150', fcExp: 30, rcReward: '골드15', rcExp: 10 },
         { id: '입문-19', bTarget: 999, wTarget: 5, ai: 2, wLimit: 19, placements: { b: 5, w: 17, bP: 3, wP: 3 }, fcReward: '골드150', fcExp: 30, rcReward: '골드15', rcExp: 10 },
         { id: '입문-20', bTarget: 999, wTarget: 5, ai: 2, wLimit: 20, placements: { b: 5, w: 18, bP: 2, wP: 3 }, fcReward: '다이아꾸러미1', fcExp: 30, rcReward: '골드15', rcExp: 10 },
-    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.입문, gameType: 'survival', mode: gameTypeToModeMap['survival'], actionPointCost: 2, boardSize: 9, targetScore: { black: d.bTarget, white: d.wTarget }, whiteStoneLimit: d.wLimit })),
+    ].map(d => ({ ...d, name: `스테이지 ${d.id.split('-')[1]}`, level: SinglePlayerLevel.입문, gameType: 'survival', mode: gameTypeToModeMap['survival'], timeControl: byoyomiTimeControl, actionPointCost: 2, boardSize: 9, targetScore: { black: d.bTarget, white: d.wTarget }, whiteStoneLimit: d.wLimit })),
 
     // 초급 1-20 (스피드)
     ...[

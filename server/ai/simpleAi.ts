@@ -1,49 +1,11 @@
 // server/ai/simpleAi.ts
 import { LiveGameSession, Player, Point, BoardState, Move, KoInfo } from '../../types/index.js';
-import { processMove } from '../../utils/goLogic.js';
+import { processMove, getGoLogic } from '../../utils/goLogic.js';
 import { calculateScores } from '../scoring.js';
-
-const getNeighbors = (x: number, y: number, boardSize: number): Point[] => {
-    const neighbors: Point[] = [];
-    if (x > 0) neighbors.push({ x: x - 1, y });
-    if (x < boardSize - 1) neighbors.push({ x: x + 1, y });
-    if (y > 0) neighbors.push({ x, y: y - 1 });
-    if (y < boardSize - 1) neighbors.push({ x, y: y + 1 });
-    return neighbors;
-};
-
-const findGroup = (startX: number, startY: number, board: BoardState, visited: boolean[][]): { stones: Point[], liberties: Set<string> } | null => {
-    const player = board[startY][startX];
-    if (player === Player.None || visited[startY][startX]) {
-        return null;
-    }
-
-    const stones: Point[] = [];
-    const liberties = new Set<string>();
-    const queue: Point[] = [{ x: startX, y: startY }];
-    visited[startY][startX] = true;
-    const boardSize = board.length;
-
-    while (queue.length > 0) {
-        const stone = queue.shift()!;
-        stones.push(stone);
-
-        for (const n of getNeighbors(stone.x, stone.y, boardSize)) {
-            const neighborState = board[n.y][n.x];
-            if (neighborState === Player.None) {
-                liberties.add(`${n.x},${n.y}`);
-            } else if (neighborState === player && !visited[n.y][n.x]) {
-                visited[n.y][n.x] = true;
-                queue.push(n);
-            }
-        }
-    }
-    return { stones, liberties };
-};
-
 
 const getValidMoves = (game: LiveGameSession): Point[] => {
     const { boardState, settings, currentPlayer, koInfo, moveHistory } = game;
+    const { getNeighbors } = getGoLogic(settings);
     const validMoves: Point[] = [];
     for (let y = 0; y < settings.boardSize; y++) {
         for (let x = 0; x < settings.boardSize; x++) {
@@ -68,9 +30,10 @@ const getRandomValidMove = (game: LiveGameSession): Point => {
 };
 
 const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: number): number => {
-    const { boardState, currentPlayer, koInfo, moveHistory, settings } = game;
+    const { boardState, currentPlayer, settings } = game;
     const opponent = currentPlayer === Player.Black ? Player.White : Player.Black;
     const boardSize = settings.boardSize;
+    const { getNeighbors, findGroup } = getGoLogic(settings);
 
     const tempBoard = boardState.map(row => [...row]);
     tempBoard[move.y][move.x] = currentPlayer;
@@ -84,9 +47,8 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
 
     for (const n of getNeighbors(move.x, move.y, boardSize)) {
         if (tempBoard[n.y][n.x] === opponent) {
-            const visited = Array(boardSize).fill(null).map(() => Array(boardSize).fill(false));
-            const group = findGroup(n.x, n.y, tempBoard, visited);
-            if (group && group.liberties.size === 0) {
+            const group = findGroup(n.x, n.y, opponent, tempBoard);
+            if (group && group.liberties === 0) {
                 captureScore += group.stones.length * 200;
             }
         }
@@ -94,9 +56,8 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
     
     for (const n of getNeighbors(move.x, move.y, boardSize)) {
         if (boardState[n.y][n.x] === currentPlayer) {
-            const visited = Array(boardSize).fill(null).map(() => Array(boardSize).fill(false));
-            const group = findGroup(n.x, n.y, boardState, visited);
-            if (group && group.liberties.size === 1 && group.liberties.has(`${move.x},${move.y}`)) {
+            const group = findGroup(n.x, n.y, currentPlayer, boardState);
+            if (group && group.liberties === 1 && group.libertyPoints.has(`${move.x},${move.y}`)) {
                 saveScore += group.stones.length * 150;
             }
         }
@@ -104,17 +65,15 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
 
     for (const n of getNeighbors(move.x, move.y, boardSize)) {
         if (tempBoard[n.y][n.x] === opponent) {
-            const visited = Array(boardSize).fill(null).map(() => Array(boardSize).fill(false));
-            const group = findGroup(n.x, n.y, tempBoard, visited);
-            if (group && group.liberties.size === 1) {
+            const group = findGroup(n.x, n.y, opponent, tempBoard);
+            if (group && group.liberties === 1) {
                 atariScore += group.stones.length * 50;
             }
         }
     }
 
-    const visitedSelf = Array(boardSize).fill(null).map(() => Array(boardSize).fill(false));
-    const myGroup = findGroup(move.x, move.y, tempBoard, visitedSelf);
-    if (myGroup && myGroup.liberties.size <= 1) {
+    const myGroup = findGroup(move.x, move.y, currentPlayer, tempBoard);
+    if (myGroup && myGroup.liberties <= 1) {
         selfAtariPenalty = 200;
     }
 

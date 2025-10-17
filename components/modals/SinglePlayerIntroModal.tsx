@@ -3,6 +3,7 @@ import { LiveGameSession, GameMode, GameType, Player } from '../../types/index.j
 import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants/index.js';
 import { BLACK_PATTERN_STONE_IMG, WHITE_PATTERN_STONE_IMG } from '../../assets.js';
 import Button from '../Button.js';
+import DraggableWindow from '../DraggableWindow.js';
 // FIX: Import gameTypeKorean from a single source to prevent redeclaration errors.
 import { gameTypeKorean } from '../arenas/TowerChallengeArena.js';
 
@@ -10,6 +11,7 @@ import { gameTypeKorean } from '../arenas/TowerChallengeArena.js';
 interface SinglePlayerIntroModalProps {
     session: LiveGameSession;
     onConfirm: () => Promise<any>;
+    isTopmost?: boolean;
 }
 
 const CaptureTargetPanel: React.FC<{ target: number; label: string; isBlack: boolean }> = ({ target, label, isBlack }) => (
@@ -19,7 +21,7 @@ const CaptureTargetPanel: React.FC<{ target: number; label: string; isBlack: boo
     </div>
 );
 
-const SinglePlayerIntroModal: React.FC<SinglePlayerIntroModalProps> = ({ session, onConfirm }) => {
+const SinglePlayerIntroModal: React.FC<SinglePlayerIntroModalProps> = ({ session, onConfirm, isTopmost }) => {
     const isTower = session.isTowerChallenge;
     const stageInfo = isTower
         ? TOWER_STAGES.find(s => s.id === session.stageId)
@@ -108,16 +110,15 @@ const SinglePlayerIntroModal: React.FC<SinglePlayerIntroModalProps> = ({ session
     }
 
     return (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-            <div className="bg-primary border-2 border-color rounded-lg shadow-xl p-6 w-full max-w-md text-center animate-fade-in">
-                <h2 className="text-2xl font-bold text-highlight mb-2">{title}</h2>
+        <DraggableWindow title={title} onClose={handleConfirmClick} windowId="single-player-intro" initialWidth={400} isTopmost={isTopmost}>
+            <div className="text-center">
                 <p className="text-secondary mb-4">{description}</p>
                 {content}
                 <Button onClick={handleConfirmClick} disabled={isConfirming} className="w-full mt-6">
                     {isConfirming ? '시작 중...' : '대국 시작'}
                 </Button>
             </div>
-        </div>
+        </DraggableWindow>
     );
 };
 

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import { Guild as GuildType, UserWithStatus, GuildBossInfo, QuestReward, GuildMember, GuildMemberRole, CoreStat, GuildResearchId, EquipmentSlot, InventoryItem, ItemGrade } from '../../types/index.js';
+import BackButton from '../BackButton.js';
 import Button from '../Button.js';
 import GuildHomePanel from './GuildHomePanel.js';
 import GuildMembersPanel from './GuildMembersPanel.js';
@@ -634,7 +635,7 @@ const GuildBoss: React.FC = () => {
         <div style={backgroundStyle} className="p-2 sm:p-4 lg:p-6 max-w-7xl mx-auto h-full flex flex-col relative">
             <header className="relative flex justify-center items-center mb-4 flex-shrink-0 py-2">
                 <div className="absolute left-0 top-1/2 -translate-y-1/2">
-                    <Button onClick={() => window.location.hash = '#/guild'}>&larr; 길드 홈으로</Button>
+                    <BackButton onClick={() => window.location.hash = '#/guild'} />
                 </div>
                 <h1 className="text-3xl font-bold text-white" style={{ textShadow: '2px 2px 5px black' }}>길드 보스전</h1>
             </header>

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { UserWithStatus, TournamentState, TournamentType, User, ChatMessage, LeagueTier } from '../types/index.js';
 import { TournamentBracket } from './TournamentBracket.js';
+import BackButton from './BackButton.js';
 import Button from './Button.js';
 import { TOURNAMENT_DEFINITIONS, AVATAR_POOL, LEAGUE_DATA, BORDER_POOL } from '../constants/index.js';
 import Avatar from './Avatar.js';
@@ -513,7 +514,7 @@ const TournamentLobby: React.FC = () => {
             )}
 
             <header className="flex justify-between items-center mb-6 flex-shrink-0">
-                <Button onClick={() => window.location.hash = '#/profile'}>&larr; 프로필로</Button>
+                <BackButton onClick={() => window.location.hash = '#/profile'} />
                 <div className="text-center">
                     <h1 className="text-3xl lg:text-4xl font-bold">자동대국 챔피언십</h1>
                     <p className="text-gray-400 mt-2 text-sm">자신의 능력치와 장비로 시뮬레이션 대회에 참가하세요!</p>

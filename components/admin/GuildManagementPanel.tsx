@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Guild as GuildType, ServerAction } from '../../types/index.js';
+import BackButton from '../BackButton.js';
 import Button from '../Button.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import ToggleSwitch from '../ui/ToggleSwitch.js';
@@ -63,7 +64,7 @@ const AdminGuildManagementPanel: React.FC<AdminGuildManagementPanelProps> = ({ g
         <div className="bg-primary text-primary p-4">
             <header className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">길드 관리: <span className="text-highlight">{guild.name}</span></h1>
-                <Button onClick={onBack} colorScheme="gray">&larr; 길드 목록으로</Button>
+                <BackButton onClick={onBack} />
             </header>
             <div className="bg-panel p-6 rounded-lg shadow-lg space-y-4 text-on-panel max-h-[70vh] overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

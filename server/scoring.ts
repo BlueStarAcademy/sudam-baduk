@@ -89,8 +89,8 @@ const isAlive = (group: { stones: Point[], liberties: Set<string> }, player: Pla
         if (eyeCount >= 2) return true;
     }
     
-    // Heuristic: large groups are very likely to be alive
-    if (group.stones.length >= 8) return true;
+    // Heuristic: groups with many liberties are likely to be alive
+    if (group.liberties.size >= 7) return true;
 
     // Seki (mutual life) is very complex. This is a simple heuristic:
     // If a group has 2 liberties, and it shares those liberties with an opponent group that also only has those 2 liberties, it's likely a seki.

@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 // FIX: Use `import type` for interfaces to prevent type/value confusion.
 import type { ServerAction, AdminProps, InventoryItemType, User, Guild } from '../../types/index.js';
 import DraggableWindow from '../DraggableWindow.js';
+import BackButton from '../BackButton.js';
 import Button from '../Button.js';
 import { EQUIPMENT_POOL, CONSUMABLE_ITEMS, MATERIAL_ITEMS } from '../../constants.js';
 
@@ -142,7 +143,7 @@ const MailSystemPanel: React.FC<MailSystemPanelProps> = ({ allUsers, onAction, o
             {isItemModalOpen && <ItemSelectionModal onClose={() => setIsItemModalOpen(false)} onAddItem={(item) => setAttachedItems(prev => [...prev, item])} />}
             <header className="flex justify-between items-center mb-8">
                 <h1 className="text-3xl font-bold">우편 발송 시스템</h1>
-                <Button onClick={onBack} colorScheme="gray">&larr; 대시보드로</Button>
+                <BackButton onClick={onBack} />
             </header>
 
             <div className="bg-panel border border-color p-6 rounded-lg shadow-lg text-on-panel">

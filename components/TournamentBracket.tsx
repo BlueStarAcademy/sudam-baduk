@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { UserWithStatus, TournamentState, PlayerForTournament, ServerAction, User, CoreStat, Match, Round, CommentaryLine, TournamentType, LeagueTier, InventoryItem } from '../types/index.js';
+import BackButton from './BackButton.js';
 import Button from './Button.js';
 import { TOURNAMENT_DEFINITIONS, BASE_TOURNAMENT_REWARDS, TOURNAMENT_SCORE_REWARDS, CONSUMABLE_ITEMS, AVATAR_POOL, BORDER_POOL, CORE_STATS_DATA, LEAGUE_DATA } from '../constants/index.js';
 import Avatar from './Avatar.js';
@@ -846,13 +847,13 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
         }
         
         if (status === 'complete') {
-            return <Button onClick={onBack} colorScheme="gray" className="w-full">로비로 돌아가기</Button>;
+            return <BackButton onClick={onBack} />;
         }
 
         if (status === 'eliminated') {
              return (
                 <div className="flex items-center justify-center gap-4">
-                    <Button onClick={onBack} colorScheme="gray">나가기</Button>
+                    <BackButton onClick={onBack} />
                     <Button onClick={onSkip} colorScheme="yellow">결과 스킵</Button>
                 </div>
             );
@@ -962,7 +963,7 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
         return (
              <div className="flex flex-col h-full bg-gray-800 p-2 gap-2">
                 <header className="flex justify-between items-center flex-shrink-0">
-                    <Button onClick={handleBackClick} colorScheme="gray" className="!px-3 !py-1">&larr;</Button>
+                    <BackButton onClick={handleBackClick} />
                     <div className="text-center">
                         <h3 className="text-xl font-bold">{tournamentState.title}</h3>
                         <p className="text-sm font-bold text-yellow-300">{myResultText}</p>
@@ -989,7 +990,7 @@ export const TournamentBracket = (props: TournamentBracketProps) => {
                 />
             )}
             <header className="flex justify-between items-center mb-4 flex-shrink-0">
-                <Button onClick={handleBackClick} colorScheme="gray">&larr; 로비로</Button>
+                <BackButton onClick={handleBackClick} />
                 <div className="text-center">
                     <h3 className="text-3xl font-bold">{tournamentState.title}</h3>
                     <p className="text-lg font-bold text-yellow-300">{myResultText}</p>

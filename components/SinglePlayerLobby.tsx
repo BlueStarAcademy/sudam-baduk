@@ -4,6 +4,7 @@ import { useAppContext } from '../hooks/useAppContext.js';
 import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../constants/singlePlayerConstants.js';
 import { SinglePlayerLevel, GameType } from '../types/enums.js';
 import type { ServerAction, UserWithStatus, InventoryItem, SinglePlayerStageInfo } from '../types/index.js';
+import BackButton from './BackButton.js';
 import Button from './Button.js';
 import DraggableWindow from './DraggableWindow.js';
 import { getMissionInfoWithLevel } from '../utils/questUtils.js';
@@ -298,8 +299,8 @@ const MissionCard: React.FC<{
                         <div className="bg-yellow-500 h-full rounded-full" style={{ width: `${upgradeProgress}%` }}></div>
                     </div>
                     <div className="flex items-center justify-center gap-1">
-                        <Button onClick={() => onUpgrade(mission)} disabled={!canUpgrade} colorScheme="blue" className="flex-1 !py-1 !text-[10px] lg:!text-xs">
-                            강화
+                        <Button onClick={() => onUpgrade(mission)} disabled={!canUpgrade} colorScheme="blue" className="flex-1 !py-1 !text-[10px] lg:!text-xs !p-1">
+                            <img src="/images/button/up.png" alt="강화" className="h-4 mx-auto" />
                         </Button>
                         <Button onClick={onClaim} disabled={Math.floor(displayAmount) < 1} colorScheme="green" className="flex-1 !py-1 !text-[10px] lg:!text-xs">
                             수령
@@ -427,7 +428,7 @@ const SinglePlayerLobby: React.FC = () => {
                 />
             )}
             <header className="flex justify-between items-center flex-shrink-0 px-4 pt-4">
-                 <Button onClick={() => window.location.hash = '#/profile'} colorScheme="gray">&larr; 프로필로</Button>
+                 <BackButton onClick={() => window.location.hash = '#/profile'} />
                 <h1 className="text-[clamp(1.75rem,1.25rem+2.5vw,2.25rem)] font-bold whitespace-nowrap">싱글플레이</h1>
                 <div className="w-32 text-right">
                     <Button
@@ -455,7 +456,7 @@ const SinglePlayerLobby: React.FC = () => {
                             <h3 className="text-[clamp(1.2rem,1rem+2.5vw,1.5rem)] font-bold text-white text-center drop-shadow-lg">{activeLevelData.name}</h3>
                             <Button onClick={handleNextLevel} className="!px-3 !py-1 text-xl font-bold">&gt;</Button>
                         </div>
-                    </div>
+                    </NineSlicePanel>
                 </div>
 
                 {/* Panel 2: Stage List */}
@@ -476,7 +477,7 @@ const SinglePlayerLobby: React.FC = () => {
                             );
                         })}
                     </ul>
-                </div>
+                </NineSlicePanel>
 
                 {/* Panel 3: Training Tasks */}
                 <div className="w-full lg:w-1/4 flex flex-col">
@@ -499,7 +500,7 @@ const SinglePlayerLobby: React.FC = () => {
                                 );
                             })}
                         </div>
-                    </div>
+                    </NineSlicePanel>
                 </div>
             </main>
         </div>

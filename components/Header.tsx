@@ -7,9 +7,9 @@ import { AVATAR_POOL, BORDER_POOL } from '../constants/index.js';
 import { useAppContext } from '../hooks/useAppContext.js';
 
 const ResourceDisplay: React.FC<{ icon: React.ReactNode; value: string; className?: string }> = ({ icon, value, className }) => (
-    <div className={`flex items-center gap-1 sm:gap-2 bg-tertiary/50 rounded-full py-1 pl-1 pr-2 shadow-inner ${className}`}>
-        <div className="bg-primary w-6 h-6 flex items-center justify-center rounded-full text-lg flex-shrink-0">{icon}</div>
-        <span className="font-bold text-xs sm:text-sm text-primary">{value}</span>
+    <div className={`flex items-center gap-0.5 sm:gap-2 bg-tertiary/50 rounded-full py-0.5 pl-0.5 pr-1 shadow-inner ${className}`}>
+        <div className="bg-primary w-5 h-5 flex items-center justify-center rounded-full text-sm flex-shrink-0">{icon}</div>
+        <span className="font-bold text-xs text-primary">{value}</span>
     </div>
 );
 
@@ -58,8 +58,8 @@ const Header: React.FC = () => {
 
     return (
         <header className="flex-shrink-0 bg-primary/80 backdrop-blur-sm shadow-lg border-b border-color">
-            <div className="p-2 flex justify-between items-center gap-2 h-[60px]">
-                <div className="flex items-center gap-2 sm:gap-3 flex-shrink min-w-0">
+            <div className="p-1 flex justify-between items-center gap-1 h-[60px] flex-nowrap overflow-hidden">
+                <div className="flex items-center gap-1 sm:gap-3 flex-shrink min-w-0">
                      <Avatar userId={currentUserWithStatus.id} userName={currentUserWithStatus.nickname} avatarUrl={avatarUrl} borderUrl={borderUrl} size={40} />
                      <div className="hidden sm:block min-w-0">
                         <h1 className="font-bold text-primary truncate">{currentUserWithStatus.nickname}</h1>
@@ -71,22 +71,22 @@ const Header: React.FC = () => {
                     <div className="flex items-center">
                         <ResourceDisplay icon="⚡" value={`${actionPoints.current}/${actionPoints.max}`} />
                         <ActionPointTimer user={currentUserWithStatus} />
-                        <button onClick={() => openShop('misc')} className="ml-1 w-6 h-6 flex-shrink-0 rounded-full bg-green-600 hover:bg-green-500 text-white font-bold flex items-center justify-center text-lg shadow-md transition-transform hover:scale-110 active:scale-95" title="행동력 구매">+</button>
+                        <button onClick={() => openShop('misc')} className="ml-0.5 w-5 h-5 flex-shrink-0 rounded-full bg-green-600 hover:bg-green-500 text-white font-bold flex items-center justify-center text-sm shadow-md transition-transform hover:scale-110 active:scale-95" title="행동력 구매">+</button>
                     </div>
                     <ResourceDisplay icon={<img src="/images/Gold.png" alt="골드" className="w-5 h-5 object-contain" />} value={gold.toLocaleString()} />
                     <ResourceDisplay icon={<img src="/images/Zem.png" alt="다이아" className="w-5 h-5 object-contain" />} value={diamonds.toLocaleString()} />
                     
-                    <div className="h-9 w-px bg-border-color mx-1 sm:mx-2"></div>
+                    <div className="h-9 w-px bg-border-color mx-0.5 sm:mx-2"></div>
                     
-                    {isAdmin && <Button onClick={() => window.location.hash = '#/admin'} colorScheme="purple" className="text-xs sm:text-sm">관리자</Button>}
+                    {isAdmin && <Button onClick={() => window.location.hash = '#/admin'} colorScheme="purple" className="text-xs">관리자</Button>}
                     <button
                         onClick={openSettingsModal}
-                        className="p-2 rounded-lg text-xl hover:bg-secondary transition-colors"
+                        className="p-1.5 rounded-lg text-lg hover:bg-secondary transition-colors"
                         title="설정"
                     >
                         ⚙️
                     </button>
-                    <Button onClick={handleLogout} colorScheme="red" className="text-xs sm:text-sm">로그아웃</Button>
+                    <Button onClick={handleLogout} colorScheme="red" className="text-xs">로그아웃</Button>
                 </div>
             </div>
         </header>

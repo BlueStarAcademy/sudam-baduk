@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../../hooks/useAppContext.js';
 import { Guild as GuildType, ServerAction } from '../../types/index.js';
+import BackButton from '../BackButton.js';
 import Button from '../Button.js';
 import CreateGuildModal from './CreateGuildModal.js';
 import { GUILD_INITIAL_MEMBER_LIMIT } from '../../constants/index.js';
@@ -32,7 +33,7 @@ const GuildLobby: React.FC<GuildLobbyProps> = () => {
         <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
             {creatingGuild && <CreateGuildModal onClose={() => setCreatingGuild(false)} />}
             <header className="flex justify-between items-center mb-6">
-                <Button onClick={() => window.location.hash = '#/profile'}>&larr; 프로필로</Button>
+                <BackButton onClick={() => window.location.hash = '#/profile'} />
                 <h1 className="text-3xl font-bold">길드 찾기</h1>
                 <Button onClick={() => setCreatingGuild(true)} colorScheme="green">길드 창설</Button>
             </header>

@@ -246,10 +246,8 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
             const userGuild = user.guildId ? (guilds[user.guildId] ?? null) : null;
             const effects = calculateUserEffects(user, userGuild);
             user.actionPoints.max = effects.maxActionPoints;
-            user.actionPoints.current = Math.min(user.actionPoints.current, user.actionPoints.max);
-            
             await db.updateUser(user);
-            return {};
+            return { clientResponse: { updatedUser: user } };
         }
 
         case 'SELL_ITEM': {
@@ -656,7 +654,8 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
         case 'EXPAND_INVENTORY': {
             const { tab } = payload as { tab: 'equipment' | 'consumable' | 'material' };
             const MAX_INVENTORY_SIZE_PER_TAB = 100;
-            const EXPANSION_COST_DIAMONDS = 100;
+            const BASE_EXPANSION_COST = 50; // Diamonds for the first 10 slots
+            const COST_INCREMENT_PER_10_SLOTS = 25; // Diamonds
             const EXPANSION_AMOUNT = 10;
             
             if (!tab || !user.inventorySlots[tab]) {
@@ -666,6 +665,10 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
             if (user.inventorySlots[tab] >= MAX_INVENTORY_SIZE_PER_TAB) {
                 return { error: '최대치까지 확장되었습니다.' };
             }
+
+            const currentSlots = user.inventorySlots[tab];
+            const expansionsMade = Math.floor((currentSlots - 10) / EXPANSION_AMOUNT); // Assuming initial 10 slots are free/base
+            const EXPANSION_COST_DIAMONDS = BASE_EXPANSION_COST + (expansionsMade * COST_INCREMENT_PER_10_SLOTS);
 
             if (user.diamonds < EXPANSION_COST_DIAMONDS && !user.isAdmin) {
                 return { error: '다이아가 부족합니다.' };

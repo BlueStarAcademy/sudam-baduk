@@ -3,6 +3,7 @@ import * as db from '../db.js';
 import { randomUUID } from 'crypto';
 import { containsProfanity } from '../../profanity.js';
 import { updateQuestProgress } from '../questService.js';
+import { broadcast } from '../services/supabaseService.js';
 
 export const handleSocialAction = async (volatileState: VolatileState, action: ServerAction & { user: User }): Promise<HandleActionResult> => {
     const { type, payload, user } = action;
@@ -12,6 +13,11 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
     let updatedUserStatuses: { [key: string]: UserStatusInfo | undefined } | null = null;
 
     switch (type) {
+        case 'HEARTBEAT': {
+            // This action is just for updating the user's last seen time,
+            // which is already handled by the middleware.
+            break;
+        }
         case 'LOGOUT': {
             delete volatileState.userConnections[user.id];
             delete volatileState.userSessions[user.id];
@@ -132,9 +138,11 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 if (channel === 'global') {
                     volatileState.waitingRoomChats['global'] = [...(volatileState.waitingRoomChats['global'] || []), warningMessage].slice(-100);
                     await db.setKV('waitingRoomChats', volatileState.waitingRoomChats);
+                    await broadcast({ waitingRoomChats: volatileState.waitingRoomChats });
                 } else {
                     volatileState.gameChats[channel] = [...(volatileState.gameChats[channel] || []), warningMessage].slice(-100);
                     await db.setKV('gameChats', volatileState.gameChats);
+                    await broadcast({ gameChats: volatileState.gameChats });
                 }
                 return { clientResponse: { success: true } };
             }
@@ -151,6 +159,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             if (channel === 'global') {
                 volatileState.waitingRoomChats['global'] = [...(volatileState.waitingRoomChats['global'] || []), message].slice(-100);
                 await db.setKV('waitingRoomChats', volatileState.waitingRoomChats);
+                await broadcast({ waitingRoomChats: volatileState.waitingRoomChats });
 
                 if (text && (text.includes('안녕') || text.includes('하이') || text.includes('반갑'))) {
                     const updatedUser = await db.getUser(user.id);
@@ -163,6 +172,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             } else { // Game chat
                 volatileState.gameChats[channel] = [...(volatileState.gameChats[channel] || []), message].slice(-100);
                 await db.setKV('gameChats', volatileState.gameChats);
+                await broadcast({ gameChats: volatileState.gameChats });
             }
             
             volatileState.userLastChatMessage[user.id] = now;

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
+import BackButton from './BackButton.js';
 import Button from './Button.js';
 // FIX: Corrected import path for TOWER_STAGES constant.
 import { TOWER_STAGES } from '../constants/towerChallengeConstants.js';
@@ -247,7 +248,7 @@ const TowerChallengeLobby: React.FC = () => {
             {isRewardInfoOpen && <TowerRankingRewardsModal onClose={() => setIsRewardInfoOpen(false)} isTopmost />}
             
             <header className="flex justify-between items-center flex-shrink-0 px-4 pt-4">
-                <Button onClick={() => window.location.hash = '#/profile'} colorScheme="gray">&larr;</Button>
+                <BackButton onClick={() => window.location.hash = '#/profile'} />
                 <div className="text-center">
                     <h1 className="text-3xl font-bold text-white" style={{textShadow: '2px 2px 4px rgba(0,0,0,0.7)'}}>도전의 탑</h1>
                     <p className="text-xs text-stone-300">랭킹 초기화까지: {timeLeft}</p>

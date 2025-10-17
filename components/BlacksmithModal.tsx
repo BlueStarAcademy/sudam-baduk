@@ -52,10 +52,10 @@ const BlacksmithModal: React.FC<BlacksmithModalProps> = ({ enhancementItem, init
             <div className="absolute top-4 right-20 z-10">
                 <button
                     onClick={() => handlers.setIsBlacksmithHelpOpen(true)}
-                    className="w-10 h-10 rounded-full bg-secondary hover:bg-tertiary border-2 border-color p-2 transition-transform hover:scale-110"
+                    className="w-10 h-10 flex items-center justify-center bg-gray-600 hover:bg-gray-500 rounded-full text-white font-bold"
                     title="대장간 도움말"
                 >
-                    <span className="text-2xl font-bold">?</span>
+                    <img src="/images/button/help.png" alt="도움말" className="h-6" />
                 </button>
             </div>
             <div className="h-[80vh] flex flex-col md:flex-row gap-6">

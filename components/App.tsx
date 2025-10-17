@@ -334,7 +334,7 @@ const App: React.FC = () => {
             {activeNegotiation && <NegotiationModal negotiation={activeNegotiation} currentUser={currentUserWithStatus} onAction={handlers.handleAction} onlineUsers={onlineUsers} isTopmost={topmostModalId === 'negotiation'} />}
             {/* FIX: Corrected prop types and names for various modal components to align with their expected definitions. */}
             {modals.isSettingsModalOpen && <SettingsModal onClose={handlers.closeSettingsModal} isTopmost={topmostModalId === 'settings'} />}
-            {modals.isInventoryOpen && <InventoryModal onClose={handlers.closeInventory} />}
+            {modals.isInventoryOpen && <InventoryModal onClose={handlers.closeInventory} isTopmost={topmostModalId === 'inventory'} />}
             {modals.isMailboxOpen && <MailboxModal currentUser={currentUserWithStatus} onClose={handlers.closeMailbox} onAction={handlers.handleAction} isTopmost={topmostModalId === 'mailbox'} />}
             {modals.isQuestsOpen && <QuestsModal currentUser={currentUserWithStatus} onClose={handlers.closeQuests} onAction={handlers.handleAction} isTopmost={topmostModalId === 'quests'} />}
             {/* FIX: Pass missing props (currentUser, onAction, onStartQuiz) to the ShopModal component to fix type error. */}
@@ -348,21 +348,21 @@ const App: React.FC = () => {
             {modals.craftResult && <CraftingResultModal result={modals.craftResult} onClose={handlers.closeCraftResult} isTopmost={topmostModalId === 'craftResult'} />}
             {modals.synthesisResult && <SynthesisResultModal result={modals.synthesisResult} onClose={handlers.closeSynthesisResult} isTopmost={topmostModalId === 'synthesisResult'} />}
             {modals.viewingUser && <UserProfileModal user={modals.viewingUser} onClose={handlers.closeViewingUser} onViewItem={handlers.openViewingItem} isTopmost={topmostModalId === 'viewingUser'} />}
-            {modals.viewingItem && <ItemDetailModal item={modals.viewingItem.item} isOwnedByCurrentUser={modals.viewingItem.isOwned} onClose={handlers.closeViewingItem} />}
+            {modals.viewingItem && <ItemDetailModal item={modals.viewingItem.item} isOwnedByCurrentUser={modals.viewingItem.isOwned} onClose={handlers.closeViewingItem} isTopmost={topmostModalId === 'viewingItem'} />}
             {modals.info && <InfoModal onClose={handlers.closeInfoModal} isTopmost={topmostModalId === 'info'} />}
             {modals.encyclopedia && <EncyclopediaModal onClose={handlers.closeEncyclopedia} isTopmost={topmostModalId === 'encyclopedia'} />}
             {modals.statAllocation && <StatAllocationModal currentUser={currentUserWithStatus} onClose={handlers.closeStatAllocationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'statAllocation'} />}
             {modals.profileEdit && <ProfileEditModal currentUser={currentUserWithStatus} onClose={handlers.closeProfileEditModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'profileEdit'} />}
-            {modals.isBlacksmithOpen && <BlacksmithModal enhancementItem={modals.enhancingItem} initialTab="enhancement" onClose={handlers.closeBlacksmith} />}
-            {modals.isBlacksmithHelpOpen && <BlacksmithHelpModal onClose={() => handlers.setIsBlacksmithHelpOpen(false)} />}
+            {modals.isBlacksmithOpen && <BlacksmithModal enhancementItem={modals.enhancingItem} initialTab="enhancement" onClose={handlers.closeBlacksmith} isTopmost={topmostModalId === 'blacksmith'} />}
+            {modals.isBlacksmithHelpOpen && <BlacksmithHelpModal onClose={() => handlers.setIsBlacksmithHelpOpen(false)} isTopmost={topmostModalId === 'blacksmithHelp'} />}
             {modals.pastRankings && <PastRankingsModal info={modals.pastRankings} onClose={handlers.closePastRankings} isTopmost={topmostModalId === 'pastRankings'} />}
             {modals.moderation && <AdminModerationModal user={modals.moderation} currentUser={currentUserWithStatus} onClose={handlers.closeModerationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'moderation'} />}
             {modals.isTowerRewardInfoOpen && <TowerRankingRewardsModal onClose={handlers.closeTowerRewardInfoModal} isTopmost={topmostModalId === 'towerRewardInfo'} />}
-            {modals.levelUpInfo && <LevelUpModal levelUpInfo={modals.levelUpInfo} onClose={handlers.closeLevelUpModal} />}
+            {modals.levelUpInfo && <LevelUpModal levelUpInfo={modals.levelUpInfo} onClose={handlers.closeLevelUpModal} isTopmost={topmostModalId === 'levelUp'} />}
             {modals.guildBossBattleResult && <GuildBossBattleResultModal result={modals.guildBossBattleResult} onClose={handlers.closeGuildBossBattleResultModal} isTopmost={topmostModalId === 'guildBossBattleResult'} />}
             {modals.guildEffects && myGuild && <GuildEffectsModal guild={myGuild} onClose={handlers.closeGuildEffectsModal} isTopmost={topmostModalId === 'guildEffects'} />}
-            {modals.equipmentEffects && <EquipmentEffectsModal user={currentUserWithStatus} guild={myGuild} onClose={handlers.closeEquipmentEffectsModal} />}
-            {modals.preset && <PresetModal user={currentUserWithStatus} onAction={handlers.handleAction} onClose={handlers.closePresetModal} />}
+            {modals.equipmentEffects && <EquipmentEffectsModal user={currentUserWithStatus} guild={myGuild} onClose={handlers.closeEquipmentEffectsModal} isTopmost={topmostModalId === 'equipmentEffects'} />}
+            {modals.preset && <PresetModal user={currentUserWithStatus} onAction={handlers.handleAction} onClose={handlers.closePresetModal} isTopmost={topmostModalId === 'preset'} />}
         </div>
     );
 };

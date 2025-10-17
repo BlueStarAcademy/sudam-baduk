@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
-import { UserWithStatus, ServerAction, ShopTab } from '../types/index.js';
+import { UserWithStatus, ServerAction, ShopTab, GuildShopItem } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { isSameDayKST, isDifferentWeekKST } from '../utils/timeUtils.js';
 import { SHOP_CONSUMABLE_ITEMS, CLIENT_SHOP_ITEMS } from '../constants/items.js';
+import { GUILD_SHOP_ITEMS } from '../constants/guildConstants.js';
 import Slider from './ui/Slider.js';
 
 // --- Type Definitions ---
@@ -13,7 +14,7 @@ type ShopItemDetails = {
     itemId: string;
     name: string;
     description: string;
-    price: { gold?: number; diamonds?: number };
+    price: { gold?: number; diamonds?: number; guildCoins?: number };
     image: string;
     type: 'equipment' | 'material' | 'consumable';
     dailyLimit?: number;
@@ -34,6 +35,7 @@ interface BulkPurchaseModalProps {
     currentUser: UserWithStatus;
     onClose: () => void;
     onAction: (action: ServerAction) => void;
+    isGuildItem?: boolean;
 }
 
 type PackageItem = {
@@ -119,13 +121,14 @@ const ActionPointQuizCard: React.FC<ActionPointQuizCardProps> = ({ currentUser, 
 
 interface ShopItemCardProps {
     item: ShopItemDetails;
-    onBuy: (item: ShopItemDetails) => void;
+    onBuy: (item: ShopItemDetails, isGuildItem?: boolean) => void;
     currentUser: UserWithStatus;
+    isGuildItem?: boolean;
 }
 
-const ShopItemCard: React.FC<ShopItemCardProps> = ({ item, onBuy, currentUser }) => {
+const ShopItemCard: React.FC<ShopItemCardProps> = ({ item, onBuy, currentUser, isGuildItem }) => {
     const isGold = !!item.price.gold;
-    const priceAmount = item.price.gold || item.price.diamonds || 0;
+    const priceAmount = item.price.gold || item.price.diamonds || item.price.guildCoins || 0;
     const PriceIcon = isGold ? <img src="/images/Gold.png" alt="골드" className="w-4 h-4" /> : <img src="/images/Zem.png" alt="다이아" className="w-4 h-4" />;
     
     const now = Date.now();
@@ -155,7 +158,7 @@ const ShopItemCard: React.FC<ShopItemCardProps> = ({ item, onBuy, currentUser })
             <h3 className="text-lg font-bold text-white">{item.name}</h3>
             <p className="text-xs text-gray-400 mt-1 flex-grow h-10">{item.description}</p>
             <div className="flex flex-col items-stretch justify-center gap-2 my-3 w-full">
-                 <Button onClick={() => onBuy(item)} disabled={remaining === 0} colorScheme="green" className="w-full !text-xs !py-2.5">
+                 <Button onClick={() => onBuy(item, isGuildItem)} disabled={remaining === 0} colorScheme="green" className="w-full !text-xs !py-2.5">
                     <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                         <span>구매</span>
                         <div className="flex items-center gap-1">({PriceIcon} {priceAmount.toLocaleString()})</div>
@@ -168,10 +171,11 @@ const ShopItemCard: React.FC<ShopItemCardProps> = ({ item, onBuy, currentUser })
 };
 
 
-const BulkPurchaseModal: React.FC<BulkPurchaseModalProps> = ({ item, currentUser, onClose, onAction }) => {
+const BulkPurchaseModal: React.FC<BulkPurchaseModalProps> = ({ item, currentUser, onClose, onAction, isGuildItem }) => {
     const [quantity, setQuantity] = useState(1);
     const isGold = !!item.price.gold;
-    const priceAmount = item.price.gold || item.price.diamonds || 0;
+    const isGuildCoins = !!item.price.guildCoins;
+    const priceAmount = item.price.gold || item.price.diamonds || item.price.guildCoins || 0;
 
     const maxQuantity = useMemo(() => {
         let max = 999;
@@ -179,7 +183,9 @@ const BulkPurchaseModal: React.FC<BulkPurchaseModalProps> = ({ item, currentUser
         // 1. By currency
         const maxByCurrency = isGold 
             ? Math.floor(currentUser.gold / priceAmount)
-            : Math.floor(currentUser.diamonds / priceAmount);
+            : isGuildCoins
+                ? Math.floor(currentUser.guildCoins / priceAmount)
+                : Math.floor(currentUser.diamonds / priceAmount);
         max = Math.min(max, maxByCurrency);
 
         // 2. By purchase limit
@@ -219,7 +225,7 @@ const BulkPurchaseModal: React.FC<BulkPurchaseModalProps> = ({ item, currentUser
 
     const handleConfirm = () => {
         if (quantity > 0) {
-            onAction({ type: 'BUY_SHOP_ITEM', payload: { itemId: item.itemId, quantity } });
+            onAction({ type: isGuildItem ? 'BUY_GUILD_SHOP_ITEM' : 'BUY_SHOP_ITEM', payload: { itemId: item.itemId, quantity } });
         }
         onClose();
     };
@@ -254,7 +260,7 @@ const BulkPurchaseModal: React.FC<BulkPurchaseModalProps> = ({ item, currentUser
                 <div className="mt-4 p-3 bg-gray-900/50 rounded-lg">
                     {isEquipmentBox && <p className="text-sm text-cyan-300 mb-2">10개 구매 시 +1개 보너스!</p>}
                     <p>총 획득: <span className="font-bold text-highlight">{totalItems}개</span></p>
-                    <p>총 비용: <span className="font-bold text-yellow-300">{(priceAmount * quantity).toLocaleString()} {isGold ? '골드' : '다이아'}</span></p>
+                    <p>총 비용: <span className="font-bold text-yellow-300">{(priceAmount * quantity).toLocaleString()} {isGold ? '골드' : isGuildCoins ? '길드 코인' : '다이아'}</span></p>
                 </div>
                  <div className="flex justify-center gap-4 mt-6">
                     <Button onClick={onClose} colorScheme="gray" className="w-32">취소</Button>
@@ -270,7 +276,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAc
     const { handlers } = useAppContext();
     const [activeTab, setActiveTab] = useState<ShopTab>(initialTab || 'package');
     const [toastMessage, setToastMessage] = useState<string | null>(null);
-    const [purchasingItem, setPurchasingItem] = useState<ShopItemDetails | null>(null);
+    const [purchasingItem, setPurchasingItem] = useState<(ShopItemDetails & { isGuildItem?: boolean }) | null>(null);
 
     useEffect(() => {
         if (toastMessage) {
@@ -279,8 +285,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAc
         }
     }, [toastMessage]);
 
-    const handleBuyItem = (item: ShopItemDetails) => {
-        setPurchasingItem(item);
+    const handleBuyItem = (item: ShopItemDetails, isGuildItem?: boolean) => {
+        setPurchasingItem({ ...item, isGuildItem });
     };
 
     const shopItems = useMemo(() => {
@@ -353,6 +359,12 @@ export const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAc
                         />
                     </div>
                 );
+            case 'guild':
+                return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {GUILD_SHOP_ITEMS.map(item => <ShopItemCard key={item.itemId} item={{ ...item, price: { gold: item.cost } }} onBuy={handleBuyItem} currentUser={currentUser} />)}
+                    </div>
+                );
         }
     };
 
@@ -376,6 +388,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAc
                     <button onClick={() => setActiveTab('materials')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${activeTab === 'materials' ? 'bg-accent' : 'text-gray-400 hover:bg-gray-700/50'}`}>재료</button>
                     <button onClick={() => setActiveTab('consumables')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${activeTab === 'consumables' ? 'bg-accent' : 'text-gray-400 hover:bg-gray-700/50'}`}>소모품</button>
                     <button onClick={() => setActiveTab('misc')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${activeTab === 'misc' ? 'bg-accent' : 'text-gray-400 hover:bg-gray-700/50'}`}>기타</button>
+                    <button onClick={() => setActiveTab('guild')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${activeTab === 'guild' ? 'bg-accent' : 'text-gray-400 hover:bg-gray-700/50'}`}>길드 상점</button>
                 </div>
 
                 <div className="flex-grow overflow-y-auto pr-2">

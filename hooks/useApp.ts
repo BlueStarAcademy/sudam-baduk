@@ -136,6 +136,7 @@ export const useApp = () => {
         
         // FIX: Reset the hash to prevent the router from trying to render a protected route.
         window.location.hash = ''; 
+        window.location.reload();
         
         // Optional: Force a reload to ensure a clean state, though state updates should handle it.
         // window.location.reload();
@@ -334,6 +335,7 @@ export const useApp = () => {
         openBlacksmith: () => openModal('blacksmith'),
         closeBlacksmith: () => { closeModal('blacksmith'); setEnhancingItem(null); },
         handleEnterWaitingRoom: (mode: GameMode) => {
+            handleAction({ type: 'ENTER_WAITING_ROOM', payload: { mode } });
             const slug = SLUG_BY_GAME_MODE.get(mode);
             if (slug) window.location.hash = `#/waiting/${slug}`;
         },
@@ -370,18 +372,64 @@ export const useApp = () => {
             }
         };
         restoreSession();
-    }, [fetchInitialState]);
-
-    useEffect(() => {
-        const handleHashChange = () => {
-            const newRoute = parseHash(window.location.hash);
-            setCurrentRoute(newRoute);
-        };
-        window.addEventListener('hashchange', handleHashChange);
-        handleHashChange();
-        return () => window.removeEventListener('hashchange', handleHashChange);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+        useEffect(() => {
+
+            const handleHashChange = () => {
+
+                const newRoute = parseHash(window.location.hash);
+
+                setCurrentRoute(newRoute);
+
+            };
+
+            window.addEventListener('hashchange', handleHashChange);
+
+            handleHashChange();
+
+            return () => window.removeEventListener('hashchange', handleHashChange);
+
+        }, []);
+
     
+
+        useEffect(() => {
+
+            if (sessionId) {
+
+                const intervalId = setInterval(() => {
+
+                    handleAction({ type: 'HEARTBEAT' });
+
+                }, 60000); // 1 minute
+
+    
+
+                return () => clearInterval(intervalId);
+
+            }
+
+        }, [sessionId, handleAction]);
+
+        
+    
+    useEffect(() => {
+        const handleStorageChange = (e: StorageEvent) => {
+            if (e.key === 'sessionId' && e.newValue !== sessionId) {
+                // Session changed in another tab, force logout to be safe
+                handleLogout();
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
+    }, [sessionId, handleLogout]);
+
     return {
         currentUser,
         currentUserWithStatus: currentUser,

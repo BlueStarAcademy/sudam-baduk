@@ -150,21 +150,25 @@ export const handleRewardAction = async (action: ServerAction & { userId: string
         }
         case 'CLAIM_QUEST_REWARD': {
             const { questId } = payload;
+            // FIX: Use optional chaining and check for null/undefined quest lists to prevent crashes.
             const questLists = {
-                daily: user.quests.daily.quests,
-                weekly: user.quests.weekly.quests,
-                monthly: user.quests.monthly.quests,
+                daily: user.quests?.daily?.quests,
+                weekly: user.quests?.weekly?.quests,
+                monthly: user.quests?.monthly?.quests,
             };
 
             let foundQuest: Quest | null = null;
             let questType: 'daily' | 'weekly' | 'monthly' | null = null;
 
             for (const type of Object.keys(questLists) as Array<keyof typeof questLists>) {
-                const quest = questLists[type].find(q => q.id === questId);
-                if (quest) {
-                    foundQuest = quest;
-                    questType = type;
-                    break;
+                const questList = questLists[type];
+                if (questList) {
+                    const quest = questList.find(q => q.id === questId);
+                    if (quest) {
+                        foundQuest = quest;
+                        questType = type;
+                        break;
+                    }
                 }
             }
 

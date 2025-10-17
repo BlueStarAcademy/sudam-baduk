@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { GameMode } from '../../types/index.js';
 import type { ServerAction, Announcement, OverrideAnnouncement, AdminProps } from '../../types/index.js';
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/gameModes.js';
+import BackButton from '../BackButton.js';
 import Button from '../Button.js';
 
 interface ServerSettingsPanelProps extends Pick<AdminProps, 'gameModeAvailability' | 'announcements' | 'globalOverrideAnnouncement' | 'announcementInterval' | 'onAction' | 'onBack'> {
@@ -54,7 +55,7 @@ const ServerSettingsPanel: React.FC<ServerSettingsPanelProps> = (props) => {
         <div className="space-y-8 bg-primary text-primary">
             <header className="flex justify-between items-center">
                 <h1 className="text-3xl font-bold">서버 설정</h1>
-                <Button onClick={onBack} colorScheme="gray">&larr; 대시보드로</Button>
+                <BackButton onClick={onBack} />
             </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

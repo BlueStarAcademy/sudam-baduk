@@ -52,40 +52,67 @@ export const handleAiGameStart = async (
     payload: any, 
     user: User, 
     guilds: Record<string, Guild>, 
-    type: 'single-player' | 'tower-challenge'
+    type: 'single-player' | 'tower-challenge' | 'ai-match'
 ): Promise<HandleActionResult> => {
     const isTower = type === 'tower-challenge';
-    const stageSource = isTower ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
-    const stageId = isTower ? `tower-${payload.floor}` : payload.stageId;
-    
-    const stage = stageSource.find(s => s.id === stageId);
+    const isAiMatch = type === 'ai-match';
+
+    let stage: SinglePlayerStageInfo | undefined;
+    let aiGameMode: GameMode;
+    let aiGameDifficulty: number;
+
+    if (isAiMatch) {
+        aiGameMode = payload.mode;
+        aiGameDifficulty = payload.aiDifficulty;
+        // For AI matches, we construct a dummy stage info for settings
+        stage = {
+            id: `ai-match-${aiGameMode}-${aiGameDifficulty}`,
+            name: `AI 대국 (${aiGameMode} Lv.${aiGameDifficulty})`,
+            level: SinglePlayerLevel.입문, // Dummy value
+            gameType: 'standard', // Dummy value
+            actionPointCost: 0, // No cost for AI matches
+            boardSize: 9, // Default board size
+            katagoLevel: aiGameDifficulty,
+            placements: { black: 0, white: 0, blackPattern: 0, whitePattern: 0 },
+            rewards: { firstClear: {}, repeatClear: {} },
+            mode: aiGameMode,
+            timeControl: { type: 'byoyomi', mainTime: 3, byoyomiTime: 30, byoyomiCount: 3 },
+        };
+    } else {
+        const stageSource = isTower ? TOWER_STAGES : SINGLE_PLAYER_STAGES;
+        const stageId = isTower ? `tower-${payload.floor}` : payload.stageId;
+        stage = stageSource.find(s => s.id === stageId);
+    }
+
     if (!stage) return { error: '스테이지 정보를 찾을 수 없습니다.' };
 
-    if (isTower) {
-        const progress = user.towerProgress?.highestFloor ?? 0;
-        if (progress < stage.floor! - 1 && !user.isAdmin) {
-            return { error: '아직 도전할 수 없는 층입니다.' };
+    if (!isAiMatch) {
+        if (isTower) {
+            const progress = user.towerProgress?.highestFloor ?? 0;
+            if (progress < stage.floor! - 1 && !user.isAdmin) {
+                return { error: '아직 도전할 수 없는 층입니다.' };
+            }
+        } else {
+            const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stage.id);
+            const progress = user.singlePlayerProgress ?? 0;
+            if (progress < stageIndex && !user.isAdmin) {
+                return { error: '아직 도전할 수 없는 스테이지입니다.' };
+            }
         }
-    } else {
-        const stageIndex = SINGLE_PLAYER_STAGES.findIndex(s => s.id === stageId);
-        const progress = user.singlePlayerProgress ?? 0;
-        if (progress < stageIndex && !user.isAdmin) {
-            return { error: '아직 도전할 수 없는 스테이지입니다.' };
+        
+        if (user.actionPoints.current < stage.actionPointCost && !user.isAdmin) {
+            return { error: `행동력이 부족합니다. (필요: ${stage.actionPointCost})` };
         }
-    }
-    
-    if (user.actionPoints.current < stage.actionPointCost && !user.isAdmin) {
-        return { error: `행동력이 부족합니다. (필요: ${stage.actionPointCost})` };
-    }
-    
-    if (!user.isAdmin) {
-        user.actionPoints.current -= stage.actionPointCost;
+        
+        if (!user.isAdmin) {
+            user.actionPoints.current -= stage.actionPointCost;
+        }
     }
 
     const negotiation: Negotiation = {
-        id: isTower ? `neg-tc-${globalThis.crypto.randomUUID()}` : `neg-sp-${globalThis.crypto.randomUUID()}`,
+        id: isTower ? `neg-tc-${globalThis.crypto.randomUUID()}` : (isAiMatch ? `neg-ai-${globalThis.crypto.randomUUID()}` : `neg-sp-${globalThis.crypto.randomUUID()}`),
         challenger: user,
-        opponent: getAiUser(GameMode.Standard, stage.katagoLevel, stageId, isTower ? stage.floor : undefined),
+        opponent: getAiUser(stage.mode || GameMode.Standard, stage.katagoLevel, stage.id, isTower ? stage.floor : undefined),
         mode: stage.mode || GameMode.Standard,
         settings: {
             boardSize: stage.boardSize,
@@ -106,8 +133,9 @@ export const handleAiGameStart = async (
     };
 
     const game = await initializeGame(negotiation, guilds);
-    game.isSinglePlayer = !isTower;
+    game.isSinglePlayer = !isTower && !isAiMatch;
     game.isTowerChallenge = isTower;
+    game.isAiGame = isAiMatch;
     
     // If the stage config doesn't specify a turn count (e.g., for capture missions),
     // make sure the default from initializeGame is removed.
@@ -129,7 +157,7 @@ export const handleAiGameStart = async (
     if (isTower) {
         game.towerChallengePlacementRefreshesUsed = 0;
         game.towerAddStonesUsed = 0;
-    } else {
+    } else if (!isAiMatch) {
         game.singlePlayerPlacementRefreshesUsed = 0;
     }
     
@@ -145,7 +173,7 @@ export const handleAiGameStart = async (
     
     await db.updateUser(user);
 
-    return { clientResponse: { newGameId: game.id, updatedUser: user } };
+    return { clientResponse: { newGameId: game.id, updatedUser: user, updatedGame: game } };
 };
 
 export const handleAiGameRefresh = async (game: LiveGameSession, user: User, type: 'single-player' | 'tower-challenge'): Promise<HandleActionResult> => {

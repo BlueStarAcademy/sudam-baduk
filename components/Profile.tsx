@@ -147,7 +147,7 @@ const LobbyCard: React.FC<{
     return (
         <div 
             onClick={available ? onEnter : undefined}
-            className={`bg-panel text-on-panel rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${shadowColor} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} h-full panel-glow`}
+            className={`bg-panel text-on-panel rounded-lg p-2 flex flex-col text-center transition-all transform hover:-translate-y-1 shadow-lg ${shadowColor} ${!available ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} h-48 panel-glow`}
         >
             {children ? <div className="flex flex-col h-full">{children}</div> : (
                 <>
@@ -455,7 +455,7 @@ const Profile: React.FC<ProfileProps> = () => {
                     ))}
                 </select>
             </div>
-        </div>
+        </NineSlicePanel>
     ), [currentUserWithStatus, handlers, handleLoadPreset, equippedItems, presets]);
 
     const leagueInfo = LEAGUE_DATA.find(l => l.tier === currentUserWithStatus.league);
@@ -484,7 +484,9 @@ const Profile: React.FC<ProfileProps> = () => {
                             <img src="/images/item/itembook.png" alt="도감" className="w-5 h-5"/>
                         </button>
                         {/* FIX: Corrected call to handlers.openInfoModal */}
-                        <button onClick={handlers.openInfoModal} className="w-8 h-8 flex items-center justify-center bg-gray-600 hover:bg-gray-500 rounded-full text-white font-bold text-lg flex-shrink-0 transition-transform hover:scale-110" title="도움말">?</button>
+                                                <button onClick={handlers.openInfoModal} className="w-8 h-8 flex items-center justify-center bg-gray-600 hover:bg-gray-500 rounded-full text-white font-bold text-lg flex-shrink-0 transition-transform hover:scale-110" title="도움말">
+                            <img src="/images/button/help.png" alt="도움말" className="h-5" />
+                        </button>
                     </div>
                 </header>
                 <main className="flex-1 flex flex-col min-h-0">
@@ -591,13 +593,13 @@ const Profile: React.FC<ProfileProps> = () => {
             {isRankingPanelOpen && <div className="fixed inset-0 bg-black/60 z-40" onClick={() => setIsRankingPanelOpen(false)}></div>}
             
             {/* Main Content Area */}
-            <main className="flex-1 min-h-0 flex flex-col gap-2 p-2 relative">
+            <main className="flex-1 min-h-0 flex flex-col gap-2 relative">
                 <button 
                     onClick={() => setIsRankingPanelOpen(true)} 
                     className="fixed top-1/2 -translate-y-1/2 left-0 z-20 w-8 h-12 bg-secondary/80 backdrop-blur-sm rounded-r-lg flex items-center justify-center text-primary shadow-lg"
                     aria-label="랭킹 패널 열기"
                 >
-                    <span className="font-bold text-lg">&lt;</span>
+                    <img src="/images/button/back.png" alt="뒤로가기" className="h-6" />
                 </button>
 
                 <div className="flex-shrink-0">
@@ -627,7 +629,7 @@ const Profile: React.FC<ProfileProps> = () => {
                             <ChatWindow messages={globalChat} mode="global" onAction={handlers.handleAction} onViewUser={handlers.openViewingUser} locationPrefix="[홈]" />
                         </div>
                     )}
-                </div>
+                </NineSlicePanel>
             </main>
 
             <footer className="fixed bottom-0 left-0 right-0 bg-primary border-t border-color p-1 z-30">

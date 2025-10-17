@@ -164,7 +164,9 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClose, onVi
                                 {user.isMbtiPublic && user.mbti ? user.mbti : '비공개'}
                             </span>
                             {user.isMbtiPublic && user.mbti && (
-                                <button onClick={() => setShowMbtiHelp(true)} className="w-4 h-4 text-xs bg-gray-600 rounded-full text-white flex items-center justify-center hover:bg-gray-500">?</button>
+                                                                <button onClick={() => setShowMbtiHelp(true)} className="w-4 h-4 text-xs bg-gray-600 rounded-full text-white flex items-center justify-center hover:bg-gray-500">
+                                    <img src="/images/button/help.png" alt="도움말" className="h-3" />
+                                </button>
                             )}
                         </div>
                         <div className="w-full bg-gray-700 rounded-full h-2.5 mt-2 border border-gray-900">

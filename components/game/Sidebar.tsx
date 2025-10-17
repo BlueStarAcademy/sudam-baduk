@@ -144,6 +144,53 @@ const GameInfoPanel: React.FC<{ session: LiveGameSession, onClose?: () => void }
     );
 };
 
+const UserItem: React.FC<{
+    user: UserWithStatus;
+    role: '흑' | '백' | '관전';
+    isGameEnded: boolean;
+    isAiGame: boolean;
+    rematchRequested: boolean;
+    handleRematch: (opponentId: string) => void;
+    onViewUser: (userId: string) => void;
+    currentUser: User;
+    player1: User;
+    player2: User;
+}> = ({ user, role, isGameEnded, isAiGame, rematchRequested, handleRematch, onViewUser, currentUser, player1, player2 }) => {
+    const isMe = user.id === currentUser.id;
+    const isOpponent = !isMe && (user.id === player1.id || user.id === player2.id);
+
+    const avatarUrl = AVATAR_POOL.find(a => a.id === user.avatarId)?.url;
+    const borderUrl = BORDER_POOL.find(b => b.id === user.borderId)?.url;
+
+    return (
+        <div className={`flex items-center gap-2 p-1 rounded ${isMe ? 'bg-blue-900/50' : ''}`}>
+            <div 
+                className={`flex items-center gap-2 flex-grow overflow-hidden ${!isMe ? 'cursor-pointer' : ''}`}
+                onClick={() => !isMe && onViewUser(user.id)}
+                title={!isMe ? `${user.nickname} 프로필 보기` : ''}
+            >
+                <div className="relative flex-shrink-0">
+                        <Avatar userId={user.id} userName={user.nickname} size={28} avatarUrl={avatarUrl} borderUrl={borderUrl} />
+                </div>
+                <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="font-semibold truncate text-sm">{user.nickname}</span>
+                    {isGameEnded && isOpponent && !isAiGame && (
+                            <Button
+                            onClick={(e) => { e?.stopPropagation(); handleRematch(user.id); }}
+                            disabled={rematchRequested}
+                            colorScheme="yellow"
+                            className="!text-xs !py-0.5 !px-2 flex-shrink-0"
+                            >
+                            {rematchRequested ? '신청중' : '재대결'}
+                            </Button>
+                    )}
+                </div>
+            </div>
+            <span className="ml-auto text-xs text-gray-400 flex-shrink-0">{role}</span>
+        </div>
+        )
+}
+
 const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ session, onlineUsers, currentUser, onClose, onAction, onViewUser }) => {
     
     const { player1, player2, blackPlayerId, whitePlayerId, gameStatus, isAiGame } = session;
@@ -169,42 +216,6 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
         onAction({ type: 'REQUEST_REMATCH', payload: { opponentId, originalGameId: session.id } });
     };
 
-    const renderUser = (user: UserWithStatus, role: '흑' | '백' | '관전') => {
-        const isMe = user.id === currentUser.id;
-        const isOpponent = !isMe && (user.id === player1.id || user.id === player2.id);
-
-        const avatarUrl = AVATAR_POOL.find(a => a.id === user.avatarId)?.url;
-        const borderUrl = BORDER_POOL.find(b => b.id === user.borderId)?.url;
-
-        return (
-            <div className={`flex items-center gap-2 p-1 rounded ${isMe ? 'bg-blue-900/50' : ''}`}>
-                <div 
-                    className={`flex items-center gap-2 flex-grow overflow-hidden ${!isMe ? 'cursor-pointer' : ''}`}
-                    onClick={() => !isMe && onViewUser(user.id)}
-                    title={!isMe ? `${user.nickname} 프로필 보기` : ''}
-                >
-                    <div className="relative flex-shrink-0">
-                         <Avatar userId={user.id} userName={user.nickname} size={28} avatarUrl={avatarUrl} borderUrl={borderUrl} />
-                    </div>
-                    <div className="flex items-center gap-2 overflow-hidden">
-                        <span className="font-semibold truncate text-sm">{user.nickname}</span>
-                        {isGameEnded && isOpponent && !isAiGame && (
-                             <Button
-                                onClick={(e) => { e?.stopPropagation(); handleRematch(user.id); }}
-                                disabled={rematchRequested}
-                                colorScheme="yellow"
-                                className="!text-xs !py-0.5 !px-2 flex-shrink-0"
-                             >
-                                {rematchRequested ? '신청중' : '재대결'}
-                             </Button>
-                        )}
-                    </div>
-                </div>
-                <span className="ml-auto text-xs text-gray-400 flex-shrink-0">{role}</span>
-            </div>
-         )
-    }
-
     return (
         <div className="bg-gray-800 p-2 rounded-md flex flex-col border border-color">
             <h3 className="text-base font-bold border-b border-gray-700 pb-1 mb-2 text-yellow-300 flex-shrink-0 flex justify-between items-center">
@@ -213,14 +224,34 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
             </h3>
             <div className="space-y-0.5 overflow-y-auto pr-1 flex-grow">
                 {playersInRoom.map(user => (
-                    <div key={user.id}>
-                        {renderUser(user, user.id === blackPlayerId ? '흑' : '백')}
-                    </div>
+                    <UserItem
+                        key={user.id}
+                        user={user}
+                        role={user.id === blackPlayerId ? '흑' : '백'}
+                        isGameEnded={isGameEnded}
+                        isAiGame={isAiGame}
+                        rematchRequested={rematchRequested}
+                        handleRematch={handleRematch}
+                        onViewUser={onViewUser}
+                        currentUser={currentUser}
+                        player1={player1}
+                        player2={player2}
+                    />
                 ))}
                 {spectators.map(user => (
-                    <div key={user.id}>
-                        {renderUser(user, '관전')}
-                    </div>
+                    <UserItem
+                        key={user.id}
+                        user={user}
+                        role={'관전'}
+                        isGameEnded={isGameEnded}
+                        isAiGame={isAiGame}
+                        rematchRequested={rematchRequested}
+                        handleRematch={handleRematch}
+                        onViewUser={onViewUser}
+                        currentUser={currentUser}
+                        player1={player1}
+                        player2={player2}
+                    />
                 ))}
             </div>
         </div>

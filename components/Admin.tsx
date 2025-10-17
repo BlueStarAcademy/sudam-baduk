@@ -7,7 +7,8 @@ import { useAppContext } from '../hooks/useAppContext';
 import AdminGuildManagementPanel from './admin/GuildManagementPanel';
 // FIX: Use `import type` for interfaces to prevent type/value confusion.
 import type { LiveGameSession, Guild as GuildType, AdminProps } from '../types/index.js';
-import Button from './Button';
+import BackButton from './BackButton.js';
+import Button from './Button.js';
 
 type AdminView = 'dashboard' | 'userManagement' | 'mailSystem' | 'serverSettings' | 'guildManagement';
 
@@ -22,7 +23,7 @@ const GuildManagementList: React.FC<GuildManagementListProps> = ({ guilds, onBac
         <div className="bg-primary text-primary">
             <header className="flex justify-between items-center mb-8">
                 <h1 className="text-3xl font-bold">길드 관리</h1>
-                <Button onClick={onBack} colorScheme="gray">&larr; 대시보드로</Button>
+                <BackButton onClick={onBack} />
             </header>
             <div className="bg-panel border border-color p-4 rounded-lg shadow-lg">
                 <ul className="space-y-2">
