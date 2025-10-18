@@ -87,6 +87,7 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isPaused, setIsPaused] = useState(session.gameStatus === GameStatus.Paused);
     const [isPauseCooldown, setIsPauseCooldown] = useState(false);
+    const [pauseCooldownTime, setPauseCooldownTime] = useState(0);
 
     useEffect(() => {
         setIsPaused(session.gameStatus === GameStatus.Paused);
@@ -148,8 +149,18 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
         
         // Cooldown
         setIsPauseCooldown(true);
+        setPauseCooldownTime(5); // Start cooldown at 5 seconds
         setTimeout(() => setIsPauseCooldown(false), 5000);
     }, [isPauseCooldown, isPaused, handlers, session.id]);
+
+    useEffect(() => {
+        if (pauseCooldownTime > 0) {
+            const timer = setInterval(() => {
+                setPauseCooldownTime(prev => prev - 1);
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [pauseCooldownTime]);
 
     useEffect(() => {
         const gameHasJustEnded =
@@ -313,7 +324,7 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
         return <TowerStatusPanel session={session} />;
     }, [session]);
     
-    const isPaused = session.gameStatus === GameStatus.Paused;
+
 
     const gameArenaProps = {
         ...gameProps,
@@ -350,7 +361,7 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
                         />
                     </div>
                     {isPaused ? (
-                        null
+                        <div className="flex-1 w-full flex items-center justify-center min-h-0 bg-gray-800/50 rounded-lg text-gray-400 text-2xl font-bold">일시정지</div>
                     ) : (
                         <div className="flex-1 w-full flex items-center justify-center min-h-0">
                              <div className="relative w-full h-full max-w-full max-h-full aspect-square">
@@ -386,6 +397,7 @@ export const TowerChallengeArena: React.FC<TowerChallengeArenaProps> = ({ sessio
                             isPausable={true}
                             isPaused={isPaused}
                             onPauseToggle={handlePauseToggle}
+                            pauseCooldownTime={pauseCooldownTime} // Pass the new prop
                         />
                     </aside>
                 )}

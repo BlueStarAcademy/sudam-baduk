@@ -156,7 +156,7 @@ export const deleteGame = async (id: string): Promise<void> => {
 
 
 // --- Full State Retrieval (for client sync) ---
-export const getAllData = async (userId: string): Promise<Pick<AppState, 'users' | 'liveGames' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'guilds' | 'towerRankings'>> => {
+export const getAllData = async (userId: string): Promise<Pick<AppState, 'users' | 'liveGames' | 'announcements' | 'globalOverrideAnnouncement' | 'gameModeAvailability' | 'announcementInterval' | 'guilds' | 'towerRankings' | 'onlineUsers'>> => {
     const db = await getDb();
     const userRepository = await import('./repositories/userRepository.js');
     const gameRepository = await import('./repositories/gameRepository.js');
@@ -171,12 +171,19 @@ export const getAllData = async (userId: string): Promise<Pick<AppState, 'users'
     const announcementInterval = await kvRepository.getKV<number>(db, 'announcementInterval') || 3;
     const guilds = await kvRepository.getKV<Record<string, Guild>>(db, 'guilds') || {};
     
-    // Fetch only users who are online or in a game for the initial state
-    const userStatuses = await kvRepository.getKV<Record<string, UserStatusInfo>>(db, 'userStatuses') || {};
-    const onlineUserIds = Object.keys(userStatuses);
-    const onlineUsers = await Promise.all(onlineUserIds.map(id => userRepository.getUser(db, id)));
+    // Fetch all users for ranking purposes
+    const allDbUsers = await userRepository.getAllUsers(db);
 
-    const towerRankings = onlineUsers
+    const userStatuses = await kvRepository.getKV<Record<string, UserStatusInfo>>(db, 'userStatuses') || {};
+    const onlineUsersWithStatus: UserWithStatus[] = (await Promise.all(allDbUsers.map(async user => {
+        const statusInfo = userStatuses[user.id];
+        if (statusInfo) {
+            return { ...user, ...statusInfo };
+        }
+        return null;
+    }))).filter(Boolean) as UserWithStatus[];
+
+    const towerRankings = allDbUsers
         .filter(u => u && u.towerProgress && u.towerProgress.highestFloor > 0)
         .sort((a, b) => {
             if (b!.towerProgress!.highestFloor !== a!.towerProgress!.highestFloor) {
@@ -191,7 +198,7 @@ export const getAllData = async (userId: string): Promise<Pick<AppState, 'users'
         }));
 
     return {
-        users: onlineUsers.filter(Boolean).reduce((acc: Record<string, User>, user: User) => { acc[user.id] = user; return acc; }, {}),
+        users: allDbUsers.reduce((acc: Record<string, User>, user: User) => { acc[user.id] = user; return acc; }, {}),
         liveGames: liveGames.reduce((acc: Record<string, LiveGameSession>, game: LiveGameSession) => { acc[game.id] = game; return acc; }, {}),
         announcements,
         globalOverrideAnnouncement,
@@ -199,5 +206,6 @@ export const getAllData = async (userId: string): Promise<Pick<AppState, 'users'
         announcementInterval,
         guilds,
         towerRankings,
+        onlineUsers: onlineUsersWithStatus, // Add onlineUsers to the returned data
     };
 };

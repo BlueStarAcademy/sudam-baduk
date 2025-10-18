@@ -25,6 +25,7 @@ interface SidebarProps extends GameProps {
     isPausable?: boolean;
     isPaused?: boolean;
     onPauseToggle?: () => void;
+    pauseCooldownTime?: number; // Add this prop
 }
 
 const GameInfoPanel: React.FC<{ session: LiveGameSession, onClose?: () => void }> = ({ session, onClose }) => {
@@ -415,7 +416,7 @@ const ChatPanel: React.FC<Omit<SidebarProps, 'onLeaveOrResign' | 'isNoContestLea
 };
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
-    const { session, onLeaveOrResign, isNoContestLeaveAvailable, isSpectator, onOpenSettings, isPausable, isPaused, onPauseToggle } = props;
+    const { session, onLeaveOrResign, isNoContestLeaveAvailable, isSpectator, onOpenSettings, isPausable, isPaused, onPauseToggle, pauseCooldownTime } = props; // Destructure new prop
     const { gameStatus } = session;
 
     const isGameEnded = ['ended', 'no_contest', 'rematch_pending'].includes(gameStatus);
@@ -432,13 +433,22 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
                 <ChatPanel {...props} />
             </div>
             <div className="flex-shrink-0 pt-2">
-                {isGameEnded && onLeaveOrResign ? (
+                {isPausable ? (
+                    <Button onClick={onPauseToggle} colorScheme="yellow" className="w-full" disabled={pauseCooldownTime && pauseCooldownTime > 0}>
+                        {isPaused ? (
+                            <>
+                                대국 재개
+                                {pauseCooldownTime && pauseCooldownTime > 0 && (
+                                    <span className="ml-2 text-sm font-mono">({pauseCooldownTime})</span>
+                                )}
+                            </>
+                        ) : (
+                            '일시정지'
+                        )}
+                    </Button>
+                ) : isGameEnded && onLeaveOrResign ? (
                     <Button onClick={onLeaveOrResign} colorScheme="gray" className="w-full">
                         나가기
-                    </Button>
-                ) : isPausable ? (
-                    <Button onClick={onPauseToggle} colorScheme="yellow" className="w-full">
-                        {isPaused ? '대국 재개' : '일시정지'}
                     </Button>
                 ) : (
                     onLeaveOrResign && (

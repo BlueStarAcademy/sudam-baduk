@@ -78,6 +78,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isPaused, setIsPaused] = useState(session.gameStatus === GameStatus.Paused);
     const [isPauseCooldown, setIsPauseCooldown] = useState(false);
+    const [pauseCooldownTime, setPauseCooldownTime] = useState(0);
 
     useEffect(() => {
         setIsPaused(session.gameStatus === GameStatus.Paused);
@@ -139,8 +140,18 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         
         // Cooldown
         setIsPauseCooldown(true);
+        setPauseCooldownTime(5); // Start cooldown at 5 seconds
         setTimeout(() => setIsPauseCooldown(false), 5000);
     }, [isPauseCooldown, isPaused, handlers, session.id]);
+
+    useEffect(() => {
+        if (pauseCooldownTime > 0) {
+            const timer = setInterval(() => {
+                setPauseCooldownTime(prev => prev - 1);
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [pauseCooldownTime]);
 
     useEffect(() => {
         console.log(`[SinglePlayerArena Debug] gameStatus: ${gameStatus}, prevGameStatus: ${prevGameStatus}`);
@@ -335,7 +346,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         return undefined;
     }, [session, isSurvival]);
     
-    const isPaused = session.gameStatus === GameStatus.Paused;
+
 
     const gameArenaProps = {
         ...gameProps,
@@ -369,7 +380,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                         />
                     </div>
                     {isPaused ? (
-                        null
+                        <div className="flex-1 w-full flex items-center justify-center min-h-0 bg-gray-800/50 rounded-lg text-gray-400 text-2xl font-bold">일시정지</div>
                     ) : (
                         <div className="flex-1 w-full flex items-center justify-center min-h-0">
                             <div className="relative w-full h-full max-w-full max-h-full aspect-square">
@@ -405,6 +416,7 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
                             isPausable={true}
                             isPaused={isPaused}
                             onPauseToggle={handlePauseToggle}
+                            pauseCooldownTime={pauseCooldownTime} // Pass the new prop
                         />
                     </aside>
                 )}

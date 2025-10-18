@@ -79,7 +79,7 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 status.stateEnteredAt = now;
                 updatedUserStatuses = { [user.id]: status };
             }
-            break;
+            return { clientResponse: { success: true, updatedUserStatuses, deletedGameId: gameId } };
         }
         case 'LEAVE_WAITING_ROOM': {
             const status = allStatuses[user.id];

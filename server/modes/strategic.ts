@@ -285,28 +285,27 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
             return { clientResponse: { updatedGame: game } };
         }
 
-        switchTurnAndUpdateTimers(game, now);
-        await db.saveGame(game); // Save game state after player's move and turn switch
-        
         if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
             game.aiTurnStartTime = Date.now();
+            // Call handleAiTurn BEFORE switching the turn
             const updatedGameAfterAi = await handleAiTurn(game, { x, y }, myPlayerEnum);
             if (updatedGameAfterAi) {
-                // AI 턴이 성공적으로 완료되면, AI가 반환한 게임 객체를 클라이언트에 전달
+                // If AI turn is successful, then switch the turn
+                switchTurnAndUpdateTimers(updatedGameAfterAi, now); // Pass the updated game from AI
+                await db.saveGame(updatedGameAfterAi); // Save the game after AI move and turn switch
                 return { clientResponse: { updatedGame: updatedGameAfterAi } };
             } else {
-                // AI 턴이 실패한 경우 (updatedGameAfterAi가 undefined)
-                // 턴을 다시 플레이어에게 돌려주고, 이 상태를 저장 후 클라이언트에 전달
+                // AI turn failed, revert turn to player
                 console.log(`[AI Turn Warning] Game ${game.id}: handleAiTurn returned undefined. Reverting turn to player.`);
-                game.currentPlayer = myPlayerEnum; // 플레이어의 턴으로 되돌림
-                // switchTurnAndUpdateTimers(game, now); // REMOVED: This was causing the turn to be switched back to the AI.
-                await db.saveGame(game); // 이 상태를 데이터베이스에 저장
+                // No need to switch turn here, as it was never switched to AI
+                await db.saveGame(game); // Save the game with player's turn
                 return { clientResponse: { updatedGame: game } };
             }
+        } else {
+            // Not an AI game, or AI turn logic not taken, so switch turn for PvP
+            switchTurnAndUpdateTimers(game, now);
+            await db.saveGame(game); // Save game state after player's move and turn switch
         }
-        
-        // AI 게임이 아닌 경우 또는 AI 턴 로직을 타지 않은 경우
-        return { clientResponse: { updatedGame: game } };
     }
 
     if (type === 'PASS_TURN') {
@@ -317,14 +316,27 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
 
         if (game.passCount >= 2) {
             await getGameResult(game);
+            await db.saveGame(game); // Save the game after result
+            return { clientResponse: { updatedGame: game } };
         } else {
-            switchTurnAndUpdateTimers(game, now);
             if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
                 game.aiTurnStartTime = Date.now();
-                void handleAiTurn(game, { x: -1, y: -1 }, myPlayerEnum);
+                const updatedGameAfterAi = await handleAiTurn(game, { x: -1, y: -1 }, myPlayerEnum);
+                if (updatedGameAfterAi) {
+                    switchTurnAndUpdateTimers(updatedGameAfterAi, now);
+                    await db.saveGame(updatedGameAfterAi);
+                    return { clientResponse: { updatedGame: updatedGameAfterAi } };
+                } else {
+                    console.log(`[AI Turn Warning] Game ${game.id}: handleAiTurn returned undefined after PASS_TURN. Reverting turn to player.`);
+                    await db.saveGame(game);
+                    return { clientResponse: { updatedGame: game } };
+                }
+            } else {
+                switchTurnAndUpdateTimers(game, now);
+                await db.saveGame(game);
+                return { clientResponse: { updatedGame: game } };
             }
         }
-        return {};
     }
     
     if (type === 'USE_ACTION_BUTTON') {

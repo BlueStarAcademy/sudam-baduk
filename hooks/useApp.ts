@@ -4,24 +4,12 @@ import {
     OverrideAnnouncement, Guild, TowerRank, AppSettings, ServerAction, User, ItemGrade, InventoryItem, ShopTab, Theme, SoundCategory
 } from '../types';
 import { parseHash } from '../utils/appUtils';
-import { createClient } from '@supabase/supabase-js';
 import { defaultSettings } from './useAppSettings';
 import { audioService } from '../services/audioService';
 import { containsProfanity } from '../profanity';
 import { SLUG_BY_GAME_MODE } from '../constants';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// FIX: This hook was heavily refactored to provide the API surface area that `App.tsx` and other components expect.
-// This includes:
-// - A modal stack for proper layering (`activeModalIds`).
-// - Individual boolean flags for modal visibility (`is...Open`).
-// - Individual open/close handlers for each modal.
-// - State management for data passed to or resulting from modals.
-// - State for toasts, Kakao registration flow, and derived `myGuild` data.
+import { supabase } from '../services/supabase';
 
 export const useApp = () => {
     // Core State
@@ -79,8 +67,6 @@ export const useApp = () => {
     const [kakaoRegistrationData, setKakaoRegistrationData] = useState<any | null>(null);
 
 
-
-
     // Derived State
     const myGuild = useMemo(() => {
         if (!currentUser?.guildId) return null;
@@ -98,6 +84,7 @@ export const useApp = () => {
     
     const activeNegotiation = useMemo(() => {
         if (!currentUser) return null;
+        if (!negotiations) return null;
         return Object.values(negotiations).find(neg => 
             (neg.challenger.id === currentUser.id || neg.opponent.id === currentUser.id) &&
             (neg.status === 'pending' || neg.status === 'draft')
@@ -177,7 +164,7 @@ export const useApp = () => {
             setNegotiations(data.negotiations || {});
             setWaitingRoomChats(data.waitingRoomChats || {});
             setGameChats(data.gameChats || {});
-            setOnlineUsers(Object.values(data.userStatuses || {}));
+            setOnlineUsers(data.onlineUsers);
 
         } catch (err: any) {
             setError(err.message);
@@ -238,6 +225,14 @@ export const useApp = () => {
             if (data.obtainedItemsBulk) {
                 setLastUsedItemResult(data.obtainedItemsBulk);
                 openModal('itemObtained');
+            }
+
+            if (data.deletedGameId) {
+                setLiveGames(prev => {
+                    const newLiveGames = { ...prev };
+                    delete newLiveGames[data.deletedGameId];
+                    return newLiveGames;
+                });
             }
 
             if (data.updatedGame) {
@@ -444,6 +439,37 @@ export const useApp = () => {
             window.removeEventListener('storage', handleStorageChange);
         };
     }, [sessionId, handleLogout]);
+
+    useEffect(() => {
+        if (!sessionId) return;
+
+        const setupChatSubscription = () => {
+            const channel = supabase.channel('chat_room');
+
+            channel.on('broadcast', { event: 'chat_message' }, (payload) => {
+                const { channel: chatChannel, message } = payload.payload;
+                if (chatChannel === 'global') {
+                    setWaitingRoomChats(prev => ({
+                        ...prev,
+                        global: [...(prev.global || []), message].slice(-100)
+                    }));
+                } else {
+                    setGameChats(prev => ({
+                        ...prev,
+                        [chatChannel]: [...(prev[chatChannel] || []), message].slice(-100)
+                    }));
+                }
+            })
+            .subscribe();
+
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        };
+
+        const unsubscribe = setupChatSubscription();
+        return () => unsubscribe();
+    }, [sessionId]); // Re-subscribe if sessionId changes
 
     return {
         currentUser,
