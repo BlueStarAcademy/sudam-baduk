@@ -359,9 +359,11 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
                 return neg.challenger.id === user.id && neg.opponent.id === aiUserId && neg.status === 'draft';
             });
             if (draftNegId) delete volatileState.negotiations[draftNegId];
+            delete volatileState.negotiations[negotiation.id];
+            await db.setKV('negotiations', volatileState.negotiations);
             
             await db.updateUser(user);
-            return { clientResponse: { updatedUser: user } };
+            return { clientResponse: { updatedUser: user, newGameId: game.id, updatedNegotiations: volatileState.negotiations } };
         }
         case 'REQUEST_REMATCH': {
             const { opponentId, originalGameId } = payload;

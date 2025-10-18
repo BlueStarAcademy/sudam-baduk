@@ -65,13 +65,16 @@ const getAutoEndTurnOptions = (boardSize: number): number[] => {
     return AUTO_END_TURN_COUNTS.full;
 };
 
+import { getDefaultSettingsForMode } from '../constants/index.js';
+
 const NegotiationModal: React.FC<NegotiationModalProps> = (props) => {
   const { negotiation, currentUser, onAction, onlineUsers, isTopmost } = props;
   const { mode } = negotiation;
   const [settings, setSettings] = useState<GameSettings>(() => {
       const isAiGame = negotiation.opponent.id === aiUserId;
       const isCreatingDraft = negotiation.status === 'draft' && negotiation.proposerId === currentUser.id;
-      let initialSettings: GameSettings = { ...DEFAULT_GAME_SETTINGS, ...negotiation.settings };
+      const defaultModeSettings = getDefaultSettingsForMode(negotiation.mode);
+      let initialSettings: GameSettings = { ...defaultModeSettings, ...negotiation.settings } as GameSettings;
       const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === negotiation.mode);
 
       if (isCreatingDraft) {
@@ -85,7 +88,6 @@ const NegotiationModal: React.FC<NegotiationModalProps> = (props) => {
           } catch (e) { console.error("Failed to load preferred settings", e); }
       }
       
-      if (negotiation.mode === GameMode.Base) initialSettings.komi = 0.5;
       if (isAiGame && !initialSettings.player1Color) initialSettings.player1Color = Player.Black;
       
       const getValidSizes = (mode: GameMode): readonly number[] => {

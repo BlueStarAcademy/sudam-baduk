@@ -198,6 +198,7 @@ export const useApp = () => {
             });
 
             const data = await response.json();
+            console.log('Action response data:', data);
 
             if (!response.ok) {
                 throw new Error(data.message || 'An unknown error occurred.');
@@ -220,6 +221,10 @@ export const useApp = () => {
 
             if (data.newNegotiation) {
                 setNegotiations(prev => ({...prev, [data.newNegotiation.id]: data.newNegotiation}));
+            }
+
+            if (data.updatedNegotiations) {
+                setNegotiations(data.updatedNegotiations);
             }
 
             if (data.obtainedItemsBulk) {
@@ -471,6 +476,16 @@ export const useApp = () => {
         return () => unsubscribe();
     }, [sessionId]); // Re-subscribe if sessionId changes
 
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     return {
         currentUser,
         currentUserWithStatus: currentUser,
@@ -497,7 +512,7 @@ export const useApp = () => {
         settings,
         hasClaimableQuest,
         hasFullMissionReward,
-        isMobile: false,
+        isMobile,
         handlers,
         // New state for App.tsx
         kakaoRegistrationData,
@@ -542,5 +557,6 @@ export const useApp = () => {
             activeModalIds, // For isTopmost logic
         },
         topmostModalId,
+        activeModalIds
     };
 };

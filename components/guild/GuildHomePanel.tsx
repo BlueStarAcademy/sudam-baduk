@@ -29,10 +29,10 @@ const GuildCheckInPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
     };
 
     return (
-        <div className="bg-secondary p-3 rounded-lg flex flex-col h-full">
+        <div className="bg-secondary p-2 rounded-lg flex flex-col h-full">
             <div>
-                <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-bold text-lg text-highlight">길드 출석부</h3>
+                <div className="flex justify-between items-center mb-1">
+                    <h3 className="font-bold text-base text-highlight">길드 출석부</h3>
                     <Button onClick={handleCheckIn} disabled={hasCheckedInToday} className="!text-sm !py-1">
                         {hasCheckedInToday ? '출석 완료' : '출석하기'}
                     </Button>
@@ -76,8 +76,8 @@ const GuildCheckInPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
 };
 
 const GuildAnnouncementPanel: React.FC<{ guild: GuildType }> = ({ guild }) => (
-    <div className="bg-secondary p-4 rounded-lg flex flex-col h-full">
-        <h3 className="font-bold text-lg text-highlight mb-2 flex-shrink-0">길드 공지</h3>
+    <div className="bg-secondary p-2 rounded-lg flex flex-col h-full">
+        <h3 className="font-bold text-base text-highlight mb-1 flex-shrink-0">길드 공지</h3>
         <div className="flex-grow overflow-y-auto pr-2 bg-tertiary/40 p-2 rounded-md min-h-0">
             <p className="text-sm text-primary whitespace-pre-wrap">
                 {guild.announcement || '등록된 공지사항이 없습니다.'}
@@ -113,8 +113,8 @@ const GuildChat: React.FC<{ guild: GuildType, myMemberInfo: GuildMember | undefi
     };
 
     return (
-        <div className="bg-secondary p-4 rounded-lg h-full flex flex-col">
-            <h3 className="font-bold text-lg text-highlight mb-2 flex-shrink-0">길드 채팅</h3>
+        <div className="bg-secondary p-2 rounded-lg h-full flex flex-col">
+            <h3 className="font-bold text-base text-highlight mb-1 flex-shrink-0">길드 채팅</h3>
             <div ref={chatBodyRef} className="flex-grow space-y-3 overflow-y-auto pr-2 mb-2 bg-tertiary/40 p-2 rounded-md min-h-0">
                 {guild.chatHistory && guild.chatHistory.length > 0 ? (
                     guild.chatHistory.map(msg => {

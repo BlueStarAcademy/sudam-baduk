@@ -129,8 +129,14 @@ const Auth: React.FC = () => {
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || '회원가입 실패');
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.indexOf('application/json') !== -1) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || '회원가입 실패');
+                    } else {
+                        const errorText = await response.text();
+                        throw new Error(errorText || '서버에서 오류가 발생했습니다.');
+                    }
                 }
                 const data = await response.json();
                 login(data.user, data.sessionId);
@@ -155,8 +161,14 @@ const Auth: React.FC = () => {
                 });
                 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || '로그인 실패');
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.indexOf('application/json') !== -1) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || '로그인 실패');
+                    } else {
+                        const errorText = await response.text();
+                        throw new Error(errorText || '서버에서 오류가 발생했습니다.');
+                    }
                 }
 
                 const data = await response.json();
@@ -263,8 +275,10 @@ const App: React.FC = () => {
         onlineUsers,
         guilds,
         myGuild,
-        topmostModalId
+        topmostModalId,
+        activeModalIds
     } = useAppContext();
+    console.log('activeModalIds:', activeModalIds, 'topmostModalId:', topmostModalId);
     
     const [isPreloading, setIsPreloading] = useState(true);
 

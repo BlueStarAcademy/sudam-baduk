@@ -161,7 +161,7 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
                 }
             }
             await db.saveGame(game);
-            return {};
+            return { clientResponse: { updatedGame: game } };
         }
         if (type === 'TOWER_PURCHASE_ITEM') {
             const game = await db.getLiveGame(gameId);

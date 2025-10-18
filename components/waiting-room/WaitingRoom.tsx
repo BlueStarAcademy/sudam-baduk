@@ -263,30 +263,37 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                  <div className="flex-shrink-0">
                     <AiChallengePanel mode={mode} />
                 </div>
-                <div className="grid grid-rows-2 gap-2 flex-1 min-h-0">
-                    <NineSlicePanel className="min-h-0 shadow-lg flex flex-col">
-                        <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
-                    </NineSlicePanel>
-                    <NineSlicePanel className="min-h-0 flex flex-col shadow-lg">
-                        <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
-                    </NineSlicePanel>
+                <div className="flex flex-col gap-2 flex-1 min-h-0">
+                    <div className="h-[55%]">
+                        <NineSlicePanel className="h-full min-h-0 shadow-lg flex flex-col">
+                            <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
+                        </NineSlicePanel>
+                    </div>
+                    <div className="h-[45%]">
+                        <NineSlicePanel className="h-full min-h-0 flex flex-col shadow-lg">
+                            <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
+                        </NineSlicePanel>
+                    </div>
                 </div>
             </div>
             
             {/* Right Sidebar Column */}
-            <div className="lg:col-span-2 grid grid-rows-2 gap-2">
-              <div className="flex flex-row gap-2 items-stretch min-h-0">
-                <NineSlicePanel className="flex-1 shadow-lg min-w-0">
-                  <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
-                </NineSlicePanel>
-                <div className="w-20 flex-shrink-0">
-                  <QuickAccessSidebar />
+            <div className="lg:col-span-2 flex flex-col gap-2">
+              <div className="h-[55%]">
+                <div className="flex flex-row gap-2 items-stretch h-full">
+                  <NineSlicePanel className="flex-1 shadow-lg min-w-0">
+                    <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
+                  </NineSlicePanel>
+                  <div className="w-20 flex-shrink-0 z-10">
+                    <QuickAccessSidebar />
+                  </div>
                 </div>
               </div>
-
-              <NineSlicePanel className="shadow-lg min-h-0">
-                <RankingList currentUser={currentUserWithStatus} mode={mode} onViewUser={handlers.openViewingUser} onShowTierInfo={() => setIsTierInfoModalOpen(true)} onShowPastRankings={handlers.openPastRankings} />
-              </NineSlicePanel>
+              <div className="h-[45%]">
+                <NineSlicePanel className="h-full shadow-lg min-h-0">
+                  <RankingList currentUser={currentUserWithStatus} mode={mode} onViewUser={handlers.openViewingUser} onShowTierInfo={() => setIsTierInfoModalOpen(true)} onShowPastRankings={handlers.openPastRankings} />
+                </NineSlicePanel>
+              </div>
             </div>
           </div>
         )}

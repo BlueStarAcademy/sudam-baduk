@@ -63,8 +63,8 @@ const GuildDonationPanel: React.FC<{ guildDonationAnimation: { coins: number; re
     }, [guildDonationAnimation]);
 
     return (
-        <div className="bg-secondary p-4 rounded-lg flex flex-col relative overflow-hidden">
-            <h3 className="font-bold text-lg text-highlight mb-3 text-center">길드 기부</h3>
+        <div className="bg-secondary p-2 rounded-lg flex flex-col relative overflow-hidden">
+            <h3 className="font-bold text-base text-highlight mb-2 text-center">길드 기부</h3>
             {animationElements}
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-tertiary p-3 rounded-md text-center">
@@ -153,7 +153,7 @@ const BossPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
             onClick={() => window.location.hash = '#/guildboss'}
             className="bg-secondary p-2 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full"
         >
-            <h3 className="font-bold text-lg text-highlight mb-1">길드 보스전</h3>
+            <h3 className="font-bold text-base text-highlight mb-1">길드 보스전</h3>
             <div className="w-20 h-20 bg-tertiary rounded-lg flex items-center justify-center my-1">
                 <img src="/images/guild/bossraid.png" alt="길드 보스전" className="w-16 h-16" />
             </div>
@@ -174,7 +174,7 @@ const WarPanel: React.FC = () => (
         onClick={() => window.location.hash = '#/guildwar'}
         className="bg-secondary p-2 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full"
     >
-        <h3 className="font-bold text-lg text-highlight mb-1">길드 전쟁</h3>
+        <h3 className="font-bold text-base text-highlight mb-1">길드 전쟁</h3>
         <div className="w-20 h-20 bg-tertiary rounded-lg flex items-center justify-center my-1">
             <img src="/images/guild/guildwar.png" alt="길드 전쟁" className="w-16 h-16" />
         </div>
@@ -305,12 +305,12 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
                     <BackButton onClick={() => window.location.hash = '#/profile'} />
                 </div>
                 
-                <div className="flex flex-col items-center gap-2">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-2">
                         <div className="relative group flex-shrink-0">
-                            <img src={guild.icon} alt="Guild Icon" className="w-16 h-16 bg-tertiary rounded-md" />
+                            <img src={guild.icon} alt="Guild Icon" className="w-12 h-12 bg-tertiary rounded-md" />
                         </div>
-                        <h1 className="text-3xl font-bold">{guild.name}</h1>
+                        <h1 className="text-2xl font-bold">{guild.name}</h1>
                     </div>
                     <div className="w-48">
                         <div className="flex justify-between text-xs text-secondary mb-0.5">
