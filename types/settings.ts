@@ -6,6 +6,7 @@ export type InventoryTab = 'all' | 'equipment' | 'consumable' | 'material';
 
 export interface GraphicsSettings {
     theme: Theme;
+    panelEdge: 0 | 1 | 2 | 3 | 4 | 5;
     panelColor?: string;
     textColor?: string;
 }

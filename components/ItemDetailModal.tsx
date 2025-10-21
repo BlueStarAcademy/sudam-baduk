@@ -1,9 +1,135 @@
-import React from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { InventoryItem, ItemGrade, ItemOption, EquipmentSlot } from '../types/index.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { GRADE_LEVEL_REQUIREMENTS } from '../constants/index.js';
 import { useAppContext } from '../hooks/useAppContext.js';
+import { gradeStyles, getStarDisplayInfo } from '../utils/itemDisplayUtils.js';
+
+// Copied from InventoryModal.tsx
+const gradeBackgrounds: Record<ItemGrade, string> = {
+    normal: '/images/equipments/normalbgi.png',
+    uncommon: '/images/equipments/uncommonbgi.png',
+    rare: '/images/equipments/rarebgi.png',
+    epic: '/images/equipments/epicbgi.png',
+    legendary: '/images/equipments/legendarybgi.png',
+    mythic: '/images/equipments/mythicbgi.png',
+};
+
+// Copied from InventoryModal.tsx
+const renderStarDisplay = (stars: number) => {
+    if (stars === 0) return null;
+    let starImage = '/images/equipments/Star1.png';
+    let numberColor = 'text-white';
+    if (stars >= 10) { starImage = '/images/equipments/Star4.png'; numberColor = "prism-text-effect"; }
+    else if (stars >= 7) { starImage = '/images/equipments/Star3.png'; numberColor = "text-purple-400"; }
+    else if (stars >= 4) { starImage = '/images/equipments/Star2.png'; numberColor = "text-amber-400"; }
+    
+    return (
+        <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 bg-black/40 rounded-br-md px-1 py-0.5 z-10" style={{ textShadow: '1px 1px 2px black' }}>
+            <img src={starImage} alt="star" className="w-3 h-3" />
+            <span className={`font-bold text-xs leading-none ${numberColor}`}>{stars}</span>
+        </div>
+    );
+};
+
+// Copied from InventoryModal.tsx
+const ComparisonDiff: React.FC<{ diff: number }> = ({ diff }) => {
+    if (diff === 0) {
+        return <span className="text-tertiary">(-)</span>;
+    }
+    const sign = diff > 0 ? '+' : '';
+    const color = diff > 0 ? 'text-green-400' : 'text-red-400';
+    return <span className={color}>({sign}{diff})</span>;
+};
+
+// Copied from InventoryModal.tsx
+const DetailedItemDisplay: React.FC<{
+    item: InventoryItem;
+    isEquippedItem?: boolean;
+    comparedToOption?: ItemOption; // For main option comparison
+    equippedItem?: InventoryItem; // For all option comparisons
+}> = ({ item, isEquippedItem, comparedToOption, equippedItem }) => {
+    const styles = gradeStyles[item.grade];
+    const requiredLevel = item.type === 'equipment' ? GRADE_LEVEL_REQUIREMENTS[item.grade] : null;
+    const starInfo = getStarDisplayInfo(item.stars);
+
+    const mainOptionDiff = useMemo(() => {
+        if (!item.options?.main || !comparedToOption) return 0;
+        return item.options.main.value - comparedToOption.value;
+    }, [item.options?.main, comparedToOption]);
+
+    const getOptionDiff = useCallback((selectedOpt: ItemOption, equippedOpts?: ItemOption[]) => {
+        if (!equippedOpts) return 0;
+        const equippedOpt = equippedOpts.find(opt => opt.type === selectedOpt.type && opt.isPercentage === selectedOpt.isPercentage);
+        return selectedOpt.value - (equippedOpt?.value || 0);
+    }, []);
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="flex items-center gap-2 p-1 flex-shrink-0">
+                <div className="relative w-20 h-20 flex-shrink-0">
+                    <img src={styles.background} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-lg" />
+                    {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-2" />}
+                    {renderStarDisplay(item.stars)}
+                </div>
+                <div className="flex-grow">
+                    <h3 className={`font-bold text-base ${starInfo.colorClass}`}>{item.name} {item.stars > 0 && <span className="text-xs">({starInfo.text})</span>}</h3>
+                    {requiredLevel && <p className="text-xs text-yellow-300">착용 레벨 합: {requiredLevel}</p>}
+                    {item.options?.main && (
+                        <div className="text-xs text-yellow-300 flex justify-between">
+                            <span>주옵션: {item.options.main.display}</span>
+                            {comparedToOption && <ComparisonDiff diff={mainOptionDiff} />}
+                        </div>
+                    )}
+                </div>
+            </div>
+            {item.options && (
+                <div className="flex-grow overflow-y-auto p-2 text-xs space-y-1">
+                    {item.options.combatSubs.length > 0 && (
+                        <ul className="list-disc list-inside ml-2">
+                            {item.options.combatSubs.map((opt, i) => {
+                                const diff = equippedItem ? getOptionDiff(opt, equippedItem.options?.combatSubs) : 0;
+                                return (
+                                    <li key={i} className="text-blue-300 flex justify-between">
+                                        <span>{opt.display}</span>
+                                        {equippedItem && <ComparisonDiff diff={diff} />}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                    {item.options.specialSubs.length > 0 && (
+                        <ul className="list-disc list-inside ml-2">
+                            {item.options.specialSubs.map((opt, i) => {
+                                const diff = equippedItem ? getOptionDiff(opt, equippedItem.options?.specialSubs) : 0;
+                                return (
+                                    <li key={i} className="text-green-300 flex justify-between">
+                                        <span>{opt.display}</span>
+                                        {equippedItem && <ComparisonDiff diff={diff} />}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                    {item.options.mythicSubs.length > 0 && (
+                        <ul className="list-disc list-inside ml-2">
+                            {item.options.mythicSubs.map((opt, i) => {
+                                const diff = equippedItem ? getOptionDiff(opt, equippedItem.options?.mythicSubs) : 0;
+                                return (
+                                    <li key={i} className="text-red-400 flex justify-between">
+                                        <span>{opt.display}</span>
+                                        {equippedItem && <ComparisonDiff diff={diff} />}
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
 
 interface ItemDetailModalProps {
   item: InventoryItem;
@@ -11,98 +137,16 @@ interface ItemDetailModalProps {
   onClose: () => void;
 }
 
-const gradeStyles: Record<ItemGrade, { bg: string, text: string, shadow: string, name: string, background: string }> = {
-    normal: { bg: 'bg-gray-700', text: 'text-white', shadow: 'shadow-gray-900/50', name: '일반', background: '/images/equipments/normalbgi.png' },
-    uncommon: { bg: 'bg-green-700', text: 'text-green-200', shadow: 'shadow-green-500/50', name: '고급', background: '/images/equipments/uncommonbgi.png' },
-    rare: { bg: 'bg-blue-700', text: 'text-blue-200', shadow: 'shadow-blue-500/50', name: '희귀', background: '/images/equipments/rarebgi.png' },
-    epic: { bg: 'bg-purple-700', text: 'text-purple-200', shadow: 'shadow-purple-500/50', name: '에픽', background: '/images/equipments/epicbgi.png' },
-    legendary: { bg: 'bg-red-800', text: 'text-red-200', shadow: 'shadow-red-500/50', name: '전설', background: '/images/equipments/legendarybgi.png' },
-    mythic: { bg: 'bg-orange-700', text: 'text-orange-200', shadow: 'shadow-orange-500/50', name: '신화', background: '/images/equipments/mythicbgi.png' },
-};
-
-const getStarDisplayInfo = (stars: number) => {
-    if (stars >= 10) {
-        return { text: `(★${stars})`, colorClass: "prism-text-effect" };
-    } else if (stars >= 7) {
-        return { text: `(★${stars})`, colorClass: "text-purple-400" };
-    } else if (stars >= 4) {
-        return { text: `(★${stars})`, colorClass: "text-amber-400" };
-    } else if (stars >= 1) {
-        return { text: `(★${stars})`, colorClass: "text-white" };
-    }
-    return { text: "", colorClass: "text-white" };
-};
-
-const OptionSection: React.FC<{ title: string; options: ItemOption[]; color: string; }> = ({ title, options, color }) => {
-    if (options.length === 0) return null;
-    return (
-        <div>
-            <h5 className={`font-semibold ${color} border-b border-gray-600 pb-1 mb-1 text-sm`}>{title}</h5>
-            <ul className="list-disc list-inside space-y-0.5 text-gray-300 text-xs">
-                {options.map((opt, i) => <li key={i}>{opt.display}</li>)}
-            </ul>
-        </div>
-    );
-};
-
-
 const ItemDetailModal: React.FC<ItemDetailModalProps> = ({ item, isOwnedByCurrentUser, onClose }) => {
-  const { handlers, currentUserWithStatus } = useAppContext();
-  const styles = gradeStyles[item.grade];
-  const requiredLevel = item.type === 'equipment' ? GRADE_LEVEL_REQUIREMENTS[item.grade] : null;
-  const starInfo = getStarDisplayInfo(item.stars);
-
-  const handleEquipToggle = () => {
-    handlers.handleAction({ type: 'TOGGLE_EQUIP_ITEM', payload: { itemId: item.id } });
-    onClose();
-  };
-
-  const handleSell = () => {
-    if(window.confirm(`${item.name} 아이템을 판매하시겠습니까?`)) {
-        handlers.handleAction({ type: 'SELL_ITEM', payload: { itemId: item.id } });
-        onClose();
-    }
-  }
-
-  const handleUse = () => {
-      handlers.handleAction({ type: 'USE_ITEM', payload: { itemId: item.id } });
-      onClose();
-  };
+  const { handlers, topmostModalId } = useAppContext();
 
   return (
-    <DraggableWindow title={item.name} onClose={onClose} windowId={`item-detail-${item.id}`}>
-      <div className="flex flex-col md:flex-row gap-4">
-        <div className="w-full md:w-1/3 flex flex-col items-center">
-            <div className="relative w-32 h-32 rounded-lg">
-                <img src={styles.background} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-lg" />
-                {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-4"/>}
-            </div>
-            <p className={`font-bold text-lg ${styles.text}`}>[{styles.name}]</p>
-             <div className="flex items-baseline justify-center gap-2">
-                <h2 className={`text-2xl font-bold ${starInfo.colorClass}`}>{item.name}</h2>
-                {item.stars > 0 && <span className={`text-xl font-bold ${starInfo.colorClass}`}>{starInfo.text}</span>}
-            </div>
-            {requiredLevel && <p className="text-xs text-yellow-300">(착용 레벨 합: {requiredLevel})</p>}
-        </div>
-        <div className="w-full md:w-2/3 space-y-3">
-            <p className="text-sm text-gray-400 italic bg-gray-900/50 p-2 rounded-md">{item.description}</p>
-            {item.type === 'equipment' && item.options && (
-                 <div className="w-full text-xs text-left space-y-2 max-h-48 overflow-y-auto bg-black/20 p-2 rounded-md">
-                    <OptionSection title="주옵션" options={[item.options.main]} color="text-yellow-300" />
-                    <OptionSection title="전투 부옵션" options={item.options.combatSubs} color="text-blue-300" />
-                    <OptionSection title="특수 부옵션" options={item.options.specialSubs} color="text-green-300" />
-                    <OptionSection title="신화 부옵션" options={item.options.mythicSubs} color="text-red-400" />
-                </div>
-            )}
-             {isOwnedByCurrentUser && (
-                <div className="flex gap-2 pt-2 border-t border-gray-700">
-                    <Button onClick={onClose} colorScheme="gray" className="flex-1">닫기</Button>
-                    {item.type === 'equipment' && <Button onClick={handleEquipToggle} colorScheme="green" className="flex-1">{item.isEquipped ? '장착 해제' : '장착'}</Button>}
-                    {item.type === 'consumable' && <Button onClick={handleUse} colorScheme="blue" className="flex-1">사용</Button>}
-                    {item.type === 'equipment' && <Button onClick={() => handlers.openEnhancement(item)} colorScheme="yellow" className="flex-1">강화</Button>}
-                    {item.type !== 'consumable' && <Button onClick={handleSell} colorScheme="red" className="flex-1">판매</Button>}
-                </div>
-             )}
+    <DraggableWindow title={item.name} onClose={onClose} windowId={`item-detail-${item.id}`} initialWidth={500} isTopmost={topmostModalId === `item-detail-${item.id}`}>
+      <div>
+        <DetailedItemDisplay item={item} />
+        <div className="flex gap-2 pt-2 border-t border-gray-700 mt-2">
+            <Button onClick={() => { handlers.openBlacksmith(item); onClose(); }} colorScheme="blue" className="flex-1">대장간</Button>
+            <Button onClick={onClose} colorScheme="gray" className="flex-1">확인</Button>
         </div>
       </div>
     </DraggableWindow>

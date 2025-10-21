@@ -32,7 +32,7 @@ const BasePlacementModal: React.FC<BasePlacementModalProps> = ({ session, curren
     }, [basePlacementDeadline]);
 
     return (
-        <DraggableWindow title="베이스돌 배치" windowId="base-placement" initialWidth={300} modal={false}>
+        <DraggableWindow title="베이스돌 배치" windowId="base-placement" initialWidth={400} modal={false}>
             <div className="text-center">
                 <p className="text-sm text-gray-200">상대에게 보이지 않는 베이스돌을 놓아주세요.</p>
                 <p className="text-lg font-bold my-2">({myPlacements}/{baseStoneCount})</p>

@@ -171,7 +171,7 @@ export const handleAdminAction = async (action: ServerAction, volatileState: Vol
         case 'ADMIN_TOGGLE_GAME_MODE': {
             const { mode, isAvailable } = payload;
             const availability = await db.getKV<Record<GameMode, boolean>>('gameModeAvailability') || {} as Record<GameMode, boolean>;
-            availability[mode] = isAvailable;
+            availability[mode as GameMode] = isAvailable;
             await db.setKV('gameModeAvailability', availability);
             return {};
         }

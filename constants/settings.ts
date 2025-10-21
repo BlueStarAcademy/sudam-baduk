@@ -10,6 +10,7 @@ export const defaultSettings: AppSettings = {
         // FIX: Explicitly cast the theme to the union of allowed theme strings to match the 'Theme' type.
         // This prevents TypeScript from inferring it as a generic 'string', which caused a type mismatch.
         theme: 'black' as 'black' | 'white' | 'blue' | 'sky' | 'green',
+        panelEdge: 0,
         panelColor: undefined,
         textColor: undefined,
     },

@@ -108,10 +108,10 @@ const RankingList: React.FC<RankingListProps> = ({ currentUser, mode, onViewUser
                 <img src={tier.icon} alt={tier.name} className="w-8 h-8 flex-shrink-0" title={tier.name}/>
                 <Avatar userId={user.id} userName={user.nickname} size={32} avatarUrl={avatarUrl} borderUrl={borderUrl} />
                 <div className="flex-grow overflow-hidden">
-                    <p className="font-semibold text-sm truncate">{user.nickname}</p>
-                    <p className="text-xs text-highlight font-mono">{score}점</p>
+                    <p className="font-semibold text-xs truncate">{user.nickname}</p>
+                    <p className="text-[10px] text-highlight font-mono">{score}점</p>
                 </div>
-                <div className="text-right text-[10px] lg:text-xs flex-shrink-0 w-20 text-tertiary">
+                <div className="text-right text-[10px] flex-shrink-0 w-20 text-tertiary">
                     <p>{stats.wins}승 {stats.losses}패</p>
                     <p className="font-semibold">{winRate}%</p>
                 </div>
@@ -120,9 +120,9 @@ const RankingList: React.FC<RankingListProps> = ({ currentUser, mode, onViewUser
     }, [mode, currentUser.id, getTierForUser, onViewUser]);
 
     return (
-        <div className="p-4 flex flex-col text-on-panel">
-            <div className="flex justify-between items-center mb-3 border-b border-color pb-2 flex-shrink-0 flex-wrap gap-2">
-                <h2 className="text-xl font-semibold">{mode} 랭킹 ({getCurrentSeasonName()})</h2>
+        <div className="px-2 pb-2 flex flex-col text-on-panel h-full">
+            <div className="flex justify-between items-center border-b border-color flex-shrink-0 flex-wrap gap-2">
+                <h2 className="text-base font-semibold">{mode} 랭킹 ({getCurrentSeasonName()})</h2>
                 <div className="flex items-center gap-2">
                     <Button 
                         onClick={() => onShowPastRankings({ user: currentUser, mode })}
@@ -147,7 +147,7 @@ const RankingList: React.FC<RankingListProps> = ({ currentUser, mode, onViewUser
                 </div>
             )}
 
-            <ul className="space-y-2 overflow-y-auto pr-2 h-72">
+            <ul className="space-y-2 overflow-y-auto pr-2 h-48">
                  {topUsers.length > 0 ? topUsers.map((user, index) => renderRankItem(user, index + 1, false)) : (
                      <p className="text-center text-tertiary pt-8">랭킹 정보가 없습니다.</p>
                  )}

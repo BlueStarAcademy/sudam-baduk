@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 // FIX: Import 'process' from 'process' module to provide correct type definitions and fix 'cwd' does not exist error.
-import process from 'process';
+import * as process from 'process';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {

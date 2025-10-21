@@ -27,17 +27,17 @@ const QuickAccessSidebar: React.FC<QuickAccessSidebarProps> = ({ mobile, fillHei
     : `flex flex-col ${fillHeight ? 'h-full justify-around' : 'gap-3'}`;
 
   return (
-    <div className={`bg-panel panel-glow text-on-panel rounded-lg p-2 ${containerClasses} overflow-y-auto`}>
+    <div className={`bg-panel panel-glow text-on-panel rounded-lg p-2 w-20 ${containerClasses}`}>
       {buttons.map(({ label, icon, action, notification }) => (
         <button
           key={label}
-          onClick={action}
+          onClick={() => action()}
           className="relative group transition-transform hover:scale-110"
           title={label}
         >
-          <div className="w-16 h-16 bg-secondary rounded-md flex items-center justify-center border-2 border-yellow-500/50 group-hover:border-yellow-400 transition-all p-1 relative">
+          <div className="w-12 h-12 bg-secondary rounded-md flex items-center justify-center border-2 border-yellow-500/50 group-hover:border-yellow-400 transition-all p-1 relative">
             <img src={icon} alt={label} className="w-full h-full object-cover rounded-sm" />
-            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-center py-0.5">
+            <div className="absolute bottom-0 left-0 right-0 bg-black/30 text-center">
                 <span className="text-xs text-white font-semibold">{label}</span>
             </div>
           </div>

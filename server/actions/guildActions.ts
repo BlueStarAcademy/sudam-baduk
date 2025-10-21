@@ -166,7 +166,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             await db.setKV('guilds', guilds);
             await broadcast({ guilds });
             await db.updateUser(applicant);
-            return {};
+            return { clientResponse: { guilds } };
         }
 
         case 'GUILD_REJECT_APPLICANT': {
@@ -186,7 +186,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
 
             await db.setKV('guilds', guilds);
             await broadcast({ guilds });
-            return {};
+            return { clientResponse: { guilds } };
         }
 
         case 'GUILD_LEAVE': {
@@ -210,7 +210,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             await db.setKV('guilds', guilds);
             await broadcast({ guilds });
             await db.updateUser(user);
-            return { clientResponse: { updatedUser: user } };
+            return { clientResponse: { updatedUser: user, guilds } };
         }
 
         case 'GUILD_KICK_MEMBER': {
@@ -234,7 +234,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             } else {
                 return { error: '권한이 없습니다.' };
             }
-            return {};
+            return { clientResponse: { guilds } };
         }
         
         case 'GUILD_PROMOTE_MEMBER':
@@ -253,7 +253,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             }
             await db.setKV('guilds', guilds);
             await broadcast({ guilds });
-            return {};
+            return { clientResponse: { guilds } };
         }
         
         case 'GUILD_TRANSFER_MASTERSHIP': {
@@ -272,7 +272,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             myMemberInfo.role = GuildMemberRole.Member;
             await db.setKV('guilds', guilds);
             await broadcast({ guilds });
-            return {};
+            return { clientResponse: { guilds } };
         }
 
         case 'GUILD_UPDATE_PROFILE': {
@@ -286,7 +286,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             if(isPublic !== undefined) guild.isPublic = isPublic;
             await db.setKV('guilds', guilds);
             await broadcast({ guilds });
-            return {};
+            return { clientResponse: { guilds } };
         }
 
         case 'GUILD_UPDATE_ANNOUNCEMENT': {
@@ -298,7 +298,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             }
             guild.announcement = announcement;
             await db.setKV('guilds', guilds);
-            return {};
+            await broadcast({ guilds });
+            return { clientResponse: { guilds } };
         }
 
         case 'GUILD_CHECK_IN': {
@@ -312,11 +313,11 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
 
             guild.checkIns[user.id] = now;
             
-            // The service now modifies the guilds object in place and the caller saves it.
             await guildService.updateGuildMissionProgress(user.guildId, 'checkIns', 1, guilds);
             
             await db.setKV('guilds', guilds);
-            return {};
+            await broadcast({ guilds });
+            return { clientResponse: { guilds } };
         }
         case 'GUILD_CLAIM_CHECK_IN_REWARD': {
              const { milestoneIndex } = payload;
@@ -337,7 +338,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
 
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
-            return { clientResponse: { updatedUser: user } };
+            await broadcast({ guilds });
+            return { clientResponse: { updatedUser: user, guilds } };
         }
         case 'GUILD_CLAIM_MISSION_REWARD': {
             const { missionId } = payload;
@@ -364,8 +366,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
-        
-            return { clientResponse: { updatedUser: user } };
+            await broadcast({ guilds });
+            return { clientResponse: { updatedUser: user, guilds } };
         }
         case 'GUILD_DONATE_GOLD':
         case 'GUILD_DONATE_DIAMOND': {
@@ -419,9 +421,11 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
 
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
+            await broadcast({ guilds });
             return { 
                 clientResponse: { 
                     updatedUser: user, 
+                    guilds,
                     donationResult: {
                         coins: gainedGuildCoins,
                         research: gainedResearchPoints,
@@ -454,7 +458,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             };
 
             await db.setKV('guilds', guilds);
-            return {};
+            await broadcast({ guilds });
+            return { clientResponse: { guilds } };
         }
 
         case 'GUILD_BUY_SHOP_ITEM': {
@@ -500,7 +505,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
                 const record = user.guildShopPurchases[itemId];
                 if (record) {
                     const isNewPeriod = (itemToBuy.limitType === 'weekly' && isDifferentWeekKST(record.lastPurchaseTimestamp, now)) ||
-                                        (itemToType.limitType === 'monthly' && isDifferentMonthKST(record.lastPurchaseTimestamp, now));
+                                        (itemToBuy.limitType === 'monthly' && isDifferentMonthKST(record.lastPurchaseTimestamp, now));
 
                     if (isNewPeriod) {
                         record.quantity = 1;
@@ -656,7 +661,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             if (!guild.chatHistory) guild.chatHistory = [];
 
             const message = {
-                id: `msg-guild-${globalThis.crypto.randomUUID()}`,
+                id: `msg-guild-${globalThis.crypto.randomUUID()}` ,
                 user: { id: user.id, nickname: user.nickname },
                 text,
                 timestamp: Date.now(),
@@ -666,7 +671,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
                 guild.chatHistory.shift();
             }
             await db.setKV('guilds', guilds);
-            return {};
+            await broadcast({ guilds });
+            return { clientResponse: { guilds } };
         }
 
         case 'GUILD_DELETE_CHAT_MESSAGE': {
@@ -706,7 +712,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             guild.chatHistory.splice(messageIndex, 1);
         
             await db.setKV('guilds', guilds);
-            return {};
+            await broadcast({ guilds });
+            return { clientResponse: { guilds } };
         }
         
         case 'START_GUILD_BOSS_BATTLE': {
@@ -742,7 +749,7 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
             const currentBoss = GUILD_BOSSES.find(b => b.id === guild.guildBossState!.currentBossId);
             if (currentBoss) {
                 const chatMessage: ChatMessage = {
-                    id: `msg-guild-${randomUUID()}`,
+                    id: `msg-guild-${randomUUID()}` ,
                     user: { id: 'system', nickname: '시스템' },
                     system: true,
                     text: `[${user.nickname}] 길드 보스전에서 [${currentBoss.name}] 보스에게 ${result.damageDealt.toLocaleString()}의 피해를 입혔습니다.`,
@@ -757,8 +764,8 @@ export const handleGuildAction = async (action: ServerAction & { user: User }, g
 
             await db.setKV('guilds', guilds);
             await db.updateUser(user);
-            
-            return { clientResponse: { updatedUser: user, guildBossBattleResult: result } };
+            await broadcast({ guilds });
+            return { clientResponse: { updatedUser: user, guildBossBattleResult: result, guilds } };
         }
 
 

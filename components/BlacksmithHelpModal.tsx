@@ -15,7 +15,7 @@ const Section: React.FC<{ title: string, children: React.ReactNode }> = ({ title
 
 const BlacksmithHelpModal: React.FC<BlacksmithHelpModalProps> = ({ onClose }) => {
   return (
-    <DraggableWindow title="대장간 도움말" onClose={onClose} windowId="blacksmith-help" initialWidth={600}>
+    <DraggableWindow title="대장간 도움말" onClose={onClose} windowId="blacksmith-help" initialWidth={800}>
         <div className="max-h-[70vh] overflow-y-auto pr-2 text-gray-300 space-y-4">
             <Section title="장비 강화">
                 <p>장비를 강화하여 별(★) 등급을 최대 10성까지 올릴 수 있습니다. 강화에는 재료와 골드가 소모됩니다.</p>

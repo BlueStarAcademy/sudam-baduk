@@ -290,8 +290,9 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
                                 MBTI는 4가지 선호 지표를 조합하여 16가지 성격 유형으로 분류하는 자기보고식 성격 유형 검사입니다.
                                 간단한 질문을 통해 자신의 성향을 알아보고 다른 유저들과 공유해보세요.
                             </p>
-                            <Button onClick={() => setIsMbtiQuestionnaireOpen(true)} colorScheme="blue" className="mt-8 !py-3 !text-lg">
+                            <Button onClick={() => setIsMbtiQuestionnaireOpen(true)} colorScheme="blue" className="mt-8 !py-3 !text-lg relative">
                                 MBTI 설정 시작하기
+                                {!currentUser.mbti && <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></div>}
                             </Button>
                             <p className="text-sm text-green-400 font-semibold mt-4">
                                 최초 설정 완료 시 보상: <span className="flex items-center justify-center gap-1">💎 100</span>
@@ -368,8 +369,9 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ currentUser, onClos
             <div className="flex flex-col h-[70vh]">
                 <div className="flex bg-gray-900/70 p-1 rounded-lg mb-4 flex-shrink-0">
                     {tabs.map(tab => (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${activeTab === tab.id ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all relative ${activeTab === tab.id ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>
                             {tab.label}
+                            {tab.id === 'mbti' && !currentUser.mbti && <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></div>}
                         </button>
                     ))}
                 </div>

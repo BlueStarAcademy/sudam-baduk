@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "client": "vite",
-    "server": "tsx server/server.ts",
+    "server": "rd /s /q dist && npm run build:server && node dist/server/server.js",
+    "build:server": "tsc --project tsconfig.node.json",
     "build": "vite build",
     "preview": "vite preview",
     "migrate": "tsx scripts/migrate-sqlite-to-postgres.ts"

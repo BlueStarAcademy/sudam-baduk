@@ -1,7 +1,11 @@
 // server/ai/simpleAi.ts
 import { LiveGameSession, Player, Point, BoardState, Move, KoInfo } from '../../types/index.js';
-import { processMove, getGoLogic } from '../../utils/goLogic.js';
+import { processMove as originalProcessMove, getGoLogic } from '../../utils/goLogic.js';
 import { calculateScores } from '../scoring.js';
+
+type ProcessMoveFunction = (boardState: BoardState, move: Move, koInfo: KoInfo | null, moveIndex: number) => { isValid: boolean; reason?: string; newBoardState: BoardState; capturedStones: Point[]; newKoInfo: KoInfo | null };
+
+const processMove: ProcessMoveFunction = originalProcessMove;
 
 const getValidMoves = (game: LiveGameSession): Point[] => {
     const { boardState, settings, currentPlayer, koInfo, moveHistory } = game;
@@ -45,7 +49,7 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
     let shapeScore = 0;
     let selfAtariPenalty = 0;
 
-    for (const n of getNeighbors(move.x, move.y, boardSize)) {
+    for (const n of getNeighbors(move.x, move.y)) {
         if (tempBoard[n.y][n.x] === opponent) {
             const group = findGroup(n.x, n.y, opponent, tempBoard);
             if (group && group.liberties === 0) {
@@ -54,7 +58,7 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
         }
     }
     
-    for (const n of getNeighbors(move.x, move.y, boardSize)) {
+    for (const n of getNeighbors(move.x, move.y)) {
         if (boardState[n.y][n.x] === currentPlayer) {
             const group = findGroup(n.x, n.y, currentPlayer, boardState);
             if (group && group.liberties === 1 && group.libertyPoints.has(`${move.x},${move.y}`)) {
@@ -63,7 +67,7 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
         }
     }
 
-    for (const n of getNeighbors(move.x, move.y, boardSize)) {
+    for (const n of getNeighbors(move.x, move.y)) {
         if (tempBoard[n.y][n.x] === opponent) {
             const group = findGroup(n.x, n.y, opponent, tempBoard);
             if (group && group.liberties === 1) {
@@ -78,7 +82,7 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
     }
 
     if (level >= 4) {
-        for (const n of getNeighbors(move.x, move.y, boardSize)) {
+        for (const n of getNeighbors(move.x, move.y)) {
             if (tempBoard[n.y][n.x] === currentPlayer) {
                 shapeScore += 5; 
             }

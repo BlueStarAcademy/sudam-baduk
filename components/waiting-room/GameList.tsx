@@ -62,9 +62,9 @@ const GameList: React.FC<GameListProps> = ({ games, onAction, currentUser }) => 
     };
 
     return (
-      <div className="p-4 flex flex-col h-full min-h-0">
-        <div className="flex justify-between items-center mb-3 border-b border-color pb-2 flex-shrink-0">
-            <h2 className="text-xl font-semibold">진행중인 대국</h2>
+      <div className="px-2 pb-2 flex flex-col h-full min-h-0">
+        <div className="flex justify-between items-center border-b border-color flex-shrink-0">
+            <h2 className="text-sm font-semibold">진행중인 대국</h2>
             <div className="flex items-center gap-2">
                 <input 
                     type="number"

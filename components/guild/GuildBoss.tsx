@@ -90,7 +90,7 @@ const renderStarDisplay = (stars: number) => {
     );
 };
 
-const EquipmentSlotDisplay: React.FC<{ slot: EquipmentSlot; item?: InventoryItem; onClick?: () => void; }> = ({ slot, item, onClick }) => {
+export const EquipmentSlotDisplay: React.FC<{ slot: EquipmentSlot; item?: InventoryItem; onClick?: () => void; }> = ({ slot, item, onClick }) => {
     const clickableClass = item && onClick ? 'cursor-pointer hover:scale-105 transition-transform' : '';
     
     if (item) {
@@ -611,9 +611,20 @@ const GuildBoss: React.FC = () => {
         
         const damageLog = myGuild.guildBossState.totalDamageLog;
         
+        console.log('GuildBoss: currentUserWithStatus.id', currentUserWithStatus?.id);
+        console.log('GuildBoss: myGuild.members', myGuild.members);
+        console.log('GuildBoss: totalDamageLog', myGuild.guildBossState.totalDamageLog);
+
         const fullRanking = Object.entries(damageLog)
             .map(([userId, damage]) => {
-                const member = myGuild.members.find(m => m.userId === userId);
+                let member = myGuild.members.find(m => m.userId === userId);
+                
+                // Workaround for admin user ID mismatch
+                if (!member && currentUserWithStatus?.id === 'user-admin-static-id' && userId === 'user-admin-static-id') {
+                    member = myGuild.members.find(m => m.nickname === '관리자');
+                }
+
+
                 return { userId, nickname: member?.nickname || '알 수 없음', damage };
             })
             .sort((a, b) => b.damage - a.damage);

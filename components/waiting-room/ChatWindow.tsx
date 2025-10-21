@@ -7,13 +7,12 @@ import { useAppContext } from '../../hooks/useAppContext.js';
 
 interface ChatWindowProps {
     messages: ChatMessage[];
-    onAction: (a: ServerAction) => void;
     mode: GameMode | 'global';
     onViewUser?: (userId: string) => void;
     locationPrefix?: string;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ messages, onAction, mode, onViewUser, locationPrefix }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ messages, mode, onViewUser, locationPrefix }) => {
     const chatBodyRef = useRef<HTMLDivElement>(null);
     const quickChatRef = useRef<HTMLDivElement>(null);
     const [chatInput, setChatInput] = useState('');
@@ -49,10 +48,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, onAction, mode, onVie
     const handleSend = (message: { text?: string, emoji?: string }) => {
         if(cooldown > 0) return;
         
-        const channel = 'global'; // Waiting room is always global
-        const payload: any = { channel, ...message, location: locationPrefix };
+        handlers.handleSendChatMessage(message, locationPrefix);
 
-        onAction({ type: 'SEND_CHAT_MESSAGE', payload });
         setShowQuickChat(false); setChatInput('');
         setCooldown(5);
     };
@@ -97,14 +94,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ messages, onAction, mode, onVie
             : "[메시지 입력]";
 
     return (
-        <div className="p-4 flex flex-col h-full min-h-0">
-            <h2 className="text-xl font-semibold mb-3 border-b border-color pb-2 flex-shrink-0">전체채팅</h2>
+        <div className="px-2 pb-2 flex flex-col h-full min-h-0">
+            <h2 className="text-sm font-semibold border-b border-color flex-shrink-0">전체채팅</h2>
             <p className="text-[10px] text-center text-yellow-400 mb-1 bg-tertiary/50 rounded-sm p-0.5">AI 보안관봇이 부적절한 언어 사용을 감지하고 있습니다. 🚓</p>
             <div ref={chatBodyRef} className="flex-grow space-y-0.5 overflow-y-auto pr-1 mb-1 bg-tertiary/40 p-1 rounded-md min-h-0">
                 {messages.map(msg => {
                     const isBotMessage = msg.system && !msg.actionInfo && msg.user.nickname === 'AI 보안관봇';
                     return (
-                        <div key={msg.id} className="text-xs">
+                        <div key={msg.id} className="text-[11px]">
                             {msg.location && <span className="font-semibold text-tertiary pr-1">{msg.location}</span>}
                             <span 
                                 className={`font-semibold pr-2 ${msg.system ? 'text-highlight' : 'text-tertiary cursor-pointer hover:underline'}`}

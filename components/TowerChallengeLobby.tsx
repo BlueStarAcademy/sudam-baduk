@@ -156,6 +156,7 @@ const StageListItem: React.FC<{
 };
 
 const gameTypeKorean: Record<GameType, string> = {
+    [GameType.Standard]: '클래식',
     'capture': '따내기',
     'survival': '살리기',
     'speed': '스피드',

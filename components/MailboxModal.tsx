@@ -103,7 +103,7 @@ const MailboxModal: React.FC<MailboxModalProps> = ({ currentUser, onClose, onAct
     };
 
     return (
-        <DraggableWindow title="우편함" onClose={onClose} windowId="mailbox" initialWidth={800} isTopmost={isTopmost}>
+        <DraggableWindow title="우편함" onClose={onClose} windowId="mailbox" initialWidth={800} initialHeight={600} isTopmost={isTopmost}>
             <div className="flex gap-6 h-full">
                 {/* Mail List */}
                 <div className="w-1/3 bg-gray-900/50 rounded-lg p-3 flex flex-col">

@@ -330,6 +330,7 @@ const Profile: React.FC<ProfileProps> = () => {
                             title="프로필 수정"
                         >
                             <span className="text-sm">✏️</span>
+                            {!currentUserWithStatus.mbti && <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></div>}
                         </button>
                     </div>
                     <div className="flex flex-col items-center w-full">
@@ -509,7 +510,7 @@ const Profile: React.FC<ProfileProps> = () => {
                         </div>
                         <div className="flex-1 flex flex-row gap-2 min-h-0">
                             <NineSlicePanel className="w-full lg:w-[30%] flex-shrink-0 min-h-0 flex flex-col">
-                                <ChatWindow messages={globalChat} mode="global" onAction={handlers.handleAction} onViewUser={handlers.openViewingUser} locationPrefix="[홈]" />
+                                <ChatWindow messages={globalChat} mode="global" onViewUser={handlers.openViewingUser} locationPrefix="[홈]" />
                             </NineSlicePanel>
                             <div className="flex-1 min-h-0 flex flex-col">
                                 <div className="grid grid-cols-6 grid-rows-4 gap-4 h-full">
@@ -626,7 +627,7 @@ const Profile: React.FC<ProfileProps> = () => {
                     {activeMobileTab === 'equipment' && EquipmentPanelContent}
                     {activeMobileTab === 'chat' && (
                         <div className="h-full flex flex-col">
-                            <ChatWindow messages={globalChat} mode="global" onAction={handlers.handleAction} onViewUser={handlers.openViewingUser} locationPrefix="[홈]" />
+                            <ChatWindow messages={globalChat} mode="global" onViewUser={handlers.openViewingUser} locationPrefix="[홈]" />
                         </div>
                     )}
                 </NineSlicePanel>

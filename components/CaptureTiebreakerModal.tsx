@@ -72,7 +72,7 @@ const CaptureTiebreakerModal: React.FC<CaptureTiebreakerModalProps> = ({ session
     );
 
     return (
-        <DraggableWindow title={title} initialWidth={550} windowId="capture-tiebreaker">
+        <DraggableWindow title={title} initialWidth={600} windowId="capture-tiebreaker">
             <div className="text-white">
                 <p className="text-center text-gray-300 mb-6">{description}</p>
                 <div className="grid grid-cols-2 gap-4 my-6">

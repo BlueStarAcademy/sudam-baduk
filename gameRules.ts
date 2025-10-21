@@ -1,6 +1,6 @@
 import { GameMode } from './types/index';
 
-type RuleSection = {
+export type RuleSection = {
     subtitle: string;
     content: string[];
 };
@@ -10,7 +10,7 @@ type GameRule = {
     sections: RuleSection[];
 };
 
-export const GAME_RULES: Partial<Record<GameMode | 'guild', GameRule>> = {
+export const GAME_RULES: Partial<Record<GameMode | 'guild' | 'single-player', GameRule>> = {
     [GameMode.Standard]: {
         title: '클래식 바둑',
         sections: [
@@ -403,6 +403,28 @@ export const GAME_RULES: Partial<Record<GameMode | 'guild', GameRule>> = {
                     '길드장: 길드원 추방, 부길드장 임명/해임, 가입 신청 관리, 길드 정보 수정 등 모든 권한을 가집니다.',
                     '부길드장: 길드원 추방, 가입 신청 관리, 길드 정보 수정 등 길드장 다음의 권한을 가집니다.',
                     '길드원: 길드의 모든 콘텐츠에 참여할 수 있습니다.',
+                ],
+            },
+        ],
+    },
+    'single-player': {
+        title: '싱글플레이',
+        sections: [
+            {
+                subtitle: '스테이지',
+                content: [
+                    '정해진 규칙에 따라 AI를 상대로 승리해야 하는 기본 모드입니다.',
+                    '각 스테이지를 클리어하면 다음 스테이지가 해금되며, 보상을 획득할 수 있습니다.',
+                    '진행도는 계정 전체에 공유되며, 한 번 클리어한 스테이지는 반복해서 도전할 수 있습니다.',
+                ],
+            },
+            {
+                subtitle: '수련 과제',
+                content: [
+                    '시간이 지남에 따라 자동으로 보상(골드 또는 다이아)이 누적되는 방치형 콘텐츠입니다.',
+                    '\'시작하기\' 버튼을 눌러야 보상 누적이 시작됩니다.',
+                    '\'수령\' 버튼을 눌러 누적된 보상을 획득할 수 있으며, 수령한 양에 따라 강화 진행도가 오릅니다.',
+                    '강화 진행도가 가득 차면, 골드를 소모하여 과제를 강화할 수 있습니다. 강화 시 최대 저장량과 생산 속도가 향상됩니다.',
                 ],
             },
         ],

@@ -17,7 +17,7 @@ const RewardSummaryModal: React.FC<RewardSummaryModalProps> = ({ summary, onClos
     const { reward, items, title } = summary;
 
     return (
-        <DraggableWindow title={title} onClose={onClose} windowId="quest-reward-summary" initialWidth={400} isTopmost={isTopmost}>
+        <DraggableWindow title={title} onClose={onClose} windowId="quest-reward-summary" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                 <h2 className="text-xl font-bold mb-4">보상을 획득했습니다!</h2>
                 <div className="space-y-3 bg-gray-900/50 p-4 rounded-lg text-lg">

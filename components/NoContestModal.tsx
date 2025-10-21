@@ -14,7 +14,7 @@ const NoContestModal: React.FC<NoContestModalProps> = ({ session, currentUser, o
     const isInitiator = session.noContestInitiatorIds?.includes(currentUser.id);
 
     return (
-        <DraggableWindow title="무효 대국" onClose={onConfirm} initialWidth={450} windowId="no-contest">
+        <DraggableWindow title="무효 대국" onClose={onConfirm} initialWidth={500} windowId="no-contest">
             <div className="text-white">
                 <div className="bg-gray-900/50 p-4 rounded-lg mb-6 text-center">
                     <p className="text-lg">

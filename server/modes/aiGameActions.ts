@@ -104,42 +104,43 @@ export const handleAiGameStart = async (
     if (isTower) {
         game.towerChallengePlacementRefreshesUsed = 0;
         game.towerAddStonesUsed = 0;
-    const { b: blackCount, w: whiteCount, bP: blackPatternCount, wP: whitePatternCount } = stage.placements || { b: 0, w: 0, bP: 0, wP: 0 };
-    const totalInitialStones = (blackCount || 0) + (whiteCount || 0) + (blackPatternCount || 0) + (whitePatternCount || 0);
+        const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount } = stage.placements || { black: 0, white: 0, blackPattern: 0, whitePattern: 0 };
+        const totalInitialStones = (blackCount || 0) + (whiteCount || 0) + (blackPatternCount || 0) + (whitePatternCount || 0);
 
-    const gnuGoInstance = gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi);
-    if (!gnuGoInstance) {
-        return { error: 'AI 엔진을 생성하는데 실패했습니다.' };
-    }
-
-    if (totalInitialStones > 0) {
-        await gnuGoInstance.sendCommand('level 0');
-
-        let currentPlayerForSetup = Player.Black;
-        for (let i = 0; i < totalInitialStones; i++) {
-            const colorStr = currentPlayerForSetup === Player.Black ? 'black' : 'white';
-            const move = await gnuGoInstance.genmove(colorStr, game.settings.boardSize);
-            
-            if (move.x === -1) { 
-                i--; // Retry if AI passes
-                continue;
-            }
-            
-            game.boardState[move.y][move.x] = currentPlayerForSetup;
-            game.moveHistory.push({ player: currentPlayerForSetup, ...move });
-
-            if (i >= blackCount + whiteCount) {
-                if (currentPlayerForSetup === Player.Black) {
-                    if (!game.blackPatternStones) game.blackPatternStones = [];
-                    game.blackPatternStones.push(move);
-                } else {
-                    if (!game.whitePatternStones) game.whitePatternStones = [];
-                    game.whitePatternStones.push(move);
-                }
-            }
-            currentPlayerForSetup = currentPlayerForSetup === Player.Black ? Player.White : Player.Black;
+        const gnuGoInstance = gnuGoServiceManager.create(game.id, stage.katagoLevel, game.settings.boardSize, game.settings.komi);
+        if (!gnuGoInstance) {
+            return { error: 'AI 엔진을 생성하는데 실패했습니다.' };
         }
-        await gnuGoInstance.sendCommand(`level ${stage.katagoLevel}`);
+
+        if (totalInitialStones > 0) {
+            await gnuGoInstance.sendCommand('level 0');
+
+            let currentPlayerForSetup = Player.Black;
+            for (let i = 0; i < totalInitialStones; i++) {
+                const colorStr = currentPlayerForSetup === Player.Black ? 'black' : 'white';
+                const move = await gnuGoInstance.genmove(colorStr, game.settings.boardSize);
+                
+                if (move.x === -1) { 
+                    i--; // Retry if AI passes
+                    continue;
+                }
+                
+                game.boardState[move.y][move.x] = currentPlayerForSetup;
+                game.moveHistory.push({ player: currentPlayerForSetup, ...move });
+
+                if (i >= blackCount + whiteCount) {
+                    if (currentPlayerForSetup === Player.Black) {
+                        if (!game.blackPatternStones) game.blackPatternStones = [];
+                        game.blackPatternStones.push(move);
+                    } else {
+                        if (!game.whitePatternStones) game.whitePatternStones = [];
+                        game.whitePatternStones.push(move);
+                    }
+                }
+                currentPlayerForSetup = currentPlayerForSetup === Player.Black ? Player.White : Player.Black;
+            }
+            await gnuGoInstance.sendCommand(`level ${stage.katagoLevel}`);
+        }
     }
 
     game.currentPlayer = Player.Black;
@@ -184,7 +185,7 @@ export const handleAiGameRefresh = async (game: LiveGameSession, user: User, typ
     game.blackPatternStones = [];
     game.whitePatternStones = [];
 
-    const { b: blackCount, w: whiteCount, bP: blackPatternCount, wP: whitePatternCount } = stage.placements || { b: 0, w: 0, bP: 0, wP: 0 };
+    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount } = stage.placements || { black: 0, white: 0, blackPattern: 0, whitePattern: 0 };
     const totalInitialStones = (blackCount || 0) + (whiteCount || 0) + (blackPatternCount || 0) + (whitePatternCount || 0);
 
     const gnuGoInstance = gnuGoServiceManager.get(game.id);

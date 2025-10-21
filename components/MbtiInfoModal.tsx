@@ -27,7 +27,7 @@ const MBTI_DESCRIPTIONS: Record<string, string> = {
 
 const MbtiInfoModal: React.FC<MbtiInfoModalProps> = ({ onClose, isTopmost }) => {
     return (
-        <DraggableWindow title="MBTI 성향 안내" onClose={onClose} windowId="mbti-info" initialWidth={400} isTopmost={isTopmost}>
+        <DraggableWindow title="MBTI 성향 안내" onClose={onClose} windowId="mbti-info" initialWidth={500} isTopmost={isTopmost}>
             <div className="max-h-[60vh] overflow-y-auto pr-2">
                 <ul className="space-y-2">
                     {Object.entries(MBTI_DESCRIPTIONS).map(([type, description]) => (

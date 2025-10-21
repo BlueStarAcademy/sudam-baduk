@@ -110,7 +110,7 @@ const SinglePlayerIntroModal: React.FC<SinglePlayerIntroModalProps> = ({ session
     }
 
     return (
-        <DraggableWindow title={title} onClose={handleConfirmClick} windowId="single-player-intro" initialWidth={400} isTopmost={isTopmost}>
+        <DraggableWindow title={title} onClose={handleConfirmClick} windowId="single-player-intro" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                 <p className="text-secondary mb-4">{description}</p>
                 {content}

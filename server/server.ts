@@ -1,9 +1,11 @@
 // server/server.ts
+console.log('DATABASE_URL:', process.env.DATABASE_URL);
+
 // FIX: Separated express value and type imports to resolve middleware type errors with `app.use`.
 // FIX: Combined express imports to a single line to fix type resolution issues with app.use overloads.
 import express, { type Express, type RequestHandler } from 'express';
 import cors from 'cors';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { initializeDatabase, getAllData, getUserCredentials, createUserCredentials, createUser, getUser, updateUser, getKV, setKV, updateUserStatus, removeUserStatus } from './db.js';
 import { handleAction } from './actions/gameActions.js';
 import { type VolatileState, type ServerAction, type User, type ChatMessage, Guild, UserStatus, type UserStatusInfo } from '../types/index.js';
@@ -122,12 +124,15 @@ app.post('/api/auth/register', async (req, res) => {
 });
 app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
+    console.log(`[Login Attempt] for user ${username}`);
     if (!username || !password) {
         return res.status(400).json({ message: '아이디와 비밀번호를 모두 입력해주세요.' });
     }
     try {
+        console.log('[Login] Getting user credentials...');
         const credentials = await getUserCredentials(username);
         if (!credentials || !credentials.hash) {
+            console.log('[Login] Invalid credentials.');
             return res.status(401).json({ message: '잘못된 아이디 또는 비밀번호입니다.' });
         }
 
@@ -136,19 +141,25 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ message: '보안 업데이트가 필요한 계정입니다. 관리자에게 문의해주세요.' });
         }
 
+        console.log('[Login] Comparing password...');
         const hashToCompare = crypto.pbkdf2Sync(password, credentials.salt, 10000, 64, 'sha512').toString('hex');
 
         if (credentials.hash !== hashToCompare) {
+            console.log('[Login] Password mismatch.');
             return res.status(401).json({ message: '잘못된 아이디 또는 비밀번호입니다.' });
         }
         
+        console.log('[Login] Getting user...');
         let user = await getUser(credentials.userId);
         if (!user) {
+            console.log('[Login] User not found.');
             return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
         }
         
+        console.log('[Login] Resetting quests...');
         user = await resetAndGenerateQuests(user);
         
+        console.log('[Login] Creating session...');
         const now = Date.now();
         const sessionId = randomUUID();
         volatileState.userSessions[user.id] = sessionId;
@@ -156,10 +167,12 @@ app.post('/api/auth/login', async (req, res) => {
         allSessions[user.id] = sessionId;
         await setKV('userSessions', allSessions);
         
+        console.log('[Login] Updating user status...');
         const statusInfo: UserStatusInfo = { status: UserStatus.Online, stateEnteredAt: now };
         await updateUserStatus(user.id, statusInfo);
         volatileState.userStatuses[user.id] = statusInfo;
 
+        console.log('[Login] Success.');
         res.json({ user, sessionId });
     } catch (error: any) {
         console.error(`[Login Error] for user ${username}:`, error);

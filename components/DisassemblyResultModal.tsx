@@ -26,7 +26,7 @@ const DisassemblyResultModal: React.FC<DisassemblyResultModalProps> = ({ result,
 
 
     return (
-        <DraggableWindow title={jackpot ? "✨ 대박! ✨" : "분해 결과"} onClose={onClose} windowId="disassembly-result" initialWidth={400} isTopmost={isTopmost}>
+        <DraggableWindow title={jackpot ? "✨ 대박! ✨" : "분해 결과"} onClose={onClose} windowId="disassembly-result" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                 {jackpot && (
                     <h2 className="text-2xl font-bold text-yellow-300 mb-4 animate-pulse">모든 재료 획득량이 2배가 되었습니다!</h2>

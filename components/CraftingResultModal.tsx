@@ -26,7 +26,7 @@ const CraftingResultModal: React.FC<CraftingResultModalProps> = ({ result, onClo
     const usedTemplate = MATERIAL_ITEMS[usedItem.name as keyof typeof MATERIAL_ITEMS];
 
     return (
-        <DraggableWindow title={title} onClose={onClose} windowId="crafting-result" initialWidth={400} isTopmost={isTopmost}>
+        <DraggableWindow title={title} onClose={onClose} windowId="crafting-result" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                 <h2 className="text-xl font-bold mb-4">아래와 같이 아이템을 변환했습니다.</h2>
 

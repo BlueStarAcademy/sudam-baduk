@@ -181,7 +181,7 @@ const CaptureBidModal: React.FC<CaptureBidModalProps> = (props) => {
     };
 
     return (
-        <DraggableWindow title={`흑선 가져오기 ${biddingRound === 2 ? '(재설정)' : ''}`} windowId="capture-bid">
+        <DraggableWindow title={`흑선 가져오기 ${biddingRound === 2 ? '(재설정)' : ''}`} windowId="capture-bid" initialWidth={600}>
              {renderContent()}
         </DraggableWindow>
     );

@@ -11,9 +11,10 @@ interface BulkUseModalProps {
     currentUserDiamonds: number;
     onClose: () => void;
     onAction: (action: ServerAction) => void;
+    isTopmost?: boolean;
 }
 
-const BulkUseModal: React.FC<BulkUseModalProps> = ({ item, currentUserGold, currentUserDiamonds, onClose, onAction }) => {
+const BulkUseModal: React.FC<BulkUseModalProps> = ({ item, currentUserGold, currentUserDiamonds, onClose, onAction, isTopmost }) => {
     const [quantity, setQuantity] = useState(1);
 
     const totalAvailable = item.quantity || 1; // Assuming stackable items have quantity
@@ -49,7 +50,7 @@ const BulkUseModal: React.FC<BulkUseModalProps> = ({ item, currentUserGold, curr
     };
 
     return (
-        <DraggableWindow title="일괄 사용" onClose={onClose} windowId={`bulk-use-${item.id}`} initialWidth={450}>
+        <DraggableWindow title="일괄 사용" onClose={onClose} windowId={`bulk-use-${item.id}`} initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                 <div className="flex flex-col items-center gap-2 mb-4">
                     <div className="relative w-24 h-24">

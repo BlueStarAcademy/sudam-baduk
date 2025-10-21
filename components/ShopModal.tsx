@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../hooks/useAppContext.js';
-import { UserWithStatus, ServerAction, ShopTab, GuildShopItem } from '../types/index.js';
+import { UserWithStatus, ServerAction, ShopTab } from '../types/index.js';
+import { GUILD_SHOP_ITEMS, GuildShopItem } from '../constants/guildConstants.js';
 import DraggableWindow from './DraggableWindow.js';
 import Button from './Button.js';
 import { isSameDayKST, isDifferentWeekKST } from '../utils/timeUtils.js';
 import { SHOP_CONSUMABLE_ITEMS, CLIENT_SHOP_ITEMS } from '../constants/items.js';
-import { GUILD_SHOP_ITEMS } from '../constants/guildConstants.js';
+
 import Slider from './ui/Slider.js';
 
 // --- Type Definitions ---
@@ -16,7 +17,7 @@ type ShopItemDetails = {
     description: string;
     price: { gold?: number; diamonds?: number; guildCoins?: number };
     image: string;
-    type: 'equipment' | 'material' | 'consumable';
+    type: 'equipment' | 'material' | 'consumable' | 'equipment_box';
     dailyLimit?: number;
     weeklyLimit?: number;
 };
@@ -369,7 +370,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ currentUser, onClose, onAc
     };
 
     return (
-        <DraggableWindow title="상점" onClose={onClose} windowId="shop" initialWidth={700} isTopmost={isTopmost}>
+        <DraggableWindow title="상점" onClose={onClose} windowId="shop" initialWidth={700} initialHeight={600} isTopmost={isTopmost}>
             {purchasingItem && (
                 <BulkPurchaseModal 
                     item={purchasingItem}

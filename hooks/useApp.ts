@@ -54,6 +54,7 @@ export const useApp = () => {
     const [levelUpInfo, setLevelUpInfo] = useState<{ type: 'strategy' | 'playful', newLevel: number } | null>(null);
     const [guildBossBattleResult, setGuildBossBattleResult] = useState<any | null>(null);
     const [guildDonationAnimation, setGuildDonationAnimation] = useState<{ coins: number; research: number } | null>(null);
+    const [questRewardSummary, setQuestRewardSummary] = useState<any | null>(null);
 
     const [settings, setSettings] = useState<AppSettings>(defaultSettings);
     
@@ -198,6 +199,7 @@ export const useApp = () => {
             });
 
             const data = await response.json();
+            console.log('Action response data:', data);
 
             if (!response.ok) {
                 throw new Error(data.message || 'An unknown error occurred.');
@@ -222,6 +224,10 @@ export const useApp = () => {
                 setNegotiations(prev => ({...prev, [data.newNegotiation.id]: data.newNegotiation}));
             }
 
+            if (data.updatedNegotiations) {
+                setNegotiations(data.updatedNegotiations);
+            }
+
             if (data.obtainedItemsBulk) {
                 setLastUsedItemResult(data.obtainedItemsBulk);
                 openModal('itemObtained');
@@ -239,6 +245,11 @@ export const useApp = () => {
                 setLiveGames(prev => ({...prev, [data.updatedGame.id]: data.updatedGame}));
             }
 
+            if (data.claimedQuestReward) {
+                setQuestRewardSummary(data.claimedQuestReward);
+                openModal('questRewardSummary');
+            }
+
             return { success: true, ...data };
         } catch (err: any) {
             console.error(`Action ${action.type} failed:`, err);
@@ -249,6 +260,37 @@ export const useApp = () => {
             return { success: false, error: err.message };
         }
     }, [sessionId, currentUser, openModal, handleLogout]);
+
+    const handleSendChatMessage = useCallback((message: { text?: string, emoji?: string }, locationPrefix?: string) => {
+        if (!currentUser) return;
+
+        // 1. Create the message object locally
+        const chatMessage: ChatMessage = {
+            id: `${Date.now()}-${Math.random()}`, // Temporary unique ID
+            user: { id: currentUser.id, nickname: currentUser.nickname },
+            timestamp: Date.now(),
+            ...message,
+            location: locationPrefix,
+        };
+
+        // 2. Optimistically update the UI for global chat
+        // Assuming waiting room chat is always global for this handler
+        setWaitingRoomChats(prev => ({
+            ...prev,
+            global: [...(prev.global || []), chatMessage].slice(-100)
+        }));
+
+        // 3. Send the message to the server
+        handleAction({
+            type: 'SEND_CHAT_MESSAGE',
+            payload: {
+                channel: 'global',
+                ...message,
+                location: locationPrefix,
+            }
+        });
+
+    }, [currentUser, handleAction]);
 
     const updateSettingsState = useCallback((newSettings: AppSettings) => {
         setSettings(newSettings);
@@ -278,9 +320,18 @@ export const useApp = () => {
             return newSettings;
         });
     }, [updateSettingsState]);
+
+    const updateGraphicsSetting = useCallback((key: keyof AppSettings['graphics'], value: any) => {
+        setSettings(s => {
+            const newSettings = { ...s, graphics: { ...s.graphics, [key]: value } };
+            updateSettingsState(newSettings);
+            return newSettings;
+        });
+    }, [updateSettingsState]);
     
     const handlers = useMemo(() => ({
         handleAction,
+        handleSendChatMessage,
         handleLogout,
         login,
         setPostGameRedirect,
@@ -341,8 +392,9 @@ export const useApp = () => {
         closeTowerRewardInfoModal: () => closeModal('towerRewardInfo'),
         closeLevelUpModal: () => { closeModal('levelUp'); setLevelUpInfo(null); },
         closeGuildBossBattleResultModal: () => { closeModal('guildBossBattleResult'); setGuildBossBattleResult(null); },
+        closeQuestRewardSummary: () => { closeModal('questRewardSummary'); setQuestRewardSummary(null); },
         setIsBlacksmithHelpOpen: (isOpen: boolean) => isOpen ? openModal('blacksmithHelp') : closeModal('blacksmithHelp'),
-        openBlacksmith: () => openModal('blacksmith'),
+        openBlacksmith: (item?: InventoryItem) => { if (item) setEnhancingItem(item); openModal('blacksmith'); },
         closeBlacksmith: () => { closeModal('blacksmith'); setEnhancingItem(null); },
         handleEnterWaitingRoom: (mode: GameMode) => {
             handleAction({ type: 'ENTER_WAITING_ROOM', payload: { mode } });
@@ -352,11 +404,12 @@ export const useApp = () => {
         updateTheme,
         updateSoundSetting,
         updateFeatureSetting,
+        updateGraphicsSetting,
         updatePanelColor: (color: string) => {},
         updateTextColor: (color: string) => {},
         resetGraphicsToDefault: () => {},
         closeAllModals: () => setActiveModalIds([]),
-    }), [handleAction, handleLogout, login, allUsers, onlineUsers, openModal, closeModal, updateTheme, updateSoundSetting, updateFeatureSetting, fetchInitialState]);
+    }), [handleAction, handleSendChatMessage, handleLogout, login, allUsers, onlineUsers, openModal, closeModal, updateTheme, updateSoundSetting, updateFeatureSetting, updateGraphicsSetting, fetchInitialState, setEnhancingItem]);
 
     useEffect(() => {
         const restoreSession = async () => {
@@ -443,33 +496,45 @@ export const useApp = () => {
     useEffect(() => {
         if (!sessionId) return;
 
-        const setupChatSubscription = () => {
-            const channel = supabase.channel('chat_room');
+        const channel = supabase.channel('online-users');
 
-            channel.on('broadcast', { event: 'chat_message' }, (payload) => {
-                const { channel: chatChannel, message } = payload.payload;
-                if (chatChannel === 'global') {
-                    setWaitingRoomChats(prev => ({
-                        ...prev,
-                        global: [...(prev.global || []), message].slice(-100)
-                    }));
-                } else {
-                    setGameChats(prev => ({
-                        ...prev,
-                        [chatChannel]: [...(prev[chatChannel] || []), message].slice(-100)
-                    }));
-                }
-            })
-            .subscribe();
+        channel.on('presence', { event: 'sync' }, () => {
+            const newState = channel.presenceState<UserWithStatus>();
+            const users = Object.keys(newState).map(key => newState[key][0]);
+            setOnlineUsers(users);
+        });
 
-            return () => {
-                supabase.removeChannel(channel);
-            };
+        channel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                if (!currentUser) return; // Add null check for currentUser
+                await channel.track({
+                    id: currentUser.id,
+                    nickname: currentUser.nickname,
+                    isAdmin: currentUser.isAdmin,
+                    strategyLevel: currentUser.strategyLevel,
+                    playfulLevel: currentUser.playfulLevel,
+                    avatarId: currentUser.avatarId,
+                    borderId: currentUser.borderId,
+                    status: currentUser.status,
+                    mode: currentUser.mode,
+                });
+            }
+        });
+
+        return () => {
+            supabase.removeChannel(channel);
         };
+    }, [sessionId, currentUser]);
 
-        const unsubscribe = setupChatSubscription();
-        return () => unsubscribe();
-    }, [sessionId]); // Re-subscribe if sessionId changes
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     return {
         currentUser,
@@ -497,7 +562,7 @@ export const useApp = () => {
         settings,
         hasClaimableQuest,
         hasFullMissionReward,
-        isMobile: false,
+        isMobile,
         handlers,
         // New state for App.tsx
         kakaoRegistrationData,
@@ -511,6 +576,7 @@ export const useApp = () => {
             isMailboxOpen: isModalOpen('mailbox'),
             isQuestsOpen: isModalOpen('quests'),
             isShopOpen: isModalOpen('shop'),
+            isGuildShopOpen: isModalOpen('guildShop'), // Added this line
             shopInitialTab,
             viewingItem,
             viewingUser,
@@ -542,5 +608,6 @@ export const useApp = () => {
             activeModalIds, // For isTopmost logic
         },
         topmostModalId,
+        activeModalIds
     };
 };

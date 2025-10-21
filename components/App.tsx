@@ -1,47 +1,50 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import Header from './Header.js';
-import { useAppContext } from '../hooks/useAppContext.js';
-import Router from './Router.js';
-import NegotiationModal from './NegotiationModal.js';
-import InventoryModal from './InventoryModal.js';
-import MailboxModal from './MailboxModal.js';
-import QuestsModal from './QuestsModal.js';
-// FIX: Changed ShopModal import to a named import to resolve "no default export" error.
-import { ShopModal } from './ShopModal.js';
-import UserProfileModal from './UserProfileModal.js';
-import InfoModal from './InfoModal.js';
-import DisassemblyResultModal from './DisassemblyResultModal.js';
-import StatAllocationModal from './StatAllocationModal.js';
-import EnhancementModal from './EnhancementModal.js';
-import ItemDetailModal from './ItemDetailModal.js';
-import ProfileEditModal from './ProfileEditModal.js';
-import ItemObtainedModal from './ItemObtainedModal.js';
-import BulkItemObtainedModal from './BulkItemObtainedModal.js';
-import EncyclopediaModal from './modals/EncyclopediaModal.js';
-import PastRankingsModal from './modals/PastRankingsModal.js';
-import AdminModerationModal from './AdminModerationModal.js';
-import RewardSummaryModal from './RewardSummaryModal.js';
-import { preloadImages, ALL_IMAGE_URLS } from '../services/assetService.js';
-import CraftingResultModal from './CraftingResultModal.js';
-import { audioService } from '../services/audioService.js';
-import SettingsModal from './SettingsModal.js';
-import ClaimAllSummaryModal from './ClaimAllSummaryModal.js';
-import MbtiInfoModal from './MbtiInfoModal.js';
-import SynthesisResultModal from './SynthesisResultModal.js';
-import TowerRankingRewardsModal from './TowerRankingRewardsModal.js';
-import LevelUpModal from './LevelUpModal.js';
-import ActionPointQuizModal from './modals/ActionPointQuizModal.js';
-import { UserStatus, User } from '../types/index.js';
-import GuildEffectsModal from './guild/GuildEffectsModal.js';
-import GuildBossBattleResultModal from './guild/GuildBossBattleResultModal.js';
-import EquipmentEffectsModal from './EquipmentEffectsModal.js';
-import PresetModal from './PresetModal.js';
-import Button from './Button.js';
-import { containsProfanity } from '../profanity.js';
-import { supabase } from '../services/supabase.js';
-import KakaoRegister from './KakaoRegister.js';
-import BlacksmithModal from './BlacksmithModal.js';
-import BlacksmithHelpModal from './BlacksmithHelpModal.js';
+import Header from './Header.tsx';
+import { useAppContext } from '../hooks/useAppContext.ts';
+import { preloadImages } from '../services/assetService.ts';
+import { audioService } from '../services/audioService.ts';
+import { ALL_IMAGE_URLS } from '../assets.ts';
+import { supabase } from '../services/supabase.ts';
+import { containsProfanity } from '../profanity.ts';
+import Button from './Button.tsx';
+import KakaoRegister from './KakaoRegister.tsx';
+import Router from './Router.tsx';
+// import NegotiationModal from './NegotiationModal.tsx';
+import InventoryModal from './InventoryModal.tsx';
+import MailboxModal from './MailboxModal.tsx';
+import QuestsModal from './QuestsModal.tsx';
+
+import { ShopModal } from './ShopModal.tsx';
+// import UserProfileModal from './UserProfileModal.tsx';
+// import InfoModal from './InfoModal.tsx';
+// import DisassemblyResultModal from './DisassemblyResultModal.tsx';
+// import StatAllocationModal from './StatAllocationModal.tsx';
+// import EnhancementModal from './EnhancementModal.tsx';
+// import ItemDetailModal from './ItemDetailModal.tsx';
+// import ProfileEditModal from './ProfileEditModal.tsx';
+import BulkItemObtainedModal from './BulkItemObtainedModal';
+import ItemObtainedModal from './ItemObtainedModal';
+// import EncyclopediaModal from './modals/EncyclopediaModal.tsx';
+// import PastRankingsModal from './modals/PastRankingsModal.tsx';
+// import AdminModerationModal from './AdminModerationModal.tsx';
+// import RewardSummaryModal from './RewardSummaryModal.tsx';
+// import CraftingResultModal from './CraftingModal.tsx';
+// import SettingsModal from './SettingsModal.tsx';
+// import ClaimAllSummaryModal from './ClaimAllSummaryModal.tsx';
+// import MbtiInfoModal from './MbtiInfoModal.tsx';
+// import SynthesisResultModal from './SynthesisResultModal.tsx';
+// import TowerRankingRewardsModal from './TowerRankingRewardsModal.tsx';
+// import LevelUpModal from './LevelUpModal.tsx';
+// import ActionPointQuizModal from './modals/ActionPointQuizModal.tsx';
+// import GuildEffectsModal from './guild/GuildEffectsModal.tsx';
+// import GuildBossBattleResultModal from './guild/GuildBossBattleResultModal.tsx';
+// import EquipmentEffectsModal from './EquipmentEffectsModal.tsx';
+// import PresetModal from './PresetModal.tsx';
+import BlacksmithModal from './BlacksmithModal.tsx';
+// import BlacksmithHelpModal from './BlacksmithHelpModal.tsx';
+// import BlacksmithHelpModal from './BlacksmithHelpModal.tsx';
+// import QuestRewardSummaryModal from './QuestRewardSummaryModal.tsx';
+// import GuildShopModal from './guild/GuildShopModal.tsx';
 
 
 function usePrevious<T>(value: T): T | undefined {
@@ -129,8 +132,14 @@ const Auth: React.FC = () => {
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || '회원가입 실패');
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.indexOf('application/json') !== -1) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || '회원가입 실패');
+                    } else {
+                        const errorText = await response.text();
+                        throw new Error(errorText || '서버에서 오류가 발생했습니다.');
+                    }
                 }
                 const data = await response.json();
                 login(data.user, data.sessionId);
@@ -155,8 +164,14 @@ const Auth: React.FC = () => {
                 });
                 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || '로그인 실패');
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.indexOf('application/json') !== -1) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || '로그인 실패');
+                    } else {
+                        const errorText = await response.text();
+                        throw new Error(errorText || '서버에서 오류가 발생했습니다.');
+                    }
                 }
 
                 const data = await response.json();
@@ -263,8 +278,10 @@ const App: React.FC = () => {
         onlineUsers,
         guilds,
         myGuild,
-        topmostModalId
+        topmostModalId,
+        activeModalIds
     } = useAppContext();
+    console.log('activeModalIds:', activeModalIds, 'topmostModalId:', topmostModalId);
     
     const [isPreloading, setIsPreloading] = useState(true);
 
@@ -331,36 +348,38 @@ const App: React.FC = () => {
             </div>
 
             {/* Modals */}
-            {activeNegotiation && <NegotiationModal negotiation={activeNegotiation} currentUser={currentUserWithStatus} onAction={handlers.handleAction} onlineUsers={onlineUsers} isTopmost={topmostModalId === 'negotiation'} />}
-            {modals.isSettingsModalOpen && <SettingsModal onClose={handlers.closeSettingsModal} isTopmost={topmostModalId === 'settings'} />}
+            {/* {activeNegotiation && <NegotiationModal negotiation={activeNegotiation} currentUser={currentUserWithStatus} onAction={handlers.handleAction} onlineUsers={onlineUsers} isTopmost={topmostModalId === 'negotiation'} />} */}
+            {/* {modals.isSettingsModalOpen && <SettingsModal onClose={handlers.closeSettingsModal} isTopmost={topmostModalId === 'settings'} />} */}
             {modals.isInventoryOpen && <InventoryModal onClose={handlers.closeInventory} isTopmost={topmostModalId === 'inventory'} />}
             {modals.isMailboxOpen && <MailboxModal currentUser={currentUserWithStatus} onClose={handlers.closeMailbox} onAction={handlers.handleAction} isTopmost={topmostModalId === 'mailbox'} />}
             {modals.isQuestsOpen && <QuestsModal currentUser={currentUserWithStatus} onClose={handlers.closeQuests} onAction={handlers.handleAction} isTopmost={topmostModalId === 'quests'} />}
             {modals.isShopOpen && <ShopModal currentUser={currentUserWithStatus} onAction={handlers.handleAction} onStartQuiz={handlers.openActionPointQuiz} onClose={handlers.closeShop} initialTab={modals.shopInitialTab!} isTopmost={topmostModalId === 'shop'} />}
-            {modals.actionPointQuiz && <ActionPointQuizModal onClose={handlers.closeActionPointQuiz} onAction={handlers.handleAction} isTopmost={topmostModalId === 'actionPointQuiz'} />}
+            {/* {modals.isGuildShopOpen && myGuild && <GuildShopModal guild={myGuild} onClose={handlers.closeGuildShop} isTopmost={topmostModalId === 'guildShop'} />} */}
+            {/* {modals.actionPointQuiz && <ActionPointQuizModal onClose={handlers.closeActionPointQuiz} onAction={handlers.handleAction} isTopmost={topmostModalId === 'actionPointQuiz'} />} */}
             {modals.lastUsedItemResult && modals.lastUsedItemResult.length === 1 && <ItemObtainedModal item={modals.lastUsedItemResult[0]} onClose={handlers.closeItemObtained} isTopmost={topmostModalId === 'itemObtained'} />}
             {modals.lastUsedItemResult && modals.lastUsedItemResult.length > 1 && <BulkItemObtainedModal items={modals.lastUsedItemResult} onClose={handlers.closeItemObtained} isTopmost={topmostModalId === 'itemObtained'} />}
-            {modals.rewardSummary && <RewardSummaryModal summary={modals.rewardSummary} onClose={handlers.closeRewardSummary} isTopmost={topmostModalId === 'rewardSummary'} />}
-            {modals.isClaimAllSummaryOpen && modals.claimAllSummary && <ClaimAllSummaryModal summary={modals.claimAllSummary} onClose={handlers.closeClaimAllSummary} isTopmost={topmostModalId === 'claimAllSummary'} />}
-            {modals.disassemblyResult && <DisassemblyResultModal result={modals.disassemblyResult} onClose={handlers.closeDisassemblyResult} isTopmost={topmostModalId === 'disassemblyResult'} />}
-            {modals.craftResult && <CraftingResultModal result={modals.craftResult} onClose={handlers.closeCraftResult} isTopmost={topmostModalId === 'craftResult'} />}
-            {modals.synthesisResult && <SynthesisResultModal result={modals.synthesisResult} onClose={handlers.closeSynthesisResult} isTopmost={topmostModalId === 'synthesisResult'} />}
-            {modals.viewingUser && <UserProfileModal user={modals.viewingUser} onClose={handlers.closeViewingUser} onViewItem={handlers.openViewingItem} isTopmost={topmostModalId === 'viewingUser'} />}
-            {modals.viewingItem && <ItemDetailModal item={modals.viewingItem.item} isOwnedByCurrentUser={modals.viewingItem.isOwned} onClose={handlers.closeViewingItem} isTopmost={topmostModalId === 'viewingItem'} />}
-            {modals.info && <InfoModal onClose={handlers.closeInfoModal} isTopmost={topmostModalId === 'info'} />}
-            {modals.encyclopedia && <EncyclopediaModal onClose={handlers.closeEncyclopedia} isTopmost={topmostModalId === 'encyclopedia'} />}
-            {modals.statAllocation && <StatAllocationModal currentUser={currentUserWithStatus} onClose={handlers.closeStatAllocationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'statAllocation'} />}
-            {modals.profileEdit && <ProfileEditModal currentUser={currentUserWithStatus} onClose={handlers.closeProfileEditModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'profileEdit'} />}
-            {modals.isBlacksmithOpen && <BlacksmithModal enhancementItem={modals.enhancingItem} initialTab="enhancement" onClose={handlers.closeBlacksmith} isTopmost={topmostModalId === 'blacksmith'} />}
-            {modals.isBlacksmithHelpOpen && <BlacksmithHelpModal onClose={() => handlers.setIsBlacksmithHelpOpen(false)} isTopmost={topmostModalId === 'blacksmithHelp'} />}
-            {modals.pastRankings && <PastRankingsModal info={modals.pastRankings} onClose={handlers.closePastRankings} isTopmost={topmostModalId === 'pastRankings'} />}
-            {modals.moderation && <AdminModerationModal user={modals.moderation} currentUser={currentUserWithStatus} onClose={handlers.closeModerationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'moderation'} />}
-            {modals.isTowerRewardInfoOpen && <TowerRankingRewardsModal onClose={handlers.closeTowerRewardInfoModal} isTopmost={topmostModalId === 'towerRewardInfo'} />}
-            {modals.levelUpInfo && <LevelUpModal levelUpInfo={modals.levelUpInfo} onClose={handlers.closeLevelUpModal} isTopmost={topmostModalId === 'levelUp'} />}
-            {modals.guildBossBattleResult && <GuildBossBattleResultModal result={modals.guildBossBattleResult} onClose={handlers.closeGuildBossBattleResultModal} isTopmost={topmostModalId === 'guildBossBattleResult'} />}
-            {modals.guildEffects && myGuild && <GuildEffectsModal guild={myGuild} onClose={handlers.closeGuildEffectsModal} isTopmost={topmostModalId === 'guildEffects'} />}
-            {modals.equipmentEffects && <EquipmentEffectsModal user={currentUserWithStatus} guild={myGuild} onClose={handlers.closeEquipmentEffectsModal} isTopmost={topmostModalId === 'equipmentEffects'} />}
-            {modals.preset && <PresetModal user={currentUserWithStatus} onAction={handlers.handleAction} onClose={handlers.closePresetModal} isTopmost={topmostModalId === 'preset'} />}
+            {/* {modals.rewardSummary && <RewardSummaryModal summary={modals.rewardSummary} onClose={handlers.closeRewardSummary} isTopmost={topmostModalId === 'rewardSummary'} />} */}
+            {/* {modals.isClaimAllSummaryOpen && modals.claimAllSummary && <ClaimAllSummaryModal summary={modals.claimAllSummary} onClose={handlers.closeClaimAllSummary} isTopmost={topmostModalId === 'claimAllSummary'} />} */}
+            {/* {modals.disassemblyResult && <DisassemblyResultModal result={modals.disassemblyResult} onClose={handlers.closeDisassemblyResult} isTopmost={topmostModalId === 'disassemblyResult'} />} */}
+            {/* {modals.craftResult && <CraftingResultModal result={modals.craftResult} onClose={handlers.closeCraftResult} isTopmost={topmostModalId === 'craftResult'} />} */}
+            {/* {modals.synthesisResult && <SynthesisResultModal result={modals.synthesisResult} onClose={handlers.closeSynthesisResult} isTopmost={topmostModalId === 'synthesisResult'} />} */}
+            {/* {modals.viewingUser && <UserProfileModal user={modals.viewingUser} onClose={handlers.closeViewingUser} onViewItem={handlers.openViewingItem} isTopmost={topmostModalId === 'viewingUser'} />} */}
+            {/* {modals.viewingItem && <ItemDetailModal item={modals.viewingItem.item} isOwnedByCurrentUser={modals.viewingItem.isOwned} onClose={handlers.closeViewingItem} isTopmost={topmostModalId === 'viewingItem'} />} */}
+            {/* {modals.info && <InfoModal onClose={handlers.closeInfoModal} isTopmost={topmostModalId === 'info'} />} */}
+            {/* {modals.encyclopedia && <EncyclopediaModal onClose={handlers.closeEncyclopedia} isTopmost={topmostModalId === 'encyclopedia'} />} */}
+            {/* {modals.statAllocation && <StatAllocationModal currentUser={currentUserWithStatus} onClose={handlers.closeStatAllocationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'statAllocation'} />} */}
+            {/* {modals.profileEdit && <ProfileEditModal currentUser={currentUserWithStatus} onClose={handlers.closeProfileEditModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'profileEdit'} />} */}
+            {modals.isBlacksmithOpen && <BlacksmithModal enhancementItem={modals.enhancingItem} onClose={handlers.closeBlacksmith} isTopmost={topmostModalId === 'blacksmith'} />}
+            {/* {modals.isBlacksmithHelpOpen && <BlacksmithHelpModal onClose={() => handlers.setIsBlacksmithHelpOpen(false)} isTopmost={topmostModalId === 'blacksmithHelp'} />} */}
+            {/* {modals.pastRankings && <PastRankingsModal info={modals.pastRankings} onClose={handlers.closePastRankings} isTopmost={topmostModalId === 'pastRankings'} />} */}
+            {/* {modals.moderation && <AdminModerationModal user={modals.moderation} currentUser={currentUserWithStatus} onClose={handlers.closeModerationModal} onAction={handlers.handleAction} isTopmost={topmostModalId === 'moderation'} />} */}
+            {/* {modals.isTowerRewardInfoOpen && <TowerRankingRewardsModal onClose={handlers.closeTowerRewardInfoModal} isTopmost={topmostModalId === 'towerRewardInfo'} />} */}
+            {/* {modals.levelUpInfo && <LevelUpModal levelUpInfo={modals.levelUpInfo} onClose={handlers.closeLevelUpModal} isTopmost={topmostModalId === 'levelUp'} />} */}
+            {/* {modals.guildBossBattleResult && <GuildBossBattleResultModal result={modals.guildBossBattleResult} onClose={handlers.closeGuildBossBattleResultModal} isTopmost={topmostModalId === 'guildBossBattleResult'} />} */}
+            {/* {modals.guildEffects && myGuild && <GuildEffectsModal guild={myGuild} onClose={handlers.closeGuildEffectsModal} isTopmost={topmostModalId === 'guildEffects'} />} */}
+            {/* {modals.equipmentEffects && <EquipmentEffectsModal user={currentUserWithStatus} guild={myGuild} onClose={handlers.closeEquipmentEffectsModal} isTopmost={topmostModalId === 'equipmentEffects'} />} */}
+            {/* {modals.preset && <PresetModal user={currentUserWithStatus} onAction={handlers.handleAction} onClose={handlers.closePresetModal} isTopmost={topmostModalId === 'preset'} />} */}
+            {/* {modals.questRewardSummary && <QuestRewardSummaryModal reward={modals.questRewardSummary} onClose={handlers.closeQuestRewardSummary} isTopmost={topmostModalId === 'questRewardSummary'} />} */}
         </div>
     );
 

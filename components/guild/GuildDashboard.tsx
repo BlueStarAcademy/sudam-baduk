@@ -32,6 +32,7 @@ const GuildDonationPanel: React.FC<{ guildDonationAnimation: { coins: number; re
     const canDonateDiamond = diamondDonationsLeft > 0 && (currentUserWithStatus?.diamonds ?? 0) >= GUILD_DONATION_DIAMOND_COST;
 
     const handleDonate = async (type: 'GUILD_DONATE_GOLD' | 'GUILD_DONATE_DIAMOND') => {
+        console.log('handleDonate called', type);
         if (donationInFlight.current) return;
         donationInFlight.current = true;
         setIsDonating(true);
@@ -63,8 +64,8 @@ const GuildDonationPanel: React.FC<{ guildDonationAnimation: { coins: number; re
     }, [guildDonationAnimation]);
 
     return (
-        <div className="bg-secondary p-4 rounded-lg flex flex-col relative overflow-hidden">
-            <h3 className="font-bold text-lg text-highlight mb-3 text-center">길드 기부</h3>
+        <div className="bg-secondary p-2 rounded-lg flex flex-col relative overflow-hidden">
+            <h3 className="font-bold text-base text-highlight mb-2 text-center">길드 기부</h3>
             {animationElements}
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-tertiary p-3 rounded-md text-center">
@@ -125,7 +126,7 @@ const ActivityPanel: React.FC<{ onOpenMissions: () => void; onOpenResearch: () =
     );
 };
 
-const BossPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
+const BossPanel: React.FC<{ guild: GuildType, className?: string }> = ({ guild, className }) => {
     const currentBoss = useMemo(() => {
         if (!guild.guildBossState) return GUILD_BOSSES[0];
         return GUILD_BOSSES.find(b => b.id === guild.guildBossState!.currentBossId) || GUILD_BOSSES[0];
@@ -151,9 +152,9 @@ const BossPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
     return (
         <button 
             onClick={() => window.location.hash = '#/guildboss'}
-            className="bg-secondary p-2 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full"
+            className={`bg-secondary p-2 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full ${className || ''}`}
         >
-            <h3 className="font-bold text-lg text-highlight mb-1">길드 보스전</h3>
+            <h3 className="font-bold text-base text-highlight mb-1">길드 보스전</h3>
             <div className="w-20 h-20 bg-tertiary rounded-lg flex items-center justify-center my-1">
                 <img src="/images/guild/bossraid.png" alt="길드 보스전" className="w-16 h-16" />
             </div>
@@ -169,12 +170,12 @@ const BossPanel: React.FC<{ guild: GuildType }> = ({ guild }) => {
     );
 };
 
-const WarPanel: React.FC = () => (
+const WarPanel: React.FC<{ className?: string }> = ({ className }) => (
     <button 
         onClick={() => window.location.hash = '#/guildwar'}
-        className="bg-secondary p-2 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full"
+        className={`bg-secondary p-2 rounded-lg flex flex-col items-center text-center transition-all hover:bg-tertiary/70 w-full ${className || ''}`}
     >
-        <h3 className="font-bold text-lg text-highlight mb-1">길드 전쟁</h3>
+        <h3 className="font-bold text-base text-highlight mb-1">길드 전쟁</h3>
         <div className="w-20 h-20 bg-tertiary rounded-lg flex items-center justify-center my-1">
             <img src="/images/guild/guildwar.png" alt="길드 전쟁" className="w-16 h-16" />
         </div>
@@ -253,10 +254,19 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
     const [isBossGuideOpen, setIsBossGuideOpen] = useState(false);
 
     const myMemberInfo = useMemo(() => {
-        return guild.members.find(m => m.userId === currentUserWithStatus?.id);
-    }, [guild.members, currentUserWithStatus?.id]);
+        if (!currentUserWithStatus?.id) return undefined;
+        let member = guild.members.find(m => m.userId === currentUserWithStatus.id);
+
+        // Workaround for admin user ID mismatch
+        if (!member && currentUserWithStatus.id === 'user-admin-static-id') {
+            member = guild.members.find(m => m.nickname === '관리자');
+        }
+        return member;
+    }, [guild.members, currentUserWithStatus?.id, currentUserWithStatus?.nickname]);
 
     const canManage = myMemberInfo?.role === GuildMemberRole.Master || myMemberInfo?.role === GuildMemberRole.Vice;
+
+
 
     const xpForNextLevel = GUILD_XP_PER_LEVEL(guild.level);
     const xpProgress = Math.min((guild.xp / xpForNextLevel) * 100, 100);
@@ -277,7 +287,7 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
     }
     
     const RightPanel: React.FC<{ guildDonationAnimation: { coins: number; research: number } | null }> = ({ guildDonationAnimation }) => (
-        <div className="lg:col-span-2 flex flex-col gap-4">
+        <div className="lg:col-span-2 flex flex-col gap-4 overflow-y-auto h-full min-h-0">
             <GuildDonationPanel guildDonationAnimation={guildDonationAnimation} />
             <ActivityPanel 
                 onOpenMissions={() => setIsMissionsOpen(true)} 
@@ -286,14 +296,12 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
                 missionNotification={missionTabNotification} 
                 onOpenBossGuide={() => setIsBossGuideOpen(true)} 
             />
-            <div className="flex-grow flex gap-4 min-h-0">
-                <BossPanel guild={guild} />
-                <WarPanel />
+            <div className="flex-grow flex gap-4">
+                <BossPanel guild={guild} className="flex-1 h-full" />
+                <WarPanel className="flex-1 h-full" />
             </div>
         </div>
-    );
-
-    return (
+    );    return (
         <div className="p-2 max-w-7xl mx-auto h-full flex flex-col w-full relative">
             {isMissionsOpen && <GuildMissionsPanel guild={guild} myMemberInfo={myMemberInfo} onClose={() => setIsMissionsOpen(false)} />}
             {isResearchOpen && <GuildResearchPanel guild={guild} myMemberInfo={myMemberInfo} onClose={() => setIsResearchOpen(false)} />}
@@ -305,12 +313,12 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
                     <BackButton onClick={() => window.location.hash = '#/profile'} />
                 </div>
                 
-                <div className="flex flex-col items-center gap-2">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-col items-center gap-1">
+                    <div className="flex items-center gap-2">
                         <div className="relative group flex-shrink-0">
-                            <img src={guild.icon} alt="Guild Icon" className="w-16 h-16 bg-tertiary rounded-md" />
+                            <img src={guild.icon} alt="Guild Icon" className="w-12 h-12 bg-tertiary rounded-md" />
                         </div>
-                        <h1 className="text-3xl font-bold">{guild.name}</h1>
+                        <h1 className="text-2xl font-bold">{guild.name}</h1>
                     </div>
                     <div className="w-48">
                         <div className="flex justify-between text-xs text-secondary mb-0.5">
@@ -343,7 +351,7 @@ export const GuildDashboard: React.FC<GuildDashboardProps> = ({ guild, guildDona
             </header>
 
             <main className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-5 gap-4">
-                <div className="lg:col-span-3 flex flex-col gap-4">
+                <div className="lg:col-span-3 flex flex-col gap-4 min-h-0">
                     <div className="flex-shrink-0">
                         <div className="flex bg-tertiary/70 p-1 rounded-lg w-full max-w-sm">
                             {tabs.map(tab => (

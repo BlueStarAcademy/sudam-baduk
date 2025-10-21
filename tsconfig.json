@@ -5,7 +5,8 @@
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "allowJs": false,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true
   },
   "include": [
     "*.ts",

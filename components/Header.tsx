@@ -58,7 +58,7 @@ const Header: React.FC = () => {
 
     return (
         <header className="flex-shrink-0 bg-primary/80 backdrop-blur-sm shadow-lg border-b border-color">
-            <div className="p-1 flex justify-between items-center gap-1 h-[60px] flex-nowrap overflow-hidden">
+            <div className="p-1 flex justify-between items-center gap-2 sm:gap-4 h-[60px] flex-nowrap">
                 <div className="flex items-center gap-1 sm:gap-3 flex-shrink min-w-0">
                      <Avatar userId={currentUserWithStatus.id} userName={currentUserWithStatus.nickname} avatarUrl={avatarUrl} borderUrl={borderUrl} size={40} />
                      <div className="hidden sm:block min-w-0">
@@ -67,11 +67,11 @@ const Header: React.FC = () => {
                      </div>
                 </div>
 
-                <div className="flex items-center justify-end flex-wrap gap-1 sm:gap-2">
+                <div className="flex items-center justify-end flex-wrap gap-2 sm:gap-4">
                     <div className="flex items-center">
                         <ResourceDisplay icon="⚡" value={`${actionPoints.current}/${actionPoints.max}`} />
                         <ActionPointTimer user={currentUserWithStatus} />
-                        <button onClick={() => openShop('misc')} className="ml-0.5 w-5 h-5 flex-shrink-0 rounded-full bg-green-600 hover:bg-green-500 text-white font-bold flex items-center justify-center text-sm shadow-md transition-transform hover:scale-110 active:scale-95" title="행동력 구매">+</button>
+                        <button onClick={() => openShop('misc')} className="ml-0.5 w-6 h-6 flex-shrink-0 rounded-full bg-green-600 hover:bg-green-500 text-white font-bold flex items-center justify-center text-sm shadow-md transition-transform hover:scale-110 active:scale-95" title="행동력 구매">+</button>
                     </div>
                     <ResourceDisplay icon={<img src="/images/Gold.png" alt="골드" className="w-5 h-5 object-contain" />} value={gold.toLocaleString()} />
                     <ResourceDisplay icon={<img src="/images/Zem.png" alt="다이아" className="w-5 h-5 object-contain" />} value={diamonds.toLocaleString()} />

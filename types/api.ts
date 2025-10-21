@@ -26,6 +26,7 @@ export interface AppState {
     announcementInterval: number;
     guilds: Record<string, Guild>;
     towerRankings: TowerRank[];
+    onlineUsers: UserWithStatus[];
     // Add userLastChatMessage to AppState
     userLastChatMessage: Record<string, number>;
 }
@@ -70,6 +71,8 @@ export interface GuildBossBattleResult {
 
 
 export type ServerActionType =
+  | 'TRIGGER_AI_MOVE'
+  | 'HEARTBEAT'
   | 'LOGIN'
   | 'REGISTER'
   | 'LOGOUT'
@@ -182,6 +185,7 @@ export type ServerActionType =
   | 'SAVE_EQUIPMENT_PRESET'
   | 'LOAD_EQUIPMENT_PRESET'
   | 'RENAME_EQUIPMENT_PRESET'
+  | 'UNEQUIP_ALL_ITEMS'
   | 'PAUSE_GAME'
   | 'RESUME_GAME'
   | 'UPDATE_APP_SETTINGS'

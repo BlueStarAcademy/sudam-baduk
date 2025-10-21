@@ -230,7 +230,7 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
                         user={user}
                         role={user.id === blackPlayerId ? '흑' : '백'}
                         isGameEnded={isGameEnded}
-                        isAiGame={isAiGame}
+                        isAiGame={isAiGame ?? false}
                         rematchRequested={rematchRequested}
                         handleRematch={handleRematch}
                         onViewUser={onViewUser}
@@ -245,7 +245,7 @@ const UserListPanel: React.FC<SidebarProps & { onClose?: () => void }> = ({ sess
                         user={user}
                         role={'관전'}
                         isGameEnded={isGameEnded}
-                        isAiGame={isAiGame}
+                        isAiGame={isAiGame ?? false}
                         rematchRequested={rematchRequested}
                         handleRematch={handleRematch}
                         onViewUser={onViewUser}
@@ -434,7 +434,7 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
             </div>
             <div className="flex-shrink-0 pt-2">
                 {isPausable ? (
-                    <Button onClick={onPauseToggle} colorScheme="yellow" className="w-full" disabled={pauseCooldownTime && pauseCooldownTime > 0}>
+                    <Button onClick={onPauseToggle} colorScheme="yellow" className="w-full" disabled={!!(pauseCooldownTime && pauseCooldownTime > 0)}>
                         {isPaused ? (
                             <>
                                 대국 재개

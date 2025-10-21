@@ -197,6 +197,7 @@ export enum SinglePlayerLevel {
 }
 
 export enum GameType {
+    Standard = 'standard',
     Capture = 'capture',
     Survival = 'survival',
     Speed = 'speed',

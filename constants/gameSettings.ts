@@ -39,6 +39,99 @@ export const BYOYOMI_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 export const BYOYOMI_TIMES = [10, 20, 30, 40, 50, 60]; // in seconds
 export const BASE_STONE_COUNTS = [3, 4, 5, 6, 7, 8, 9, 10];
 export const DEFAULT_KOMI = 6.5;
+
+export const getDefaultSettingsForMode = (mode: GameMode): Partial<GameSettings> => {
+    switch (mode) {
+        case GameMode.Standard:
+            return {
+                boardSize: 19,
+                timeLimit: 10,
+                byoyomiCount: 3,
+                byoyomiTime: 30,
+                komi: DEFAULT_KOMI,
+            };
+        case GameMode.Omok:
+            return {
+                boardSize: 19,
+                has33Forbidden: true,
+                hasOverlineForbidden: true,
+            };
+        case GameMode.Ttamok:
+            return {
+                boardSize: 19,
+                captureTarget: 20,
+                has33Forbidden: true,
+                hasOverlineForbidden: true,
+            };
+        case GameMode.Capture:
+            return {
+                boardSize: 13,
+                captureTarget: 10,
+            };
+        case GameMode.Speed:
+            return {
+                boardSize: 13,
+                timeLimit: 5,
+                timeIncrement: 5,
+            };
+        case GameMode.Base:
+            return {
+                boardSize: 13,
+                baseStones: 4,
+                komi: 0.5,
+            };
+        case GameMode.Hidden:
+            return {
+                boardSize: 13,
+                hiddenStoneCount: 2,
+                scanCount: 5,
+                komi: DEFAULT_KOMI,
+            };
+        case GameMode.Missile:
+            return {
+                boardSize: 13,
+                missileCount: 5,
+                komi: DEFAULT_KOMI,
+            };
+        case GameMode.Mix:
+            return {
+                boardSize: 13,
+                mixedModes: [GameMode.Hidden, GameMode.Speed],
+                komi: DEFAULT_KOMI,
+            };
+        case GameMode.Dice:
+            return {
+                boardSize: 19,
+                diceGoRounds: 3,
+                oddDiceCount: 1,
+                evenDiceCount: 1,
+            };
+        case GameMode.Thief:
+            return {
+                boardSize: 13,
+            };
+        case GameMode.Alkkagi:
+            return {
+                alkkagiRounds: 1,
+                alkkagiPlacementType: AlkkagiPlacementType.TurnByTurn,
+                alkkagiLayout: AlkkagiLayoutType.Normal,
+                alkkagiStoneCount: 5,
+                alkkagiGaugeSpeed: 700,
+                alkkagiSlowItemCount: 2,
+                alkkagiAimingLineItemCount: 2,
+            };
+        case GameMode.Curling:
+            return {
+                curlingRounds: 3,
+                curlingStoneCount: 5,
+                curlingGaugeSpeed: 700,
+                curlingSlowItemCount: 2,
+                curlingAimingLineItemCount: 2,
+            };
+        default:
+            return {};
+    }
+};
 export const FISCHER_INCREMENT_SECONDS = 5;
 export const TIME_BONUS_SECONDS_PER_POINT = 5;
 export const DICE_GO_ITEM_COUNTS = [0, 1, 2, 3];

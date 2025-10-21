@@ -174,7 +174,7 @@ const PotionSelectionModal: React.FC<PotionSelectionModalProps> = ({ currentUser
     };
 
     return (
-        <DraggableWindow title="컨디션 회복 물약 사용" onClose={onClose} windowId="potion-selection" initialWidth={400}>
+        <DraggableWindow title="컨디션 회복 물약 사용" onClose={onClose} windowId="potion-selection" initialWidth={500}>
             <div className="space-y-4">
                 {potions.map(potion => (
                     <div key={potion.name} className="flex items-center justify-between p-3 bg-gray-900/50 rounded-lg">

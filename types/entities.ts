@@ -512,6 +512,7 @@ export interface User {
     guildShopPurchases: Record<string, { quantity: number, lastPurchaseTimestamp: number }>;
     appSettings?: AppSettings;
     kakaoId?: string;
+    gameId?: string;
 
     // Tournament progress
     lastNeighborhoodPlayedDate?: number;
@@ -883,4 +884,5 @@ export interface LiveGameSession {
     whiteStoneLimit?: number;
     autoEndTurnCount?: number;
     promptForMoreStones?: boolean;
+    stageInfo?: SinglePlayerStageInfo;
 }

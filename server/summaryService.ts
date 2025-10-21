@@ -11,9 +11,9 @@ import { openEquipmentBox1, createItemFromTemplate } from './shop.js';
 import { createItemInstancesFromReward, addItemsToInventory } from '../utils/inventoryUtils.js';
 import { defaultStats } from './initialData.js';
 import { aiUserId, getAiUser } from './ai/index.js';
-import os from 'os';
-import fs from 'fs';
-import path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 import { calculateScores } from './scoring.js';
 import { getDb } from './db/connection.js';
 

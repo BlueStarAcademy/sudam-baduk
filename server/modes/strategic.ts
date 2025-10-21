@@ -12,9 +12,11 @@ import {
     type Move,
     Point,
     UserStatusInfo,
-    type Negotiation
+    type Negotiation,
+    BoardState,
+    KoInfo
 } from '../../types/index.js';
-import { processMove } from '../../utils/goLogic';
+import { processMove } from '../../utils/goLogic.js';
 import { getGameResult, endGame } from '../summaryService.js';
 import { makeAiMove } from '../ai/index.js';
 import * as db from '../db.js';
@@ -30,25 +32,70 @@ import { VolatileState } from '../../types/api.js';
 import { getNewActionButtons } from '../services/actionButtonService.js';
 
 export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player): Promise<LiveGameSession | undefined> => {
+
     try {
+
         const gameId = gameFromAction.id;
-        
-        const aiPlayerId = gameFromAction.player2.id;
-        const aiPlayerEnum = gameFromAction.blackPlayerId === aiPlayerId ? Player.Black : (gameFromAction.whitePlayerId === aiPlayerId ? Player.White : Player.None);
 
-        console.log(`[AI Turn Debug] Game ${gameId}: Current player is ${gameFromAction.currentPlayer}, AI player is ${aiPlayerEnum}`);
 
-        if (gameFromAction.currentPlayer !== aiPlayerEnum) return undefined;
 
-        let aiMove = await makeAiMove(gameFromAction) as (Point & { isHidden?: boolean });
-        console.log(`[AI Turn Debug] Game ${gameId}: AI generated move: ${JSON.stringify(aiMove)}`);
+        // Fetch the freshest game state from the database first.
 
         const freshGame = await db.getLiveGame(gameId);
-        if (!freshGame || freshGame.currentPlayer !== aiPlayerEnum) {
-            console.log(`[AI Turn Debug] Game ${gameId}: Game state changed or game ended while AI was thinking. Aborting AI move.`);
-            console.log(`[AI Turn Debug] Game ${gameId}: Current player was ${aiPlayerEnum}, now is ${freshGame?.currentPlayer}`);
+
+        if (!freshGame) {
+
+            console.log(`[AI Turn Abort] Game ${gameId}: Game not found.`);
+
             return undefined;
+
         }
+
+
+
+        const aiPlayerId = freshGame.player2.id;
+
+        const aiPlayerEnum = freshGame.blackPlayerId === aiPlayerId ? Player.Black : (freshGame.whitePlayerId === aiPlayerId ? Player.White : Player.None);
+
+
+
+        console.log(`[AI Turn Debug] Game ${gameId}: Current player is ${freshGame.currentPlayer}, AI player is ${aiPlayerEnum}`);
+
+
+
+        // Check if it's actually the AI's turn in the freshest state.
+
+        if (freshGame.currentPlayer !== aiPlayerEnum) {
+
+            console.log(`[AI Turn Abort] Game ${gameId}: It's not AI's turn. Current player is ${freshGame.currentPlayer}.`);
+
+            return freshGame; // Return the current state without making a move.
+
+        }
+
+        
+
+        // Now, make the AI move based on this fresh state.
+
+        let aiMove = await makeAiMove(freshGame) as (Point & { isHidden?: boolean });
+
+        console.log(`[AI Turn Debug] Game ${gameId}: AI generated move: ${JSON.stringify(aiMove)}`);
+
+
+
+        // No need to fetch again, we already have the fresh state.
+
+        if (freshGame.currentPlayer !== aiPlayerEnum) {
+
+            console.log(`[AI Turn Debug] Game ${gameId}: Game state changed or game ended while AI was thinking. Aborting AI move.`);
+
+            console.log(`[AI Turn Debug] Game ${gameId}: Current player was ${aiPlayerEnum}, now is ${freshGame?.currentPlayer}`);
+
+            return freshGame;
+
+        }
+
+
 
         if (aiMove.isHidden) {
             freshGame.gameStatus = GameStatus.AiHiddenThinking;
@@ -114,7 +161,7 @@ export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { 
             console.log(`[AI Turn Debug] Game ${gameId}: AI making regular move at (${aiMove.x}, ${aiMove.y}).`);
 
             let attempts = 0;
-            let result;
+            let result: { isValid: boolean; reason?: string; newBoardState: BoardState; capturedStones: Point[]; newKoInfo: KoInfo | null } = { isValid: false, newBoardState: freshGame.boardState, capturedStones: [], newKoInfo: freshGame.koInfo };
             while (attempts < 5) {
                 result = processMove(freshGame.boardState, { ...aiMove, player: freshGame.currentPlayer }, freshGame.koInfo, freshGame.moveHistory.length);
                 if (result.isValid) {
@@ -286,19 +333,24 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
         }
 
         if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
+            // Save the game state after the player's move but before the AI's turn.
+            await db.saveGame(game);
+
             game.aiTurnStartTime = Date.now();
-            // Call handleAiTurn BEFORE switching the turn
+            // Call handleAiTurn. It will fetch the fresh state we just saved.
             const updatedGameAfterAi = await handleAiTurn(game, { x, y }, myPlayerEnum);
+
             if (updatedGameAfterAi) {
-                // If AI turn is successful, then switch the turn
-                switchTurnAndUpdateTimers(updatedGameAfterAi, now); // Pass the updated game from AI
-                await db.saveGame(updatedGameAfterAi); // Save the game after AI move and turn switch
+                // The AI turn logic is responsible for saving the game after its move.
+                // We just need to switch turns and save again.
+                switchTurnAndUpdateTimers(updatedGameAfterAi, now);
+                await db.saveGame(updatedGameAfterAi);
                 return { clientResponse: { updatedGame: updatedGameAfterAi } };
             } else {
-                // AI turn failed, revert turn to player
-                console.log(`[AI Turn Warning] Game ${game.id}: handleAiTurn returned undefined. Reverting turn to player.`);
-                // No need to switch turn here, as it was never switched to AI
-                await db.saveGame(game); // Save the game with player's turn
+                // AI turn might have failed or been aborted (e.g., game ended).
+                // The game state in `game` is still the one after the player's move.
+                // We don't need to do anything extra here as the turn doesn't switch.
+                console.log(`[AI Turn Info] Game ${game.id}: handleAiTurn did not return an updated game. The turn remains with the player.`);
                 return { clientResponse: { updatedGame: game } };
             }
         } else {
@@ -320,15 +372,18 @@ export const handleStrategicGameAction = async (volatileState: VolatileState, ga
             return { clientResponse: { updatedGame: game } };
         } else {
             if (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) {
+                // Save the game state after the player's pass but before the AI's turn.
+                await db.saveGame(game);
+
                 game.aiTurnStartTime = Date.now();
                 const updatedGameAfterAi = await handleAiTurn(game, { x: -1, y: -1 }, myPlayerEnum);
+
                 if (updatedGameAfterAi) {
                     switchTurnAndUpdateTimers(updatedGameAfterAi, now);
                     await db.saveGame(updatedGameAfterAi);
                     return { clientResponse: { updatedGame: updatedGameAfterAi } };
                 } else {
-                    console.log(`[AI Turn Warning] Game ${game.id}: handleAiTurn returned undefined after PASS_TURN. Reverting turn to player.`);
-                    await db.saveGame(game);
+                    console.log(`[AI Turn Info] Game ${game.id}: handleAiTurn did not return an updated game after PASS_TURN. The turn remains with the player.`);
                     return { clientResponse: { updatedGame: game } };
                 }
             } else {

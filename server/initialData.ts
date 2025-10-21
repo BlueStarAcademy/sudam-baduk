@@ -1,7 +1,7 @@
 import { type AppState, type User, type UserCredentials, type QuestLog, type DailyQuestData, type WeeklyCompetitor, type WeeklyQuestData, type MonthlyQuestData, type Guild, CoreStat, GameMode, LeagueTier, GuildMemberRole, GuildResearchId, type InventoryItem } from '../types/index.js';
 // FIX: Corrected import paths to resolve circular dependency.
 import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, BOT_NAMES, AVATAR_POOL, GUILD_MISSIONS_POOL, GUILD_INITIAL_MEMBER_LIMIT, defaultSettings } from '../constants/index.js';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 // FIX: Import createDefaultBaseStats from shared utils.
 import { createDefaultBaseStats } from '../utils/statUtils.js';
 
@@ -205,6 +205,7 @@ export const getInitialState = (): Omit<AppState, 'liveGames' | 'negotiations' |
             '녹색별': { ...test3Creds, userId: testUser3.id },
         },
         guilds: {},
+        onlineUsers: [],
     };
 }
 

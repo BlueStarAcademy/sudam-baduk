@@ -25,7 +25,7 @@ const THEMES: { id: Theme; name: string; colors: string[] }[] = [
 const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isTopmost }) => {
     // FIX: Destructure handlers from useAppContext and use them to update settings.
     const { settings, handlers } = useAppContext();
-    const { updateTheme, updateSoundSetting, updateFeatureSetting } = handlers;
+    const { updateTheme, updateSoundSetting, updateFeatureSetting, updateGraphicsSetting } = handlers;
     const [activeTab, setActiveTab] = useState<SettingsTab>('graphics');
     
     const tabs: { id: SettingsTab; label: string }[] = [
@@ -134,6 +134,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, isTopmost }) => 
                                                 <div key={i} style={{ backgroundColor: color }} className="w-6 h-6 rounded-full border-2 border-primary"></div>
                                             ))}
                                         </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-semibold text-text-secondary">패널 엣지 스타일</h3>
+                            <div className="grid grid-cols-3 gap-2 mt-2">
+                                {[
+                                    { id: 0, name: '기본', image: '/images/panel/panel_top_left.png' },
+                                    { id: 1, name: '스타일 1', image: '/images/panel/panel_top_left1.png' },
+                                    { id: 2, name: '스타일 2', image: '/images/panel/panel_top_left2.png' },
+                                    { id: 3, name: '스타일 3', image: '/images/panel/panel_top_left3.png' },
+                                    { id: 4, name: '스타일 4', image: '/images/panel/panel_top_left4.png' },
+                                    { id: 5, name: '스타일 5', image: '/images/panel/panel_top_left5.png' },
+                                ].map(style => (
+                                    <label key={style.id} className="flex items-center p-2 bg-tertiary/50 rounded-lg cursor-pointer border-2 border-transparent has-[:checked]:border-accent has-[:checked]:ring-2 has-[:checked]:ring-accent">
+                                        <input
+                                            type="radio"
+                                            name="panelEdge"
+                                            value={style.id}
+                                            checked={settings.graphics.panelEdge === style.id}
+                                            onChange={() => updateGraphicsSetting('panelEdge', style.id)}
+                                            className="w-4 h-4 text-accent bg-secondary border-color focus:ring-accent"
+                                        />
+                                        <img src={style.image} alt={style.name} className="w-8 h-8 ml-2" />
+                                        <span className="ml-2 text-sm">{style.name}</span>
                                     </label>
                                 ))}
                             </div>

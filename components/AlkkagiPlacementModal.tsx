@@ -35,7 +35,7 @@ const AlkkagiPlacementModal: React.FC<AlkkagiPlacementModalProps> = ({ session, 
     }, [alkkagiPlacementDeadline]);
 
     return (
-        <DraggableWindow title={title} windowId="alkkagi-placement" initialWidth={300} modal={false}>
+        <DraggableWindow title={title} windowId="alkkagi-placement" initialWidth={400} modal={false}>
             <div className="text-center">
                 <p className="text-sm text-gray-200">{(session.alkkagiRound || 1) > 1 ? '부족한 돌을 배치하세요.' : '상대에게 보이지 않게 돌을 배치하세요.'}</p>
                 <p className="text-lg font-bold my-2">({myStonesPlacedThisPhase}/{targetPlacements})</p>

@@ -1,7 +1,7 @@
 
 import { Pool } from 'pg';
 import { initializeAndGetDb, getDb } from './db/connection.js';
-import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank, UserStatusInfo } from '../types/index.js';
+import { User, LiveGameSession, AppState, UserCredentials, AdminLog, Announcement, OverrideAnnouncement, GameMode, Guild, TowerRank, UserStatusInfo, UserWithStatus } from '../types/index.js';
 import { getInitialState } from './initialData.js';
 
 // --- Initialization and Seeding ---

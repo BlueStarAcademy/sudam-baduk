@@ -204,7 +204,7 @@ const EncyclopediaModal: React.FC<EncyclopediaModalProps> = ({ onClose, isTopmos
     const layoutClasses = 'flex-row';
 
     return (
-        <DraggableWindow title="도감" onClose={onClose} windowId="encyclopedia" initialWidth={900} isTopmost={isTopmost}>
+        <DraggableWindow title="도감" onClose={onClose} windowId="encyclopedia" initialWidth={1200} isTopmost={isTopmost}>
              <div className="flex bg-gray-900/70 p-1 rounded-lg mb-4 flex-shrink-0">
                 <button onClick={() => setMainTab('equipment')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${mainTab === 'equipment' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>장비</button>
                 <button onClick={() => setMainTab('material')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${mainTab === 'material' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>재료</button>
@@ -213,11 +213,11 @@ const EncyclopediaModal: React.FC<EncyclopediaModalProps> = ({ onClose, isTopmos
             </div>
             
             {mainTab === 'help' ? (
-                <div className="h-[calc(var(--vh,1vh)*65)] bg-gray-900/50 rounded-lg p-4">
+                <div className="h-[calc(var(--vh,1vh)*80)] bg-gray-900/50 rounded-lg p-4">
                     {renderHelpContent()}
                 </div>
             ) : (
-                <div className={`flex gap-4 h-[calc(var(--vh,1vh)*65)] ${layoutClasses}`}>
+                <div className={`flex gap-4 h-[calc(var(--vh,1vh)*80)] ${layoutClasses}`}>
                     {/* Left Panel: Item Lists */}
                     <div className="flex flex-col gap-4 w-1/2 h-full">
                         {mainTab === 'consumable' && (

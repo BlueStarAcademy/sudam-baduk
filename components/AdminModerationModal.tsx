@@ -65,7 +65,7 @@ const AdminModerationModal: React.FC<AdminModerationModalProps> = ({ user, curre
     ];
 
     return (
-        <DraggableWindow title={`사용자 제재: ${user.nickname}`} onClose={onClose} windowId={`admin-mod-${user.id}`} isTopmost={isTopmost}>
+        <DraggableWindow title={`사용자 제재: ${user.nickname}`} onClose={onClose} windowId={`admin-mod-${user.id}`} initialWidth={800} isTopmost={isTopmost}>
             <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg">
                     <Avatar userId={user.id} userName={user.nickname} avatarUrl={avatarUrl} borderUrl={borderUrl} size={64} />

@@ -3,7 +3,7 @@ import React from 'react';
 import { LiveGameSession } from './types/index';
 import { useAppContext } from './hooks/useAppContext';
 import SinglePlayerArena from './components/arenas/SinglePlayerArena';
-import TowerChallengeArena from './components/arenas/TowerChallengeArena';
+import { TowerChallengeArena } from './components/arenas/TowerChallengeArena';
 import PvpArena from './components/arenas/PvpArena';
 
 interface GameComponentProps {

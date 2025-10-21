@@ -80,7 +80,7 @@ const SynthesisResultModal: React.FC<SynthesisResultModalProps> = ({ result, onC
     const gradeColor = isDoubleMythic ? 'prism-text-effect' : styles.text;
 
     return (
-        <DraggableWindow title={wasUpgraded || isDoubleMythic ? "✨ 합성 대성공! ✨" : "합성 결과"} onClose={onClose} windowId="synthesis-result" initialWidth={400} isTopmost={isTopmost}>
+        <DraggableWindow title={wasUpgraded || isDoubleMythic ? "✨ 합성 대성공! ✨" : "합성 결과"} onClose={onClose} windowId="synthesis-result" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                  {(wasUpgraded || isDoubleMythic) && (
                     <h2 className="text-2xl font-bold text-yellow-300 mb-4 animate-pulse">

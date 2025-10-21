@@ -72,6 +72,17 @@ export const handlePresetAction = async (user: User, action: ServerAction): Prom
             await db.updateUser(user);
             return { clientResponse: { updatedUser: user } };
         }
+
+        case 'UNEQUIP_ALL_ITEMS': {
+            user.inventory.forEach(item => {
+                if (item.isEquipped) {
+                    item.isEquipped = false;
+                }
+            });
+            user.equipment = {}; // Clear all equipped slots
+            await db.updateUser(user);
+            return { clientResponse: { updatedUser: user, successMessage: '모든 장비를 해제했습니다.' } };
+        }
     }
     return { error: '알 수 없는 프리셋 액션입니다.' };
 };

@@ -53,7 +53,7 @@ const AlkkagiRoundSummary: React.FC<AlkkagiRoundSummaryProps> = ({ session, curr
     }
 
     return (
-        <DraggableWindow title={`${round} 라운드 결과`} initialWidth={550} windowId="alkkari-round-summary">
+        <DraggableWindow title={`${round} 라운드 결과`} initialWidth={600} windowId="alkkari-round-summary">
             <div className="text-white text-center">
                 <h2 className="text-2xl font-bold mb-2">{winner.nickname}님 라운드 승리!</h2>
                 <p className="text-gray-300 mb-6">{description}</p>

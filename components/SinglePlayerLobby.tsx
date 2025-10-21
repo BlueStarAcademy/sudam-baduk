@@ -1,16 +1,17 @@
 
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { useAppContext } from '../hooks/useAppContext.js';
-import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../constants/singlePlayerConstants.js';
-import { SinglePlayerLevel, GameType } from '../types/enums.js';
-import type { ServerAction, UserWithStatus, InventoryItem, SinglePlayerStageInfo } from '../types/index.js';
-import BackButton from './BackButton.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
-import { getMissionInfoWithLevel } from '../utils/questUtils.js';
+import { useAppContext } from '../hooks/useAppContext.ts';
+import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../constants/singlePlayerConstants.ts';
+import { SinglePlayerLevel, GameType } from '../types/enums.ts';
+import type { ServerAction, UserWithStatus, InventoryItem, SinglePlayerStageInfo } from '../types/index.ts';
+import BackButton from './BackButton.tsx';
+import Button from './Button.tsx';
+import DraggableWindow from './DraggableWindow.tsx';
+import { getMissionInfoWithLevel } from '../utils/questUtils.ts';
 // FIX: Add missing import for CONSUMABLE_ITEMS
-import { CONSUMABLE_ITEMS } from '../constants/items.js';
-import NineSlicePanel from './ui/NineSlicePanel.js';
+import { CONSUMABLE_ITEMS } from '../constants/items.ts';
+import NineSlicePanel from './ui/NineSlicePanel.tsx';
+import HelpModal from './HelpModal.tsx';
 
 interface UpgradeMissionModalProps {
     mission: SinglePlayerStageInfo;
@@ -82,6 +83,7 @@ const UpgradeMissionModal: React.FC<UpgradeMissionModalProps> = ({ mission, curr
 };
 
 const gameTypeKorean: Record<GameType, string> = {
+    [GameType.Standard]: '클래식',
     'capture': '따내기',
     'survival': '살리기',
     'speed': '스피드',
@@ -282,7 +284,7 @@ const MissionCard: React.FC<{
         <div className="bg-secondary/60 p-2 rounded-lg flex flex-col h-full border-2 border-color text-on-panel">
             <div className="flex-grow flex flex-col items-center gap-2 text-center">
                 <img src={mission.image} alt={mission.name} className="w-16 h-16 object-cover p-1 rounded-md bg-tertiary" />
-                <h4 className="font-bold text-sm text-highlight truncate" title={mission.name}>{mission.name}</h4>
+                <h4 className="font-bold text-sm text-highlight truncate" title={mission.name}>{mission.name} <span className="text-xs text-yellow-400">Lv.{currentLevel}</span></h4>
                 <p className="text-[10px] text-tertiary flex-grow min-h-[2rem]">{mission.description}</p>
             </div>
             
@@ -354,6 +356,7 @@ const getRequiredProgressForStageId = (stageId: string): number => {
 const SinglePlayerLobby: React.FC = () => {
     const { currentUserWithStatus, handlers } = useAppContext();
     const [activeLevelIndex, setActiveLevelIndex] = useState(0);
+    const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
     const [upgradingMission, setUpgradingMission] = useState<SinglePlayerStageInfo | null>(null);
     const scrollContainerRef = useRef<HTMLUListElement>(null);
     const stageRefs = useRef<Map<string, HTMLLIElement | null>>(new Map());
@@ -427,18 +430,19 @@ const SinglePlayerLobby: React.FC = () => {
                     onAction={handlers.handleAction}
                 />
             )}
+            {isHelpModalOpen && <HelpModal mode="single-player" onClose={() => setIsHelpModalOpen(false)} />}
             <header className="flex justify-between items-center flex-shrink-0 px-4 pt-4">
                  <BackButton onClick={() => window.location.hash = '#/profile'} />
                 <h1 className="text-[clamp(1.75rem,1.25rem+2.5vw,2.25rem)] font-bold whitespace-nowrap">싱글플레이</h1>
                 <div className="w-32 text-right">
-                    <Button
-                        onClick={() => handleStart(currentUserWithStatus?.lastSinglePlayerStageId)}
-                        colorScheme="yellow"
-                        className="!text-sm"
-                        disabled={!currentUserWithStatus?.lastSinglePlayerStageId}
+                    <button
+                        onClick={() => setIsHelpModalOpen(true)}
+                        className="ml-2 w-10 h-10 flex items-center justify-center bg-secondary hover:bg-tertiary rounded-full text-primary font-bold text-lg flex-shrink-0 transition-transform hover:scale-110"
+                        aria-label="도움말 보기"
+                        title="도움말 보기"
                     >
-                        이어하기
-                    </Button>
+                        <img src="/images/button/help.png" alt="도움말" className="h-5" />
+                    </button>
                 </div>
             </header>
 

@@ -5,7 +5,7 @@ import HelpModal from '../HelpModal.js';
 import { useAppContext } from '../../hooks/useAppContext.js';
 
 // Import newly created sub-components
-import PlayerList from './PlayerList.js';
+import { PlayerList } from './PlayerList.js';
 import RankingList from './RankingList.js';
 import GameList from './GameList.js';
 import ChatWindow from './ChatWindow.js';
@@ -33,15 +33,12 @@ function usePrevious<T>(value: T): T | undefined {
 
 const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
     const { handlers } = useAppContext();
-    const [selectedAiDifficulty, setSelectedAiDifficulty] = useState(50);
     const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
     const isPlayfulAiSupported = PLAYFUL_AI_MODES.includes(mode);
 
     if (!isStrategic && !isPlayfulAiSupported) {
         return null;
     }
-    
-    const botName = isStrategic ? `${mode}봇(카타고)` : `${mode}봇`;
 
     const handleChallenge = () => {
         handlers.handleAction({
@@ -49,38 +46,18 @@ const AiChallengePanel: React.FC<{ mode: GameMode }> = ({ mode }) => {
             payload: {
                 opponentId: aiUserId,
                 mode,
-                settings: { aiDifficulty: selectedAiDifficulty }
             }
         });
     };
 
     return (
-        <NineSlicePanel className="shadow-lg p-3 flex items-center justify-between flex-shrink-0 text-on-panel" padding="p-3">
+        <NineSlicePanel className="shadow-lg p-2 flex items-center justify-between flex-shrink-0 text-on-panel" padding="p-2">
             <div className="flex items-center gap-3">
-                 <Avatar userId={aiUserId} userName="AI" size={40} className="border-2 border-purple-500" />
-                 <div>
-                    <h3 className="text-base font-bold text-purple-300">AI와 대결하기</h3>
-                    <p className="text-xs text-tertiary">{botName}와(과) 즉시 대국을 시작합니다.</p>
-                 </div>
+                 <Avatar userId={aiUserId} userName="AI" size={32} className="border-2 border-purple-500" />
+                 <h3 className="text-base font-bold text-purple-300">AI와 대결하기</h3>
             </div>
-            <div className="flex items-center gap-2">
-                <select 
-                    value={selectedAiDifficulty} 
-                    onChange={e => setSelectedAiDifficulty(Number(e.target.value))}
-                    className="bg-tertiary border border-color rounded-md p-1.5 text-xs text-primary"
-                >
-                    <option value={10}>Lv.1</option>
-                    <option value={20}>Lv.2</option>
-                    <option value={30}>Lv.3</option>
-                    <option value={40}>Lv.4</option>
-                    <option value={50}>Lv.5</option>
-                    <option value={60}>Lv.6</option>
-                    <option value={70}>Lv.7</option>
-                    <option value={80}>Lv.8</option>
-                    <option value={90}>Lv.9</option>
-                    <option value={100}>Lv.10</option>
-                </select>
-                <Button onClick={handleChallenge} colorScheme="purple" className="!text-sm !py-1.5">설정 및 시작</Button>
+            <div className="flex-1 text-right">
+                <Button onClick={handleChallenge} colorScheme="purple" className="!text-sm !py-1.5">도전하기</Button>
             </div>
         </NineSlicePanel>
     );
@@ -179,16 +156,8 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
   const ongoingGames = (Object.values(liveGames) as LiveGameSession[]).filter(g => g.mode === mode && !g.isAiGame);
   
   const usersInThisRoom = useMemo(() => {
-    // Get all other users who are in this waiting room.
     const othersInRoom = onlineUsers.filter(u => u.id !== currentUserWithStatus.id && u.mode === mode);
-    
-    // Show myself in the list only if my status correctly reflects I'm in this waiting room.
-    if (currentUserWithStatus.status === 'waiting' && currentUserWithStatus.mode === mode) {
-        return [currentUserWithStatus, ...othersInRoom];
-    }
-    
-    // Otherwise, I'm probably just transitioning, so only show other confirmed users.
-    return othersInRoom;
+    return [currentUserWithStatus, ...othersInRoom];
   }, [onlineUsers, mode, currentUserWithStatus]);
 
   const isStrategic = useMemo(() => SPECIAL_GAME_MODES.some(m => m.mode === mode), [mode]);
@@ -227,7 +196,7 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                         <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                     </NineSlicePanel>
                     <NineSlicePanel className="h-1/2 shadow-lg flex flex-col min-h-0">
-                        <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} />
+                        <ChatWindow messages={chatMessages} mode={'global'} locationPrefix={locationPrefix} />
                     </NineSlicePanel>
                 </div>
             </div>
@@ -263,30 +232,37 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                  <div className="flex-shrink-0">
                     <AiChallengePanel mode={mode} />
                 </div>
-                <div className="grid grid-rows-2 gap-2 flex-1 min-h-0">
-                    <NineSlicePanel className="min-h-0 shadow-lg flex flex-col">
-                        <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
-                    </NineSlicePanel>
-                    <NineSlicePanel className="min-h-0 flex flex-col shadow-lg">
-                        <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
-                    </NineSlicePanel>
+                <div className="flex flex-col gap-2 flex-1 min-h-0">
+                    <div className="h-[60%]">
+                        <NineSlicePanel className="h-full min-h-0 shadow-lg flex flex-col">
+                            <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
+                        </NineSlicePanel>
+                    </div>
+                    <div className="h-[40%]">
+                        <NineSlicePanel className="h-full min-h-0 flex flex-col shadow-lg">
+                            <ChatWindow messages={chatMessages} mode={'global'} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
+                        </NineSlicePanel>
+                    </div>
                 </div>
             </div>
             
             {/* Right Sidebar Column */}
-            <div className="lg:col-span-2 grid grid-rows-2 gap-2">
-              <div className="flex flex-row gap-2 items-stretch min-h-0">
-                <NineSlicePanel className="flex-1 shadow-lg min-w-0">
-                  <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
-                </NineSlicePanel>
-                <div className="w-20 flex-shrink-0">
-                  <QuickAccessSidebar />
+            <div className="lg:col-span-2 flex flex-col gap-2">
+              <div className="h-[55%]">
+                <div className="flex flex-row gap-2 items-stretch h-full">
+                  <NineSlicePanel className="flex-1 shadow-lg min-w-0">
+                    <PlayerList users={usersInThisRoom} mode={mode} onAction={handlers.handleAction} currentUser={currentUserWithStatus} negotiations={Object.values(negotiations)} onViewUser={handlers.openViewingUser} />
+                  </NineSlicePanel>
+                  <div className="w-20 flex-shrink-0 z-10">
+                    <QuickAccessSidebar />
+                  </div>
                 </div>
               </div>
-
-              <NineSlicePanel className="shadow-lg min-h-0">
-                <RankingList currentUser={currentUserWithStatus} mode={mode} onViewUser={handlers.openViewingUser} onShowTierInfo={() => setIsTierInfoModalOpen(true)} onShowPastRankings={handlers.openPastRankings} />
-              </NineSlicePanel>
+              <div className="h-[45%]">
+                <NineSlicePanel className="h-full shadow-lg min-h-0">
+                  <RankingList currentUser={currentUserWithStatus} mode={mode} onViewUser={handlers.openViewingUser} onShowTierInfo={() => setIsTierInfoModalOpen(true)} onShowPastRankings={handlers.openPastRankings} />
+                </NineSlicePanel>
+              </div>
             </div>
           </div>
         )}

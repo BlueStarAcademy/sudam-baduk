@@ -6,7 +6,7 @@
 
 import { type LiveGameSession, type AlkkagiStone, type Point, AlkkagiLayoutType, Player, AlkkagiPlacementType, type Negotiation, MythicStat, type VolatileState, type ServerAction, type HandleActionResult, type User, GameMode, GameStatus, WinReason, RPSChoice, Guild } from '../../types/index.js';
 import * as db from '../db.js';
-import { getGoLogic, processMove } from '../../utils/goLogic';
+import { getGoLogic, processMove } from '../../utils/goLogic.js';
 import { handleSharedAction, updateSharedGameState, handleTimeoutFoul as handlePlayfulTimeoutFoul } from './shared.js';
 import { aiUserId } from '../ai/index.js';
 import { ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES, PLAYFUL_MODE_FOUL_LIMIT, DICE_GO_MAIN_ROLL_TIME, DICE_GO_MAIN_PLACE_TIME } from '../../constants/index.js';

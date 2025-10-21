@@ -15,7 +15,7 @@ const PastRankingsModal: React.FC<PastRankingsModalProps> = ({ info, onClose, is
     const seasonNames = Object.keys(history).sort((a, b) => b.localeCompare(a));
 
     return (
-        <DraggableWindow title="지난 시즌 랭킹" onClose={onClose} windowId="past-rankings" initialWidth={450} isTopmost={isTopmost}>
+        <DraggableWindow title="지난 시즌 랭킹" onClose={onClose} windowId="past-rankings" initialWidth={500} isTopmost={isTopmost}>
             <div className="h-full overflow-y-auto pr-2">
                 <h3 className="text-lg font-bold text-center mb-4">{mode}</h3>
                 {seasonNames.length > 0 ? (

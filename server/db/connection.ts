@@ -1,6 +1,6 @@
 
 import { Pool } from 'pg';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import { URL } from 'url';
 
 // Explicitly load .env file. tsx runner might not do this automatically.
@@ -301,7 +301,8 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
                     "whiteStoneLimit" INTEGER,
                     "autoEndTurnCount" INTEGER,
                     "promptForMoreStones" BOOLEAN,
-                    "aiHiddenStoneUsedThisGame" BOOLEAN
+                    "aiHiddenStoneUsedThisGame" BOOLEAN,
+                    "stageInfo" JSONB
                 );
             `;
 
@@ -336,6 +337,17 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
             if (colRes.rowCount === 0) {
                 console.log('[DB Migration] Adding column "aiHiddenStoneUsedThisGame" to live_games table.');
                 await client.query('ALTER TABLE live_games ADD COLUMN "aiHiddenStoneUsedThisGame" BOOLEAN');
+            }
+
+            const checkStageInfoColumnQuery = `
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_name = 'live_games' AND column_name = 'stageInfo'
+            `;
+            const colResStageInfo = await client.query(checkStageInfoColumnQuery);
+            if (colResStageInfo.rowCount === 0) {
+                console.log('[DB Migration] Adding column "stageInfo" to live_games table.');
+                await client.query('ALTER TABLE live_games ADD COLUMN "stageInfo" JSONB');
             }
 
             // Migration for kv.value column type

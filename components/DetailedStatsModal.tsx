@@ -40,7 +40,7 @@ const DetailedStatsModal: React.FC<DetailedStatsModalProps> = ({ currentUser, st
 
 
     return (
-        <DraggableWindow title={title} onClose={onClose} windowId="detailed-stats" initialWidth={600}>
+        <DraggableWindow title={title} onClose={onClose} windowId="detailed-stats" initialWidth={700}>
             <div className="max-h-[calc(var(--vh,1vh)*60)] overflow-y-auto pr-2">
                 <ul className="space-y-3">
                     {modes.map(({ mode }) => {

@@ -153,7 +153,7 @@ const QuestsModal: React.FC<QuestsModalProps> = ({ currentUser, onClose, onActio
     };
 
     return (
-        <DraggableWindow title="퀘스트" onClose={onClose} windowId="quests" initialWidth={750} isTopmost={isTopmost}>
+        <DraggableWindow title="퀘스트" onClose={onClose} windowId="quests" initialWidth={750} initialHeight={600} isTopmost={isTopmost}>
             <div className="h-full flex flex-col">
                 <div className="flex bg-gray-900/70 p-1 rounded-lg mb-4 flex-shrink-0">
                     <button onClick={() => setActiveTab('daily')} className={`flex-1 py-2 text-sm font-semibold rounded-md transition-all ${activeTab === 'daily' ? 'bg-blue-600' : 'text-gray-400 hover:bg-gray-700/50'}`}>일일</button>

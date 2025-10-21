@@ -14,7 +14,7 @@ const GuildBossBattleResultModal: React.FC<GuildBossBattleResultModalProps> = ({
     const hpPercentAfter = (result.bossHpAfter / result.bossMaxHp) * 100;
     
     return (
-        <DraggableWindow title="전투 결과" onClose={onClose} windowId="guild-boss-battle-result" initialWidth={450} isTopmost={isTopmost}>
+        <DraggableWindow title="전투 결과" onClose={onClose} windowId="guild-boss-battle-result" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                 <h2 className="text-2xl font-bold mb-4">{result.bossName} 전투 결과</h2>
                 <div className="space-y-3 bg-gray-900/50 p-4 rounded-lg text-lg">

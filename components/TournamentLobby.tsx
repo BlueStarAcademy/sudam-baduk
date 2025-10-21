@@ -533,7 +533,6 @@ const TournamentLobby: React.FC = () => {
                         <ChatWindow
                             messages={globalChat}
                             mode="global"
-                            onAction={handlers.handleAction}
                             onViewUser={handlers.openViewingUser}
                             locationPrefix="[챔피언십]"
                         />

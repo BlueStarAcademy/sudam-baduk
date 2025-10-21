@@ -79,7 +79,7 @@ const ItemObtainedModal: React.FC<ItemObtainedModalProps> = ({ item, onClose, is
     }, [item.grade]);
 
     return (
-        <DraggableWindow title="아이템 획득" onClose={onClose} windowId="item-obtained" initialWidth={400} isTopmost={isTopmost}>
+        <DraggableWindow title="아이템 획득" onClose={onClose} windowId="item-obtained" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                 <div className="p-6 rounded-lg">
                     <div className="relative w-48 h-48 mx-auto rounded-lg mb-4 overflow-hidden">

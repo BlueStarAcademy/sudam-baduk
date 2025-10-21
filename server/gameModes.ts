@@ -209,7 +209,11 @@ export const updateGameStates = async (games: LiveGameSession[], now: number, gu
                 console.log(`[Game Loop] Triggering stuck AI turn for game ${game.id}`);
                 game.aiTurnStartTime = now;
                 // Do not await, let it run in the background
-                void strategic.handleAiTurn(game, game.lastMove, Player.Black);
+                if (game.lastMove) {
+                    void strategic.handleAiTurn(game, game.lastMove, Player.Black);
+                } else {
+                    console.warn(`[Game Loop] AI turn triggered for game ${game.id} but game.lastMove is null.`);
+                }
             }
         }
         

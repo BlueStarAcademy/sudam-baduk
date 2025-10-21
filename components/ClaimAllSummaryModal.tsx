@@ -11,7 +11,7 @@ interface ClaimAllSummaryModalProps {
 
 const ClaimAllSummaryModal: React.FC<ClaimAllSummaryModalProps> = ({ summary, onClose, isTopmost }) => {
     return (
-        <DraggableWindow title="일괄 수령 결과" onClose={onClose} windowId="claim-all-summary" initialWidth={400} isTopmost={isTopmost}>
+        <DraggableWindow title="일괄 수령 결과" onClose={onClose} windowId="claim-all-summary" initialWidth={500} isTopmost={isTopmost}>
             <div className="text-center">
                 <h2 className="text-xl font-bold mb-4">아래 보상을 모두 수령했습니다!</h2>
                 <div className="space-y-3 bg-gray-900/50 p-4 rounded-lg text-lg">

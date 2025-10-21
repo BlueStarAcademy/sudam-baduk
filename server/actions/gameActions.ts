@@ -1,7 +1,7 @@
 
 
 
-import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus } from '../../types/index.js';
+import { VolatileState, ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild, LiveGameSession, GameStatus, WinReason } from '../../types/index.js';
 import * as db from '../db.js';
 // FIX: The member handleStrategicGameAction is now exported from strategic.js
 import { handleAiTurn, handleStrategicGameAction } from '../modes/strategic.js';
@@ -123,7 +123,10 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
 
         if (game.currentPlayer === aiPlayerEnum && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
             console.log(`[AI Trigger] Game ${game.id}: Manually triggering AI turn from client.`);
-            const updatedGame = await handleAiTurn(game, game.lastMove, Player.Black); // In SP/Tower, user is always Black (P1)
+            if (!game.lastMove) {
+            return { error: "AI move triggered without a last move." };
+        }
+        const updatedGame = await handleAiTurn(game, game.lastMove, Player.Black); // In SP/Tower, user is always Black (P1)
             if (updatedGame) {
                 return { clientResponse: { updatedGame } };
             }
@@ -161,7 +164,7 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
                 }
             }
             await db.saveGame(game);
-            return {};
+            return { clientResponse: { updatedGame: game } };
         }
         if (type === 'TOWER_PURCHASE_ITEM') {
             const game = await db.getLiveGame(gameId);
@@ -228,11 +231,13 @@ export const handleAction = async (action: ServerAction & { user: User }, volati
 
         // Determine the winner (the opponent of the resigning player)
         const winnerId = game.player1.id === user.id ? game.player2.id : game.player1.id;
-        const winnerPlayerEnum = game.player1.id === user.id ? game.player2Enum : game.player1Enum;
+        const winnerPlayerEnum = game.player1.id === user.id ? 
+            (game.blackPlayerId === game.player2.id ? Player.Black : Player.White) : 
+            (game.blackPlayerId === game.player1.id ? Player.Black : Player.White);
 
         game.gameStatus = GameStatus.Ended;
         game.winner = winnerPlayerEnum;
-        game.winReason = 'resign';
+        game.winReason = WinReason.Resign;
 
         await db.saveGame(game);
         return { clientResponse: { updatedGame: game } };
