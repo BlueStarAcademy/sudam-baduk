@@ -1,15 +1,19 @@
 import React, { useState, useMemo } from 'react';
-import { InventoryItem, InventoryItemType, ItemGrade, EquipmentSlot } from '../types/index.js';
-import { useAppContext } from '../hooks/useAppContext.js';
-import Button from './Button.js';
-import InventoryPanel from './InventoryPanel.js';
-import DisassemblyResultModal from './DisassemblyResultModal.js';
-import { MATERIAL_ITEMS } from '../constants/index.js';
+import { InventoryItem, InventoryItemType, ItemGrade, EquipmentSlot } from '../types';
+import { useAppContext } from '../hooks/useAppContext';
+import Button from './Button';
+import InventoryPanel from './InventoryPanel';
+import DisassemblyResultModal from './DisassemblyResultModal';
+import { MATERIAL_ITEMS } from '../constants';
+import { gradeStyles } from '../utils/itemDisplayUtils';
 
-const DisassemblyPanel: React.FC = () => {
+interface DisassemblyPanelProps {
+    selectedItem: InventoryItem | null;
+    onSelectItem: (item: InventoryItem | null) => void;
+}
+
+const DisassemblyPanel: React.FC<DisassemblyPanelProps> = ({ selectedItem, onSelectItem }) => {
     const { currentUserWithStatus, handlers, modals } = useAppContext();
-    const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-    const [sortBy, setSortBy] = useState<'time' | 'grade' | 'type'>('time');
 
     const canDisassemble = useMemo(() => {
         return selectedItem && selectedItem.type === 'equipment' && !selectedItem.isEquipped;
@@ -18,7 +22,7 @@ const DisassemblyPanel: React.FC = () => {
     const handleDisassemble = () => {
         if (!selectedItem) return;
         handlers.handleAction({ type: 'DISASSEMBLE_ITEM', payload: { itemId: selectedItem.id } });
-        setSelectedItem(null);
+        onSelectItem(null); // Clear selected item after disassembly
     };
 
     const getExpectedMaterials = useMemo(() => {
@@ -70,7 +74,7 @@ const DisassemblyPanel: React.FC = () => {
     if (!currentUserWithStatus) return null;
 
     return (
-        <div className="h-full flex flex-col">
+        <div className="h-full flex flex-col p-4">
             {modals.disassemblyResult && (
                 <DisassemblyResultModal
                     result={modals.disassemblyResult}
@@ -78,55 +82,46 @@ const DisassemblyPanel: React.FC = () => {
                     isTopmost={modals.topmostModalId === 'disassemblyResult'}
                 />
             )}
-            <div className="flex-grow flex flex-row gap-4">
-                {/* Left Panel: Selected Item Details */}
-                <div className="w-1/2 bg-gray-900/40 p-4 rounded-lg flex flex-col items-center justify-center">
-                    {selectedItem ? (
-                        <div className="text-center">
-                            <img src={selectedItem.image || '/images/equipments/empty.png'} alt={selectedItem.name} className="w-32 h-32 object-contain mx-auto mb-2" />
-                            <h3 className={`font-bold text-xl ${ItemGrade[selectedItem.grade]}`}>{selectedItem.name}</h3>
-                            <p className="text-gray-400 text-sm">{selectedItem.description}</p>
-                            <div className="mt-4">
-                                <h4 className="font-bold text-lg text-yellow-300 mb-2">예상 획득 재료</h4>
-                                {getExpectedMaterials.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {getExpectedMaterials.map((mat, index) => (
-                                            <div key={index} className="flex items-center justify-center gap-2 text-primary text-base">
-                                                <img src={mat.image} alt={mat.name} className="w-6 h-6" />
-                                                <span>{mat.name} x {mat.quantity}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-gray-500">분해 시 획득하는 재료가 없습니다.</p>
-                                )}
-                            </div>
-                            <Button
-                                onClick={handleDisassemble}
-                                disabled={!canDisassemble}
-                                colorScheme="red"
-                                className="mt-4 w-full"
-                            >
-                                {canDisassemble ? '분해하기' : '장착 해제 후 분해 가능'}
-                            </Button>
+            <div className="flex-grow flex flex-col items-center justify-center bg-gray-900/40 p-4 rounded-lg">
+                {selectedItem ? (
+                    <div className="text-center w-full">
+                        <div className="relative w-24 h-24 flex-shrink-0 rounded-md border-2 border-color/50 bg-tertiary/50 mx-auto mb-2">
+                            <img src={gradeStyles[selectedItem.grade].background} alt={selectedItem.grade} className="absolute inset-0 w-full h-full object-cover rounded-sm" />
+                            <img src={selectedItem.image || '/images/equipments/empty.png'} alt={selectedItem.name} className="relative w-full h-full object-contain p-1" />
                         </div>
-                    ) : (
-                        <p className="text-gray-400 text-lg">분해할 장비를 선택해주세요.</p>
-                    )}
-                </div>
+                        <h3 className={`font-bold text-lg ${gradeStyles[selectedItem.grade].text}`}>{selectedItem.name}</h3>
+                        <p className="text-gray-400 text-sm">+{selectedItem.stars} 강화</p>
 
-                {/* Right Panel: Inventory for selection */}
-                <div className="w-1/2 flex flex-col">
-                    <InventoryPanel
-                        items={currentUserWithStatus.inventory}
-                        selectedItems={selectedItem ? [selectedItem] : []}
-                        onSelectItem={setSelectedItem}
-                        itemTypeFilter="equipment"
-                        title="분해할 장비 선택"
-                        sortBy={sortBy}
-                        onSortByChange={setSortBy}
-                    />
-                </div>
+                        <div className="mt-4 p-3 bg-gray-800/50 rounded-lg text-xs space-y-2">
+                            <h4 className="font-bold text-center text-yellow-300 mb-2">예상 획득 재료</h4>
+                            {getExpectedMaterials.length > 0 ? (
+                                <div className="space-y-1">
+                                    {getExpectedMaterials.map((mat, index) => (
+                                        <div key={index} className="flex items-center justify-between gap-2 text-primary text-sm">
+                                            <span className="flex items-center gap-1">
+                                                <img src={mat.image} alt={mat.name} className="w-4 h-4" />
+                                                {mat.name}
+                                            </span>
+                                            <span>x {mat.quantity}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-gray-500">분해 시 획득하는 재료가 없습니다.</p>
+                            )}
+                        </div>
+                        <Button
+                            onClick={handleDisassemble}
+                            disabled={!canDisassemble}
+                            colorScheme="red"
+                            className="mt-4 w-full py-2 text-base"
+                        >
+                            {canDisassemble ? '분해하기' : '장착 해제 후 분해 가능'}
+                        </Button>
+                    </div>
+                ) : (
+                    <p className="text-gray-400 text-lg">분해할 장비를 선택해주세요.</p>
+                )}
             </div>
         </div>
     );

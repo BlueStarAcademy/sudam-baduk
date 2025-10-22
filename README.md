@@ -21,9 +21,7 @@ This project requires several environment variables for both the client-side app
 Create a file named `.env` in the root of your project and add the following content. **Replace the placeholder values** with your actual keys and URLs.
 
 ```env
-# For Gemini API access (used by the client)
-# This is provided by the AI Studio environment, but required for local development.
-API_KEY="your_gemini_api_key_here"
+
 
 # For PostgreSQL database connection (used by the server)
 DATABASE_URL="postgresql://user:password@host:port/database"

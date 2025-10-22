@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
 // Import EquipmentSlot enum to use its members instead of string literals.
-import { UserWithStatus, ServerAction, AvatarInfo, BorderInfo, EquipmentSlot } from '../types/index.js';
-import { AVATAR_POOL, BORDER_POOL, RANKING_TIERS, SHOP_BORDER_ITEMS } from '../constants/index.js';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import Avatar from './Avatar.js';
-import { containsProfanity } from '../profanity.js';
-import ToggleSwitch from './ui/ToggleSwitch.js';
-import MbtiQuestionnaireModal from './modals/MbtiQuestionnaireModal.js';
+import { UserWithStatus, ServerAction, AvatarInfo, BorderInfo, EquipmentSlot } from '../types';
+import { AVATAR_POOL, BORDER_POOL, RANKING_TIERS, SHOP_BORDER_ITEMS } from '../constants';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import Avatar from './Avatar';
+import { containsProfanity } from '../profanity';
+import ToggleSwitch from './ui/ToggleSwitch';
+import MbtiQuestionnaireModal from './modals/MbtiQuestionnaireModal';
 
 
 // FIX: Add missing props to the interface

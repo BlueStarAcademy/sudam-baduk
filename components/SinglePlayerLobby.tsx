@@ -1,17 +1,17 @@
 
 import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
-import { useAppContext } from '../hooks/useAppContext.ts';
-import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../constants/singlePlayerConstants.ts';
-import { SinglePlayerLevel, GameType } from '../types/enums.ts';
-import type { ServerAction, UserWithStatus, InventoryItem, SinglePlayerStageInfo } from '../types/index.ts';
-import BackButton from './BackButton.tsx';
-import Button from './Button.tsx';
-import DraggableWindow from './DraggableWindow.tsx';
-import { getMissionInfoWithLevel } from '../utils/questUtils.ts';
+import { useAppContext } from '../hooks/useAppContext';
+import { SINGLE_PLAYER_STAGES, SINGLE_PLAYER_MISSIONS } from '../constants/singlePlayerConstants';
+import { SinglePlayerLevel, GameType } from '../types/enums';
+import type { ServerAction, UserWithStatus, InventoryItem, SinglePlayerStageInfo } from '../types/index';
+import BackButton from './BackButton';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
+import { getMissionInfoWithLevel } from '../utils/questUtils';
 // FIX: Add missing import for CONSUMABLE_ITEMS
-import { CONSUMABLE_ITEMS } from '../constants/items.ts';
-import NineSlicePanel from './ui/NineSlicePanel.tsx';
-import HelpModal from './HelpModal.tsx';
+import { CONSUMABLE_ITEMS } from '../constants/items';
+import NineSlicePanel from './ui/NineSlicePanel';
+import HelpModal from './HelpModal';
 
 interface UpgradeMissionModalProps {
     mission: SinglePlayerStageInfo;

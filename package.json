@@ -1,18 +1,17 @@
 {
-  "name": "gemini-go-app",
+  "name": "bs-baduk-app",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "client": "vite",
-    "server": "rd /s /q dist && npm run build:server && node dist/server/server.js",
+    "server": "rd /s /q dist && npm run build:server && node dist/server/server.js > server.log 2>&1",
     "build:server": "tsc --project tsconfig.node.json",
     "build": "vite build",
     "preview": "vite preview",
     "migrate": "tsx scripts/migrate-sqlite-to-postgres.ts"
   },
   "dependencies": {
-    "@google/genai": "^1.13.0",
     "@supabase/supabase-js": "^2.43.4",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

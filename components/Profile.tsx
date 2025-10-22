@@ -1,21 +1,47 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { UserWithStatus, GameMode, EquipmentSlot, InventoryItem, ItemGrade, ServerAction, LeagueTier, CoreStat, SpecialStat, MythicStat, ItemOptionType, TournamentState, User, Guild, EquipmentPreset } from '../types/index.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, AVATAR_POOL, BORDER_POOL, LEAGUE_DATA, CORE_STATS_DATA, SPECIAL_STATS_DATA, MYTHIC_STATS_DATA, emptySlotImages, TOURNAMENT_DEFINITIONS, GRADE_LEVEL_REQUIREMENTS, RANKING_TIERS, SINGLE_PLAYER_STAGES } from '../constants/index.js';
-import { STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG } from '../assets.js';
-import Avatar from './Avatar.js';
-import Button from './Button.js';
-import DetailedStatsModal from './DetailedStatsModal.js';
-import { getMannerScore, getMannerRank, getMannerStyle } from '../utils/mannerUtils.js';
-import { calculateUserEffects, calculateTotalStats } from '../utils/statUtils.js';
-import { useAppContext } from '../hooks/useAppContext.js';
+import { UserWithStatus, GameMode, EquipmentSlot, InventoryItem, ItemGrade, ServerAction, LeagueTier, CoreStat, SpecialStat, MythicStat, ItemOptionType, TournamentState, User, Guild, EquipmentPreset } from '../types';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, AVATAR_POOL, BORDER_POOL, LEAGUE_DATA, CORE_STATS_DATA, SPECIAL_STATS_DATA, MYTHIC_STATS_DATA, emptySlotImages, TOURNAMENT_DEFINITIONS, GRADE_LEVEL_REQUIREMENTS, RANKING_TIERS, SINGLE_PLAYER_STAGES } from '../constants';
+import { STRATEGIC_GO_LOBBY_IMG, PLAYFUL_GO_LOBBY_IMG, TOURNAMENT_LOBBY_IMG, SINGLE_PLAYER_LOBBY_IMG, TOWER_CHALLENGE_LOBBY_IMG } from '../assets';
+import Avatar from './Avatar';
+import Button from './Button';
+import DetailedStatsModal from './DetailedStatsModal';
+import { getMannerScore, getMannerRank, getMannerStyle } from '../utils/mannerUtils';
+import { calculateUserEffects, calculateTotalStats } from '../utils/statUtils';
+import { useAppContext } from '../hooks/useAppContext';
 // FIX: Import QuickAccessSidebar component to resolve module resolution error.
-import QuickAccessSidebar from './QuickAccessSidebar.js';
-import ChatWindow from "./waiting-room/ChatWindow.js";
-import EquipmentEffectsModal from "./EquipmentEffectsModal.js";
-import PresetModal from "./PresetModal.js";
-import RankingBoard from "./profile/RankingBoard.js";
-import { isDifferentDayKST, getKSTDate } from '../utils/timeUtils.js';
-import NineSlicePanel from './ui/NineSlicePanel.js';
+import QuickAccessSidebar from './QuickAccessSidebar';
+import ChatWindow from "./waiting-room/ChatWindow";
+import EquipmentEffectsModal from "./EquipmentEffectsModal";
+import PresetModal from "./PresetModal";
+import RankingBoard from "./profile/RankingBoard";
+import { isDifferentDayKST, getKSTDate } from '../utils/timeUtils';
+import NineSlicePanel from './ui/NineSlicePanel';
+import { gradeStyles } from '../utils/itemDisplayUtils';
+
+const getStarDisplayInfo = (stars: number): { text: string; colorClass: string; starImage: string; numberColor: string; } => {
+    if (stars >= 10) {
+        return { text: `(★${stars})`, colorClass: "prism-text-effect", starImage: '/images/star-rainbow.png', numberColor: 'text-white' };
+    } else if (stars >= 7) {
+        return { text: `(★${stars})`, colorClass: "text-blue-400", starImage: '/images/star-blue.png', numberColor: 'text-blue-300' };
+    } else if (stars >= 4) {
+        return { text: `(★${stars})`, colorClass: "text-amber-400", starImage: '/images/star-gold.png', numberColor: 'text-yellow-300' };
+    } else if (stars >= 1) {
+        return { text: `(★${stars})`, colorClass: "text-white", starImage: '/images/star-white.png', numberColor: 'text-white' };
+    }
+    return { text: "", colorClass: "text-white", starImage: '', numberColor: '' };
+};
+
+const renderStarDisplay = (stars: number) => {
+    if (stars === 0) return null;
+    const starInfo = getStarDisplayInfo(stars);
+    
+    return (
+        <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 bg-black/40 rounded-br-md px-1 py-0.5 z-10" style={{ textShadow: '1px 1px 2px black' }}>
+            <img src={starInfo.starImage} alt="star" className="w-3 h-3" />
+            <span className={`font-bold text-xs leading-none ${starInfo.numberColor}`}>{stars}</span>
+        </div>
+    );
+};
 
 interface ProfileProps {
 }
@@ -45,57 +71,7 @@ const XpBar: React.FC<{ level: number, currentXp: number, label: string, colorCl
 };
 
 
-const gradeBackgrounds: Record<ItemGrade, string> = {
-    normal: '/images/equipments/normalbgi.png',
-    uncommon: '/images/equipments/uncommonbgi.png',
-    rare: '/images/equipments/rarebgi.png',
-    epic: '/images/equipments/epicbgi.png',
-    legendary: '/images/equipments/legendarybgi.png',
-    mythic: '/images/equipments/mythicbgi.png',
-};
 
-const getStarDisplayInfo = (stars: number) => {
-    if (stars >= 10) {
-        return { text: `(★${stars})`, colorClass: "prism-text-effect" };
-    } else if (stars >= 7) {
-        return { text: `(★${stars})`, colorClass: "text-purple-400" };
-    } else if (stars >= 4) {
-        return { text: `(★${stars})`, colorClass: "text-amber-400" };
-    } else if (stars >= 1) {
-        return { text: `(★${stars})`, colorClass: "text-white" };
-    }
-    return { text: "", colorClass: "text-white" };
-};
-
-const renderStarDisplay = (stars: number) => {
-    if (stars === 0) return null;
-
-    let starImage = '';
-    let numberColor = '';
-    let starImageClass = '';
-
-    if (stars >= 10) {
-        starImage = '/images/equipments/Star4.png';
-        numberColor = "prism-text-effect";
-        starImageClass = "prism-image-effect";
-    } else if (stars >= 7) {
-        starImage = '/images/equipments/Star3.png';
-        numberColor = "text-purple-400";
-    } else if (stars >= 4) {
-        starImage = '/images/equipments/Star2.png';
-        numberColor = "text-amber-400";
-    } else if (stars >= 1) {
-        starImage = '/images/equipments/Star1.png';
-        numberColor = "text-white";
-    }
-
-    return (
-        <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 bg-black/40 rounded-br-md px-1 py-0.5 z-10" style={{ textShadow: '1px 1px 2px black' }}>
-            <img src={starImage} alt="star" className={`w-3 h-3 ${starImageClass}`} />
-            <span className={`font-bold text-xs leading-none ${numberColor}`}>{stars}</span>
-        </div>
-    );
-};
 
 
 const EquipmentSlotDisplay: React.FC<{ slot: EquipmentSlot; item?: InventoryItem; onClick?: () => void; }> = ({ slot, item, onClick }) => {
@@ -111,7 +87,7 @@ const EquipmentSlotDisplay: React.FC<{ slot: EquipmentSlot; item?: InventoryItem
                 title={titleText}
                 onClick={onClick}
             >
-                <img src={gradeBackgrounds[item.grade]} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-md" />
+                <img src={gradeStyles[item.grade].background} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-md" />
                 {renderStarDisplay(item.stars)}
                 {item.image && <img src={item.image} alt={item.name} className="relative w-full h-full object-contain p-1.5"/>}
             </div>

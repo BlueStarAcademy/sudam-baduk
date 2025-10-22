@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { LiveGameSession, User } from '../types.js';
+import { LiveGameSession, User } from '../types';
 
 interface DisconnectionModalProps {
     session: LiveGameSession;

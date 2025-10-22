@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import Slider from './ui/Slider.js';
-import { InventoryItem, ServerAction, ItemGrade } from '../types/index.js';
-import { currencyBundles } from '../constants/index.js';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import Slider from './ui/Slider';
+import { InventoryItem, ServerAction, ItemGrade } from '../types';
+import { currencyBundles } from '../constants';
 
 interface BulkUseModalProps {
     item: InventoryItem;

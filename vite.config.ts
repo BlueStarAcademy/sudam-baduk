@@ -13,10 +13,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
     ],
-    define: {
-      // Expose API_KEY to the client as process.env.API_KEY to align with Gemini API guidelines.
-      'process.env.API_KEY': JSON.stringify(env.API_KEY),
-    },
+
     server: {
       host: '0.0.0.0',
       hmr: {

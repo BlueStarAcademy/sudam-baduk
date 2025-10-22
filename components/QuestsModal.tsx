@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { UserWithStatus, Quest, ServerAction, QuestLog, QuestReward, InventoryItem } from '../types/index.js';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import { DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS, DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_REWARDS, CONSUMABLE_ITEMS } from '../constants/index.js';
+import { UserWithStatus, Quest, ServerAction, QuestLog, QuestReward, InventoryItem } from '../types';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import { DAILY_MILESTONE_THRESHOLDS, WEEKLY_MILESTONE_THRESHOLDS, MONTHLY_MILESTONE_THRESHOLDS, DAILY_MILESTONE_REWARDS, WEEKLY_MILESTONE_REWARDS, MONTHLY_MILESTONE_REWARDS, CONSUMABLE_ITEMS } from '../constants';
 import { audioService } from '../services/audioService.js';
 
 // FIX: Add missing props to the interface

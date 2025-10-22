@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useImperativeHandle, forwardRef, useRef, ReactNode, useMemo, useCallback } from 'react';
 // FIX: Separate enum and type imports.
-import { AlkkagiLayoutType, GameStatus, Player } from '../types/index.js';
-import type { AlkkagiStone, GameSettings, Point, LiveGameSession, UserWithStatus } from '../types/index.js';
-import { BATTLE_PLACEMENT_ZONES } from '../constants.js';
+import { AlkkagiLayoutType, GameStatus, Player } from '../types';
+import type { AlkkagiStone, GameSettings, Point, LiveGameSession, UserWithStatus } from '../types';
+import { BATTLE_PLACEMENT_ZONES } from '../constants';
 
 export interface AlkkagiBoardHandle {
     updateLocalStones: (newStones: AlkkagiStone[]) => void;

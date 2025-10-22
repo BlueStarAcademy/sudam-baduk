@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
-import { UserWithStatus, Guild, CoreStat, SpecialStat, MythicStat } from '../types/index.js';
-import DraggableWindow from './DraggableWindow.js';
-import RadarChart from './RadarChart.js';
-import { calculateUserEffects } from '../utils/statUtils.js';
-import { calculateTotalStats } from '../utils/statUtils.js';
-import { MYTHIC_STATS_DATA } from '../constants/index.js';
+import { UserWithStatus, Guild, CoreStat, SpecialStat, MythicStat } from '../types';
+import DraggableWindow from './DraggableWindow';
+import RadarChart from './RadarChart';
+import { calculateUserEffects } from '../utils/statUtils';
+import { calculateTotalStats } from '../utils/statUtils';
+import { MYTHIC_STATS_DATA } from '../constants';
 
 interface EquipmentEffectsModalProps {
     user: UserWithStatus;

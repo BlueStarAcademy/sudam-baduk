@@ -1,8 +1,11 @@
 import React from 'react';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import { QuestReward, InventoryItem } from '../types/index.js';
-import { gradeStyles } from '../utils/itemDisplayUtils.js';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import { QuestReward, InventoryItem } from '../types';
+import { gradeStyles } from '../utils/itemDisplayUtils';
+import { EQUIPMENT_POOL, CONSUMABLE_ITEMS } from '../constants/items';
+
+const ALL_ITEMS = [...EQUIPMENT_POOL, ...CONSUMABLE_ITEMS];
 
 interface QuestRewardSummaryModalProps {
     reward: QuestReward;
@@ -44,13 +47,18 @@ const QuestRewardSummaryModal: React.FC<QuestRewardSummaryModalProps> = ({ rewar
                     <div className="w-full mt-2">
                         <h4 className="text-lg font-bold text-center text-blue-300 mb-2">아이템</h4>
                         <div className="grid grid-cols-3 gap-2">
-                            {reward.items.map((item, index) => (
-                                <div key={index} className="flex flex-col items-center text-center">
-                                    <img src={item.image || '/images/equipments/empty.png'} alt={item.name} className="w-12 h-12 object-contain" />
-                                    <span className={`text-xs ${gradeStyles[item.grade]}`}>{item.name}</span>
-                                    {item.quantity && item.quantity > 1 && <span className="text-xs text-gray-400">x{item.quantity}</span>}
-                                </div>
-                            ))}
+                            {reward.items.map((item, index) => {
+                                const itemDetails = 'itemId' in item ? ALL_ITEMS.find(i => i.name === item.itemId) : item;
+                                if (!itemDetails) return null; // Handle case where itemDetails might not be found
+
+                                return (
+                                    <div key={index} className="flex flex-col items-center text-center">
+                                        <img src={itemDetails.image || '/images/equipments/empty.png'} alt={itemDetails.name} className="w-12 h-12 object-contain" />
+                                        <span className={`text-xs ${gradeStyles[itemDetails.grade]}`}>{itemDetails.name}</span>
+                                        {item.quantity && item.quantity > 1 && <span className="text-xs text-gray-400">x{item.quantity}</span>}
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 )}

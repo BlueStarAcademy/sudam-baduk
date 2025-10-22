@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { Player, GameMode } from '../../types/index.js';
 import type { GameProps, Point } from '../../types/index.js';
 import GoBoard from '../GoBoard.js';
-import { getGoLogic, processMove } from '../../utils/goLogic';
+import { getGoLogic, processMove } from '../../utils/goLogic.ts';
 
 interface ThiefGoArenaProps extends GameProps {
     isMyTurn: boolean;

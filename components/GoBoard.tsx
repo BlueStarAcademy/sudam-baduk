@@ -4,11 +4,11 @@ import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
     type LiveGameSession, type User, type AnimationData, type RecommendedMove, type ServerAction, type Point, type BoardState, type AnalysisResult, type Move,
     Player, GameMode, GameStatus
-} from '../types/index.js';
-import { processMove } from '../utils/goLogic';
-import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG } from '../assets.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants/index.js';
-import { OwnershipOverlay, HintWindow } from './game/AnalysisWindows.js';
+} from '../types';
+import { processMove } from '../utils/goLogic.ts';
+import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG, WHITE_HIDDEN_STONE_IMG, BLACK_HIDDEN_STONE_IMG } from '../assets';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants';
+import { OwnershipOverlay, HintWindow } from './game/AnalysisWindows';
 
 const findMoveIndexAt = (session: Pick<LiveGameSession, 'moveHistory'>, x: number, y: number): number => {
     if (!session.moveHistory) return -1;

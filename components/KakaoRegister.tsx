@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAppContext } from '../hooks/useAppContext.js';
-import Button from './Button.js';
-import { TERMS_OF_SERVICE } from '../termsOfService.js';
-import { containsProfanity } from '../profanity.js';
+import { useAppContext } from '../hooks/useAppContext';
+import Button from './Button';
+import { TERMS_OF_SERVICE } from '../termsOfService';
+import { containsProfanity } from '../profanity';
 
 interface KakaoRegisterProps {
     registrationData: {

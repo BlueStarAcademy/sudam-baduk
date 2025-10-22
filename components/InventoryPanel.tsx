@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
-import { InventoryItem, ItemGrade, EquipmentSlot } from '../types/index.js';
-import { ItemCard } from './EnhancementModal.js';
+import { InventoryItem, ItemGrade, EquipmentSlot } from '../types';
+import { ItemCard } from './EnhancementModal';
 
 export const InventoryPanel: React.FC<{
     items: InventoryItem[];

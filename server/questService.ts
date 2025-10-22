@@ -1,6 +1,5 @@
 
 import * as types from '../types/index.js';
-// FIX: Corrected import path for constants.
 import { DAILY_QUESTS, WEEKLY_QUESTS, MONTHLY_QUESTS, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, SINGLE_PLAYER_MISSIONS } from '../constants/index.js';
 import { isDifferentDayKST, isDifferentWeekKST, isDifferentMonthKST } from '../utils/timeUtils.js';
 import { createDefaultQuests } from './initialData.js';
@@ -115,7 +114,7 @@ export const resetAndGenerateQuests = async (user: types.User): Promise<types.Us
     return modified ? updatedUser : user;
 };
 
-export const updateQuestProgress = (user: types.User, type: 'win' | 'participate' | 'action_button' | 'tournament_participate' | 'enhancement_attempt' | 'craft_attempt' | 'chat_greeting' | 'tournament_complete' | 'login' | 'claim_daily_milestone_100' | 'claim_weekly_milestone_100' | 'tower_challenge_participate' | 'claim_single_player_mission' | 'tournament_match_played' | 'guild_donate' | 'guild_boss_participate', mode?: types.GameMode, amount: number = 1) => {
+export const updateQuestProgress = (user: types.User, type: 'win' | 'participate' | 'action_button' | 'tournament_participate' | 'enhancement_attempt' | 'craft_attempt' | 'synthesis_attempt' | 'chat_greeting' | 'tournament_complete' | 'login' | 'claim_daily_milestone_100' | 'claim_weekly_milestone_100' | 'tower_challenge_participate' | 'claim_single_player_mission' | 'tournament_match_played' | 'guild_donate' | 'guild_boss_participate', mode?: types.GameMode, amount: number = 1) => {
     if (!user.quests) return;
     const isStrategic = mode ? SPECIAL_GAME_MODES.some(m => m.mode === mode) : false;
     const isPlayful = mode ? PLAYFUL_GAME_MODES.some(m => m.mode === mode) : false;
@@ -138,6 +137,7 @@ export const updateQuestProgress = (user: types.User, type: 'win' | 'participate
                 case 'action_button': shouldUpdate = quest.title === '액션버튼 사용하기'; break;
                 case 'enhancement_attempt': shouldUpdate = quest.title === '장비 강화시도'; break;
                 case 'craft_attempt': shouldUpdate = quest.title === '재료 합성시도'; break;
+                case 'synthesis_attempt': shouldUpdate = quest.title === '장비 합성시도'; break;
                 case 'claim_daily_milestone_100': shouldUpdate = quest.title === '일일 퀘스트 활약도100 보상받기'; break;
                 case 'claim_weekly_milestone_100': shouldUpdate = quest.title === '주간 퀘스트 활약도100 보상받기'; break;
                 case 'tower_challenge_participate': shouldUpdate = quest.title === '도전의탑 도전하기'; break;

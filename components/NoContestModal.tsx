@@ -1,7 +1,7 @@
 import React from 'react';
-import { LiveGameSession, User } from '../types.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
+import { LiveGameSession, User } from '../types';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
 
 interface NoContestModalProps {
     session: LiveGameSession;

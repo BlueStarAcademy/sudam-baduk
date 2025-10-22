@@ -65,7 +65,7 @@ const StageSelectionModal: React.FC<StageSelectionModalProps> = ({ currentUser, 
                                 <div className="flex-grow flex flex-col items-center justify-center">
                                     <h3 className="font-bold text-lg">{stage.name}</h3>
                                     <p className="text-xs text-gray-400 mt-1">{`목표 점수: 흑${stage.targetScore!.black}/백${stage.targetScore!.white}`}</p>
-                                    <p className="text-xs text-gray-400 mt-1">AI 레벨: {stage.katagoLevel}</p>
+                                    <p className="text-xs text-gray-400 mt-1">AI 레벨: {stage.aiLevel}</p>
                                 </div>
                                 <div className="mt-4 pt-2 border-t border-gray-600 w-full flex-shrink-0">
                                     <p className="text-xs font-semibold text-yellow-300">최초 보상</p>

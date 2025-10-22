@@ -176,7 +176,7 @@ app.post('/api/auth/login', async (req, res) => {
         res.json({ user, sessionId });
     } catch (error: any) {
         console.error(`[Login Error] for user ${username}:`, error);
-        res.status(500).json({ message: 'A server error occurred during login.' });
+        res.status(500).json({ message: error.message || 'A server error occurred during login.' });
     }
 });
 app.post('/api/auth/sync', async (req, res) => {

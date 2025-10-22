@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { GameMode } from '../types/index.js';
-import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants.js';
-import { strategicAiDisplayMap } from '../constants/gameSettings.js';
-import BackButton from './BackButton.js';
-import { useAppContext } from '../hooks/useAppContext.js';
-import NineSlicePanel from './ui/NineSlicePanel.js';
-import Button from './Button.js';
+import { GameMode } from '../types';
+import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../constants';
+import { strategicAiDisplayMap } from '../constants/gameSettings';
+import BackButton from './BackButton';
+import { useAppContext } from '../hooks/useAppContext';
+import NineSlicePanel from './ui/NineSlicePanel';
+import Button from './Button';
 
 interface LobbyProps {
   lobbyType: 'strategic' | 'playful';
@@ -42,7 +42,7 @@ const GameCard: React.FC<{ mode: GameMode, description: string, image: string, a
     );
 };
 
-import { aiUserId } from '../constants/auth.js';
+import { aiUserId } from '../constants/auth';
 
 const Lobby: React.FC<LobbyProps> = ({ lobbyType }) => {
   const { gameModeAvailability, handlers } = useAppContext();

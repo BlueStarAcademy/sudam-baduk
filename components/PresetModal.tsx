@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { UserWithStatus, ServerAction, EquipmentPreset } from '../types/index.js';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import { containsProfanity } from '../profanity.js';
+import { UserWithStatus, ServerAction, EquipmentPreset } from '../types';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import { containsProfanity } from '../profanity';
 
 interface PresetModalProps {
     user: UserWithStatus;

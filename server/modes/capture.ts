@@ -20,6 +20,8 @@ export const initializeCapture = (game: LiveGameSession, now: number) => {
             [Player.None]: 0,
             [Player.Black]: target,
             [Player.White]: target,
+            [Player.BlackPattern]: 0,
+            [Player.WhitePattern]: 0,
         };
         
         transitionToPlaying(game, now);
@@ -65,6 +67,8 @@ export const updateCaptureState = (game: LiveGameSession, now: number) => {
                         [Player.None]: 0,
                         [Player.Black]: baseTarget + winnerBid,
                         [Player.White]: baseTarget,
+                        [Player.BlackPattern]: 0,
+                        [Player.WhitePattern]: 0,
                     };
                     
                     game.gameStatus = GameStatus.CaptureReveal;
@@ -84,6 +88,8 @@ export const updateCaptureState = (game: LiveGameSession, now: number) => {
                             [Player.None]: 0,
                             [Player.Black]: baseTarget + p1Bid,
                             [Player.White]: baseTarget,
+                            [Player.BlackPattern]: 0,
+                            [Player.WhitePattern]: 0,
                         };
 
                         game.gameStatus = GameStatus.CaptureTiebreaker;

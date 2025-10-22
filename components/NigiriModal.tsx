@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { LiveGameSession, User, ServerAction } from '../types.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
-import { audioService } from '../services/audioService.js';
+import { LiveGameSession, User, ServerAction } from '../types';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
+import { audioService } from '../services/audioService';
 
 interface NigiriModalProps {
     session: LiveGameSession;

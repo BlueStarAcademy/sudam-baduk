@@ -1,7 +1,7 @@
 import React from 'react';
-import { GameMode } from '../types.js';
-import DraggableWindow from './DraggableWindow.js';
-import { GAME_RULES, RuleSection } from '../gameRules.js';
+import { GameMode } from '../types';
+import DraggableWindow from './DraggableWindow';
+import { GAME_RULES, RuleSection } from '../gameRules';
 
 interface HelpModalProps {
     mode: GameMode | 'guild' | 'single-player';

@@ -18,6 +18,8 @@ export enum Player {
     None,
     Black,
     White,
+    BlackPattern,
+    WhitePattern,
 }
 
 export enum GameStatus {

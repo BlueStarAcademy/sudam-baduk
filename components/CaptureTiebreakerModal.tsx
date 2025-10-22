@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 // FIX: Separate enum and type imports.
-import { Player } from '../types/index.js';
-import type { LiveGameSession, ServerAction, User } from '../types/index.js';
-import Avatar from './Avatar.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
+import { Player } from '../types';
+import type { LiveGameSession, ServerAction, User } from '../types';
+import Avatar from './Avatar';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
 
 interface CaptureTiebreakerModalProps {
     session: LiveGameSession;

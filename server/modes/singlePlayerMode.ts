@@ -8,16 +8,13 @@ import * as currencyService from '../currencyService.js';
 import { getAiUser } from '../ai/index.js';
 
 const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo) => {
-    console.log('[placeInitialStones] Initializing board for stage:', stage.id);
     game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(Player.None));
     game.blackPatternStones = [];
     game.whitePatternStones = [];
 
-    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount, centerBlackStoneChance } = stage.placements;
-    console.log('[placeInitialStones] Placement counts:', { blackCount, whiteCount, blackPatternCount, whitePatternCount });
+    const { randomBlackStones: blackCount, randomWhiteStones: whiteCount, randomBlackPatternedStones: blackPatternCount, randomWhitePatternedStones: whitePatternCount, centerBlackStoneChance } = stage.placements;
     
     const placeStones = (player: Player, count: number, isPattern: boolean) => {
-        console.log(`[placeInitialStones] Attempting to place ${count} stones for player ${player}, pattern: ${isPattern}`);
         const patternStonesKey = player === Player.Black ? 'blackPatternStones' : 'whitePatternStones';
         let placed = 0;
         let attempts = 0;
@@ -34,7 +31,7 @@ const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo)
             }
             attempts++;
         }
-        console.log(`[placeInitialStones] Placed ${placed} stones for player ${player}, pattern: ${isPattern}`);
+
     };
     
     placeStones(Player.Black, blackCount, false);
@@ -43,16 +40,13 @@ const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo)
     placeStones(Player.White, whitePatternCount, true);
 
     if (centerBlackStoneChance) {
-        console.log('[placeInitialStones] Checking for center black stone chance:', centerBlackStoneChance);
         if (Math.random() * 100 < centerBlackStoneChance) {
             const center = Math.floor(stage.boardSize / 2);
             if (game.boardState[center][center] === Player.None) {
                 game.boardState[center][center] = Player.Black;
-                console.log('[placeInitialStones] Placed center black stone.');
             }
         }
     }
-    console.log('[placeInitialStones] Final board state after initial placement:', game.boardState);
 }
 
 export const handleAiGameStart = async (
@@ -80,8 +74,8 @@ export const handleAiGameStart = async (
             gameType: GameType.Standard, // Dummy value
             actionPointCost: 0, // No cost for AI matches
             boardSize: 9, // Default board size
-            katagoLevel: aiGameDifficulty,
-            placements: { black: 0, white: 0, blackPattern: 0, whitePattern: 0 },
+            aiLevel: aiGameDifficulty,
+            placements: { randomBlackStones: 0, randomWhiteStones: 0, randomBlackPatternedStones: 0, randomWhitePatternedStones: 0 },
             rewards: { firstClear: {}, repeatClear: {} },
             mode: aiGameMode,
             timeControl: { type: 'byoyomi', mainTime: 3, byoyomiTime: 30, byoyomiCount: 3 },
@@ -120,7 +114,7 @@ export const handleAiGameStart = async (
     const negotiation: Negotiation = {
         id: isTower ? `neg-tc-${globalThis.crypto.randomUUID()}` : (isAiMatch ? `neg-ai-${globalThis.crypto.randomUUID()}` : `neg-sp-${globalThis.crypto.randomUUID()}`),
         challenger: user,
-        opponent: getAiUser(stage.mode || GameMode.Standard, stage.katagoLevel, stage.id, isTower ? stage.floor : undefined),
+        opponent: getAiUser(stage.mode || GameMode.Standard, stage.aiLevel, stage.id, isTower ? stage.floor : undefined),
         mode: stage.mode || GameMode.Standard,
         settings: {
             boardSize: stage.boardSize,
@@ -129,7 +123,7 @@ export const handleAiGameStart = async (
             byoyomiTime: 30,
             komi: 6.5,
             player1Color: Player.Black,
-            aiDifficulty: stage.katagoLevel,
+            aiDifficulty: stage.aiLevel,
             timeControl: stage.timeControl,
             autoEndTurnCount: stage.autoEndTurnCount,
             missileCount: stage.missileCount,
@@ -159,7 +153,7 @@ export const handleAiGameStart = async (
     game.blackStoneLimit = stage.blackStoneLimit;
     game.whiteStoneLimit = stage.whiteStoneLimit;
     const targetScore = stage.targetScore;
-    game.effectiveCaptureTargets = targetScore ? { [Player.Black]: targetScore.black, [Player.White]: targetScore.white, [Player.None]: 0 } : undefined;
+    game.effectiveCaptureTargets = targetScore ? { [Player.Black]: targetScore.black, [Player.White]: targetScore.white, [Player.None]: 0, [Player.BlackPattern]: 0, [Player.WhitePattern]: 0 } : undefined;
     game.blackStonesPlaced = 0;
     game.whiteStonesPlaced = 0;
 
@@ -259,14 +253,9 @@ export const handleConfirmIntro = async (gameId: string, user: User): Promise<Ha
     }
 
     if (game.gameStatus === GameStatus.SinglePlayerIntro) {
-        console.log(`[handleConfirmIntro] Game ${gameId}: Status before change: ${game.gameStatus}`);
         game.gameStatus = GameStatus.Playing;
-        console.log(`[handleConfirmIntro] Game ${gameId}: Status after change: ${game.gameStatus}`);
-        
-        // Call placeInitialStones here
         if (game.stageInfo) {
             placeInitialStones(game, game.stageInfo);
-            console.log(`[handleConfirmIntro] Game ${gameId}: Board state after initial placement:`, game.boardState);
         }
         
         const now = Date.now();

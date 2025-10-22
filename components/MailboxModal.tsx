@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { UserWithStatus, Mail, ServerAction, InventoryItem } from '../types/index.js';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import { audioService } from '../services/audioService.js';
+import { UserWithStatus, Mail, ServerAction, InventoryItem } from '../types';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import { audioService } from '../services/audioService';
 
 // FIX: Add missing props to the interface
 interface MailboxModalProps {

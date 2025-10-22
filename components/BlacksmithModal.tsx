@@ -6,7 +6,7 @@ import EnhancementPanel from './EnhancementModal';
 import InventoryPanel from './InventoryPanel'; // Import the new panel
 import { SYNTHESIS_LEVEL_BENEFITS } from '../constants';
 
-import SynthesisPanel from './SynthesisPanel';
+// import SynthesisPanel from './SynthesisPanel';
 import DisassemblyPanel from './DisassemblyPanel';
 import MaterialConversionPanel from './MaterialConversionPanel';
 
@@ -33,7 +33,19 @@ const BlacksmithModal: React.FC<BlacksmithModalProps> = ({ enhancementItem, init
     const [activeTab, setActiveTab] = useState<BlacksmithTab>(initialTab || 'enhancement');
     const [enhancementOutcome, setEnhancementOutcome] = useState<any>(null);
     const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(enhancementItem);
+    const [selectedSynthesisItems, setSelectedSynthesisItems] = useState<InventoryItem[]>([]);
     const [sortBy, setSortBy] = useState<'time' | 'grade' | 'type'>('time');
+
+    const toggleSynthesisItem = (item: InventoryItem) => {
+        setSelectedSynthesisItems(prev => {
+            if (prev.some(si => si.id === item.id)) {
+                return prev.filter(si => si.id !== item.id);
+            } else if (prev.length < 3) {
+                return [...prev, item];
+            }
+            return prev;
+        });
+    };
 
     const handleActionWithOutcome = async (action: any) => {
         const result = await handlers.handleAction(action);
@@ -81,16 +93,24 @@ const BlacksmithModal: React.FC<BlacksmithModalProps> = ({ enhancementItem, init
                             return (
                                 <div key={grade} className="flex justify-between">
                                     <span>{name} 대성공 확률:</span>
-                                                                                                                                                            <span className="font-bold text-green-400">
-                                                                                                                                                                {currentBenefit}%
-                                                                                                                                                            </span>                                </div>
+                                    <span className="font-bold text-green-400">
+                                        {currentBenefit}%
+                                        {nextBenefit > currentBenefit && (
+                                            <span className="text-blue-400 ml-1">→ {nextBenefit}%</span>
+                                        )}
+                                    </span>
+                                </div>
                             )
                         })}
                         <div className="flex justify-between">
                             <span>신화 더블옵션 확률:</span>
-                                                                                                                            <span className="font-bold text-yellow-300">
-                                                                                                                                {SYNTHESIS_LEVEL_BENEFITS[synthesisLevel]?.doubleMythicChance || 0}%
-                                                                                                                            </span>                        </div>
+                            <span className="font-bold text-yellow-300">
+                                {SYNTHESIS_LEVEL_BENEFITS[synthesisLevel]?.doubleMythicChance || 0}%
+                                {SYNTHESIS_LEVEL_BENEFITS[synthesisLevel + 1] && SYNTHESIS_LEVEL_BENEFITS[synthesisLevel + 1].doubleMythicChance > (SYNTHESIS_LEVEL_BENEFITS[synthesisLevel]?.doubleMythicChance || 0) && (
+                                    <span className="text-blue-400 ml-1">→ {SYNTHESIS_LEVEL_BENEFITS[synthesisLevel + 1].doubleMythicChance}%</span>
+                                )}
+                            </span>
+                        </div>
                     </div>
                 </div>
                 
@@ -112,7 +132,7 @@ const BlacksmithModal: React.FC<BlacksmithModalProps> = ({ enhancementItem, init
                             ))}
                         </div>
                         
-                        <div className="flex-grow bg-secondary/50 rounded-lg relative">
+                        <div className="flex-grow bg-secondary/50 rounded-lg relative min-h-0 overflow-y-auto">
                             {activeTab === 'enhancement' && selectedItem && (
                                  <EnhancementPanel
                                     item={selectedItem}
@@ -124,23 +144,58 @@ const BlacksmithModal: React.FC<BlacksmithModalProps> = ({ enhancementItem, init
                                     isTopmost={false}
                                 />
                             )}
-                            {activeTab === 'synthesis' && <SynthesisPanel />}
-                            {activeTab === 'disassembly' && <DisassemblyPanel />}
+                            {activeTab === 'synthesis' && /* <SynthesisPanel selectedItems={selectedSynthesisItems} onSelectItem={toggleSynthesisItem} /> */ null}
+                            {activeTab === 'disassembly' && <DisassemblyPanel selectedItem={selectedItem} onSelectItem={setSelectedItem} />}
                             {activeTab === 'material_conversion' && <MaterialConversionPanel />}
                         </div>
                     </div>
 
                     {/* Bottom Section - Inventory */}
-                    <div className="flex-grow">
-                        <InventoryPanel
-                            items={currentUserWithStatus.inventory}
-                            selectedItems={selectedItem ? [selectedItem] : []}
-                            onSelectItem={setSelectedItem}
-                            itemTypeFilter="equipment"
-                            title="강화할 장비 선택"
-                            sortBy={sortBy}
-                            onSortByChange={setSortBy}
-                        />
+                    <div className="flex-shrink-0 h-[280px] w-full">
+                        {(activeTab === 'enhancement') && (
+                            <InventoryPanel
+                                items={currentUserWithStatus.inventory}
+                                selectedItems={selectedItem ? [selectedItem] : []}
+                                onSelectItem={setSelectedItem}
+                                itemTypeFilter="equipment"
+                                title="장비 선택"
+                                sortBy={sortBy}
+                                onSortByChange={setSortBy}
+                            />
+                        )}
+                        {activeTab === 'synthesis' && (
+                            <InventoryPanel
+                                items={currentUserWithStatus.inventory.filter(item => item.type === 'equipment' && !item.isEquipped)}
+                                selectedItems={selectedSynthesisItems}
+                                onSelectItem={toggleSynthesisItem}
+                                itemTypeFilter="equipment"
+                                title="합성 재료 선택"
+                                sortBy={sortBy}
+                                onSortByChange={setSortBy}
+                            />
+                        )}
+                        {activeTab === 'disassembly' && (
+                            <InventoryPanel
+                                items={currentUserWithStatus.inventory.filter(item => item.type === 'equipment' && !item.isEquipped)}
+                                selectedItems={selectedItem ? [selectedItem] : []}
+                                onSelectItem={setSelectedItem}
+                                itemTypeFilter="equipment"
+                                title="분해할 장비 선택"
+                                sortBy={sortBy}
+                                onSortByChange={setSortBy}
+                            />
+                        )}
+                        {activeTab === 'material_conversion' && (
+                            <InventoryPanel
+                                items={currentUserWithStatus.inventory}
+                                selectedItems={[]}
+                                onSelectItem={() => {}}
+                                itemTypeFilter="material"
+                                title="보유 재료"
+                                sortBy={sortBy}
+                                onSortByChange={setSortBy}
+                            />
+                        )}
                     </div>
                 </div>
             </div>

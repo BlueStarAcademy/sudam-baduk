@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { Player, GameMode, GameStatus } from '../../types/index.js';
 import type { GameProps, Point, Move } from '../../types/index.js';
 import GoBoard from '../GoBoard.js';
-import { getGoLogic } from '../../utils/goLogic';
+import { getGoLogic } from '../../utils/goLogic.ts';
 
 interface GoGameArenaProps extends GameProps {
     isMyTurn: boolean;

@@ -10,7 +10,7 @@ const placeInitialStonesRandomly = (game: LiveGameSession, stage: SinglePlayerSt
     game.blackPatternStones = [];
     game.whitePatternStones = [];
 
-    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount, centerBlackStoneChance } = stage.placements;
+    const { randomBlackStones: blackCount, randomWhiteStones: whiteCount, randomBlackPatternedStones: blackPatternCount, randomWhitePatternedStones: whitePatternCount, centerBlackStoneChance } = stage.placements;
     
     const placeRandomStones = (player: Player, count: number, isPattern: boolean) => {
         const patternStonesKey = player === Player.Black ? 'blackPatternStones' : 'whitePatternStones';
@@ -62,7 +62,7 @@ export const handleTowerChallengeGameStart = async (volatileState: VolatileState
         user.actionPoints.current -= stage.actionPointCost;
     }
 
-    const aiLevel = stage.katagoLevel;
+    const aiLevel = stage.aiLevel;
     const aiOpponent = getAiUser(GameMode.Standard, aiLevel, undefined, floor);
 
     const negotiation: Negotiation = {
@@ -105,13 +105,11 @@ export const handleTowerChallengeGameStart = async (volatileState: VolatileState
     game.blackStoneLimit = stage.blackStoneLimit;
     game.whiteStoneLimit = stage.whiteStoneLimit;
     const targetScore = stage.targetScore;
-    game.effectiveCaptureTargets = targetScore ? { [Player.Black]: targetScore.black, [Player.White]: targetScore.white, [Player.None]: 0 } : undefined;
+    game.effectiveCaptureTargets = targetScore ? { [Player.Black]: targetScore.black, [Player.White]: targetScore.white, [Player.None]: 0, [Player.BlackPattern]: 0, [Player.WhitePattern]: 0 } : undefined;
     game.blackStonesPlaced = 0;
     game.whiteStonesPlaced = 0;
     game.towerChallengePlacementRefreshesUsed = 0;
-    game.towerAddStonesUsed = 0;
-
-    const { black: blackCount, white: whiteCount } = stage.placements;
+    const { randomBlackStones: blackCount, randomWhiteStones: whiteCount } = stage.placements;
     
     const placeRandomStones = (player: Player, count: number) => {
         let placed = 0;
@@ -166,7 +164,7 @@ export const handleTowerChallengeRefresh = async (game: LiveGameSession, user: U
 
     game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(Player.None));
     
-    const { black: blackCount, white: whiteCount } = stage.placements;
+    const { randomBlackStones: blackCount, randomWhiteStones: whiteCount } = stage.placements;
     const placeRandomStones = (player: Player, count: number) => {
         let placed = 0;
         let attempts = 0;

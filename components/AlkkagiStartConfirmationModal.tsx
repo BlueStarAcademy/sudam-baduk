@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 // FIX: Separate enum and type imports.
-import { Player } from '../types/index.js';
-import type { LiveGameSession, User, ServerAction } from '../types/index.js';
-import Avatar from './Avatar.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
-import { AVATAR_POOL, BORDER_POOL } from '../constants.js';
+import { Player } from '../types';
+import type { LiveGameSession, User, ServerAction } from '../types';
+import Avatar from './Avatar';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
+import { AVATAR_POOL, BORDER_POOL } from '../constants';
 
 interface AlkkagiStartConfirmationModalProps {
     session: LiveGameSession;

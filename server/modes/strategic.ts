@@ -14,8 +14,11 @@ import {
     UserStatusInfo,
     type Negotiation,
     BoardState,
-    KoInfo
+    KoInfo,
+    SinglePlayerStageInfo
 } from '../../types/index.js';
+import { TOWER_STAGES } from '../../constants/towerChallengeConstants.js';
+import { SINGLE_PLAYER_STAGES } from '../../constants/singlePlayerConstants.js';
 import { processMove } from '../../utils/goLogic.js';
 import { getGameResult, endGame } from '../summaryService.js';
 import { makeAiMove } from '../ai/index.js';
@@ -30,6 +33,61 @@ import { initializeHidden, updateHiddenState, handleHiddenAction } from './hidde
 import { initializeMissile, updateMissileState, handleMissileAction } from './missile.js';
 import { VolatileState } from '../../types/api.js';
 import { getNewActionButtons } from '../services/actionButtonService.js';
+
+const applyRandomPlacements = (game: LiveGameSession, stageInfo: SinglePlayerStageInfo) => {
+    const { boardSize } = game.settings;
+    const { placements } = stageInfo;
+
+    game.blackPatternStones = [];
+    game.whitePatternStones = [];
+
+    const availablePositions: Point[] = [];
+    for (let y = 0; y < boardSize; y++) {
+        for (let x = 0; x < boardSize; x++) {
+            availablePositions.push({ x, y });
+        }
+    }
+
+    // Shuffle available positions
+    for (let i = availablePositions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [availablePositions[i], availablePositions[j]] = [availablePositions[j], availablePositions[i]];
+    }
+
+    let placedBlack = 0;
+    let placedWhite = 0;
+    let placedBlackPattern = 0;
+    let placedWhitePattern = 0;
+
+    const placeStone = (player: Player, isPattern: boolean, pos: Point) => {
+        game.boardState[pos.y][pos.x] = player;
+        if (isPattern) {
+            if (player === Player.Black) {
+                game.blackPatternStones!.push(pos);
+            } else if (player === Player.White) {
+                game.whitePatternStones!.push(pos);
+            }
+        }
+    };
+
+    for (const pos of availablePositions) {
+        if (placedBlack < (placements.randomBlackStones || 0)) {
+            placeStone(Player.Black, false, pos);
+            placedBlack++;
+        } else if (placedWhite < (placements.randomWhiteStones || 0)) {
+            placeStone(Player.White, false, pos);
+            placedWhite++;
+        } else if (placedBlackPattern < (placements.randomBlackPatternedStones || 0)) {
+            placeStone(Player.Black, true, pos);
+            placedBlackPattern++;
+        } else if (placedWhitePattern < (placements.randomWhitePatternedStones || 0)) {
+            placeStone(Player.White, true, pos);
+            placedWhitePattern++;
+        } else {
+            break;
+        }
+    }
+};
 
 export const handleAiTurn = async (gameFromAction: LiveGameSession, userMove: { x: number, y: number }, userPlayerEnum: Player): Promise<LiveGameSession | undefined> => {
 
@@ -214,6 +272,21 @@ export const initializeStrategicGame = async (game: LiveGameSession, neg: Negoti
         game.blackPlayerId = neg.challenger.id;
         game.whitePlayerId = neg.opponent.id;
         
+        // Retrieve stage info
+        let stageInfo: SinglePlayerStageInfo | undefined;
+        if (game.isSinglePlayer) {
+            stageInfo = SINGLE_PLAYER_STAGES.find(s => s.id === neg.id.replace('neg-sp-', ''));
+        } else if (game.isTowerChallenge) {
+            const floor = parseInt(neg.id.replace('neg-tc-', ''));
+            stageInfo = TOWER_STAGES.find(s => s.floor === floor);
+        }
+
+        if (stageInfo && stageInfo.placements) {
+            applyRandomPlacements(game, stageInfo);
+        }
+        game.gameStatus = GameStatus.Playing;
+        game.currentPlayer = Player.Black;
+
         // This is the FIX: Call mode-specific initializers for AI/SP games too.
         if (game.mode === GameMode.Capture) {
             initializeCapture(game, now);

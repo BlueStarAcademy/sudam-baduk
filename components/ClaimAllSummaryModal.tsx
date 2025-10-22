@@ -1,7 +1,7 @@
 
 import React from 'react';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
 
 interface ClaimAllSummaryModalProps {
     summary: { gold: number, diamonds: number, actionPoints: number };

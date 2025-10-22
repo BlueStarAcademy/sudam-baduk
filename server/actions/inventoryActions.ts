@@ -2,7 +2,6 @@ import * as db from '../db.js';
 import { type ServerAction, type User, type VolatileState, InventoryItem, Quest, QuestLog, InventoryItemType, TournamentType, TournamentState, QuestReward, ItemOption, CoreStat, SpecialStat, MythicStat, EquipmentSlot, ItemGrade, Player, Mail, HandleActionResult, Guild } from '../../types/index.js';
 import { updateQuestProgress } from '../questService.js';
 import { SHOP_ITEMS, createItemFromTemplate, pickRandom } from '../shop.js';
-// FIX: Corrected import paths for constants.
 import { 
     currencyBundles,
     CONSUMABLE_ITEMS, 
@@ -21,7 +20,6 @@ import {
     ENHANCEMENT_LEVEL_REQUIREMENTS
 } from '../../constants/index.js';
 import { addItemsToInventory as addItemsToInventoryUtil } from '../../utils/inventoryUtils.js';
-// FIX: Import `calculateUserEffects` from the correct utility file.
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import * as currencyService from '../currencyService.js';
 import * as guildService from '../guildService.js';
@@ -345,8 +343,7 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
                     const combatTier = rules.combatTier;
                     const combatPool = SUB_OPTION_POOLS[item.slot!][combatTier].filter(opt => !existingSubTypes.has(opt.type));
                     if(combatPool.length > 0) {
-                        // FIX: Cast return of pickRandom to `any` to resolve property access errors.
-                        const newSubDef = pickRandom(combatPool) as any;
+                        const newSubDef: { type: CoreStat; isPercentage: boolean; range: [number, number]; } = pickRandom(combatPool);
                         combatPool.splice(combatPool.indexOf(newSubDef), 1);
                         
                         const value = getRandomInt(newSubDef.range[0], newSubDef.range[1]);
@@ -366,8 +363,7 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
         
                     const itemTier = GRADE_SUB_OPTION_RULES[item.grade].combatTier;
                     const subOptionPool = SUB_OPTION_POOLS[item.slot!][itemTier];
-                    // FIX: Cast return of find to `any` to resolve property access errors.
-                    const subDef = subOptionPool.find(s => s.type === subToUpgrade.type && s.isPercentage === subToUpgrade.isPercentage) as any;
+                    const subDef = subOptionPool.find(s => s.type === subToUpgrade.type && s.isPercentage === subToUpgrade.isPercentage);
         
                     if (subDef) {
                         const increaseAmount = getRandomInt(subDef.range[0], subDef.range[1]);
@@ -441,7 +437,6 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
                 }
             }
             
-// FIX: Add missing 'options' property to created item object to satisfy InventoryItem type.
             const itemsToAdd: InventoryItem[] = Object.entries(gainedMaterials).map(([name, quantity]) => ({
                 ...MATERIAL_ITEMS[name as keyof typeof MATERIAL_ITEMS], id: `item-${globalThis.crypto.randomUUID()}`, quantity, createdAt: Date.now(), isEquipped: false, level: 1, stars: 0, options: undefined
             }));
@@ -488,7 +483,6 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
             }
         
             const toAddTemplate = MATERIAL_ITEMS[toMaterialName as keyof typeof MATERIAL_ITEMS];
-// FIX: Add missing 'options' property to created item object to satisfy InventoryItem type.
             const itemsToAdd: InventoryItem[] = [{
                 ...toAddTemplate, id: `item-${globalThis.crypto.randomUUID()}`, quantity: toYield, createdAt: Date.now(), isEquipped: false, level: 1, stars: 0, options: undefined
             }];
@@ -645,7 +639,7 @@ export const handleInventoryAction = async (action: ServerAction & { userId: str
                 guildService.updateGuildMissionProgress(user.guildId, 'equipmentSyntheses', 1);
             }
             
-            updateQuestProgress(user, 'craft_attempt'); // This should probably be 'synthesis_attempt'
+            updateQuestProgress(user, 'synthesis_attempt');
             await db.updateUser(user);
         
             return { clientResponse: { synthesisResult: { item: newItem, wasUpgraded: wasUpgraded || isDoubleMythic }, updatedUser: user } };

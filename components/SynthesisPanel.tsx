@@ -1,20 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { InventoryItem, ItemGrade, EquipmentSlot } from '../types/index.js';
-import { useAppContext } from '../hooks/useAppContext.js';
-import Button from './Button.js';
-import InventoryPanel from './InventoryPanel.js';
-import SynthesisResultModal from './SynthesisResultModal.js';
-import DetailedItemDisplay from './DetailedItemDisplay.js';
-import { SYNTHESIS_COSTS, SYNTHESIS_LEVEL_BENEFITS } from '../constants/index.js';
+import { InventoryItem, ItemGrade, EquipmentSlot } from '../types';
+import { useAppContext } from '../hooks/useAppContext';
+import Button from './Button';
+import SynthesisResultModal from './SynthesisResultModal';
+import { SYNTHESIS_COSTS, SYNTHESIS_LEVEL_BENEFITS, slotNames } from '../constants';
 
 interface SynthesisPanelProps {
-    // No specific props needed for now
+    selectedItems: InventoryItem[];
+    onSelectItem: (item: InventoryItem) => void;
 }
 
-const SynthesisPanel: React.FC<SynthesisPanelProps> = () => {
+const SynthesisPanel: React.FC<SynthesisPanelProps> = ({ selectedItems, onSelectItem }) => {
     const { currentUserWithStatus, handlers, modals } = useAppContext();
-    const [selectedItems, setSelectedItems] = useState<InventoryItem[]>([]);
-    const [sortBy, setSortBy] = useState<'time' | 'grade' | 'type'>('time');
 
     const synthesisLevel = currentUserWithStatus?.synthesisLevel || 1;
     const synthesisBenefit = SYNTHESIS_LEVEL_BENEFITS[synthesisLevel];
@@ -41,21 +38,49 @@ const SynthesisPanel: React.FC<SynthesisPanelProps> = () => {
         return true;
     }, [selectedItems, currentUserWithStatus, synthesisBenefit]);
 
+    const synthesisOutcomeProbabilities = useMemo(() => {
+        if (selectedItems.length !== 3) return [];
+
+        const slotCounts: Record<EquipmentSlot, number> = {
+            [EquipmentSlot.Fan]: 0,
+            [EquipmentSlot.Board]: 0,
+            [EquipmentSlot.Top]: 0,
+            [EquipmentSlot.Bottom]: 0,
+            [EquipmentSlot.Bowl]: 0,
+            [EquipmentSlot.Stones]: 0,
+        };
+
+        selectedItems.forEach(item => {
+            if (item.slot) {
+                slotCounts[item.slot]++;
+            }
+        });
+
+        const probabilities: { slotName: string; probability: number }[] = [];
+        let totalProbability = 0;
+
+        for (const slot in slotCounts) {
+            const count = slotCounts[slot as EquipmentSlot];
+            if (count > 0) {
+                const probability = Math.floor((count / 3) * 100);
+                probabilities.push({ slotName: slotNames[slot as EquipmentSlot], probability });
+                totalProbability += probability;
+            }
+        }
+
+        // Adjust for rounding errors if necessary
+        if (totalProbability !== 100 && probabilities.length > 0) {
+            const diff = 100 - totalProbability;
+            probabilities[0].probability += diff;
+        }
+
+        return probabilities;
+    }, [selectedItems]);
+
     const handleSynthesize = () => {
         if (!canSynthesize) return;
         handlers.handleAction({ type: 'SYNTHESIZE_EQUIPMENT', payload: { itemIds: selectedItems.map(item => item.id) } });
-        setSelectedItems([]);
-    };
-
-    const toggleSelectItem = (item: InventoryItem) => {
-        setSelectedItems(prev => {
-            if (prev.some(si => si.id === item.id)) {
-                return prev.filter(si => si.id !== item.id);
-            } else if (prev.length < 3) {
-                return [...prev, item];
-            }
-            return prev;
-        });
+        onSelectItem(selectedItems[0]); // Clear selected items after synthesis
     };
 
     const selectedGrade = selectedItems.length > 0 ? selectedItems[0].grade : null;
@@ -64,7 +89,7 @@ const SynthesisPanel: React.FC<SynthesisPanelProps> = () => {
     if (!currentUserWithStatus) return null;
 
     return (
-        <div className="h-full flex flex-col lg:flex-row gap-4 p-4">
+        <div className="h-full flex flex-col p-4">
             {modals.synthesisResult && (
                 <SynthesisResultModal
                     result={modals.synthesisResult}
@@ -73,41 +98,64 @@ const SynthesisPanel: React.FC<SynthesisPanelProps> = () => {
                 />
             )}
 
-            {/* Left Panel: Selected Items for Synthesis */}
-            <div className="w-full lg:w-1/2 flex flex-col bg-tertiary/50 p-4 rounded-lg">
-                <h3 className="text-lg font-bold text-primary mb-4">합성할 장비 선택 (3개)</h3>
-                <div className="flex-grow grid grid-cols-3 gap-2 items-center justify-center">
+            <div className="flex-grow flex flex-col bg-tertiary/50 p-4 rounded-lg">
+                <h3 className="text-lg font-bold text-primary mb-4 text-center">합성할 장비 선택 (3개)</h3>
+                <div className="flex justify-center gap-2 mb-4">
                     {Array.from({ length: 3 }).map((_, index) => (
                         selectedItems[index] ? (
-                            <DetailedItemDisplay key={selectedItems[index].id} item={selectedItems[index]} />
+                            <div key={selectedItems[index].id} className="relative w-20 h-20 rounded-md border-2 border-color/50 bg-gray-700/50 flex items-center justify-center">
+                                <img src={selectedItems[index].image} alt={selectedItems[index].name} className="w-full h-full object-contain p-1" />
+                                <span className="absolute bottom-0 right-0 text-xs font-bold text-white bg-black/60 px-1 rounded-tl-md">{selectedItems[index].quantity || 1}</span>
+                            </div>
                         ) : (
-                            <div key={index} className="w-full aspect-square rounded-md bg-gray-700/50 flex items-center justify-center text-gray-400 text-sm">
+                            <div key={index} className="w-20 h-20 rounded-md border-2 border-color/50 bg-gray-700/50 flex items-center justify-center text-gray-400 text-xs">
                                 슬롯 비어있음
                             </div>
                         )
                     ))}
                 </div>
-                
+
                 {selectedItems.length === 3 && selectedGrade && (
-                    <div className="mt-4 p-3 bg-gray-800/50 rounded-lg text-sm space-y-2">
-                        <div className="flex justify-between">
-                            <span className="text-gray-300">합성 등급:</span>
-                            <span className={`font-bold ${ItemGrade[selectedGrade]}`}>{selectedGrade}</span>
+                    <div className="space-y-3 flex-grow">
+                        <div className="bg-gray-900/50 p-3 rounded-lg text-xs space-y-1">
+                            <h4 className="font-bold text-center text-blue-300 mb-2">합성 결과 예측</h4>
+                            {synthesisOutcomeProbabilities.length > 0 ? (
+                                synthesisOutcomeProbabilities.map((outcome, index) => (
+                                    <div key={index} className="flex justify-between">
+                                        <span>{outcome.slotName}:</span>
+                                        <span className="font-bold text-blue-400">{outcome.probability}%</span>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-500 text-center">합성 가능한 조합이 아닙니다.</p>
+                            )}
                         </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-300">합성 비용:</span>
-                            <span className="font-bold text-yellow-300">{synthesisCost.toLocaleString()} 골드</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-300">성공 확률:</span>
-                            <span className="font-bold text-green-400">{synthesisBenefit.upgradeChance[selectedGrade] || 0}%</span>
-                        </div>
-                        {selectedGrade === ItemGrade.Legendary && (
+
+                        <div className="bg-gray-900/50 p-3 rounded-lg text-xs space-y-1">
+                            <h4 className="font-bold text-center text-yellow-300 mb-2">합성 상세</h4>
                             <div className="flex justify-between">
-                                <span className="text-gray-300">신화 더블옵션 확률:</span>
-                                <span className="font-bold text-purple-400">{synthesisBenefit.doubleMythicChance}%</span>
+                                <span>합성 등급:</span>
+                                <span className={`font-bold ${gradeStyles[selectedGrade].text}`}>{selectedGrade}</span>
                             </div>
-                        )}
+                            <div className="flex justify-between">
+                                <span>합성 비용:</span>
+                                <span className="font-bold text-yellow-300">{synthesisCost.toLocaleString()} 골드</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span>성공 확률:</span>
+                                <span className="font-bold text-green-400">{synthesisBenefit.upgradeChance[selectedGrade] || 0}%</span>
+                            </div>
+                            {selectedGrade === ItemGrade.Legendary && (
+                                <div className="flex justify-between">
+                                    <span>신화 더블옵션 확률:</span>
+                                    <span className="font-bold text-purple-400">{synthesisBenefit.doubleMythicChance}%</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex-grow flex items-center justify-center">
+                        <p className="text-gray-400 text-lg">합성할 장비를 3개 선택해주세요.</p>
                     </div>
                 )}
 
@@ -115,23 +163,10 @@ const SynthesisPanel: React.FC<SynthesisPanelProps> = () => {
                     onClick={handleSynthesize}
                     disabled={!canSynthesize}
                     colorScheme="blue"
-                    className="w-full mt-4"
+                    className="w-full py-2 mt-4 text-base"
                 >
                     장비 합성
                 </Button>
-            </div>
-
-            {/* Right Panel: Inventory for selection */}
-            <div className="w-full lg:w-1/2 flex flex-col">
-                <InventoryPanel
-                    items={currentUserWithStatus.inventory.filter(item => item.type === 'equipment' && !item.isEquipped)}
-                    selectedItems={selectedItems}
-                    onSelectItem={toggleSelectItem}
-                    itemTypeFilter="equipment"
-                    title="합성 재료 선택"
-                    sortBy={sortBy}
-                    onSortByChange={setSortBy}
-                />
             </div>
         </div>
     );

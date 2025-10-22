@@ -1,11 +1,11 @@
 import React, { useMemo, useEffect, useRef, useState } from 'react';
-import { LiveGameSession, User, Player, WinReason, StatChange, AnalysisResult, GameMode, GameSummary, InventoryItem, AvatarInfo, BorderInfo, AlkkagiStone } from '../types/index.js';
-import Avatar from './Avatar.js';
-import { audioService } from '../services/audioService.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
-import { PLAYFUL_GAME_MODES, AVATAR_POOL, BORDER_POOL, CONSUMABLE_ITEMS } from '../constants/index.js';
-import { getMannerRank as getMannerRankShared } from '../utils/mannerUtils.js';
+import { LiveGameSession, User, Player, WinReason, StatChange, AnalysisResult, GameMode, GameSummary, InventoryItem, AvatarInfo, BorderInfo, AlkkagiStone } from '../types';
+import Avatar from './Avatar';
+import { audioService } from '../services/audioService';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
+import { PLAYFUL_GAME_MODES, AVATAR_POOL, BORDER_POOL, CONSUMABLE_ITEMS } from '../constants';
+import { getMannerRank as getMannerRankShared } from '../utils/mannerUtils';
 
 interface GameSummaryModalProps {
     session: LiveGameSession;

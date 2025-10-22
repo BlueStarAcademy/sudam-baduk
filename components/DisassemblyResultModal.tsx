@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import { MATERIAL_ITEMS } from '../constants.js';
-import { audioService } from '../services/audioService.js';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import { MATERIAL_ITEMS } from '../constants';
+import { audioService } from '../services/audioService';
 
 interface DisassemblyResultModalProps {
     result: {

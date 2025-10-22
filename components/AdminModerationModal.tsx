@@ -1,11 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
 // FIX: Use `import type` for interfaces to prevent type/value confusion.
-import type { UserWithStatus, ServerAction } from '../types/index.js';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import Avatar from './Avatar.js';
-import { AVATAR_POOL, BORDER_POOL } from '../constants.js';
+import type { UserWithStatus, ServerAction } from '../types';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import Avatar from './Avatar';
+import { AVATAR_POOL, BORDER_POOL } from '../constants';
 
 interface AdminModerationModalProps {
     user: UserWithStatus;

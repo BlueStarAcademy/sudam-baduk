@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { LiveGameSession, User, Player, KomiBid, ServerAction, Point, BoardState } from '.././types/index.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
-import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG } from '../assets.js';
-import { DEFAULT_KOMI, aiUserId } from '../constants/index.js';
-import Slider from './ui/Slider.js';
-import { getGoLogic } from '../utils/goLogic';
+import { LiveGameSession, User, Player, KomiBid, ServerAction, Point, BoardState } from '../types';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
+import { WHITE_BASE_STONE_IMG, BLACK_BASE_STONE_IMG } from '../assets';
+import { DEFAULT_KOMI, aiUserId } from '../constants';
+import Slider from './ui/Slider';
+import { getGoLogic } from '../utils/goLogic.ts';
 
 interface KomiBiddingPanelProps {
     session: LiveGameSession;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import DraggableWindow from './DraggableWindow.js';
-import { GAME_RULES } from '../gameRules.js';
+import DraggableWindow from './DraggableWindow';
+import { GAME_RULES } from '../gameRules';
 
 interface InfoModalProps {
     onClose: () => void;

@@ -225,6 +225,13 @@ export const initializeAlkkagi = (game: LiveGameSession, neg: Negotiation, now: 
         [p2.id]: { slow: (game.settings.alkkagiSlowItemCount || 0) + p2SlowBonus, aimingLine: (game.settings.alkkagiAimingLineItemCount || 0) + p2AimBonus }
     };
 
+    // Place initial random stones if setting is enabled
+    if (game.settings.alkkagiInitialRandomStones && game.settings.alkkagiInitialRandomStones > 0) {
+        const numInitialStones = game.settings.alkkagiInitialRandomStones;
+        placeRandomStonesForPlayer(game, Player.Black, game.blackPlayerId!, numInitialStones);
+        placeRandomStonesForPlayer(game, Player.White, game.whitePlayerId!, numInitialStones);
+    }
+
     if (game.isAiGame) {
         const humanPlayerColor = neg.settings.player1Color || Player.Black;
         if (humanPlayerColor === Player.Black) {
@@ -247,7 +254,10 @@ export const initializeAlkkagi = (game: LiveGameSession, neg: Negotiation, now: 
         if (game.gameStatus === GameStatus.AlkkagiSimultaneousPlacement) {
             const aiPlayerEnum = humanPlayerColor === Player.Black ? Player.White : Player.Black;
             const targetStones = game.settings.alkkagiStoneCount || 5;
-            placeRandomStonesForPlayer(game, aiPlayerEnum, aiUserId, targetStones);
+            // Only place if not already placed by initial random stones
+            if (!game.settings.alkkagiInitialRandomStones || game.settings.alkkagiInitialRandomStones === 0) {
+                placeRandomStonesForPlayer(game, aiPlayerEnum, aiUserId, targetStones);
+            }
         }
 
     } else {

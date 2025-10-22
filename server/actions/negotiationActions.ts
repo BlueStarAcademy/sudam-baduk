@@ -4,7 +4,7 @@ import { SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES, STRATEGIC_ACTION_POINT_COST, PL
 import { initializeGame } from '../gameModes.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import { aiUserId, getAiUser } from '../ai/index.js';
-import { gnuGoServiceManager } from '../services/gnuGoService.js';
+
 
 const getActionPointCost = (mode: GameMode): number => {
     if (SPECIAL_GAME_MODES.some(m => m.mode === mode)) {
@@ -342,10 +342,7 @@ export const handleNegotiationAction = async (volatileState: VolatileState, acti
             
             const isStrategic = SPECIAL_GAME_MODES.some(m => m.mode === mode);
             const displayLevel = isStrategic ? game.player2.strategyLevel : game.player2.playfulLevel;
-            const aiStage = Math.max(1, displayLevel / 5);
-            const gnuGoEngineLevel = Math.max(0, aiStage - 1);
 
-            await gnuGoServiceManager.create(game.id, gnuGoEngineLevel, game.settings.boardSize, game.settings.komi);
 
             await db.saveGame(game);
             

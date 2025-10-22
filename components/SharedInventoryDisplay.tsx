@@ -1,6 +1,6 @@
 import React from 'react';
-import { InventoryItem, ItemGrade } from '../types/index.js';
-import { gradeStyles } from '../utils/itemDisplayUtils.js';
+import { InventoryItem, ItemGrade } from '../types';
+import { gradeStyles } from '../utils/itemDisplayUtils';
 
 interface SharedInventoryDisplayProps {
     items: InventoryItem[];

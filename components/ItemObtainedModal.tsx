@@ -1,24 +1,16 @@
 import React, { useEffect } from 'react';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import { InventoryItem, ItemGrade, ItemOption, CoreStat, SpecialStat, MythicStat } from '../types.js';
-import { audioService } from '../services/audioService.js';
-import { GRADE_LEVEL_REQUIREMENTS } from '../constants.js';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import { InventoryItem, ItemGrade, ItemOption, CoreStat, SpecialStat, MythicStat } from '../types';
+import { audioService } from '../services/audioService';
+import { GRADE_LEVEL_REQUIREMENTS } from '../constants';
+import { gradeStyles, getStarDisplayInfo } from '../utils/itemDisplayUtils';
 
 interface ItemObtainedModalProps {
     item: InventoryItem;
     onClose: () => void;
     isTopmost?: boolean;
 }
-
-const gradeStyles: Record<ItemGrade, { bg: string, text: string, shadow: string, name: string, background: string }> = {
-    [ItemGrade.Normal]: { bg: 'bg-gray-700', text: 'text-white', shadow: 'shadow-gray-900/50', name: '일반', background: '/images/equipments/normalbgi.png' },
-    [ItemGrade.Uncommon]: { bg: 'bg-green-700', text: 'text-green-200', shadow: 'shadow-green-500/50', name: '고급', background: '/images/equipments/uncommonbgi.png' },
-    [ItemGrade.Rare]: { bg: 'bg-blue-700', text: 'text-blue-200', shadow: 'shadow-blue-500/50', name: '희귀', background: '/images/equipments/rarebgi.png' },
-    [ItemGrade.Epic]: { bg: 'bg-purple-700', text: 'text-purple-200', shadow: 'shadow-purple-500/50', name: '에픽', background: '/images/equipments/epicbgi.png' },
-    [ItemGrade.Legendary]: { bg: 'bg-red-800', text: 'text-red-200', shadow: 'shadow-red-500/50', name: '전설', background: '/images/equipments/legendarybgi.png' },
-    [ItemGrade.Mythic]: { bg: 'bg-orange-700', text: 'text-orange-200', shadow: 'shadow-orange-500/50', name: '신화', background: '/images/equipments/mythicbgi.png' },
-};
 
 const gradeBorderStyles: Partial<Record<ItemGrade, string>> = {
     [ItemGrade.Rare]: 'spinning-border-rare',
@@ -27,18 +19,7 @@ const gradeBorderStyles: Partial<Record<ItemGrade, string>> = {
     [ItemGrade.Mythic]: 'spinning-border-mythic',
 };
 
-const getStarDisplayInfo = (stars: number) => {
-    if (stars >= 10) {
-        return { text: `(★${stars})`, colorClass: "prism-text-effect" };
-    } else if (stars >= 7) {
-        return { text: `(★${stars})`, colorClass: "text-blue-400" };
-    } else if (stars >= 4) {
-        return { text: `(★${stars})`, colorClass: "text-amber-400" };
-    } else if (stars >= 1) {
-        return { text: `(★${stars})`, colorClass: "text-white" };
-    }
-    return { text: "", colorClass: "text-white" };
-};
+
 
 const OptionSection: React.FC<{ title: string; options: ItemOption[]; color: string; }> = ({ title, options, color }) => {
     if (options.length === 0) return null;

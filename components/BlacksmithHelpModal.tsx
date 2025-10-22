@@ -1,6 +1,6 @@
 import React from 'react';
-import DraggableWindow from './DraggableWindow.js';
-import { SYNTHESIS_LEVEL_BENEFITS } from '../constants/index.js';
+import DraggableWindow from './DraggableWindow';
+import { SYNTHESIS_LEVEL_BENEFITS } from '../constants';
 
 interface BlacksmithHelpModalProps {
     onClose: () => void;

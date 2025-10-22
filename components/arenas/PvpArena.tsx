@@ -1,20 +1,20 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Player, GameMode, GameStatus, WinReason } from '../../types/index.js';
-import type { Point, GameProps, LiveGameSession, AlkkagiStone, ServerAction, User, UserWithStatus } from '../../types/index.js';
-import GameArena from '../GameArena.js';
-import Sidebar from '../game/Sidebar.js';
-import PlayerPanel from '../game/PlayerPanel.js';
-import GameModals from '../game/GameModals.js';
-import TurnDisplay from '../game/TurnDisplay.js';
-import { audioService } from '../../services/audioService.js';
-import { TerritoryAnalysisWindow } from '../game/AnalysisWindows.js';
-import GameControls from '../game/GameControls.js';
-import { PLAYFUL_GAME_MODES, SPECIAL_GAME_MODES, SLUG_BY_GAME_MODE } from '../../constants/index.js';
-import { useAppContext } from '../../hooks/useAppContext.js';
-import DisconnectionModal from '../DisconnectionModal.js';
-import { useClientTimer } from '../../hooks/useClientTimer.js';
-import TurnCounterPanel from '../game/TurnCounterPanel.js';
-import { processMove } from '../../utils/goLogic';
+import { Player, GameMode, GameStatus, WinReason } from '../../types';
+import type { Point, GameProps, LiveGameSession, AlkkagiStone, ServerAction, User, UserWithStatus } from '../../types';
+import GameArena from '../GameArena';
+import Sidebar from '../game/Sidebar';
+import PlayerPanel from '../game/PlayerPanel';
+import GameModals from '../game/GameModals';
+import TurnDisplay from '../game/TurnDisplay';
+import { audioService } from '../../services/audioService';
+import { TerritoryAnalysisWindow } from '../game/AnalysisWindows';
+import GameControls from '../game/GameControls';
+import { PLAYFUL_GAME_MODES, SPECIAL_GAME_MODES, SLUG_BY_GAME_MODE } from '../../constants';
+import { useAppContext } from '../../hooks/useAppContext';
+import DisconnectionModal from '../DisconnectionModal';
+import { useClientTimer } from '../../hooks/useClientTimer';
+import TurnCounterPanel from '../game/TurnCounterPanel';
+import { processMove } from '../../utils/goLogic.ts';
 
 function usePrevious<T>(value: T): T | undefined {
   const ref = useRef<T | undefined>(undefined);

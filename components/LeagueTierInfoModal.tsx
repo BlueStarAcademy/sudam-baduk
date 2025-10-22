@@ -1,8 +1,8 @@
 import React from 'react';
-import DraggableWindow from './DraggableWindow.js';
-import { LEAGUE_DATA, LEAGUE_WEEKLY_REWARDS } from '../constants.js';
+import DraggableWindow from './DraggableWindow';
+import { LEAGUE_DATA, LEAGUE_WEEKLY_REWARDS } from '../constants';
 // FIX: LeagueRewardTier is now defined in types/entities.ts and exported from types/index.js
-import { LeagueRewardTier } from '../types/index.js';
+import { LeagueRewardTier } from '../types';
 
 interface LeagueTierInfoModalProps {
     onClose: () => void;

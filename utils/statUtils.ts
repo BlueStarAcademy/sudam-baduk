@@ -1,5 +1,5 @@
 
-import type { User, Guild, MannerEffects } from '../types/index.js';
+import type { User, Guild, MannerEffects, InventoryItem } from '../types/index.js';
 import { CoreStat, SpecialStat, MythicStat, GuildResearchId } from '../types/index.js';
 import { GUILD_RESEARCH_PROJECTS, ACTION_POINT_REGEN_INTERVAL_MS } from '../constants/index.js';
 import { getMannerEffects } from './mannerUtils.js';
@@ -140,4 +140,19 @@ export const calculateTotalStats = (user: User, guild: Guild | null): Record<Cor
     }
     
     return finalStats;
+};
+
+export const calculateItemStats = (item: InventoryItem): Record<CoreStat | SpecialStat | MythicStat, number> => {
+    const stats: Record<CoreStat | SpecialStat | MythicStat, number> = {} as any;
+
+    if (item.options) {
+        const allOptions = [item.options.main, ...item.options.combatSubs, ...item.options.specialSubs, ...item.options.mythicSubs];
+        for (const opt of allOptions) {
+            if (opt) {
+                stats[opt.type] = (stats[opt.type] || 0) + opt.value;
+            }
+        }
+    }
+
+    return stats;
 };

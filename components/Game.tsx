@@ -1,9 +1,9 @@
 import React from 'react';
-import type { GameProps } from '../types/index.js';
-import PvpArena from './arenas/PvpArena.js';
-import SinglePlayerArena from './arenas/SinglePlayerArena.js';
+import type { GameProps } from '../types';
+import PvpArena from './arenas/PvpArena';
+import SinglePlayerArena from './arenas/SinglePlayerArena';
 // FIX: Changed to a named import for `TowerChallengeArena` to resolve module resolution error.
-import { TowerChallengeArena } from './arenas/TowerChallengeArena.js';
+import { TowerChallengeArena } from './arenas/TowerChallengeArena';
 
 const Game: React.FC<{ session: GameProps['session'] }> = ({ session }) => {
     if (session.isSinglePlayer) {

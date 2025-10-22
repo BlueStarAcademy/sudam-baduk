@@ -1,37 +1,37 @@
 import React, { useMemo, useCallback } from 'react';
-import { InventoryItem, ItemGrade, ItemOption, EquipmentSlot } from '../types/index.js';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
-import { GRADE_LEVEL_REQUIREMENTS } from '../constants/index.js';
-import { useAppContext } from '../hooks/useAppContext.js';
-import { gradeStyles, getStarDisplayInfo } from '../utils/itemDisplayUtils.js';
+import { InventoryItem, ItemGrade, ItemOption, EquipmentSlot } from '../types';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
+import { GRADE_LEVEL_REQUIREMENTS } from '../constants';
+import { useAppContext } from '../hooks/useAppContext';
+import { gradeStyles } from '../utils/itemDisplayUtils';
 
-// Copied from InventoryModal.tsx
-const gradeBackgrounds: Record<ItemGrade, string> = {
-    normal: '/images/equipments/normalbgi.png',
-    uncommon: '/images/equipments/uncommonbgi.png',
-    rare: '/images/equipments/rarebgi.png',
-    epic: '/images/equipments/epicbgi.png',
-    legendary: '/images/equipments/legendarybgi.png',
-    mythic: '/images/equipments/mythicbgi.png',
+const getStarDisplayInfo = (stars: number): { text: string; colorClass: string; starImage: string; numberColor: string; } => {
+    if (stars >= 10) {
+        return { text: `(★${stars})`, colorClass: "prism-text-effect", starImage: '/images/star-rainbow.png', numberColor: 'text-white' };
+    } else if (stars >= 7) {
+        return { text: `(★${stars})`, colorClass: "text-blue-400", starImage: '/images/star-blue.png', numberColor: 'text-blue-300' };
+    } else if (stars >= 4) {
+        return { text: `(★${stars})`, colorClass: "text-amber-400", starImage: '/images/star-gold.png', numberColor: 'text-yellow-300' };
+    } else if (stars >= 1) {
+        return { text: `(★${stars})`, colorClass: "text-white", starImage: '/images/star-white.png', numberColor: 'text-white' };
+    }
+    return { text: "", colorClass: "text-white", starImage: '', numberColor: '' };
 };
 
-// Copied from InventoryModal.tsx
 const renderStarDisplay = (stars: number) => {
     if (stars === 0) return null;
-    let starImage = '/images/equipments/Star1.png';
-    let numberColor = 'text-white';
-    if (stars >= 10) { starImage = '/images/equipments/Star4.png'; numberColor = "prism-text-effect"; }
-    else if (stars >= 7) { starImage = '/images/equipments/Star3.png'; numberColor = "text-purple-400"; }
-    else if (stars >= 4) { starImage = '/images/equipments/Star2.png'; numberColor = "text-amber-400"; }
+    const starInfo = getStarDisplayInfo(stars);
     
     return (
         <div className="absolute top-0.5 left-0.5 flex items-center gap-0.5 bg-black/40 rounded-br-md px-1 py-0.5 z-10" style={{ textShadow: '1px 1px 2px black' }}>
-            <img src={starImage} alt="star" className="w-3 h-3" />
-            <span className={`font-bold text-xs leading-none ${numberColor}`}>{stars}</span>
+            <img src={starInfo.starImage} alt="star" className="w-3 h-3" />
+            <span className={`font-bold text-xs leading-none ${starInfo.numberColor}`}>{stars}</span>
         </div>
     );
 };
+
+
 
 // Copied from InventoryModal.tsx
 const ComparisonDiff: React.FC<{ diff: number }> = ({ diff }) => {

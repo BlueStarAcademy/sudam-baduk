@@ -11,7 +11,7 @@ const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo)
     game.blackPatternStones = [];
     game.whitePatternStones = [];
 
-    const { black: blackCount, white: whiteCount, blackPattern: blackPatternCount, whitePattern: whitePatternCount, centerBlackStoneChance } = stage.placements;
+    const { randomBlackStones: blackCount, randomWhiteStones: whiteCount, randomBlackPatternedStones: blackPatternCount, randomWhitePatternedStones: whitePatternCount, centerBlackStoneChance } = stage.placements;
     
     const placeStones = (player: Player, count: number, isPattern: boolean) => {
         const patternStonesKey = player === Player.Black ? 'blackPatternStones' : 'whitePatternStones';
@@ -85,7 +85,7 @@ export const handleAiGameStart = async (
     const negotiation: Negotiation = {
         id: isTower ? `neg-tc-${globalThis.crypto.randomUUID()}` : `neg-sp-${globalThis.crypto.randomUUID()}`,
         challenger: user,
-        opponent: getAiUser(GameMode.Standard, stage.katagoLevel, stageId, isTower ? stage.floor : undefined),
+        opponent: getAiUser(GameMode.Standard, stage.aiLevel, stageId, isTower ? stage.floor : undefined),
         mode: stage.mode || GameMode.Standard,
         settings: {
             boardSize: stage.boardSize,
@@ -94,7 +94,7 @@ export const handleAiGameStart = async (
             byoyomiTime: 30,
             komi: 6.5,
             player1Color: Player.Black,
-            aiDifficulty: stage.katagoLevel,
+            aiDifficulty: stage.aiLevel,
             timeControl: stage.timeControl,
             autoEndTurnCount: stage.autoEndTurnCount,
             missileCount: stage.missileCount,
@@ -122,7 +122,7 @@ export const handleAiGameStart = async (
     game.blackStoneLimit = stage.blackStoneLimit;
     game.whiteStoneLimit = stage.whiteStoneLimit;
     const targetScore = stage.targetScore;
-    game.effectiveCaptureTargets = targetScore ? { [Player.Black]: targetScore.black, [Player.White]: targetScore.white, [Player.None]: 0 } : undefined;
+    game.effectiveCaptureTargets = targetScore ? { [Player.Black]: targetScore.black, [Player.White]: targetScore.white, [Player.None]: 0, [Player.BlackPattern]: 0, [Player.WhitePattern]: 0 } : undefined;
     game.blackStonesPlaced = 0;
     game.whiteStonesPlaced = 0;
 
@@ -227,6 +227,7 @@ export const handleConfirmIntro = async (gameId: string, user: User): Promise<Ha
 
     if (game.gameStatus === GameStatus.SinglePlayerIntro) {
         game.gameStatus = GameStatus.Playing;
+        game.currentPlayer = Player.Black;
         
         const now = Date.now();
         game.turnStartTime = now;

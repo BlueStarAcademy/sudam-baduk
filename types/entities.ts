@@ -348,8 +348,8 @@ export interface SinglePlayerStageInfo {
     actionPointCost: number;
     boardSize: 7 | 9 | 11 | 13;
     targetScore?: { black: number; white: number };
-    katagoLevel: number;
-    placements: { black: number; white: number; blackPattern: number; whitePattern: number; centerBlackStoneChance?: number };
+    aiLevel: number;
+    placements: { randomBlackStones: number; randomWhiteStones: number; randomBlackPatternedStones: number; randomWhitePatternedStones: number; centerBlackStoneChance?: number };
     rewards: { firstClear: QuestReward; repeatClear: QuestReward };
     mode?: GameMode;
     timeControl?: { type: 'byoyomi' | 'fischer'; mainTime: number; byoyomiTime?: number; byoyomiCount?: number, increment?: number };
@@ -697,7 +697,9 @@ export interface GameSettings {
     alkkagiSlowItemCount?: number;
     alkkagiAimingLineItemCount?: number;
     alkkagiRounds?: 1 | 2 | 3;
+    alkkagiInitialRandomStones?: number;
     curlingStoneCount?: number;
+    curlingInitialRandomStones?: number;
     curlingGaugeSpeed?: number;
     curlingSlowItemCount?: number;
     curlingAimingLineItemCount?: number;

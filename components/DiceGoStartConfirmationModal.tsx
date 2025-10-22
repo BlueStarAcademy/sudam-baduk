@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { LiveGameSession, User, ServerAction, Player } from '../types.js';
-import Avatar from './Avatar.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
-import { AVATAR_POOL, BORDER_POOL } from '../constants.js';
-import Dice from './Dice.js';
+import { LiveGameSession, User, ServerAction, Player } from '../types';
+import Avatar from './Avatar';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
+import { AVATAR_POOL, BORDER_POOL } from '../constants';
+import Dice from './Dice';
 
 interface DiceGoStartConfirmationModalProps {
     session: LiveGameSession;

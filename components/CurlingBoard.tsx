@@ -2,8 +2,8 @@
 
 import React, { forwardRef, useImperativeHandle, useState, useEffect, useRef, useMemo, ReactNode } from 'react';
 // FIX: Separate enum and type imports.
-import { GameStatus, Player } from '../types/index.js';
-import type { AlkkagiStone, Point, LiveGameSession, UserWithStatus } from '../types/index.js';
+import { GameStatus, Player } from '../types';
+import type { AlkkagiStone, Point, LiveGameSession, UserWithStatus } from '../types';
 
 export interface CurlingBoardHandle {
     updateLocalStones: (newStones: AlkkagiStone[]) => void;

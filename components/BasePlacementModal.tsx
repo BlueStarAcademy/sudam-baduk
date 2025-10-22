@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 // FIX: Use `import type` for interfaces to prevent type/value confusion.
-import type { LiveGameSession, User, ServerAction } from '../types/index.js';
-import DraggableWindow from './DraggableWindow.js';
-import Button from './Button.js';
+import type { LiveGameSession, User, ServerAction } from '../types';
+import DraggableWindow from './DraggableWindow';
+import Button from './Button';
 
 interface BasePlacementModalProps {
     session: LiveGameSession;

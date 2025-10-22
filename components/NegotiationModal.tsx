@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Negotiation, UserWithStatus, GameSettings, GameMode, ServerAction, DiceGoVariant, Player, AlkkagiPlacementType, AlkkagiLayoutType, User } from '../types/index.js';
+import { Negotiation, UserWithStatus, GameSettings, GameMode, ServerAction, DiceGoVariant, Player, AlkkagiPlacementType, AlkkagiLayoutType, User } from '../types';
 import { 
     BOARD_SIZES, TIME_LIMITS, BYOYOMI_COUNTS, BYOYOMI_TIMES, DEFAULT_KOMI, CAPTURE_TARGETS, SPEED_BOARD_SIZES,
     SPEED_TIME_LIMITS, FISCHER_INCREMENT_SECONDS, BASE_STONE_COUNTS, HIDDEN_STONE_COUNTS, SCAN_COUNTS,
@@ -8,11 +8,11 @@ import {
     MISSILE_BOARD_SIZES, MISSILE_COUNTS, SPECIAL_GAME_MODES, DEFAULT_GAME_SETTINGS, aiUserId, DICE_GO_ITEM_COUNTS, CURLING_ITEM_COUNTS, ALKKAGI_ITEM_COUNTS, ALKKAGI_ROUNDS,
     CURLING_ROUNDS, AVATAR_POOL, BORDER_POOL,
     PLAYFUL_GAME_MODES, STRATEGIC_ACTION_POINT_COST, PLAYFUL_ACTION_POINT_COST, strategicAiDisplayMap, captureAiLevelMap, AUTO_END_TURN_COUNTS
-} from '../constants/index.js';
-import { audioService } from '../services/audioService.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
-import Avatar from './Avatar.js';
+} from '../constants';
+import { audioService } from '../services/audioService';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
+import Avatar from './Avatar';
 
 interface NegotiationModalProps {
   negotiation: Negotiation;
@@ -65,7 +65,7 @@ const getAutoEndTurnOptions = (boardSize: number): number[] => {
     return AUTO_END_TURN_COUNTS.full;
 };
 
-import { getDefaultSettingsForMode } from '../constants/index.js';
+import { getDefaultSettingsForMode } from '../constants';
 
 const NegotiationModal: React.FC<NegotiationModalProps> = (props) => {
   const { negotiation, currentUser, onAction, onlineUsers, isTopmost } = props;

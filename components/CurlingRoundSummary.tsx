@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { LiveGameSession, ServerAction, Player, User } from '../types.js';
-import Avatar from './Avatar.js';
-import Button from './Button.js';
-import DraggableWindow from './DraggableWindow.js';
-import { AVATAR_POOL, BORDER_POOL } from '../constants.js';
+import { LiveGameSession, ServerAction, Player, User } from '../types';
+import Avatar from './Avatar';
+import Button from './Button';
+import DraggableWindow from './DraggableWindow';
+import { AVATAR_POOL, BORDER_POOL } from '../constants';
 
 interface CurlingRoundSummaryProps {
     session: LiveGameSession;

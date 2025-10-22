@@ -41,14 +41,17 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
 
     const tempBoard = boardState.map(row => [...row]);
     tempBoard[move.y][move.x] = currentPlayer;
-    let score = Math.random(); 
+    let score = 0; 
 
     let captureScore = 0;
     let saveScore = 0;
     let atariScore = 0;
     let shapeScore = 0;
     let selfAtariPenalty = 0;
+    let centerPreference = 0;
+    let territoryInfluence = 0;
 
+    // Capture and Save logic (existing)
     for (const n of getNeighbors(move.x, move.y)) {
         if (tempBoard[n.y][n.x] === opponent) {
             const group = findGroup(n.x, n.y, opponent, tempBoard);
@@ -67,6 +70,7 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
         }
     }
 
+    // Atari logic (existing)
     for (const n of getNeighbors(move.x, move.y)) {
         if (tempBoard[n.y][n.x] === opponent) {
             const group = findGroup(n.x, n.y, opponent, tempBoard);
@@ -76,11 +80,13 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
         }
     }
 
+    // Self-atari penalty (existing)
     const myGroup = findGroup(move.x, move.y, currentPlayer, tempBoard);
     if (myGroup && myGroup.liberties <= 1) {
         selfAtariPenalty = 200;
     }
 
+    // Shape score (existing)
     if (level >= 4) {
         for (const n of getNeighbors(move.x, move.y)) {
             if (tempBoard[n.y][n.x] === currentPlayer) {
@@ -88,13 +94,30 @@ const calculateHeuristicMoveScore = (move: Point, game: LiveGameSession, level: 
             }
         }
     }
-    
-    // 여기에 level 1일 때의 특별 로직을 추가합니다.
+
+    // Center preference (new)
+    const centerX = Math.floor(boardSize / 2);
+    const centerY = Math.floor(boardSize / 2);
+    const distanceToCenter = Math.abs(move.x - centerX) + Math.abs(move.y - centerY);
+    centerPreference = (boardSize * 2 - distanceToCenter) * 2; // Closer to center, higher score
+
+    // Territory influence (new - very basic)
+    for (const n of getNeighbors(move.x, move.y)) {
+        if (tempBoard[n.y][n.x] === Player.None) {
+            territoryInfluence += 1; // Encourage moves next to empty spaces
+        }
+    }
+
+    // Adjust scoring based on level and game type
     if (level === 1 || gameType === 'capture' || gameType === 'survival') {
-        // For level 1, or in capture/survival modes, focus heavily on captures.
-        return (captureScore * 1000) + (atariScore * 50) + (saveScore * 10) - selfAtariPenalty + Math.random();
+        // For level 1, or in capture/survival modes, focus heavily on captures and basic influence.
+        return (captureScore * 1000) + (atariScore * 50) + (saveScore * 10) - selfAtariPenalty + (territoryInfluence * 5);
+    } else if (level <= 3) {
+        // For lower levels, balance captures/saves with some center preference and territory.
+        return (captureScore + saveScore + atariScore + shapeScore) - selfAtariPenalty + centerPreference + (territoryInfluence * 10);
     } else {
-        return (captureScore + saveScore + atariScore + shapeScore) - selfAtariPenalty + Math.random(); // Default scoring
+        // Higher levels use more complex minimax, but still benefit from good heuristics.
+        return (captureScore + saveScore + atariScore + shapeScore) - selfAtariPenalty + centerPreference + (territoryInfluence * 15);
     }
 };
 
@@ -103,16 +126,7 @@ export const makeSimpleAiMove = (game: LiveGameSession): Point => {
     const difficulty = settings.aiDifficulty || 50;
     const level = Math.max(1, Math.min(10, Math.round(difficulty / 10)));
 
-    const mistakeProbabilities = [0, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.05, 0.02, 0.01, 0];
-    const mistakeChance = mistakeProbabilities[level] ?? 0.05;
 
-    console.log(`[Simple AI Debug] Game ${game.id}: Difficulty ${difficulty}, Level ${level}, Mistake Chance ${mistakeChance}`);
-
-    if (Math.random() < mistakeChance && level < 8) {
-        const randomMove = getRandomValidMove(game);
-        console.log(`[Simple AI Debug] Game ${game.id}: Making a random (mistake) move: ${JSON.stringify(randomMove)}`);
-        return randomMove;
-    }
     
     const validMoves = getValidMoves(game);
     console.log(`[Simple AI Debug] Game ${game.id}: Found ${validMoves.length} valid moves.`);
@@ -193,9 +207,11 @@ export const makeSimpleAiMove = (game: LiveGameSession): Point => {
     scoredMoves.sort((a, b) => b.score - a.score);
 
     if (scoredMoves.length > 0) {
-        const bestMove = scoredMoves[0].move;
-        console.log(`[Simple AI Debug] Game ${game.id}: Best move found: ${JSON.stringify(bestMove)} with score ${scoredMoves[0].score}`);
-        return bestMove;
+        const bestScore = scoredMoves[0].score;
+        const bestMoves = scoredMoves.filter(move => move.score === bestScore);
+        const chosenMove = bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+        console.log(`[Simple AI Debug] Game ${game.id}: Best move found: ${JSON.stringify(chosenMove)} with score ${bestScore}`);
+        return chosenMove;
     }
 
     const fallbackMove = getRandomValidMove(game);

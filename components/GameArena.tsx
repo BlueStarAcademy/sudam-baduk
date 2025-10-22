@@ -1,12 +1,12 @@
 import React from 'react';
-import { GameProps, Player, GameMode, Point } from '../types/index.js';
+import { GameProps, Player, GameMode, Point } from '../types';
 
 // Import the new arena components
-import GoGameArena from './arenas/GoGameArena.js';
-import AlkkagiArena from './arenas/AlkkagiArena.js';
-import CurlingArena from './arenas/CurlingArena.js';
-import DiceGoArena from './arenas/DiceGoArena.js';
-import ThiefGoArena from './arenas/ThiefGoArena.js';
+import GoGameArena from './arenas/GoGameArena';
+import AlkkagiArena from './arenas/AlkkagiArena';
+import CurlingArena from './arenas/CurlingArena';
+import DiceGoArena from './arenas/DiceGoArena';
+import ThiefGoArena from './arenas/ThiefGoArena';
 
 interface GameArenaProps extends GameProps {
     isMyTurn: boolean;

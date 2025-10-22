@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { UserWithStatus } from '../types/index.js';
-import Button from './Button.js';
-import Avatar from './Avatar.js';
-import { getMannerEffects } from '../utils/mannerUtils.js';
-import { AVATAR_POOL, BORDER_POOL } from '../constants/index.js';
-import { useAppContext } from '../hooks/useAppContext.js';
+import { UserWithStatus } from '../types';
+import Button from './Button';
+import Avatar from './Avatar';
+import { getMannerEffects } from '../utils/mannerUtils';
+import { AVATAR_POOL, BORDER_POOL } from '../constants';
+import { useAppContext } from '../hooks/useAppContext';
 
 const ResourceDisplay: React.FC<{ icon: React.ReactNode; value: string; className?: string }> = ({ icon, value, className }) => (
     <div className={`flex items-center gap-0.5 sm:gap-2 bg-tertiary/50 rounded-full py-0.5 pl-0.5 pr-1 shadow-inner ${className}`}>

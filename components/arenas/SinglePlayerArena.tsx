@@ -15,7 +15,7 @@ import TurnCounterPanel from '../game/TurnCounterPanel.js';
 import { SINGLE_PLAYER_STAGES, SPECIAL_GAME_MODES, PLAYFUL_GAME_MODES } from '../../constants/index.js';
 import TowerStatusPanel from '../game/TowerStatusPanel.js';
 import SinglePlayerIntroModal from '../modals/SinglePlayerIntroModal.js';
-import { processMove } from '../../utils/goLogic';
+import { processMove } from '../../utils/goLogic.ts';
 import Button from '../Button.js';
 import CurrencyPanel from '../game/CurrencyPanel.js';
 import ChatWindow from '../waiting-room/ChatWindow.js';

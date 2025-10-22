@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 // FIX: Separate enum and type imports, and correct import path.
 import { Player, GameStatus, GameMode } from '../../types/index.js';
 import type { GameProps, Point } from '../../types/index.js';
-import { getGoLogic } from '../../utils/goLogic';
+import { getGoLogic } from '../../utils/goLogic.ts';
 import { audioService } from '../../services/audioService.js';
 import GoBoard from '../GoBoard.js';
 

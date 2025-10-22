@@ -7,6 +7,34 @@ import { CURLING_TURN_TIME_LIMIT } from '../../constants/index.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 
+const placeRandomCurlingStone = (game: LiveGameSession, playerEnum: Player) => {
+    const boardSizePx = 840;
+    const stoneRadius = (840 / 19) * 0.47;
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    while (attempts < maxAttempts) {
+        attempts++;
+        const x = stoneRadius + Math.random() * (boardSizePx - stoneRadius * 2);
+        const y = stoneRadius + Math.random() * (boardSizePx - stoneRadius * 2);
+
+        const newStone: AlkkagiStone = {
+            id: Date.now() + Math.random(), player: playerEnum,
+            x: x, y: y, vx: 0, vy: 0,
+            radius: stoneRadius, onBoard: true
+        };
+
+        const overlaps = (game.curlingStones || []).some(stone => Math.hypot(newStone.x - stone.x, newStone.y - stone.y) < stoneRadius * 2);
+
+        if (!overlaps) {
+            if (!game.curlingStones) game.curlingStones = [];
+            game.curlingStones.push(newStone);
+            return;
+        }
+    }
+    console.warn(`[Curling] Could not place random stone after ${maxAttempts} attempts.`);
+};
+
 // --- Simulation & Scoring Logic ---
 const runServerSimulation = (initialStones: AlkkagiStone[], flickedStone: AlkkagiStone, velocity: Point, duration: number): { finalStones: AlkkagiStone[], stonesFallen: AlkkagiStone[] } => {
     let simStones: AlkkagiStone[] = JSON.parse(JSON.stringify(initialStones || []));
@@ -112,7 +140,7 @@ const endCurlingRound = (game: LiveGameSession, now: number) => {
     const whiteCumulativeBeforeRound = game.curlingRoundSummary?.cumulativeScores?.[Player.White] || 0;
     
     if (!game.curlingScores) {
-        game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 };
+        game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0, [Player.BlackPattern]: 0, [Player.WhitePattern]: 0 };
     }
 
     const blackKnockoutsThisRound = (game.curlingScores[Player.Black] || 0) - blackCumulativeBeforeRound;
@@ -164,6 +192,28 @@ export const initializeCurling = (game: LiveGameSession, neg: Negotiation, now: 
         [p2.id]: { slow: (neg.settings.curlingSlowItemCount || 0) + p2SlowBonus, aimingLine: (neg.settings.curlingAimingLineItemCount || 0) + p2AimBonus }
     };
 
+    // Place initial random stones if setting is enabled
+    if (game.settings.curlingInitialRandomStones && game.settings.curlingInitialRandomStones > 0) {
+        const numInitialStones = game.settings.curlingInitialRandomStones;
+        // Curling stones are all the same color initially, so we just place them as Player.None
+        // The actual player color is assigned when they are flicked.
+        // For initial random placement, we can alternate colors or assign based on player ID.
+        // Let's assume for now they are just generic stones, and their player property will be set later.
+        // Or, if the intent is to have pre-placed stones that belong to a player, we need to clarify.
+        // For now, I will place them as Player.None and let the game logic assign them later.
+        // However, the request specifically mentions "흑돌/백돌" (black/white stones).
+        // So, I will place half as black and half as white.
+        const blackStonesToPlace = Math.ceil(numInitialStones / 2);
+        const whiteStonesToPlace = Math.floor(numInitialStones / 2);
+
+        for (let i = 0; i < blackStonesToPlace; i++) {
+            placeRandomCurlingStone(game, Player.Black);
+        }
+        for (let i = 0; i < whiteStonesToPlace; i++) {
+            placeRandomCurlingStone(game, Player.White);
+        }
+    }
+
     if (game.isAiGame) {
         const humanPlayerColor = neg.settings.player1Color || Player.Black;
         if (humanPlayerColor === Player.Black) {
@@ -179,8 +229,7 @@ export const initializeCurling = (game: LiveGameSession, neg: Negotiation, now: 
         game.currentPlayer = Player.Black; // 선공 starts
         game.gameStatus = GameStatus.CurlingPlaying;
         game.curlingRound = 1;
-        game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 };
-        game.stonesThrownThisRound = { [game.player1.id]: 0, [game.player2.id]: 0 };
+        game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0, [Player.BlackPattern]: 0, [Player.WhitePattern]: 0 };
         game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;
         game.turnDeadline = game.curlingTurnDeadline;
         game.turnStartTime = now;
@@ -257,7 +306,7 @@ export const updateCurlingState = async (game: LiveGameSession, now: number) => 
                 
                 game.gameStatus = GameStatus.CurlingPlaying;
                 game.curlingRound = 1;
-                game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0 };
+                game.curlingScores = { [Player.Black]: 0, [Player.White]: 0, [Player.None]: 0, [Player.BlackPattern]: 0, [Player.WhitePattern]: 0 };
                 game.curlingStones = [];
                 game.stonesThrownThisRound = { [p1Id]: 0, [p2Id]: 0 };
                 game.curlingTurnDeadline = now + CURLING_TURN_TIME_LIMIT * 1000;

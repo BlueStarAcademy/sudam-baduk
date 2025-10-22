@@ -1,5 +1,5 @@
 import React from 'react';
-import DraggableWindow from './DraggableWindow.js';
+import DraggableWindow from './DraggableWindow';
 
 interface MbtiInfoModalProps {
     onClose: () => void;
