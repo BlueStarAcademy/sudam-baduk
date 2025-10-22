@@ -233,14 +233,14 @@ const WaitingRoom: React.FC<WaitingRoomComponentProps> = ({ mode }) => {
                     <AiChallengePanel mode={mode} />
                 </div>
                 <div className="flex flex-col gap-2 flex-1 min-h-0">
-                    <div className="h-[60%]">
+                    <div className="h-[55%]">
                         <NineSlicePanel className="h-full min-h-0 shadow-lg flex flex-col">
                             <GameList games={ongoingGames} onAction={handlers.handleAction} currentUser={currentUserWithStatus} />
                         </NineSlicePanel>
                     </div>
-                    <div className="h-[40%]">
+                    <div className="h-[45%]">
                         <NineSlicePanel className="h-full min-h-0 flex flex-col shadow-lg">
-                            <ChatWindow messages={chatMessages} mode={'global'} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
+                            <ChatWindow messages={chatMessages} mode={'global'} onAction={handlers.handleAction} locationPrefix={locationPrefix} onViewUser={handlers.openViewingUser} />
                         </NineSlicePanel>
                     </div>
                 </div>

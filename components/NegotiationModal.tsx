@@ -65,7 +65,7 @@ const getAutoEndTurnOptions = (boardSize: number): number[] => {
     return AUTO_END_TURN_COUNTS.full;
 };
 
-import { getDefaultSettingsForMode } from '../constants';
+import { getDefaultSettingsForMode } from '../constants/index.js';
 
 const NegotiationModal: React.FC<NegotiationModalProps> = (props) => {
   const { negotiation, currentUser, onAction, onlineUsers, isTopmost } = props;
