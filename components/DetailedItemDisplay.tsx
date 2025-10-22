@@ -62,14 +62,18 @@ const DetailedItemDisplay: React.FC<DetailedItemDisplayProps> = ({ item, equippe
     return (
         <div className="w-full h-full flex flex-col bg-gray-800/50 rounded-lg p-2 relative">
             <div className="flex items-center justify-between mb-1">
-                <h3 className={`font-bold text-lg ${gradeStyles[item.grade]}`}>{item.name}</h3>
+                <h3 className={`font-bold text-base ${gradeStyles[item.grade]}`}>{item.name}
+                    {item.type === 'equipment' && item.options?.main && (
+                        <span className="ml-2 text-sm text-blue-300">({CORE_STATS_DATA[item.options.main.type].name}: +{item.options.main.value}{item.options.main.isPercentage ? '%' : ''})</span>
+                    )}
+                </h3>
                 {item.isEquipped && <span className="text-green-400 text-xs font-bold">[장착중]</span>}
             </div>
             <p className="text-gray-400 text-xs mb-2">{item.description}</p>
 
             <div className="flex items-center justify-center mb-2 relative">
                 <img src={gradeStyles[item.grade].background} alt={item.grade} className="absolute inset-0 w-full h-full object-cover rounded-md opacity-20" />
-                <img src={item.image || '/images/equipments/empty.png'} alt={item.name} className="w-20 h-20 object-contain relative z-10" />
+                <img src={item.image || '/images/equipments/empty.png'} alt={item.name} className="w-16 h-16 object-contain relative z-10" />
                 {item.stars > 0 && (
                     <div className="absolute bottom-0 right-0 bg-black/60 rounded-tl-md px-1 py-0.5 flex items-center gap-0.5 z-10">
                         <img src={getStarDisplayInfo(item.stars).starImage} alt="star" className="w-3 h-3" />
@@ -80,12 +84,7 @@ const DetailedItemDisplay: React.FC<DetailedItemDisplayProps> = ({ item, equippe
 
             {item.type === 'equipment' && (
                 <div className="space-y-1 flex-grow overflow-y-auto pr-1">
-                    <div className="mb-1">
-                        <h4 className="font-semibold text-blue-300 border-b border-gray-600 pb-0.5 mb-0.5 text-xs">기본 능력치</h4>
-                        <div className="space-y-0.5">
-                            {item.options?.main && renderStat(item.options.main.type, item.options.main.value, item.options.main.isPercentage, true)}
-                        </div>
-                    </div>
+                    {/* Main option is now next to title */}
                     {renderOptions(item.options?.combatSubs || [], '전투 부옵션', 'text-red-300')}
                     {renderOptions(item.options?.specialSubs || [], '특수 부옵션', 'text-yellow-300')}
                     {renderOptions(item.options?.mythicSubs || [], '신화 부옵션', 'text-purple-300')}
@@ -105,6 +104,7 @@ const DetailedItemDisplay: React.FC<DetailedItemDisplayProps> = ({ item, equippe
                 </div>
             )}
         </div>
+    );
 };
 
 export default DetailedItemDisplay;

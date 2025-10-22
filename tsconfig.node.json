@@ -5,7 +5,8 @@
     "moduleResolution": "node",
     "outDir": "dist",
     "target": "ES2020",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "typeRoots": ["./node_modules/@types"]
   },
   "include": ["vite.config.ts", "server/**/*.ts", "utils/**/*.ts"]
 }

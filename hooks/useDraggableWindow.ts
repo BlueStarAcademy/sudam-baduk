@@ -9,7 +9,11 @@ export const useDraggableWindow = (windowId: string, initialWidth?: number, init
     const [isDragging, setIsDragging] = useState(false);
     const [position, setPosition] = useState<Point>(() => {
         const storedPosition = localStorage.getItem(`windowPosition-${windowId}`);
-        return storedPosition ? JSON.parse(storedPosition) : { x: 0, y: 0 };
+        if (storedPosition) {
+            return JSON.parse(storedPosition);
+        }
+        // Default to 0,0 and let useEffect center it if not remembered
+        return { x: 0, y: 0 };
     });
     const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
     const [rememberPosition, setRememberPosition] = useState<boolean>(() => {
@@ -17,6 +21,18 @@ export const useDraggableWindow = (windowId: string, initialWidth?: number, init
     });
 
     const windowRef = useRef<HTMLDivElement>(null);
+
+    // Effect to center the window if not remembered and no stored position
+    useEffect(() => {
+        if (!rememberPosition && position.x === 0 && position.y === 0 && windowRef.current) {
+            const { innerWidth, innerHeight } = window;
+            const { offsetWidth, offsetHeight } = windowRef.current;
+
+            const centerX = (innerWidth - offsetWidth) / 2;
+            const centerY = (innerHeight - offsetHeight) / 2;
+            setPosition({ x: centerX, y: centerY });
+        }
+    }, [rememberPosition, position.x, position.y, windowId]); // Added windowId to dependencies
 
     useEffect(() => {
         if (rememberPosition) {

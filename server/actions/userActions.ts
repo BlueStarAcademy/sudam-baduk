@@ -4,7 +4,7 @@ import { containsProfanity } from '../../profanity.js';
 import { createDefaultSpentStatPoints } from '../initialData.js';
 import * as currencyService from '../currencyService.js';
 import * as guildService from '../guildService.js';
-import crypto from 'crypto';
+import * as crypto from 'crypto';
 import { grantReward } from './rewardActions.js';
 
 export const handleUserAction = async (action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult> => {

@@ -14,7 +14,7 @@ interface DraggableWindowProps {
 }
 
 const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, children, onClose, initialWidth, initialHeight, windowId, modal, closeOnOutsideClick, isTopmost }) => {
-    const { position, handleMouseDown, handleTouchStart, rememberPosition, handleRememberChange, headerCursor } = useDraggableWindow(windowId, initialWidth, initialHeight);
+    const { position, handleMouseDown, handleTouchStart, rememberPosition, handleRememberChange, headerCursor, windowRef } = useDraggableWindow(windowId, initialWidth, initialHeight);
 
     const style: React.CSSProperties = {
         transform: `translate(${position.x}px, ${position.y}px)`,
@@ -23,7 +23,7 @@ const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, children, onCl
     };
 
     return (
-        <div style={style} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-primary rounded-xl shadow-2xl flex flex-col z-50 text-on-panel panel-glow">
+        <div ref={windowRef} style={style} className="fixed bg-primary rounded-xl shadow-2xl flex flex-col z-50 text-on-panel panel-glow">
             <div
                 className={`bg-secondary p-3 rounded-t-xl flex justify-between items-center ${headerCursor} touch-none`}
                 onMouseDown={handleMouseDown}
@@ -31,7 +31,7 @@ const DraggableWindow: React.FC<DraggableWindowProps> = ({ title, children, onCl
             >
                 <h2 className="text-lg font-bold text-secondary select-none">{title}</h2>
                 {onClose && (
-                    <button onClick={isTopmost ? onClose : undefined} className="w-10 h-10 flex items-center justify-center rounded-full bg-tertiary hover:bg-danger transition-colors z-30">
+                    <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full bg-tertiary hover:bg-danger transition-colors z-30">
                         <span className="text-white font-bold text-lg">✕</span>
                     </button>
                 )}
