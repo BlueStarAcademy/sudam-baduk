@@ -554,14 +554,18 @@ const isPlacementValid = (game: LiveGameSession, point: Point, player: Player): 
     return true;
 };
 
-export const handleAlkkagiAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
+export const handleAlkkagiAction = async (game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const { type, payload } = action;
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     
-    const sharedResult = await handleSharedAction(volatileState, game, action, user);
-    if (sharedResult) return sharedResult;
+    const sharedResult = await handleSharedAction(game, action, user);
+    if (sharedResult) {
+        await db.saveGame(game);
+        await broadcast({ type: 'GAME_STATE_UPDATE', payload: { updatedGame: game } });
+        return sharedResult;
+    }
     
     switch(type) {
         case 'CONFIRM_ALKKAGI_START': {
@@ -569,17 +573,14 @@ export const handleAlkkagiAction = async (volatileState: VolatileState, game: Li
             if (game.gameStatus !== GameStatus.AlkkagiStartConfirmation) return { error: "Not in confirmation phase." };
             if (!game.preGameConfirmations) game.preGameConfirmations = {};
             if (game.isAiGame) (game.preGameConfirmations as any)[aiUserId] = true;
-            
             game.preGameConfirmations[user.id] = true;
-            
-            return {};
+            break;
         }
         case 'ALKKAGI_PLACE_STONE': {
             const isSimultaneous = game.gameStatus === GameStatus.AlkkagiSimultaneousPlacement;
             if (game.gameStatus !== GameStatus.AlkkagiPlacement && !isSimultaneous) return { error: '배치 단계가 아닙니다.' };
             if (!isSimultaneous && !isMyTurn) return { error: '당신의 차례가 아닙니다.' };
 
-            // This is the number of stones to REFILL each round
             const stonesToPlaceThisRound = game.settings.alkkagiStoneCount || 5;
             const alreadyPlacedThisRound = game.alkkagiStonesPlacedThisRound?.[user.id] || 0;
 
@@ -614,7 +615,7 @@ export const handleAlkkagiAction = async (volatileState: VolatileState, game: Li
             } else {
                 return { error: '유효하지 않은 위치입니다.' };
             }
-            return {};
+            break;
         }
         case 'ALKKAGI_FLICK_STONE': {
             if (game.gameStatus !== GameStatus.AlkkagiPlaying || !isMyTurn) return { error: "지금은 공격할 수 없습니다."};
@@ -630,7 +631,7 @@ export const handleAlkkagiAction = async (volatileState: VolatileState, game: Li
             game.alkkagiTurnDeadline = undefined;
             game.turnDeadline = undefined;
             game.turnStartTime = undefined;
-            return {};
+            break;
         }
         case 'USE_ALKKAGI_ITEM': {
             if (game.gameStatus !== GameStatus.AlkkagiPlaying || !isMyTurn) return { error: "Not your turn to use an item." };
@@ -647,16 +648,19 @@ export const handleAlkkagiAction = async (volatileState: VolatileState, game: Li
                 (game.activeAlkkagiItems as any)[user.id] = [];
             }
             (game.activeAlkkagiItems as any)[user.id].push(itemType);
-            return {};
+            break;
         }
         case 'CONFIRM_ROUND_END': {
             if (game.gameStatus !== GameStatus.AlkkagiRoundEnd) return { error: "라운드 종료 확인 단계가 아닙니다." };
             if (!game.roundEndConfirmations) game.roundEndConfirmations = {};
             game.roundEndConfirmations[user.id] = now;
-            return {};
+            break;
         }
     }
     
+    await db.saveGame(game);
+    await broadcast({ type: 'GAME_STATE_UPDATE', payload: { updatedGame: game } });
+
     return null;
 };
 

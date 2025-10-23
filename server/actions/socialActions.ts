@@ -1,39 +1,37 @@
-import { type VolatileState, type ServerAction, type User, type HandleActionResult, UserStatus, ChatMessage, UserStatusInfo } from '../../types/index.js';
+import { type ServerAction, type User, type HandleActionResult, UserStatus, ChatMessage, UserStatusInfo } from '../../types/index.js';
 import * as db from '../db.js';
 import { randomUUID } from 'crypto';
 import { containsProfanity } from '../../profanity.js';
 import { updateQuestProgress } from '../questService.js';
 import { broadcast } from '../services/supabaseService.js';
 
-export const handleSocialAction = async (volatileState: VolatileState, action: ServerAction & { user: User }): Promise<HandleActionResult> => {
+export const handleSocialAction = async (action: ServerAction & { user: User }): Promise<HandleActionResult> => {
     const { type, payload, user } = action;
     const now = Date.now();
 
-    const allStatuses = await db.getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
-    let updatedUserStatuses: { [key: string]: UserStatusInfo | undefined } | null = null;
-
     switch (type) {
         case 'HEARTBEAT': {
-            // This action is just for updating the user's last seen time,
-            // which is already handled by the middleware.
+            // In a stateless architecture, a heartbeat might be used to update a 'last_seen' timestamp in the DB.
+            // This can be handled by a cron job that cleans up users who haven't been seen recently.
+            // For now, we do nothing here as the session middleware already implicitly handles activity.
             break;
         }
         case 'LOGOUT': {
-            delete volatileState.userConnections[user.id];
-            delete volatileState.userSessions[user.id];
-            delete allStatuses[user.id];
-            updatedUserStatuses = { [user.id]: undefined };
-            
+            // This is now handled in server.ts action endpoint directly to allow logout even with expired session.
+            // Kept here as a fallback but should ideally not be hit if client sends to /api/action.
             const allSessions = await db.getKV<Record<string, string>>('userSessions') || {};
             delete allSessions[user.id];
             await db.setKV('userSessions', allSessions);
+
+            await db.removeUserStatus(user.id);
+            await broadcast({ type: 'USER_STATUS_UPDATE', payload: { userId: user.id, statusInfo: null } });
             break;
         }
         case 'ENTER_WAITING_ROOM': {
             const { mode } = payload;
             const status: UserStatusInfo = { status: UserStatus.Waiting, mode, stateEnteredAt: now };
-            allStatuses[user.id] = status;
-            updatedUserStatuses = { [user.id]: status };
+            await db.updateUserStatus(user.id, status);
+            await broadcast({ type: 'USER_STATUS_UPDATE', payload: { userId: user.id, statusInfo: status } });
             break;
         }
         case 'SET_USER_STATUS': {
@@ -41,11 +39,12 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
             if (![UserStatus.Waiting, UserStatus.Resting].includes(status)) {
                 return { error: 'Invalid status update.' };
             }
-            const userStatus = allStatuses[user.id];
+            const userStatus = await db.getUserStatus(user.id);
             if (userStatus && [UserStatus.Waiting, UserStatus.Resting, UserStatus.Online].includes(userStatus.status)) {
                 userStatus.status = status;
                 userStatus.stateEnteredAt = now;
-                updatedUserStatuses = { [user.id]: userStatus };
+                await db.updateUserStatus(user.id, userStatus);
+                await broadcast({ type: 'USER_STATUS_UPDATE', payload: { userId: user.id, statusInfo: userStatus } });
             }
             break;
         }
@@ -61,73 +60,37 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                 mode: game.mode, 
                 stateEnteredAt: now 
             };
-            allStatuses[user.id] = status;
-            updatedUserStatuses = { [user.id]: status };
+            await db.updateUserStatus(user.id, status);
+            await broadcast({ type: 'USER_STATUS_UPDATE', payload: { userId: user.id, statusInfo: status } });
             break;
         }
-        case 'LEAVE_AI_GAME': {
-            const { gameId } = payload;
-            const game = await db.getLiveGame(gameId);
-            if (game && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge) && game.player1.id === user.id) {
-                // await db.deleteGame(game.id); // Do not delete SP games, let them be cleaned up later or archived
-            }
-            const status = allStatuses[user.id];
-            if (status) {
-                status.status = UserStatus.Online;
-                delete status.gameId;
-                delete status.mode;
-                status.stateEnteredAt = now;
-                updatedUserStatuses = { [user.id]: status };
-            }
-            return { clientResponse: { success: true, updatedUserStatuses, deletedGameId: gameId } };
-        }
-        case 'LEAVE_WAITING_ROOM': {
-            const status = allStatuses[user.id];
-            if (status) {
-                status.status = UserStatus.Online;
-                status.mode = undefined;
-                status.gameId = undefined;
-                status.stateEnteredAt = now;
-                updatedUserStatuses = { [user.id]: status };
-            }
-            break;
-        }
-        case 'LEAVE_GAME_ROOM': {
-            const { gameId, mode } = payload;
-            const userStatus = allStatuses[user.id];
-
-            if (userStatus && userStatus.gameId === gameId) {
-                userStatus.status = UserStatus.Waiting;
-                userStatus.mode = mode;
-                delete userStatus.gameId;
-                userStatus.stateEnteredAt = now;
-                updatedUserStatuses = { [user.id]: userStatus };
-            }
-            break;
-        }
+        case 'LEAVE_AI_GAME':
+        case 'LEAVE_GAME_ROOM':
+        case 'LEAVE_WAITING_ROOM':
         case 'LEAVE_SPECTATING': {
-            const { gameId, mode } = payload;
-            const userStatus = allStatuses[user.id];
-            
-            if (userStatus && userStatus.spectatingGameId === gameId) {
-                userStatus.status = UserStatus.Waiting;
-                userStatus.mode = mode;
-                delete userStatus.spectatingGameId;
-                userStatus.stateEnteredAt = now;
-                updatedUserStatuses = { [user.id]: userStatus };
+            const userStatus = await db.getUserStatus(user.id);
+            if (userStatus) {
+                const newStatus: UserStatusInfo = { status: UserStatus.Online, stateEnteredAt: now };
+                await db.updateUserStatus(user.id, newStatus);
+                await broadcast({ type: 'USER_STATUS_UPDATE', payload: { userId: user.id, statusInfo: newStatus } });
             }
             break;
         }
         case 'SEND_CHAT_MESSAGE': {
             const { channel, text, emoji, location } = payload;
             
-            const lastMessageTime = volatileState.userLastChatMessage[user.id] || 0;
+            const userLastChatMessage = await db.getKV<Record<string, number>>('userLastChatMessage') || {};
+            const lastMessageTime = userLastChatMessage[user.id] || 0;
             if (now - lastMessageTime < 5000 && !user.isAdmin) {
                 return { error: '채팅이 너무 빠릅니다. 잠시 후 다시 시도해주세요.' };
             }
-            
+
+            let message: ChatMessage;
+            let isWarning = false;
+
             if (text && containsProfanity(text)) {
-                const warningMessage: ChatMessage = {
+                isWarning = true;
+                message = {
                     id: `msg-${randomUUID()}`,
                     user: { id: 'system', nickname: 'AI 보안관봇' },
                     system: true,
@@ -135,58 +98,47 @@ export const handleSocialAction = async (volatileState: VolatileState, action: S
                     timestamp: now,
                     location: location,
                 };
-                if (channel === 'global') {
-                    volatileState.waitingRoomChats['global'] = [...(volatileState.waitingRoomChats['global'] || []), warningMessage].slice(-100);
-                    await db.setKV('waitingRoomChats', volatileState.waitingRoomChats);
-                    await broadcast({ waitingRoomChats: volatileState.waitingRoomChats });
-                } else {
-                    volatileState.gameChats[channel] = [...(volatileState.gameChats[channel] || []), warningMessage].slice(-100);
-                    await db.setKV('gameChats', volatileState.gameChats);
-                    await broadcast({ gameChats: volatileState.gameChats });
-                }
-                return { clientResponse: { success: true } };
+            } else {
+                message = {
+                    id: `msg-${randomUUID()}`,
+                    user: { id: user.id, nickname: user.nickname },
+                    text,
+                    emoji,
+                    timestamp: now,
+                    location: location,
+                };
             }
-
-            const message: ChatMessage = {
-                id: `msg-${randomUUID()}`,
-                user: { id: user.id, nickname: user.nickname },
-                text,
-                emoji,
-                timestamp: now,
-                location: location,
-            };
             
-            if (channel === 'global') {
-                volatileState.waitingRoomChats['global'] = [...(volatileState.waitingRoomChats['global'] || []), message].slice(-100);
-                await db.setKV('waitingRoomChats', volatileState.waitingRoomChats);
-                await broadcast({ waitingRoomChats: volatileState.waitingRoomChats });
+            const chatKey = channel === 'global' ? 'waitingRoomChats' : 'gameChats';
+            const allChats = await db.getKV<Record<string, ChatMessage[]>>(chatKey) || {};
+            const channelChats = allChats[channel] || [];
+            channelChats.push(message);
+            allChats[channel] = channelChats.slice(-100);
+            await db.setKV(chatKey, allChats);
+
+            // Broadcast only the new message for efficiency
+            await broadcast({ type: 'NEW_CHAT_MESSAGE', payload: { channel, message } });
+
+            if (!isWarning) {
+                userLastChatMessage[user.id] = now;
+                await db.setKV('userLastChatMessage', userLastChatMessage);
 
                 if (text && (text.includes('안녕') || text.includes('하이') || text.includes('반갑'))) {
                     const updatedUser = await db.getUser(user.id);
                     if(updatedUser) {
-                        updateQuestProgress(updatedUser, 'chat_greeting');
-                        await db.updateUser(updatedUser);
+                        const userWasUpdated = await updateQuestProgress(updatedUser, 'chat_greeting');
+                        if (userWasUpdated) {
+                           await db.updateUser(updatedUser);
+                           // Optionally broadcast user update if quest progress gives immediate rewards
+                           // await broadcast({ type: 'USER_DATA_UPDATE', payload: { userId: updatedUser.id, updatedUser }});
+                        }
                     }
                 }
-
-            } else { // Game chat
-                volatileState.gameChats[channel] = [...(volatileState.gameChats[channel] || []), message].slice(-100);
-                await db.setKV('gameChats', volatileState.gameChats);
-                await broadcast({ gameChats: volatileState.gameChats });
             }
-            
-            volatileState.userLastChatMessage[user.id] = now;
-            await db.setKV('userLastChatMessage', volatileState.userLastChatMessage);
             break;
         }
         default:
              return { error: 'Unknown social action type.' };
-    }
-    
-    if (updatedUserStatuses) {
-        await db.setKV('userStatuses', allStatuses);
-        volatileState.userStatuses = allStatuses;
-        return { clientResponse: { success: true, updatedUserStatuses } };
     }
     
     return { clientResponse: { success: true } };

@@ -94,7 +94,7 @@ const SynthesisPanel: React.FC<SynthesisPanelProps> = ({ selectedItems, onSelect
                 <SynthesisResultModal
                     result={modals.synthesisResult}
                     onClose={handlers.closeSynthesisResult}
-                    isTopmost={modals.topmostModalId === 'synthesisResult'}
+                    isTopmost={topmostModalId === 'synthesisResult'}
                 />
             )}
 

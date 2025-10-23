@@ -475,14 +475,18 @@ export const updateCurlingState = async (game: LiveGameSession, now: number) => 
     }
 };
 
-export const handleCurlingAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
+export const handleCurlingAction = async (game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     const { type, payload } = action;
     const now = Date.now();
     const myPlayerEnum = user.id === game.blackPlayerId ? Player.Black : (user.id === game.whitePlayerId ? Player.White : Player.None);
     const isMyTurn = myPlayerEnum === game.currentPlayer;
     
-    const sharedResult = await handleSharedAction(volatileState, game, action, user);
-    if (sharedResult) return sharedResult;
+    const sharedResult = await handleSharedAction(game, action, user);
+    if (sharedResult) {
+        await db.saveGame(game);
+        await broadcast({ type: 'GAME_STATE_UPDATE', payload: { updatedGame: game } });
+        return sharedResult;
+    }
 
     switch(type) {
         case 'CONFIRM_CURLING_START': {
@@ -492,8 +496,7 @@ export const handleCurlingAction = async (volatileState: VolatileState, game: Li
             if (game.isAiGame) (game.preGameConfirmations as any)[aiUserId] = true;
             
             game.preGameConfirmations[user.id] = true;
-            
-            return {};
+            break;
         }
         case 'CURLING_FLICK_STONE': {
             if (!isMyTurn || (game.gameStatus !== GameStatus.CurlingPlaying && game.gameStatus !== GameStatus.CurlingTiebreakerPlaying)) return { error: "Not your turn to flick."};
@@ -508,7 +511,7 @@ export const handleCurlingAction = async (volatileState: VolatileState, game: Li
                 vx: 0,
                 vy: 0,
                 radius: stoneRadius,
-                onBoard: true // Will be set to true in simulation
+                onBoard: true
             };
             
             const animationDuration = 8000;
@@ -530,7 +533,7 @@ export const handleCurlingAction = async (volatileState: VolatileState, game: Li
             game.curlingTurnDeadline = undefined;
             game.turnDeadline = undefined;
             game.turnStartTime = undefined;
-            return {};
+            break;
         }
         case 'USE_CURLING_ITEM': {
             if (game.gameStatus !== GameStatus.CurlingPlaying || !isMyTurn) return { error: 'Not your turn to use an item.' };
@@ -546,16 +549,19 @@ export const handleCurlingAction = async (volatileState: VolatileState, game: Li
             if (!game.activeCurlingItems) game.activeCurlingItems = {};
             if (!(game.activeCurlingItems as any)[user.id]) (game.activeCurlingItems as any)[user.id] = [];
             (game.activeCurlingItems as any)[user.id].push(itemType);
-            return {};
+            break;
         }
         case 'CONFIRM_ROUND_END': {
             if (game.gameStatus !== GameStatus.CurlingRoundEnd) return { error: "Not in round end confirmation phase." };
             if (!game.roundEndConfirmations) game.roundEndConfirmations = {};
             game.roundEndConfirmations[user.id] = now;
-            return {};
+            break;
         }
     }
     
+    await db.saveGame(game);
+    await broadcast({ type: 'GAME_STATE_UPDATE', payload: { updatedGame: game } });
+
     return null;
 };
 

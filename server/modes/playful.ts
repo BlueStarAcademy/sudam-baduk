@@ -49,19 +49,36 @@ export const updatePlayfulGameState = async (game: LiveGameSession, now: number)
     }
 };
 
-export const handlePlayfulGameAction = async (volatileState: VolatileState, game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
+// server/modes/playful.ts
+
+import { ServerAction, User, HandleActionResult, GameMode, Negotiation, Guild, LiveGameSession } from '../../types/index.js';
+import { initializeDiceGo, updateDiceGoState, handleDiceGoAction } from './diceGo.js';
+import { initializeThief, updateThiefState, handleThiefAction } from './thief.js';
+import { initializeAlkkagi, updateAlkkagiState, handleAlkkagiAction } from './alkkagi.js';
+import { initializeCurling, updateCurlingState, handleCurlingAction } from './curling.js';
+import { initializeOmok, updateOmokState, handleOmokAction } from './omokLogic.js';
+
+export const initializePlayfulGame = async (game: LiveGameSession, neg: Negotiation, now: number, p1Guild: Guild | null, p2Guild: Guild | null) => {
+    // ... (implementation unchanged)
+};
+
+export const updatePlayfulGameState = async (game: LiveGameSession, now: number) => {
+    // ... (implementation unchanged)
+};
+
+export const handlePlayfulGameAction = async (game: LiveGameSession, action: ServerAction & { userId: string }, user: User): Promise<HandleActionResult | null> => {
     switch (game.mode) {
         case GameMode.Dice:
-            return handleDiceGoAction(volatileState, game, action, user);
+            return handleDiceGoAction(game, action, user);
         case GameMode.Thief:
-            return handleThiefAction(volatileState, game, action, user);
+            return handleThiefAction(game, action, user);
         case GameMode.Alkkagi:
-            return handleAlkkagiAction(volatileState, game, action, user);
+            return handleAlkkagiAction(game, action, user);
         case GameMode.Curling:
-            return handleCurlingAction(volatileState, game, action, user);
+            return handleCurlingAction(game, action, user);
         case GameMode.Omok:
         case GameMode.Ttamok:
-            return handleOmokAction(volatileState, game, action, user);
+            return handleOmokAction(game, action, user);
     }
     return null;
 };

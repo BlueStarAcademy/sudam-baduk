@@ -1,4 +1,4 @@
-import { VolatileState, ServerAction, HandleActionResult, UserStatusInfo } from '../../types/api.js';
+import { ServerAction, HandleActionResult, UserStatusInfo } from '../../types/api.js';
 import { User, Guild, LiveGameSession, Negotiation, SinglePlayerStageInfo } from '../../types/entities.js';
 import { GameMode, Player, GameStatus, UserStatus, SinglePlayerLevel, GameType } from '../../types/enums.js';
 import * as db from '../db.js';
@@ -6,6 +6,7 @@ import { initializeGame } from '../gameModes.js';
 import { SINGLE_PLAYER_STAGES, TOWER_STAGES } from '../../constants/index.js';
 import * as currencyService from '../currencyService.js';
 import { getAiUser } from '../ai/index.js';
+import { broadcast } from '../services/supabaseService.js';
 
 const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo) => {
     game.boardState = Array(stage.boardSize).fill(0).map(() => Array(stage.boardSize).fill(Player.None));
@@ -18,7 +19,7 @@ const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo)
         const patternStonesKey = player === Player.Black ? 'blackPatternStones' : 'whitePatternStones';
         let placed = 0;
         let attempts = 0;
-        const maxAttempts = stage.boardSize * stage.boardSize * 2; // Increased attempts
+        const maxAttempts = stage.boardSize * stage.boardSize * 2;
         while (placed < count && attempts < maxAttempts) {
             const x = Math.floor(Math.random() * stage.boardSize);
             const y = Math.floor(Math.random() * stage.boardSize);
@@ -31,7 +32,6 @@ const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo)
             }
             attempts++;
         }
-
     };
     
     placeStones(Player.Black, blackCount, false);
@@ -50,7 +50,6 @@ const placeInitialStones = (game: LiveGameSession, stage: SinglePlayerStageInfo)
 }
 
 export const handleAiGameStart = async (
-    volatileState: VolatileState, 
     payload: any, 
     user: User, 
     guilds: Record<string, Guild>, 
@@ -66,14 +65,13 @@ export const handleAiGameStart = async (
     if (isAiMatch) {
         aiGameMode = payload.mode;
         aiGameDifficulty = payload.aiDifficulty;
-        // For AI matches, we construct a dummy stage info for settings
         stage = {
             id: `ai-match-${aiGameMode}-${aiGameDifficulty}`,
             name: `AI 대국 (${aiGameMode} Lv.${aiGameDifficulty})`,
-            level: SinglePlayerLevel.입문, // Dummy value
-            gameType: GameType.Standard, // Dummy value
-            actionPointCost: 0, // No cost for AI matches
-            boardSize: 9, // Default board size
+            level: SinglePlayerLevel.입문, 
+            gameType: GameType.Standard, 
+            actionPointCost: 0, 
+            boardSize: 9, 
             aiLevel: aiGameDifficulty,
             placements: { randomBlackStones: 0, randomWhiteStones: 0, randomBlackPatternedStones: 0, randomWhitePatternedStones: 0 },
             rewards: { firstClear: {}, repeatClear: {} },
@@ -139,8 +137,6 @@ export const handleAiGameStart = async (
     game.isTowerChallenge = isTower;
     game.isAiGame = isAiMatch;
     
-    // If the stage config doesn't specify a turn count (e.g., for capture missions),
-    // make sure the default from initializeGame is removed.
     if (!stage.autoEndTurnCount && stage.gameType === 'capture') {
         game.autoEndTurnCount = undefined;
     }
@@ -170,9 +166,11 @@ export const handleAiGameStart = async (
     
     const statusInfo: UserStatusInfo = { status: UserStatus.InGame, mode: game.mode, gameId: game.id, stateEnteredAt: Date.now() };
     await db.updateUserStatus(game.player1.id, statusInfo);
-    volatileState.userStatuses[game.player1.id] = statusInfo;
-    
     await db.updateUser(user);
+
+    // Broadcast the new game and user status
+    await broadcast({ type: 'GAME_START', payload: { newGame: game } });
+    await broadcast({ type: 'USER_STATUS_UPDATE', payload: { userId: user.id, statusInfo } });
 
     return { clientResponse: { newGameId: game.id, updatedUser: user, updatedGame: game } };
 };
@@ -211,8 +209,11 @@ export const handleAiGameRefresh = async (game: LiveGameSession, user: User, typ
     game.currentPlayer = Player.Black;
 
     await db.updateUser(user);
-    // Game is already saved by the caller (handleAction)
-    return { clientResponse: { updatedUser: user } };
+    await db.saveGame(game);
+
+    await broadcast({ type: 'GAME_STATE_UPDATE', payload: { updatedGame: game } });
+
+    return { clientResponse: { updatedUser: user, updatedGame: game } };
 };
 
 export const handleTowerAddStones = async (game: LiveGameSession, user: User): Promise<HandleActionResult> => {
@@ -242,8 +243,11 @@ export const handleTowerAddStones = async (game: LiveGameSession, user: User): P
     }
 
     await db.updateUser(user);
-    // Game is saved by handleAction
-    return { clientResponse: { updatedUser: user } };
+    await db.saveGame(game);
+
+    await broadcast({ type: 'GAME_STATE_UPDATE', payload: { updatedGame: game } });
+
+    return { clientResponse: { updatedUser: user, updatedGame: game } };
 };
 
 export const handleConfirmIntro = async (gameId: string, user: User): Promise<HandleActionResult> => {
@@ -284,6 +288,7 @@ export const handleConfirmIntro = async (gameId: string, user: User): Promise<Ha
         }
         
         await db.saveGame(game);
+        await broadcast({ type: 'GAME_STATE_UPDATE', payload: { updatedGame: game } });
     }
     return { clientResponse: { updatedGame: game } };
 };

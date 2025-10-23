@@ -79,7 +79,7 @@ const DisassemblyPanel: React.FC<DisassemblyPanelProps> = ({ selectedItem, onSel
                 <DisassemblyResultModal
                     result={modals.disassemblyResult}
                     onClose={handlers.closeDisassemblyResult}
-                    isTopmost={modals.topmostModalId === 'disassemblyResult'}
+                    isTopmost={topmostModalId === 'disassemblyResult'}
                 />
             )}
             <div className="flex-grow flex flex-col items-center justify-center bg-gray-900/40 p-4 rounded-lg">
