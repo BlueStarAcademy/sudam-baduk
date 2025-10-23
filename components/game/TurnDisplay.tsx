@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { LiveGameSession, Player, GameStatus, GameMode, User, UserWithStatus, WinReason } from '../../types.js';
+import { LiveGameSession, Player, GameStatus, GameMode, User, UserWithStatus, WinReason, GameType } from '../../types.js';
 import { PLAYFUL_GAME_MODES, DICE_GO_MAIN_PLACE_TIME, DICE_GO_MAIN_ROLL_TIME, DICE_GO_LAST_CAPTURE_BONUS_BY_TOTAL_ROUNDS } from '../../constants/index.js';
 import { audioService } from '../../services/audioService.js';
 
@@ -70,6 +70,13 @@ const getGameStatusText = (session: LiveGameSession, currentUser: UserWithStatus
         case GameStatus.AiHiddenThinking:
             return 'AI가 히든돌을 사용합니다...';
         case GameStatus.Playing: {
+            if (gameType === GameType.Survival && autoEndTurnCount) {
+                const remainingTurns = autoEndTurnCount - moveHistory.length;
+                if (remainingTurns <= 0) {
+                    return "AI의 공격 턴이 모두 소진되었습니다. 계가를 시작합니다.";
+                }
+                return `AI의 공격 턴: ${remainingTurns}회 남음`;
+            }
             const player = getPlayerByEnum(currentPlayer);
             return player ? `${player.nickname}님의 차례입니다.` : '대국 진행 중';
         }
@@ -122,6 +129,8 @@ const TurnDisplay: React.FC<TurnDisplayProps> = ({ session, currentUser }) => {
     const [percentage, setPercentage] = useState(100);
     const [foulMessage, setFoulMessage] = useState<string | null>(null);
     const [byoyomiMessage, setByoyomiMessage] = useState<string | null>(null);
+    
+
     
     const prevTimeoutPlayerId = usePrevious(session.lastTimeoutPlayerId);
     const prevFoulInfoMessage = usePrevious(session.foulInfo?.message);

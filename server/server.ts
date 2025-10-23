@@ -333,19 +333,7 @@ const startServer = async () => {
 
     console.log('[AI] Self-contained AI active, external engines disabled.');
 
-    setInterval(async () => {
-        try {
-            const allActiveGames = await db.getAllActiveGames();
-            const guilds = await db.getKV<Record<string, Guild>>('guilds') || {};
-            const updatedGames = await gameModes.updateGameStates(allActiveGames, Date.now(), guilds);
 
-            for (const game of updatedGames) {
-                await db.saveGame(game);
-            }
-        } catch (e) {
-            console.error("Error in game loop:", e);
-        }
-    }, 1000);
 
     setInterval(async () => {
         const now = Date.now();
