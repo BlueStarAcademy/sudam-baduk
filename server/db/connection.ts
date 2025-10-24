@@ -1,5 +1,7 @@
 
-import { Pool } from 'pg';
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+import { Pool, PoolConfig } from 'pg';
 import * as dotenv from 'dotenv';
 import { URL } from 'url';
 
@@ -23,29 +25,36 @@ export const initializeAndGetDb = async (): Promise<Pool> => {
     const connectionString = process.env.DATABASE_URL;
 
     if (!connectionString || typeof connectionString !== 'string' || connectionString.trim() === '') {
-        console.error(`[DB] DATABASE_URL environment variable is not valid. Found: "${connectionString}". Please check your .env file in the project root.`);
+        console.error(`[DB] DATABASE_URL environment variable is not valid. Found: "${connectionString}". Please check your .env file in the project root. Exiting process.`);
         process.exit(1);
     }
     
     try {
         new URL(connectionString);
     } catch (e) {
-        console.error(`[DB] The DATABASE_URL in your .env file is not a valid URL. Please check for typos or special characters that might need to be encoded (like '#' or '@' in the password). It is also recommended to wrap the entire URL in double quotes in your .env file.`);
+        console.error(`[DB] The DATABASE_URL in your .env file is not a valid URL. Please check for typos or special characters that might need to be encoded (like '#' or '@' in the password). It is also recommended to wrap the entire URL in double quotes in your .env file. Exiting process.`);
         console.error(`[DB] Invalid value: "${connectionString}"`);
         process.exit(1);
     }
 
 
     // Use the connection string directly from .env without modification
-    const pool = new Pool({
+    let connectionOptions: PoolConfig = {
         connectionString: connectionString,
-    });
+    };
+
+    // Always try to use SSL, but reject unauthorized to false for self-signed certs
+    connectionOptions.ssl = {
+        rejectUnauthorized: false,
+    };
+
+    const pool = new Pool(connectionOptions);
 
     try {
         await pool.query('SELECT NOW()');
         console.log('[DB] PostgreSQL connected successfully.');
     } catch (err) {
-        console.error('[DB] Failed to connect to PostgreSQL:', err);
+        console.error('[DB] Failed to connect to PostgreSQL: Exiting process.', err);
         process.exit(1);
     }
 

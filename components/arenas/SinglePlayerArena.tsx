@@ -46,6 +46,9 @@ const SinglePlayerArena: React.FC<SinglePlayerArenaProps> = ({ session }) => {
         settings,
     } = useAppContext();
 
+    console.log('[SinglePlayerArena] Current gameStatus:', session.gameStatus);
+    console.log('[SinglePlayerArena] Current player:', session.currentPlayer);
+
     const { id: gameId, gameStatus, player1, player2, blackByoyomiPeriodsLeft, blackTimeLeft, settings: gameSettings, mode, currentPlayer, moveHistory } = session;
 
     if (!currentUser || !currentUserWithStatus) {

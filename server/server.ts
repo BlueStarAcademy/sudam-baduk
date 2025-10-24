@@ -139,7 +139,9 @@ app.post('/api/auth/login', async (req, res) => {
         res.json({ user, sessionId });
     } catch (error: any) {
         console.error(`[Login Error] for user ${username}:`, error);
-        res.status(500).json({ message: error.message || 'A server error occurred during login.' });
+        // Log the full error object for debugging
+        console.error(error);
+        res.status(500).json({ message: error.message || 'A server error occurred during login.', stack: error.stack });
     }
 });
 
@@ -299,7 +301,7 @@ app.post('/api/action', async (req, res) => {
     try {
         // IMPORTANT: handleAction must be refactored to be stateless.
         // It should fetch state from DB, perform action, save state, and return events to broadcast.
-        const result = await handleAction(action, dummyVolatileState);
+        const result = await handleAction(action);
 
         // After the action, we should broadcast any state changes that result from it.
         // The `result` from `handleAction` should ideally contain information about what changed.
@@ -340,6 +342,11 @@ app.get('/api/cron/minute-tick', async (req, res) => {
 // Vercel will keep the function "warm" for a period, so this won't run on every single request.
 initializeDatabase().catch(err => {
     console.error('[Server] Failed to initialize database:', err);
+});
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
 
 export default app;

@@ -1,5 +1,7 @@
 
 
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 import 'dotenv/config';
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
@@ -29,6 +31,9 @@ try {
 
 const pgPool = new Pool({
     connectionString: connectionString,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
 const migrateUsers = async (sqliteDb: any) => {
