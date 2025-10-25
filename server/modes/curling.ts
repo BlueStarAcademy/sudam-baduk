@@ -6,6 +6,7 @@ import { aiUserId } from '../ai/index.js';
 import { CURLING_TURN_TIME_LIMIT } from '../../constants/index.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
 import { endGame, processGameSummary } from '../summaryService.js';
+import { broadcast } from '../services/supabaseService.js';
 
 const placeRandomCurlingStone = (game: LiveGameSession, playerEnum: Player) => {
     const boardSizePx = 840;

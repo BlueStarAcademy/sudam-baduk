@@ -551,6 +551,7 @@ export interface PlayerForTournament {
     wins: number;
     losses: number;
     condition: number;
+    isBot?: boolean;
 }
 
 // Item and Inventory types

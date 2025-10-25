@@ -8,25 +8,41 @@ import { getInitialState } from './initialData.js';
 let isInitialized = false;
 
 const seedInitialData = async (db: Pool) => {
-    console.log('[DB] Database is empty. Seeding initial data...');
+    console.log('[DB] Ensuring initial data is present...');
     const userRepository = await import('./repositories/userRepository.js');
     const credentialsRepository = await import('./repositories/credentialsRepository.js');
     const initialState = getInitialState();
-    const usersToCreate = Object.values(initialState.users);
-    const credentialsToCreate = initialState.userCredentials;
+    const usersToEnsure = Object.values(initialState.users);
+    const credentialsToEnsure = initialState.userCredentials;
 
-    for (const user of usersToCreate) {
-        await userRepository.createUser(db, user);
-    }
-    
-    for (const username of Object.keys(credentialsToCreate)) {
-        const cred = credentialsToCreate[username];
-        const originalUser = usersToCreate.find(u => u.username === username);
-        if (originalUser && cred.hash && cred.salt) {
-            await credentialsRepository.createUserCredentials(db, originalUser.username, cred.hash, cred.salt, cred.userId);
+    for (const user of usersToEnsure) {
+        const existingUser = await userRepository.getUserByUsername(db, user.username);
+        if (!existingUser) {
+            console.log(`[DB] Creating initial user: ${user.nickname}`);
+            await userRepository.createUser(db, user);
+        } else {
+            // Update existing user to ensure data consistency, e.g., isAdmin status
+            console.log(`[DB] Updating initial user: ${user.nickname}`);
+            await userRepository.updateUser(db, user);
         }
     }
-    console.log('[DB] Initial data seeding complete.');
+    
+    for (const username of Object.keys(credentialsToEnsure)) {
+        const cred = credentialsToEnsure[username];
+        const existingCreds = await credentialsRepository.getUserCredentials(db, username);
+        if (!existingCreds) {
+            console.log(`[DB] Creating credentials for initial user: ${username}`);
+            if (cred.hash && cred.salt) {
+                await credentialsRepository.createUserCredentials(db, username, cred.hash, cred.salt, cred.userId);
+            }
+        } else if (existingCreds.hash !== cred.hash || existingCreds.salt !== cred.salt) {
+            console.log(`[DB] Updating credentials for initial user: ${username}`);
+            if (cred.hash && cred.salt) {
+                await credentialsRepository.updateUserPassword(db, cred.userId, cred.hash, cred.salt);
+            }
+        }
+    }
+    console.log('[DB] Initial data presence ensured.');
 };
 
 export const initializeDatabase = async () => {
@@ -34,9 +50,8 @@ export const initializeDatabase = async () => {
     const db = await initializeAndGetDb();
     const userCountResult = await db.query<{ count: string }>('SELECT COUNT(*) as count FROM users');
     const userCount = userCountResult.rows[0] ? parseInt(userCountResult.rows[0].count, 10) : 0;
-    if (userCount === 0) {
-        await seedInitialData(db);
-    }
+    // Always ensure initial data is present for development/testing
+    await seedInitialData(db);
     isInitialized = true;
 };
 
@@ -72,6 +87,11 @@ export const removeUserStatus = async (userId: string): Promise<void> => {
         SET value = value - $1::text
         WHERE key = 'userStatuses';
     `, [userId]);
+};
+
+export const getUserStatus = async (userId: string): Promise<UserStatusInfo | null> => {
+    const userStatuses = await getKV<Record<string, UserStatusInfo>>('userStatuses') || {};
+    return userStatuses[userId] || null;
 };
 
 

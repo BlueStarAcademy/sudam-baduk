@@ -239,13 +239,11 @@ const Stone: React.FC<{ player: Player, cx: number, cy: number, isLastMove?: boo
                 cx={cx}
                 cy={cy}
                 r={radius}
-                fill={player === Player.Black ? "#111827" : "#f5f2e8"}
+                fill={player === Player.Black ? "black" : "white"}
                 stroke={strokeColor}
                 strokeWidth={strokeWidth}
                 className={isPending ? 'animate-pulse' : ''}
             />
-            {player === Player.White && <circle cx={cx} cy={cy} r={radius} fill="url(#clam_grain)" />}
-            <circle cx={cx} cy={cy} r={radius} fill={player === Player.Black ? 'url(#slate_highlight)' : 'url(#clamshell_highlight)'} />
             {isBaseStone && (
                 <image href={player === Player.Black ? BLACK_BASE_STONE_IMG : WHITE_BASE_STONE_IMG} x={cx - specialImageOffset} y={cy - specialImageOffset} width={specialImageSize} height={specialImageSize} />
             )}
@@ -655,7 +653,6 @@ const GoBoard: React.FC<GoBoardProps> = (props) => {
                 
                 {boardState.map((row, y) => row.map((player, x) => {
                     if (player === Player.None) return null;
-                    const { cx, cy } = toSvgCoords({ x, y });
                     
                     const isSingleLastMove = showLastMoveMarker && isLastMoveMarkerEnabled && lastMove && lastMove.x === x && lastMove.y === y;
                     const isMultiLastMove = showLastMoveMarker && isLastMoveMarkerEnabled && lastTurnStones && lastTurnStones.some(p => p.x === x && p.y === y);

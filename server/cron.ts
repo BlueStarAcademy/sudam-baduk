@@ -7,10 +7,10 @@ import { broadcast } from './services/supabaseService.js';
 
 const ACTIVE_GAME_STATUSES: GameStatus[] = [
     GameStatus.Playing,
-    GameStatus.Nigiri, GameStatus.NigiriReveal,
+    GameStatus.NigiriChoosing, GameStatus.NigiriGuessing, GameStatus.NigiriReveal,
     GameStatus.TurnPreferenceSelection,
-    GameStatus.CaptureBidding, GameStatus.CaptureBidReveal,
-    GameStatus.BasePlacement, GameStatus.BasePlacementReveal,
+    GameStatus.CaptureBidding, GameStatus.CaptureReveal,
+    GameStatus.BasePlacement,
     GameStatus.HiddenPlacing,
     GameStatus.DiceRolling, GameStatus.DicePlacing, GameStatus.DiceRollingAnimating, GameStatus.DiceRoundEnd,
     GameStatus.ThiefRoleSelection, GameStatus.ThiefRps, GameStatus.ThiefRpsReveal, GameStatus.ThiefRoleConfirmed, GameStatus.ThiefRolling, GameStatus.ThiefPlacing, GameStatus.ThiefRollingAnimating, GameStatus.ThiefRoundEnd,
@@ -27,8 +27,7 @@ export const handleCronTick = async (req: Request, res: Response) => {
     try {
         console.log('[Cron] Starting tick job...');
         const now = Date.now();
-        const allGames = await db.getAllLiveGames();
-        const activeGames = Object.values(allGames).filter(game => ACTIVE_GAME_STATUSES.includes(game.gameStatus));
+        const activeGames = await db.getAllActiveGames();
 
         console.log(`[Cron] Found ${activeGames.length} active games to process.`);
 

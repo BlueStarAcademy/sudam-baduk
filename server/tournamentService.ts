@@ -12,6 +12,62 @@ import { addItemsToInventory, createItemInstancesFromReward } from '../utils/inv
 import { calculateTotalStats } from './services/statService.js';
 import { handleRewardAction } from './actions/rewardActions.js';
 
+export const getTournamentStateKey = (type: TournamentType): keyof User => {
+    return `last${type.charAt(0).toUpperCase() + type.slice(1)}Tournament` as keyof User;
+};
+
+export const getTournamentPlayedDateKey = (type: TournamentType): keyof User => {
+    return `last${type.charAt(0).toUpperCase() + type.slice(1)}PlayedDate` as keyof User;
+};
+
+const createBotForTournament = (league: LeagueTier, tournamentType: TournamentType, botId: string): PlayerForTournament => {
+    const botStats = createBotStats(league, tournamentType);
+    const botName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+    const botAvatar = AVATAR_POOL[Math.floor(Math.random() * AVATAR_POOL.length)];
+
+    return {
+        id: `bot-${botId}`,
+        nickname: botName,
+        stats: botStats,
+        originalStats: JSON.parse(JSON.stringify(botStats)),
+        wins: 0,
+        losses: 0,
+        league: league,
+        avatarId: botAvatar.id,
+        borderId: 'border_001', 
+        condition: 100,
+        isBot: true,
+    };
+};
+
+export const generateParticipants = (user: User, type: TournamentType, allUsers: User[], guilds: Record<string, Guild>): PlayerForTournament[] => {
+    const definition = TOURNAMENT_DEFINITIONS[type];
+    const userLeague = user.league || LeagueTier.Sprout;
+
+    const userAsParticipant: PlayerForTournament = {
+        id: user.id,
+        nickname: user.nickname,
+        stats: calculateTotalStats(user, user.guildId ? guilds[user.guildId] : null),
+        originalStats: calculateTotalStats(user, user.guildId ? guilds[user.guildId] : null),
+        wins: 0,
+        losses: 0,
+        league: userLeague,
+        avatarId: user.avatarId,
+        borderId: user.borderId,
+        condition: 100,
+    };
+
+    const participants: PlayerForTournament[] = [userAsParticipant];
+    const numBots = definition.players - 1;
+
+    for (let i = 0; i < numBots; i++) {
+        const botLeague = userLeague;
+        participants.push(createBotForTournament(botLeague, type, `${type}-${i}`));
+    }
+
+    return participants.sort(() => Math.random() - 0.5);
+};
+
 
 type HandleActionResult = { 
     clientResponse?: any;

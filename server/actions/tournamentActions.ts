@@ -10,7 +10,7 @@ import * as tournamentService from '../tournamentService.js';
 import { addItemsToInventory, createItemInstancesFromReward } from '../../utils/inventoryUtils.js';
 import { calculateTotalStats } from '../services/statService.js';
 import { handleRewardAction } from './rewardActions.js';
-
+import { broadcast } from '../services/supabaseService.js';
 
 type HandleActionResult = { 
     clientResponse?: any;
@@ -46,25 +46,6 @@ const createBotStats = (league: LeagueTier, tournamentType: TournamentType): Rec
     return stats as Record<CoreStat, number>;
 };
 
-
-import { randomUUID } from 'crypto';
-import * as db from '../db.js';
-import { type ServerAction, type User, TournamentType, PlayerForTournament, TournamentState, LeagueTier, CoreStat, Guild } from '../../types/index.js';
-import { TOURNAMENT_DEFINITIONS } from '../../constants/index.js';
-import { updateQuestProgress } from '../questService.js';
-import { isSameDayKST } from '../../utils/timeUtils.js';
-import * as tournamentService from '../tournamentService.js';
-import { calculateTotalStats } from '../services/statService.js';
-import { handleRewardAction } from './rewardActions.js';
-import { broadcast } from '../services/supabaseService.js';
-
-type HandleActionResult = { 
-    clientResponse?: any;
-    error?: string;
-};
-
-// ... (helper functions like createBotStats remain the same)
-
 export const handleTournamentAction = async (action: ServerAction & { userId: string }, user: User, guilds: Record<string, Guild>): Promise<HandleActionResult> => {
     const { type, payload } = action;
     const now = Date.now();
@@ -78,7 +59,7 @@ export const handleTournamentAction = async (action: ServerAction & { userId: st
             const stateKey = tournamentService.getTournamentStateKey(type);
             const playedDateKey = tournamentService.getTournamentPlayedDateKey(type);
 
-            const existingState = user[stateKey];
+            const existingState = user[stateKey] as TournamentState | null;
 
             if (existingState) {
                 const userInTournament = existingState.players.find(p => p.id === user.id);
@@ -94,7 +75,7 @@ export const handleTournamentAction = async (action: ServerAction & { userId: st
                 return {};
             }
 
-            if (user[playedDateKey] && isSameDayKST(user[playedDateKey], now) && !user.isAdmin) {
+            if (user[playedDateKey] && isSameDayKST(user[playedDateKey] as number, now) && !user.isAdmin) {
                 return { error: '이미 오늘 참가한 토너먼트입니다. 결과를 확인해주세요.' };
             }
             
@@ -115,7 +96,7 @@ export const handleTournamentAction = async (action: ServerAction & { userId: st
         case 'START_TOURNAMENT_ROUND': {
             const { type } = payload as { type: TournamentType };
             const stateKey = tournamentService.getTournamentStateKey(type);
-            const tournamentState = user[stateKey];
+            const tournamentState = user[stateKey] as TournamentState | null;
 
             if (!tournamentState) return { error: '토너먼트 정보를 찾을 수 없습니다.' };
             
@@ -131,7 +112,7 @@ export const handleTournamentAction = async (action: ServerAction & { userId: st
         case 'FORFEIT_TOURNAMENT': {
             const { type: tournamentType } = payload as { type: TournamentType };
             const stateKey = tournamentService.getTournamentStateKey(tournamentType);
-            const tournamentState = user[stateKey];
+            const tournamentState = user[stateKey] as TournamentState | null;
 
             if (!tournamentState) return { error: '토너먼트 정보를 찾을 수 없습니다.' };
             

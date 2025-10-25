@@ -126,12 +126,8 @@ export const handleSocialAction = async (action: ServerAction & { user: User }):
                 if (text && (text.includes('안녕') || text.includes('하이') || text.includes('반갑'))) {
                     const updatedUser = await db.getUser(user.id);
                     if(updatedUser) {
-                        const userWasUpdated = await updateQuestProgress(updatedUser, 'chat_greeting');
-                        if (userWasUpdated) {
-                           await db.updateUser(updatedUser);
-                           // Optionally broadcast user update if quest progress gives immediate rewards
-                           // await broadcast({ type: 'USER_DATA_UPDATE', payload: { userId: updatedUser.id, updatedUser }});
-                        }
+                        updateQuestProgress(updatedUser, 'chat_greeting');
+                        await db.updateUser(updatedUser);
                     }
                 }
             }

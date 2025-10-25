@@ -6,6 +6,7 @@ import { aiUserId } from '../ai/index.js';
 import { ALKKAGI_PLACEMENT_TIME_LIMIT, ALKKAGI_SIMULTANEOUS_PLACEMENT_TIME_LIMIT, ALKKAGI_TURN_TIME_LIMIT, BATTLE_PLACEMENT_ZONES, PLAYFUL_MODE_FOUL_LIMIT } from '../../constants/index.js';
 import { endGame, processGameSummary } from '../summaryService.js';
 import { calculateUserEffects } from '../../utils/statUtils.js';
+import { broadcast } from '../services/supabaseService.js';
 
 // --- Simulation & Scoring Logic ---
 const runServerSimulation = (game: LiveGameSession) => {

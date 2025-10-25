@@ -20,24 +20,6 @@ import { handlePresetAction } from './presetActions.js';
 import { TOWER_STAGES } from '../../constants/index.js';
 import * as currencyService from '../currencyService.js';
 
-// TODO: Refactor all downstream action handlers to be stateless.
-import { ServerAction, User, HandleActionResult, GameMode, ServerActionType, Guild } from '../../types/index.js';
-import * as db from '../db.js';
-import { handleAiTurn, handleStrategicGameAction } from '../modes/strategic.js';
-import { Player } from '../../types/index.js';
-import { handlePlayfulGameAction } from '../modes/playful.js';
-import { handleAiGameStart, handleConfirmIntro } from '../modes/singlePlayerMode.js';
-import { handleUserAction } from './userActions.js';
-import { handleNegotiationAction } from './negotiationActions.js';
-import { handleInventoryAction } from './inventoryActions.js';
-import { handleShopAction } from './shopActions.js';
-import { handleRewardAction } from './rewardActions.js';
-import { handleSocialAction } from './socialActions.js';
-import { handleTournamentAction } from './tournamentActions.js';
-import { handleAdminAction } from './adminActions.js';
-import { handleGuildAction } from './guildActions.js';
-import { handlePresetAction } from './presetActions.js';
-
 export const handleAction = async (action: ServerAction & { user: User }): Promise<HandleActionResult> => {
     const { type, payload, user } = action;
     const { gameId } = payload || {};
@@ -134,7 +116,7 @@ export const handleAction = async (action: ServerAction & { user: User }): Promi
         const aiPlayerEnum = game.blackPlayerId === aiPlayerId ? Player.Black : (game.whitePlayerId === aiPlayerId ? Player.White : Player.None);
 
         if (game.currentPlayer === aiPlayerEnum && (game.isAiGame || game.isSinglePlayer || game.isTowerChallenge)) {
-            await handleAiTurn(game, game.lastMove!, myPlayerEnum);
+            await handleAiTurn(game, game.lastMove!, aiPlayerEnum);
             return { clientResponse: { success: true } };
         }
         return { clientResponse: { success: true } }; // Not AI's turn, do nothing
